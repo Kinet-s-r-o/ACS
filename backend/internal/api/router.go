@@ -44,6 +44,7 @@ type Router struct {
 	auditRepo        *database.AuditRepository
 	blockedRepo      *database.BlockedDeviceRepository
 	metricRepo       *database.MetricRepository
+	snapshotRepo     *database.SnapshotRepository
 	loginLimiter     *loginLimiter
 	downloadLimiter  *loginLimiter
 	uploadDir        string
@@ -85,6 +86,7 @@ func NewRouter(db *gorm.DB) *Router {
 		auditRepo:        database.NewAuditRepository(db),
 		blockedRepo:      database.NewBlockedDeviceRepository(db),
 		metricRepo:       database.NewMetricRepository(db),
+		snapshotRepo:     database.NewSnapshotRepository(db),
 		loginLimiter:     newLoginLimiter(5, 15*time.Minute),
 		downloadLimiter:  newLoginLimiter(60, time.Minute),
 		uploadDir:        uploadDir,
@@ -142,6 +144,11 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /device/{serial}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteDeviceBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParametersBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesRead)(r.handleListSnapshotsBySerial))
+	apiMux.HandleFunc("POST /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesWrite)(r.handleCreateSnapshotBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/snapshots/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetSnapshotBySerial))
+	apiMux.HandleFunc("POST /device/{serial}/snapshots/{id}/restore", auth.RequirePermission(models.PermDevicesWrite)(r.handleRestoreSnapshotBySerial))
+	apiMux.HandleFunc("DELETE /device/{serial}/snapshots/{id}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteSnapshotBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/faults", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceFaultsBySerial))
 	apiMux.HandleFunc("PUT /device/{serial}/tags", auth.RequirePermission(models.PermDevicesWrite)(r.handleSetDeviceTagsBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/get-parameters", auth.RequirePermission(models.PermDevicesWrite)(r.handleGetParameterValuesBySerial))
@@ -1444,6 +1451,239 @@ func (r *Router) handleGetDeviceTasksBySerial(w http.ResponseWriter, req *http.R
 		return
 	}
 	respondJSON(w, http.StatusOK, tasks)
+}
+
+func (r *Router) handleListSnapshotsBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	snapshots, err := r.snapshotRepo.ListByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get snapshots")
+		return
+	}
+	for index := range snapshots {
+		snapshots[index].Parameters = nil
+	}
+	respondJSON(w, http.StatusOK, snapshots)
+}
+
+func (r *Router) handleCreateSnapshotBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	var payload struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	payload.Name = strings.TrimSpace(payload.Name)
+	if payload.Name == "" {
+		payload.Name = "Snapshot " + time.Now().Format("2006-01-02 15:04:05")
+	}
+	if len(payload.Name) > 128 {
+		respondError(w, http.StatusBadRequest, "Snapshot name must be 128 characters or fewer")
+		return
+	}
+	parameters, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to read device parameters")
+		return
+	}
+	if len(parameters) == 0 {
+		respondError(w, http.StatusConflict, "No cached device parameters are available")
+		return
+	}
+	snapshotParameters := make([]models.SnapshotParameter, 0, len(parameters))
+	for _, parameter := range parameters {
+		value := parameter.Value
+		if database.IsSensitiveParameterName(parameter.Name) {
+			value, err = database.EncryptValue(value)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError, "Failed to protect snapshot values")
+				return
+			}
+		}
+		snapshotParameters = append(snapshotParameters, models.SnapshotParameter{
+			Name: parameter.Name, Value: value, ValueType: parameter.ValueType, Writable: parameter.Writable,
+		})
+	}
+	encoded, err := json.Marshal(snapshotParameters)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to encode snapshot")
+		return
+	}
+	snapshot := &models.DeviceSnapshot{
+		DeviceID: device.ID, Name: payload.Name, Manufacturer: device.Manufacturer,
+		ProductClass: device.ProductClass, SoftwareVersion: device.SoftwareVersion,
+		ParameterCount: len(snapshotParameters), Parameters: models.JSON(encoded),
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		snapshot.CreatedBy = claims.Username
+	}
+	if err := r.snapshotRepo.Create(req.Context(), snapshot); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to create snapshot")
+		return
+	}
+	snapshot.Parameters = nil
+	respondJSON(w, http.StatusCreated, snapshot)
+}
+
+func (r *Router) handleGetSnapshotBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid snapshot ID")
+		return
+	}
+	snapshot, err := r.snapshotRepo.GetByID(req.Context(), device.ID, id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get snapshot")
+		return
+	}
+	if snapshot == nil {
+		respondError(w, http.StatusNotFound, "Snapshot not found")
+		return
+	}
+	if err := r.decodeSnapshotParameters(snapshot, req); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to decode snapshot")
+		return
+	}
+	respondJSON(w, http.StatusOK, snapshot)
+}
+
+func (r *Router) handleRestoreSnapshotBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid snapshot ID")
+		return
+	}
+	snapshot, err := r.snapshotRepo.GetByID(req.Context(), device.ID, id)
+	if err != nil || snapshot == nil {
+		respondError(w, http.StatusNotFound, "Snapshot not found")
+		return
+	}
+	var payload struct {
+		Parameters []string `json:"parameters"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
+		respondError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	selected := make(map[string]bool, len(payload.Parameters))
+	for _, name := range payload.Parameters {
+		selected[name] = true
+	}
+	var snapshotParameters []models.SnapshotParameter
+	if err := json.Unmarshal(snapshot.Parameters, &snapshotParameters); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to decode snapshot values")
+		return
+	}
+	current, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to read current device parameters")
+		return
+	}
+	currentWritable := make(map[string]bool, len(current))
+	for _, parameter := range current {
+		currentWritable[parameter.Name] = parameter.Writable != nil && *parameter.Writable
+	}
+	values := make(map[string]string)
+	for _, parameter := range snapshotParameters {
+		if len(selected) > 0 && !selected[parameter.Name] {
+			continue
+		}
+		if !currentWritable[parameter.Name] {
+			continue
+		}
+		value := parameter.Value
+		if database.IsSensitiveParameterName(parameter.Name) {
+			value, err = database.DecryptValue(value)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError, "Failed to decrypt snapshot values")
+				return
+			}
+		}
+		values[parameter.Name] = value
+	}
+	if len(values) == 0 {
+		respondError(w, http.StatusConflict, "Snapshot has no selected writable parameters")
+		return
+	}
+	task, err := models.NewTaskWithPayload(device.ID, models.TaskTypeSetParameterValues, values)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to create restore task")
+		return
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		task.CreatedBy = claims.Username
+	}
+	if err := r.taskRepo.Create(req.Context(), task); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to create restore task")
+		return
+	}
+	respondJSON(w, http.StatusCreated, map[string]interface{}{"task": task, "restored": len(values)})
+}
+
+func (r *Router) handleDeleteSnapshotBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid snapshot ID")
+		return
+	}
+	if err := r.snapshotRepo.Delete(req.Context(), device.ID, id); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to delete snapshot")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (r *Router) decodeSnapshotParameters(snapshot *models.DeviceSnapshot, req *http.Request) error {
+	var parameters []models.SnapshotParameter
+	if err := json.Unmarshal(snapshot.Parameters, &parameters); err != nil {
+		return err
+	}
+	claims := auth.GetUserFromContext(req.Context())
+	fullAccess := claims != nil && claims.Role == models.RoleFull
+	for index := range parameters {
+		if database.IsSensitiveParameterName(parameters[index].Name) {
+			if !fullAccess {
+				parameters[index].Value = "[REDACTED]"
+				continue
+			}
+			value, err := database.DecryptValue(parameters[index].Value)
+			if err != nil {
+				return err
+			}
+			parameters[index].Value = value
+		}
+	}
+	encoded, err := json.Marshal(parameters)
+	if err != nil {
+		return err
+	}
+	snapshot.Parameters = models.JSON(encoded)
+	return nil
 }
 
 func (r *Router) handleGetDeviceFaultsBySerial(w http.ResponseWriter, req *http.Request) {

@@ -332,6 +332,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.BlockedDevice{},
 		&models.MetricDefinition{},
 		&models.MetricSample{},
+		&models.DeviceSnapshot{},
 		&database.Setting{},
 	}
 

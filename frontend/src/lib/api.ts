@@ -28,6 +28,8 @@ export interface DeviceStats { total: number; online: number; offline: number }
 export interface DeviceListResponse { devices: Device[]; total: number; limit: number; offset: number }
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
 export interface Task { id: number; device_id: number; type: string; payload: unknown; status: string; result: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string }
+export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
+export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
 export interface Fault { id: number; device_id: number; serial_number: string; fault_code: string; fault_string: string; parameter_name: string; resolved: boolean; created_at: string; resolved_at: string | null }
 export interface User { id: number; username: string; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
@@ -81,6 +83,11 @@ export const api = {
   getDeviceTypes: () => request<string[]>('/devices/device-types'),
   getDeviceParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameters`),
   getDeviceTasks: (serial: string) => request<Task[]>(`/device/${encodeURIComponent(serial)}/tasks`),
+  getDeviceSnapshots: (serial: string) => request<DeviceSnapshot[]>(`/device/${encodeURIComponent(serial)}/snapshots`),
+  getDeviceSnapshot: (serial: string, id: number) => request<DeviceSnapshot>(`/device/${encodeURIComponent(serial)}/snapshots/${id}`),
+  createDeviceSnapshot: (serial: string, name?: string) => request<DeviceSnapshot>(`/device/${encodeURIComponent(serial)}/snapshots`, { method: 'POST', body: JSON.stringify({ name }) }),
+  restoreDeviceSnapshot: (serial: string, id: number, parameters?: string[]) => request<{ task: Task; restored: number }>(`/device/${encodeURIComponent(serial)}/snapshots/${id}/restore`, { method: 'POST', body: JSON.stringify({ parameters }) }),
+  deleteDeviceSnapshot: (serial: string, id: number) => request<{ status: string }>(`/device/${encodeURIComponent(serial)}/snapshots/${id}`, { method: 'DELETE' }),
   getDeviceFaults: (serial: string) => request<Fault[]>(`/device/${encodeURIComponent(serial)}/faults`),
   getParameterValues: (serial: string, parameters: string[]) => request<Task>(`/device/${encodeURIComponent(serial)}/get-parameters`, { method: 'POST', body: JSON.stringify({ parameters }) }),
   setParameterValues: (serial: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/set-parameters`, { method: 'POST', body: JSON.stringify({ parameters }) }),

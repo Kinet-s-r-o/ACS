@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical } from 'lucide-solid';
-import { api, type MetricDefinition, type Task } from '../lib/api';
+import { api, type DeviceSnapshot, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -57,6 +57,15 @@ interface IperfForm {
   bandwidth: string;
 }
 
+interface SnapshotTreeRow {
+  path: string;
+  label: string;
+  depth: number;
+  parameter?: SnapshotParameter;
+  currentValue?: string;
+  descendants: string[];
+}
+
 const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
 
 const PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
@@ -75,11 +84,12 @@ const DeviceDetail: Component = () => {
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' ? searchParams.tab : 'overview';
+  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
   const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
   const [tasks, { refetch: refetchTasks }] = createResource(serial, api.getDeviceTasks);
+  const [snapshots, { refetch: refetchSnapshots }] = createResource(serial, api.getDeviceSnapshots);
   const [deviceFaults, { refetch: refetchDeviceFaults }] = createResource(serial, api.getDeviceFaults);
   const [metricDefs] = createResource(api.getMetricDefinitions);
   const [taskPage, setTaskPage] = createSignal(0);
@@ -154,6 +164,96 @@ const DeviceDetail: Component = () => {
   const unresolvedFaultCount = createMemo(() => (deviceFaults() || []).filter(f => !f.resolved).length);
   const pendingTaskCount = createMemo(() => (tasks() || []).filter(t => t.status !== 'completed').length);
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] = createSignal<DeviceSnapshot | null>(null);
+  const [snapshotSelection, setSnapshotSelection] = createSignal<string[]>([]);
+  const [snapshotName, setSnapshotName] = createSignal('');
+  const [snapshotLoading, setSnapshotLoading] = createSignal<string | null>(null);
+
+  const snapshotRows = createMemo<SnapshotTreeRow[]>(() => {
+    const snapshot = selectedSnapshot();
+    if (!snapshot?.parameters) return [];
+    const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
+    const changed = snapshot.parameters.filter(parameter => current.get(parameter.name) !== parameter.value);
+    const nodes = new Map<string, { parameter?: SnapshotParameter; descendants: string[] }>();
+    for (const parameter of changed) {
+      const parts = parameter.name.split('.');
+      for (let index = 0; index < parts.length; index++) {
+        const path = parts.slice(0, index + 1).join('.');
+        const node = nodes.get(path) || { descendants: [] };
+        node.descendants = [...new Set([...node.descendants, parameter.name])];
+        if (index === parts.length - 1) node.parameter = parameter;
+        nodes.set(path, node);
+      }
+    }
+    return [...nodes.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([path, node]) => ({
+        path,
+        label: path.substring(path.lastIndexOf('.') + 1),
+        depth: path.split('.').length - 1,
+        parameter: node.parameter,
+        currentValue: node.parameter ? current.get(node.parameter.name) : undefined,
+        descendants: node.descendants,
+      }));
+  });
+
+  const toggleSnapshotPath = (row: SnapshotTreeRow) => {
+    const selected = new Set(snapshotSelection());
+    const allSelected = row.descendants.every(name => selected.has(name));
+    row.descendants.forEach(name => allSelected ? selected.delete(name) : selected.add(name));
+    setSnapshotSelection([...selected]);
+  };
+
+  const openSnapshot = async (snapshot: DeviceSnapshot) => {
+    setSnapshotLoading(`open-${snapshot.id}`);
+    try {
+      const detail = await api.getDeviceSnapshot(serial(), snapshot.id);
+      setSelectedSnapshot(detail);
+      const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
+      setSnapshotSelection((detail.parameters || []).filter(parameter => current.get(parameter.name) !== parameter.value).map(parameter => parameter.name));
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not open snapshot', detail: (error as Error).message, persistent: true });
+    } finally { setSnapshotLoading(null); }
+  };
+
+  const createSnapshot = async () => {
+    setSnapshotLoading('create');
+    try {
+      await api.createDeviceSnapshot(serial(), snapshotName().trim() || undefined);
+      setSnapshotName('');
+      notify({ tone: 'success', title: 'Snapshot created from cached parameters' });
+      await refetchSnapshots();
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not create snapshot', detail: (error as Error).message, persistent: true });
+    } finally { setSnapshotLoading(null); }
+  };
+
+  const restoreSnapshot = async () => {
+    const snapshot = selectedSnapshot();
+    const selected = snapshotSelection();
+    if (!snapshot || selected.length === 0) return;
+    if (!await confirm({ title: 'Restore selected snapshot parameters?', description: `${selected.length} selected parameter(s) will be sent to the CPE as a configuration task.`, confirmLabel: 'Create restore task', tone: 'danger' })) return;
+    setSnapshotLoading(`restore-${snapshot.id}`);
+    try {
+      const result = await api.restoreDeviceSnapshot(serial(), snapshot.id, selected);
+      notify({ tone: 'success', title: 'Restore task created', detail: `${result.restored} writable parameter(s) queued.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not restore snapshot', detail: (error as Error).message, persistent: true });
+    } finally { setSnapshotLoading(null); }
+  };
+
+  const deleteSnapshot = async (snapshot: DeviceSnapshot) => {
+    if (!await confirm({ title: 'Delete snapshot?', description: `This permanently removes “${snapshot.name}”.`, confirmLabel: 'Delete snapshot', tone: 'danger' })) return;
+    setSnapshotLoading(`delete-${snapshot.id}`);
+    try {
+      await api.deleteDeviceSnapshot(serial(), snapshot.id);
+      if (selectedSnapshot()?.id === snapshot.id) { setSelectedSnapshot(null); setSnapshotSelection([]); }
+      await refetchSnapshots();
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not delete snapshot', detail: (error as Error).message, persistent: true });
+    } finally { setSnapshotLoading(null); }
+  };
 
   const handleResolveFault = async (id: number) => {
     setPendingFault(id);
@@ -843,7 +943,7 @@ const DeviceDetail: Component = () => {
     setActionLoading(null);
   };
 
-  const refreshAll = () => { refetchDevice(); refetchParams(); refetchTasks(); };
+  const refreshAll = () => { refetchDevice(); refetchParams(); refetchTasks(); refetchSnapshots(); };
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '-';
@@ -1233,7 +1333,7 @@ const DeviceDetail: Component = () => {
             <Zap size={14} />
             <span class="hidden sm:inline">{actionLoading() === 'summon' ? '...' : 'Summon'}</span>
           </button></Show>
-          <button onClick={refreshAll} disabled={device.loading || parameters.loading || tasks.loading} class="btn btn-secondary text-xs sm:text-sm">
+          <button onClick={refreshAll} disabled={device.loading || parameters.loading || tasks.loading || snapshots.loading} class="btn btn-secondary text-xs sm:text-sm">
             <RefreshCw size={14} />
             <span class="hidden sm:inline">Refresh</span>
           </button>
@@ -1264,6 +1364,7 @@ const DeviceDetail: Component = () => {
       <nav role="tablist" class="tab-bar" aria-label="Device detail sections">
         <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
+        <button role="tab" class={`tab-btn ${activeTab() === 'snapshots' ? 'is-active' : ''}`} aria-selected={activeTab() === 'snapshots'} onClick={() => setSearchParams({ tab: 'snapshots' })}>Snapshots</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'tasks' ? 'is-active' : ''}`} aria-selected={activeTab() === 'tasks'} onClick={() => setSearchParams({ tab: 'tasks' })}>
           Tasks
           <Show when={pendingTaskCount() > 0}>
@@ -1428,6 +1529,92 @@ const DeviceDetail: Component = () => {
               </div>
             </div>
 
+            </Show>
+
+            <Show when={activeTab() === 'snapshots'}>
+              <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
+                <div class="card p-4 xl:col-span-2">
+                  <div class="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <h2 class="text-sm font-medium text-secondary">Configuration Snapshots</h2>
+                      <p class="text-xs text-muted mt-1">Stored from the parameters currently cached by SKYACS.</p>
+                    </div>
+                    <span class="text-xs text-muted">{snapshots()?.length || 0}</span>
+                  </div>
+                  <Show when={isFullAccess()}>
+                    <div class="flex gap-2 mb-4">
+                      <input class="input flex-1 text-sm" value={snapshotName()} onInput={(event) => setSnapshotName(event.currentTarget.value)} placeholder="Snapshot name (optional)" disabled={snapshotLoading() === 'create'} />
+                      <button type="button" class="btn btn-primary text-xs" onClick={() => void createSnapshot()} disabled={snapshotLoading() !== null}>
+                        <Save size={14} /> Create
+                      </button>
+                    </div>
+                  </Show>
+                  <Show when={(snapshots() || []).length > 0} fallback={<EmptyState title="No snapshots" description="Create a snapshot to preserve the current cached CPE configuration." />}>
+                    <div class="space-y-2">
+                      <For each={snapshots()}>
+                        {(snapshot) => (
+                          <div class={`rounded border p-3 ${selectedSnapshot()?.id === snapshot.id ? 'border-primary bg-primary/5' : 'border-subtle'}`}>
+                            <div class="flex items-center justify-between gap-3">
+                              <button type="button" class="text-left min-w-0 flex-1" onClick={() => void openSnapshot(snapshot)} disabled={snapshotLoading() !== null}>
+                                <div class="text-sm text-primary truncate">{snapshot.name}</div>
+                                <div class="text-xs text-muted mt-1">{formatDate(snapshot.created_at)} · {snapshot.parameter_count} parameters</div>
+                              </button>
+                              <Show when={isFullAccess()}>
+                                <button type="button" class="icon-button text-muted hover:text-rose-400" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button>
+                              </Show>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+
+                <div class="card p-4 xl:col-span-3">
+                  <Show when={selectedSnapshot()} fallback={<div class="h-full min-h-56 flex items-center justify-center text-sm text-muted">Select a snapshot to inspect its tree diff.</div>}>
+                    {(snapshot) => (
+                      <>
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                          <div>
+                            <h2 class="text-sm font-medium text-secondary">Diff: {snapshot().name}</h2>
+                            <p class="text-xs text-muted mt-1">Select a branch to select all writable parameters below it.</p>
+                          </div>
+                          <Show when={isFullAccess()}>
+                            <button type="button" class="btn btn-primary text-xs" onClick={() => void restoreSnapshot()} disabled={snapshotLoading() !== null || snapshotSelection().length === 0}>
+                              <RefreshCw size={14} /> Restore {snapshotSelection().length || ''}
+                            </button>
+                          </Show>
+                        </div>
+                        <Show when={snapshotRows().length > 0} fallback={<EmptyState title="No differences" description="The selected snapshot matches the cached current parameters." />}>
+                          <div class="border border-subtle rounded overflow-auto max-h-[600px]">
+                            <div class="min-w-[680px]">
+                              <div class="grid grid-cols-[minmax(280px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-3 px-3 py-2 bg-elevated text-[10px] text-muted uppercase tracking-wide">
+                                <div>Parameter tree</div><div>Snapshot</div><div>Current</div>
+                              </div>
+                              <For each={snapshotRows()}>
+                                {(row) => {
+                                  const selectedCount = () => row.descendants.filter(name => snapshotSelection().includes(name)).length;
+                                  const isBranch = row.descendants.length > 1 || !row.parameter;
+                                  return (
+                                    <div class="grid grid-cols-[minmax(280px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-3 items-center border-t border-subtle/60 px-3 py-2 text-xs">
+                                      <div style={{ 'padding-left': `${row.depth * 16}px` }} class="flex items-center gap-2 min-w-0">
+                                        <input type="checkbox" checked={selectedCount() === row.descendants.length} ref={(element) => { element.indeterminate = selectedCount() > 0 && selectedCount() < row.descendants.length; }} onChange={() => toggleSnapshotPath(row)} disabled={!isFullAccess()} />
+                                        <span class={isBranch ? 'text-secondary font-medium' : 'text-primary font-mono truncate'} title={row.path}>{row.label}</span>
+                                      </div>
+                                      <span class="font-mono text-secondary truncate" title={row.parameter?.value}>{row.parameter?.value || ''}</span>
+                                      <span class="font-mono text-muted truncate" title={row.currentValue}>{row.currentValue || ''}</span>
+                                    </div>
+                                  );
+                                }}
+                              </For>
+                            </div>
+                          </div>
+                        </Show>
+                      </>
+                    )}
+                  </Show>
+                </div>
+              </div>
             </Show>
 
             {/* Row 1.2: Metrics */}
