@@ -55,6 +55,9 @@ func (r *Router) handleCreateMetricDefinition(w http.ResponseWriter, req *http.R
 	if body.DisplayFormat == "" {
 		body.DisplayFormat = "number"
 	}
+	if body.HealthSize == "" {
+		body.HealthSize = "small"
+	}
 
 	if err := r.metricRepo.Create(req.Context(), &body); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create metric definition")
@@ -91,6 +94,9 @@ func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.R
 		return
 	}
 
+	if body.HealthSize == "" {
+		body.HealthSize = "small"
+	}
 	body.ID = id
 	if err := r.metricRepo.Update(req.Context(), &body); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update metric definition")
@@ -291,6 +297,14 @@ func validateMetricDefinition(def *models.MetricDefinition) error {
 	case "", "number", "uptime", "gauge":
 	default:
 		return errors.New("display_format must be 'number', 'uptime', or 'gauge'")
+	}
+	switch def.HealthSize {
+	case "", "small", "medium", "large":
+	default:
+		return errors.New("health_size must be 'small', 'medium', or 'large'")
+	}
+	if def.HealthOrder < 0 {
+		return errors.New("health_order must be non-negative")
 	}
 	if len(def.Thresholds) > 20 {
 		return errors.New("thresholds must have at most 20 entries")

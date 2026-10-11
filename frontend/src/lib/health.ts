@@ -12,6 +12,13 @@ export interface HealthTile {
   thresholds?: Threshold[];
   arc?: string;
   pointer?: boolean;
+  size?: 'small' | 'medium' | 'large';
+}
+
+export interface HealthTileGroup {
+  label?: string;
+  tiles: HealthTile[];
+  size: 'small' | 'medium' | 'large';
 }
 
 export interface UnitScale {

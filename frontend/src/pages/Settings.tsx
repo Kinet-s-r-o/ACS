@@ -27,6 +27,8 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   multiplier: 1,
   unit_scale: '',
   health: false,
+  health_order: 0,
+  health_size: 'small',
   warn_threshold: null,
   critical_threshold: null,
   threshold_direction: 'higher_is_worse',
@@ -108,6 +110,8 @@ const Settings: Component = () => {
       multiplier: def.multiplier,
       unit_scale: def.unit_scale,
       health: def.health,
+      health_order: def.health_order ?? 0,
+      health_size: def.health_size || 'small',
       warn_threshold: def.warn_threshold,
       critical_threshold: def.critical_threshold,
       threshold_direction: def.threshold_direction,
@@ -419,7 +423,7 @@ const Settings: Component = () => {
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label for="metric-group" class="block text-xs text-muted mb-1.5">Chart Group</label>
+                <label for="metric-group" class="block text-xs text-muted mb-1.5">Chart / Health Group</label>
                 <input id="metric-group" type="text" value={metricForm().group} onInput={(e) => setMetricForm(f => ({ ...f, group: e.currentTarget.value }))} class="input w-full" placeholder="e.g. throughput (optional)" />
               </div>
               <div>
@@ -476,6 +480,18 @@ const Settings: Component = () => {
                     <option value="gauge">Gauge graph</option>
                   </select>
                 </div>
+              <div>
+                <label for="metric-health-order" class="block text-xs text-muted mb-1.5">Display order</label>
+                <input id="metric-health-order" type="number" min="0" step="1" value={metricForm().health_order} onInput={(e) => setMetricForm(f => ({ ...f, health_order: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} placeholder="0" class="input w-full" />
+              </div>
+              <div>
+                <label for="metric-health-size" class="block text-xs text-muted mb-1.5">Element size</label>
+                <select id="metric-health-size" value={metricForm().health_size} onChange={(e) => setMetricForm(f => ({ ...f, health_size: e.currentTarget.value as 'small' | 'medium' | 'large' }))} class="input w-full">
+                  <option value="small">Small (1/3 width)</option>
+                  <option value="medium">Medium (1/2 width)</option>
+                  <option value="large">Large (full width)</option>
+                </select>
+              </div>
                 <div>
                   <label for="metric-warn" class="block text-xs text-muted mb-1.5">Warn threshold</label>
                   <input id="metric-warn" type="number" step="any" value={metricForm().warn_threshold ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, warn_threshold: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="optional" class="input w-full" />

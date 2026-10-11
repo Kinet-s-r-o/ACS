@@ -3,7 +3,7 @@ import { createResource, createSignal, Show, For, createEffect, createMemo, onCl
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical } from 'lucide-solid';
 import { api, type MetricDefinition, type Task } from '../lib/api';
-import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTile } from '../lib/health';
+import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
 import Dialog from '../components/Dialog';
@@ -798,10 +798,10 @@ const DeviceDetail: Component = () => {
     return 'text-amber-400';
   };
 
-  const healthTiles = createMemo<HealthTile[]>(() => {
+  const healthTileGroups = createMemo<HealthTileGroup[]>(() => {
     const defs = healthPanelMetrics(matchingMetrics());
     if (defs.length > 0) {
-      return defs.map(def => {
+      const tiles = defs.map(def => {
         const rateValue = def.transform === 'rate' ? rateMetricValues()?.get(def.id) : undefined;
         const v = rateValue ?? findHealthValue(parameters() || [], def);
         const range = def.display_format === 'gauge' ? gaugeRange(v, def) : undefined;
@@ -817,13 +817,26 @@ const DeviceDetail: Component = () => {
           thresholds: def.thresholds,
           arc: def.gauge_arc,
           pointer: def.gauge_pointer,
+          size: def.health_size || 'small',
         };
       });
+      const groups: HealthTileGroup[] = [];
+      defs.forEach((def, index) => {
+        const groupName = def.group?.trim() || '';
+        const existing = groupName ? groups.find(g => g.label === groupName) : undefined;
+        if (existing) {
+          existing.tiles.push(tiles[index]);
+          if (tiles[index].size === 'large' || (tiles[index].size === 'medium' && existing.size === 'small')) existing.size = tiles[index].size;
+        } else {
+          groups.push({ label: groupName || undefined, tiles: [tiles[index]], size: tiles[index].size || 'small' });
+        }
+      });
+      return groups;
     }
     return [
-      { label: 'Uptime', value: getDeviceUptime() ? formatUptime(getDeviceUptime()!) : '-', color: getUptimeColor(), format: 'number' },
-      { label: 'RX dBm', value: getRxPower(), color: getRxPowerColor(), format: 'number' },
-      { label: 'Temperature', value: `${getTemperature()}°`, color: getTempColor(), format: 'number' },
+      { tiles: [{ label: 'Uptime', value: getDeviceUptime() ? formatUptime(getDeviceUptime()!) : '-', color: getUptimeColor(), format: 'number', size: 'small' }], size: 'small' },
+      { tiles: [{ label: 'RX dBm', value: getRxPower(), color: getRxPowerColor(), format: 'number', size: 'small' }], size: 'small' },
+      { tiles: [{ label: 'Temperature', value: `${getTemperature()}°`, color: getTempColor(), format: 'number', size: 'small' }], size: 'small' },
     ];
   });
 
@@ -1248,33 +1261,44 @@ const DeviceDetail: Component = () => {
                   <HeartPulse size={14} />
                   Device Health
                 </h2>
-                <div class="grid grid-cols-3 gap-3 text-center">
-                  <For each={healthTiles()}>
-                    {(tile) => (
-                      <div>
-                        <Show when={tile.format === 'gauge'}>
-                          <HealthGauge
-                            value={tile.raw ?? null}
-                            min={tile.min ?? 0}
-                            max={tile.max ?? 100}
-                            color={tile.color}
-                            label={tile.label}
-                            centerText={tile.value}
-                            animated={tile.animated ?? true}
-                            thresholds={tile.thresholds}
-                            arc={tile.arc}
-                            pointer={tile.pointer}
-                          />
+                <div class="grid grid-cols-6 gap-3 text-center">
+                  <For each={healthTileGroups()}>
+                    {(group) => (
+                      <div class={group.size === 'large' ? 'col-span-6' : group.size === 'medium' ? 'col-span-6 sm:col-span-3' : 'col-span-6 sm:col-span-2'}>
+                        <Show when={group.label}>
+                          <div class="text-[10px] font-medium text-muted uppercase tracking-wide mb-1">{group.label}</div>
                         </Show>
-                        <Show when={tile.format !== 'gauge'}>
-                          <div
-                            class={`text-lg font-bold font-mono ${tile.color.startsWith('#') ? '' : tile.color}`}
-                            style={tile.color.startsWith('#') ? { color: tile.color } : {}}
-                          >
-                            {tile.value}
-                          </div>
-                          <div class="text-[10px] text-muted mt-0.5">{tile.label}</div>
-                        </Show>
+                        <div class={group.tiles.length > 1 ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : ''}>
+                          <For each={group.tiles}>
+                            {(tile) => (
+                              <div>
+                                <Show when={tile.format === 'gauge'}>
+                                  <HealthGauge
+                                    value={tile.raw ?? null}
+                                    min={tile.min ?? 0}
+                                    max={tile.max ?? 100}
+                                    color={tile.color}
+                                    label={tile.label}
+                                    centerText={tile.value}
+                                    animated={tile.animated ?? true}
+                                    thresholds={tile.thresholds}
+                                    arc={tile.arc}
+                                    pointer={tile.pointer}
+                                  />
+                                </Show>
+                                <Show when={tile.format !== 'gauge'}>
+                                  <div
+                                    class={`text-lg font-bold font-mono ${tile.color.startsWith('#') ? '' : tile.color}`}
+                                    style={tile.color.startsWith('#') ? { color: tile.color } : {}}
+                                  >
+                                    {tile.value}
+                                  </div>
+                                  <div class="text-[10px] text-muted mt-0.5">{tile.label}</div>
+                                </Show>
+                              </div>
+                            )}
+                          </For>
+                        </div>
                       </div>
                     )}
                   </For>

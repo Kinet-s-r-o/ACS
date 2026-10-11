@@ -41,6 +41,15 @@ test('Metrics tab is no longer mutually exclusive with the Health panel', () => 
   assert.equal(panel[0].name, 'CPU');
 });
 
+test('Health panel metrics use configured order while preserving ties', () => {
+  const defs = [
+    { ...baseDef, id: 1, name: 'Downstream', health: true, health_order: 20 },
+    { ...baseDef, id: 2, name: 'Temperature', health: true, health_order: 10 },
+    { ...baseDef, id: 3, name: 'Uptime', health: true, health_order: 20 },
+  ];
+  assert.deepEqual(healthPanelMetrics(defs).map(m => m.name), ['Temperature', 'Downstream', 'Uptime']);
+});
+
 test('empty input yields empty views', () => {
   assert.deepEqual(metricsTabMetrics([]), []);
   assert.deepEqual(healthPanelMetrics([]), []);

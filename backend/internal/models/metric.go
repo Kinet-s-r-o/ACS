@@ -18,24 +18,26 @@ type Threshold struct {
 //   - "active":  fetched via GetParameterValues on a polling interval
 //   - "universal": collected from both sources
 type MetricDefinition struct {
-	ID                 int64     `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name               string    `json:"name" gorm:"not null;uniqueIndex:idx_metric_name_match,priority:1"`
-	Description        string    `json:"description"`
-	DeviceTypeMatch    string    `json:"device_type_match" gorm:"not null;default:'*';uniqueIndex:idx_metric_name_match,priority:2"`
-	ParameterName      string    `json:"parameter_name" gorm:"not null"`
-	Unit               string    `json:"unit"`
-	Source             string    `json:"source" gorm:"not null;default:'passive'"`
-	Active             bool      `json:"active" gorm:"default:true"`
-	Group              string    `json:"group" gorm:"default:''"`
-	Color              string    `json:"color" gorm:"default:''"`
-	Axis               string    `json:"axis" gorm:"default:'left'"`
-	Transform          string    `json:"transform" gorm:"default:''"`
-	Multiplier         float64   `json:"multiplier" gorm:"default:1"`
-	UnitScale          string    `json:"unit_scale" gorm:"default:''"`
-	Health             bool      `json:"health" gorm:"default:false"`
-	WarnThreshold      *float64  `json:"warn_threshold"`
-	CriticalThreshold  *float64  `json:"critical_threshold"`
-	ThresholdDirection string    `json:"threshold_direction" gorm:"not null;default:'higher_is_worse'"`
+	ID                 int64       `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name               string      `json:"name" gorm:"not null;uniqueIndex:idx_metric_name_match,priority:1"`
+	Description        string      `json:"description"`
+	DeviceTypeMatch    string      `json:"device_type_match" gorm:"not null;default:'*';uniqueIndex:idx_metric_name_match,priority:2"`
+	ParameterName      string      `json:"parameter_name" gorm:"not null"`
+	Unit               string      `json:"unit"`
+	Source             string      `json:"source" gorm:"not null;default:'passive'"`
+	Active             bool        `json:"active" gorm:"default:true"`
+	Group              string      `json:"group" gorm:"default:''"`
+	Color              string      `json:"color" gorm:"default:''"`
+	Axis               string      `json:"axis" gorm:"default:'left'"`
+	Transform          string      `json:"transform" gorm:"default:''"`
+	Multiplier         float64     `json:"multiplier" gorm:"default:1"`
+	UnitScale          string      `json:"unit_scale" gorm:"default:''"`
+	Health             bool        `json:"health" gorm:"default:false"`
+	HealthOrder        int         `json:"health_order" gorm:"default:0"`
+	HealthSize         string      `json:"health_size" gorm:"not null;default:'small'"`
+	WarnThreshold      *float64    `json:"warn_threshold"`
+	CriticalThreshold  *float64    `json:"critical_threshold"`
+	ThresholdDirection string      `json:"threshold_direction" gorm:"not null;default:'higher_is_worse'"`
 	DisplayFormat      string      `json:"display_format" gorm:"not null;default:'number'"`
 	GaugeAnimated      bool        `json:"gauge_animated" gorm:"default:true"`
 	GaugeMin           *float64    `json:"gauge_min"`

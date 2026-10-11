@@ -17,7 +17,11 @@ export function metricsTabMetrics(defs: MetricDefinition[]): MetricDefinition[] 
  * Only metrics with `health` enabled appear here.
  */
 export function healthPanelMetrics(defs: MetricDefinition[]): MetricDefinition[] {
-  return defs.filter(d => d.health);
+  return defs
+    .filter(d => d.health)
+    .map((def, index) => ({ def, index }))
+    .sort((a, b) => (a.def.health_order ?? 0) - (b.def.health_order ?? 0) || a.index - b.index)
+    .map(({ def }) => def);
 }
 
 /**
