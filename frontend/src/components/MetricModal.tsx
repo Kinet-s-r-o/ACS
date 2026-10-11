@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal, createResource, Show, For } from 'solid-js';
+import { createSignal, createResource, Show, For, on } from 'solid-js';
 import { Plus, X } from 'lucide-solid';
 import { api, type MetricDefinition } from '../lib/api';
 import Dialog from './Dialog';
@@ -95,9 +95,9 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     setMetricTab('metric');
   };
 
-  if (props.open) {
-    initForm();
-  }
+  on(() => props.open, (open) => {
+    if (open) initForm();
+  });
 
   const handleSave = async () => {
     const form = metricForm();
