@@ -59,8 +59,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
   const [deviceTypes] = createResource(api.getDeviceTypes);
 
-  const initForm = () => {
-    const m = props.editingMetric;
+  const initForm = (m: MetricDefinition | null) => {
     if (m) {
       setMetricForm({
         name: m.name,
@@ -95,9 +94,12 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     setMetricTab('metric');
   };
 
-  on(() => props.open, (open) => {
-    if (open) initForm();
-  });
+  on(
+    [() => props.open, () => props.editingMetric],
+    ([open, m]) => {
+      if (open) initForm(m);
+    }
+  );
 
   const handleSave = async () => {
     const form = metricForm();
