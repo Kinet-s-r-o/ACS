@@ -7,6 +7,7 @@ import (
 	"math"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/skydashnet/skyacs/internal/models"
@@ -252,11 +253,15 @@ func (r *MetricRepository) QueryAggregated(ctx context.Context, deviceID, metric
 }
 
 // deviceTypeMatches checks whether a device type string matches a glob pattern.
+// Matching is case-insensitive: both the device type and the pattern are
+// lowercased before comparison, mirroring the case-insensitive template→device
+// resolution (LOWER() in SQL) so metric collection stays consistent with how
+// templates are scoped to devices.
 func deviceTypeMatches(deviceType, pattern string) bool {
 	if pattern == "" || pattern == "*" {
 		return true
 	}
-	matched, _ := path.Match(pattern, deviceType)
+	matched, _ := path.Match(strings.ToLower(pattern), strings.ToLower(deviceType))
 	return matched
 }
 

@@ -33,12 +33,17 @@ export function healthPanelMetrics(defs: MetricDefinition[]): MetricDefinition[]
  * The pattern must match the ENTIRE value. An empty pattern or a bare `*`
  * matches everything (mirroring the backend's `deviceTypeMatches`, which
  * special-cases `""` and `"*"` before calling `path.Match`).
+ *
+ * Matching is case-insensitive (both sides are lowercased), mirroring the
+ * backend's case-insensitive template→device resolution.
  */
 export function globMatch(pattern: string, value: string): boolean {
   if (pattern === '' || pattern === '*') return true;
 
-  let name = value;
-  let pat = pattern;
+  // Case-insensitive: metric matching must stay consistent with the backend's
+  // case-insensitive template→device resolution (LOWER() in SQL).
+  let name = value.toLowerCase();
+  let pat = pattern.toLowerCase();
   Pattern: while (pat.length > 0) {
     const { star, chunk, rest } = scanChunk(pat);
     pat = rest;

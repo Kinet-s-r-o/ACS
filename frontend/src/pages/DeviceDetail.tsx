@@ -341,9 +341,10 @@ const DeviceDetail: Component = () => {
     return defs.filter((def) => {
       if (!def.active) return false;
       if (def.device_type_match === '' || def.device_type_match === '*') return true;
-      // Simple glob: support * wildcard
+      // Simple glob: support * wildcard (case-insensitive, to stay consistent
+      // with the backend's case-insensitive metric matching).
       const pattern = def.device_type_match.replace(/\*/g, '.*');
-      return new RegExp(`^${pattern}$`).test(deviceType);
+      return new RegExp(`^${pattern}$`, 'i').test(deviceType);
     });
   });
 

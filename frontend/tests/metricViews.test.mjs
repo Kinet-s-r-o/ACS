@@ -92,6 +92,19 @@ test('globMatch: empty value and non-matching', () => {
   assert.equal(globMatch('Zyxel/*', 'Huawei/AR600'), false);
 });
 
+test('globMatch: matching is case-insensitive', () => {
+  // Template scopes are stored lowercased by the backend, while device types
+  // keep their original case — matching must ignore case on both sides.
+  const deviceType = 'Huawei Technologies Co., Ltd/EG8145X6-10';
+  const templateScope = 'huawei technologies co., ltd/eg8145x6-10';
+  assert.equal(globMatch('Huawei Technologies Co., Ltd/EG8145X6-10', templateScope), true);
+  assert.equal(globMatch(templateScope, deviceType), true);
+  assert.equal(globMatch('Huawei*/EG8145X6-10', templateScope), true);
+  assert.equal(globMatch('Zyxel/VMG3625', templateScope), false);
+  // character classes are case-insensitive too
+  assert.equal(globMatch('Zyxel/[0-9]*', 'zyxel/12345'), true);
+});
+
 // --- metricsForTemplate (scope resolution) ---------------------------------
 
 const mkDef = (id, name, match) => ({ ...baseDef, id, name, device_type_match: match });
@@ -147,4 +160,17 @@ test('metricsForTemplate: product-class scope shows metrics for that product cla
 test('metricsForTemplate: empty defs yields empty result', () => {
   assert.deepEqual(metricsForTemplate([], '', ''), []);
   assert.deepEqual(metricsForTemplate([], 'Zyxel', 'VMG3625'), []);
+});
+
+test('metricsForTemplate: scope matching is case-insensitive', () => {
+  const defs = [
+    mkDef(1, 'Uptime', '*'),
+    mkDef(2, 'CPU', 'Huawei Technologies Co., Ltd/EG8145X6-10'),
+    mkDef(3, 'Other', 'Zyxel/VMG3625'),
+  ];
+  // Template scope is stored lowercased by the backend.
+  const result = metricsForTemplate(defs, 'huawei technologies co., ltd', 'eg8145x6-10');
+  const names = result.map(d => d.name).sort();
+  // Uptime (*) and CPU (exact, case-insensitive) apply; Other (Zyxel) does not.
+  assert.deepEqual(names, ['CPU', 'Uptime']);
 });
