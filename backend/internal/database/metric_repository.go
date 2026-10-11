@@ -124,13 +124,15 @@ func (r *MetricRepository) QueryAggregatedRate(ctx context.Context, deviceID, me
 	return rows, err
 }
 
-// QueryRaw returns raw metric samples for a device within a time range.
-func (r *MetricRepository) QueryRaw(ctx context.Context, deviceID, metricID int64, from, to time.Time) ([]models.MetricSample, error) {
+// QueryRaw returns metric samples with the definition multiplier applied.
+func (r *MetricRepository) QueryRaw(ctx context.Context, deviceID, metricID int64, from, to time.Time, multiplier float64) ([]models.MetricSample, error) {
 	var samples []models.MetricSample
-	err := r.db.WithContext(ctx).
-		Where("device_id = ? AND metric_id = ? AND timestamp BETWEEN ? AND ?", deviceID, metricID, from, to).
-		Order("timestamp ASC").
-		Find(&samples).Error
+	query := `
+		SELECT timestamp, value * $5 AS value
+		FROM metric_samples
+		WHERE device_id = $1 AND metric_id = $2 AND timestamp BETWEEN $3 AND $4
+		ORDER BY timestamp ASC`
+	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, from, to, multiplier).Scan(&samples).Error
 	return samples, err
 }
 
@@ -235,20 +237,20 @@ func (r *MetricRepository) PassiveParamNames(ctx context.Context, deviceType str
 	return names, nil
 }
 
-// QueryAggregated returns aggregated metric data from a continuous aggregate
-// table for a device within a time range.
-func (r *MetricRepository) QueryAggregated(ctx context.Context, deviceID, metricID int64, from, to time.Time, bucket string) ([]models.AggregatedMetric, error) {
+// QueryAggregated returns aggregated metric data with the definition multiplier
+// applied from a continuous aggregate table for a device within a time range.
+func (r *MetricRepository) QueryAggregated(ctx context.Context, deviceID, metricID int64, from, to time.Time, bucket string, multiplier float64) ([]models.AggregatedMetric, error) {
 	table := caTableForBucket(bucket)
 	if table == "" {
 		return nil, fmt.Errorf("unsupported bucket: %s", bucket)
 	}
 	var rows []models.AggregatedMetric
 	query := fmt.Sprintf(`
-		SELECT time_bucket AS "timestamp", avg_value AS "avg", min_value AS "min", max_value AS "max", sample_count AS "count"
+		SELECT time_bucket AS "timestamp", avg_value * $5 AS "avg", min_value * $5 AS "min", max_value * $5 AS "max", sample_count AS "count"
 		FROM %s
 		WHERE device_id = $1 AND metric_id = $2 AND time_bucket BETWEEN $3 AND $4
 		ORDER BY time_bucket ASC`, table)
-	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, from, to).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, from, to, multiplier).Scan(&rows).Error
 	return rows, err
 }
 
@@ -355,4 +357,3 @@ func SetupTimescaleDB(db *gorm.DB) error {
 	}
 	return nil
 }
-

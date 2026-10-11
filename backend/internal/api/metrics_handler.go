@@ -166,7 +166,7 @@ func (r *Router) handleGetDeviceMetrics(w http.ResponseWriter, req *http.Request
 	def, defErr := r.metricRepo.GetByID(req.Context(), metricID)
 	isRate := defErr == nil && def.Transform == "rate"
 	multiplier := 1.0
-	if isRate {
+	if defErr == nil {
 		multiplier = def.Multiplier
 		if multiplier <= 0 {
 			multiplier = 1.0
@@ -183,7 +183,7 @@ func (r *Router) handleGetDeviceMetrics(w http.ResponseWriter, req *http.Request
 			respondJSON(w, http.StatusOK, map[string]interface{}{"samples": samples})
 			return
 		}
-		samples, err := r.metricRepo.QueryRaw(req.Context(), device.ID, metricID, from, to)
+		samples, err := r.metricRepo.QueryRaw(req.Context(), device.ID, metricID, from, to, multiplier)
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to query metric samples")
 			return
@@ -210,7 +210,7 @@ func (r *Router) handleGetDeviceMetrics(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	rows, err := r.metricRepo.QueryAggregated(req.Context(), device.ID, metricID, from, to, bucket)
+	rows, err := r.metricRepo.QueryAggregated(req.Context(), device.ID, metricID, from, to, bucket, multiplier)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to query aggregated metrics")
 		return
@@ -218,7 +218,7 @@ func (r *Router) handleGetDeviceMetrics(w http.ResponseWriter, req *http.Request
 
 	// Fallback: if the CA returned no rows (e.g. not yet refreshed), try raw samples.
 	if len(rows) == 0 {
-		samples, rawErr := r.metricRepo.QueryRaw(req.Context(), device.ID, metricID, from, to)
+		samples, rawErr := r.metricRepo.QueryRaw(req.Context(), device.ID, metricID, from, to, multiplier)
 		if rawErr == nil && len(samples) > 0 {
 			respondJSON(w, http.StatusOK, map[string]interface{}{"samples": samples})
 			return
