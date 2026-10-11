@@ -1131,7 +1131,7 @@ func (h *Handler) buildTaskRequest(task *models.Task) (interface{}, error) {
 				spv.ParameterList.Parameters = append(spv.ParameterList.Parameters, ParameterValueStruct{
 					Name:  name,
 					Value: value,
-					Type:  "",
+					Type:  inferSetParameterType(name),
 				})
 			}
 			log.Printf("Sending SetParameterValues: %d params", len(spv.ParameterList.Parameters))
@@ -1172,6 +1172,19 @@ func (h *Handler) buildTaskRequest(task *models.Task) (interface{}, error) {
 	return nil, fmt.Errorf("unsupported or empty task payload for %s", task.Type)
 }
 
+// inferSetParameterType keeps the generic parameter API string-based while
+// emitting the vendor-required CWMP types for Huawei's iPerf data model.
+func inferSetParameterType(name string) string {
+	if !strings.Contains(name, ".X_HW_IperfSpeedTest.IperfClient.") {
+		return ""
+	}
+	switch name[strings.LastIndex(name, ".")+1:] {
+	case "Bandwidth", "MaxTime", "Parallel", "Port":
+		return "unsignedInt"
+	default:
+		return ""
+	}
+}
 
 func (h *Handler) sendFault(w http.ResponseWriter, err error, request *SOAPEnvelope) {
 	fault := &SOAPFault{

@@ -47,6 +47,18 @@ interface ParamColumnConfig {
   visible: boolean;
 }
 
+interface IperfForm {
+  serverAddr: string;
+  port: string;
+  testMode: 'UPLOAD' | 'DOWNLOAD';
+  protocolType: 'TCP' | 'UDP';
+  maxTime: string;
+  parallel: string;
+  bandwidth: string;
+}
+
+const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
+
 const PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
 const defaultParamColumns: ParamColumnConfig[] = [
   { id: 'object', label: 'Object', visible: false },
@@ -236,6 +248,27 @@ const DeviceDetail: Component = () => {
   const [connCredUsername, setConnCredUsername] = createSignal('');
   const [connCredPassword, setConnCredPassword] = createSignal('');
   const [generatedCred, setGeneratedCred] = createSignal<{ username: string; password: string } | null>(null);
+  const [showIperfModal, setShowIperfModal] = createSignal(false);
+  const [iperfRunning, setIperfRunning] = createSignal(false);
+  const [iperfForm, setIperfForm] = createSignal<IperfForm>({ serverAddr: '', port: '5201', testMode: 'UPLOAD', protocolType: 'TCP', maxTime: '10', parallel: '1', bandwidth: '0' });
+  const [iperfResult, setIperfResult] = createSignal<Record<string, string> | null>(null);
+
+  const iperfSupported = createMemo(() => (parameters() || []).some(p => p.name.startsWith(IPERF_CLIENT_ROOT)));
+  const iperfParameter = (suffix: string) => (parameters() || []).find(p => p.name === IPERF_CLIENT_ROOT + suffix)?.value || '';
+
+  const openIperfModal = () => {
+    setIperfForm({
+      serverAddr: iperfParameter('ServerAddr'),
+      port: iperfParameter('Port') || '5201',
+      testMode: iperfParameter('TestMode') === 'DOWNLOAD' ? 'DOWNLOAD' : 'UPLOAD',
+      protocolType: iperfParameter('ProtocolType') === 'UDP' ? 'UDP' : 'TCP',
+      maxTime: iperfParameter('MaxTime') || '10',
+      parallel: iperfParameter('Parallel') || '1',
+      bandwidth: iperfParameter('Bandwidth') || '0',
+    });
+    setIperfResult(null);
+    setShowIperfModal(true);
+  };
 
   onMount(() => {
     const saved = localStorage.getItem(HOST_COLUMNS_STORAGE_KEY);
@@ -483,6 +516,84 @@ const DeviceDetail: Component = () => {
       showMessage('error', 'Connection request failed. Verify reachability and credentials, then retry.', (err as Error).message);
     }
     setActionLoading(null);
+  };
+
+  const waitForTask = async (taskId: number, label: string, timeoutMs = 120_000): Promise<Task> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const current = (await api.getDeviceTasks(serial())).find(task => task.id === taskId);
+      if (current?.status === 'completed') return current;
+      if (current?.status === 'failed') throw new Error(current.error_message || `${label} failed.`);
+      await new Promise(resolve => window.setTimeout(resolve, 1500));
+    }
+    throw new Error(`${label} timed out while waiting for the CPE session.`);
+  };
+
+  const handleRunIperf = async () => {
+    const form = iperfForm();
+    const port = Number(form.port);
+    const maxTime = Number(form.maxTime);
+    const parallel = Number(form.parallel);
+    const bandwidth = Number(form.bandwidth);
+    if (!form.serverAddr.trim()) {
+      showMessage('error', 'Enter an iPerf server address.');
+      return;
+    }
+    if (!Number.isInteger(port) || port < 1 || port > 65535 || !Number.isInteger(maxTime) || maxTime < 1 || maxTime > 1800 || !Number.isInteger(parallel) || parallel < 1 || parallel > 32 || !Number.isFinite(bandwidth) || bandwidth < 0) {
+      showMessage('error', 'Check the iPerf values: port 1–65535, duration 1–1800 s, parallel streams 1–32, bandwidth 0 or greater.');
+      return;
+    }
+
+    setIperfRunning(true);
+    setActionLoading('iperf');
+    setIperfResult(null);
+    const prefix = IPERF_CLIENT_ROOT;
+    try {
+      const configTask = await api.setParameterValues(serial(), {
+        [prefix + 'ServerAddr']: form.serverAddr.trim(),
+        [prefix + 'Port']: String(port),
+        [prefix + 'TestMode']: form.testMode,
+        [prefix + 'ProtocolType']: form.protocolType,
+        [prefix + 'MaxTime']: String(maxTime),
+        [prefix + 'Parallel']: String(parallel),
+        [prefix + 'Bandwidth']: String(bandwidth),
+      });
+      await waitForTask(configTask.id, 'iPerf configuration');
+
+      const startTask = await api.setParameterValues(serial(), { [prefix + 'DiagnosticsState']: 'Requested' });
+      await waitForTask(startTask.id, 'iPerf start');
+      try { await api.connectionRequest(serial()); } catch { /* CPE may already be in an active CWMP session. */ }
+
+      const deadline = Date.now() + Math.max(60_000, maxTime * 1000 + 45_000);
+      let finalValues: Record<string, string> | null = null;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const readTask = await api.getParameterValues(serial(), [
+          prefix + 'DiagnosticsState',
+          prefix + 'TestResult',
+          prefix + 'Result',
+          prefix + 'ReportTime',
+          prefix + 'ErrorDescription',
+        ]);
+        const completedRead = await waitForTask(readTask.id, 'iPerf result read');
+        const values = (completedRead.result || {}) as Record<string, string>;
+        finalValues = values;
+        const state = (values[prefix + 'DiagnosticsState'] || '').toLowerCase();
+        if (state.includes('complete') || state.includes('error') || values[prefix + 'ErrorDescription']) break;
+      }
+      if (!finalValues) throw new Error('The CPE did not return an iPerf result.');
+      setIperfResult(finalValues);
+      const error = finalValues[prefix + 'ErrorDescription'];
+      if (error) showMessage('error', 'iPerf test completed with a CPE error.', error);
+      else showMessage('success', 'iPerf test completed.');
+      await refetchParams();
+      await refetchTasks();
+    } catch (err) {
+      showMessage('error', 'iPerf test was not completed.', (err as Error).message);
+    } finally {
+      setIperfRunning(false);
+      setActionLoading(null);
+    }
   };
 
   const handleSetWifiEnabled = async (index: number, enabled: boolean) => {
@@ -1107,6 +1218,12 @@ const DeviceDetail: Component = () => {
           </Show>
         </div>
         <div class="flex gap-2 items-center">
+          <Show when={isFullAccess() && iperfSupported()}>
+            <button onClick={openIperfModal} disabled={actionLoading() !== null} class="btn btn-secondary text-xs sm:text-sm">
+              <Activity size={14} />
+              <span class="hidden sm:inline">iPerf test</span>
+            </button>
+          </Show>
           <Show when={isFullAccess()}><button onClick={handleSummon} disabled={actionLoading() !== null} class="btn btn-primary text-xs sm:text-sm">
             <Zap size={14} />
             <span class="hidden sm:inline">{actionLoading() === 'summon' ? '...' : 'Summon'}</span>
@@ -2307,6 +2424,71 @@ const DeviceDetail: Component = () => {
 			/>
 			</Dialog>
 		  </Show>
+
+      <Show when={showIperfModal()}>
+        <Dialog
+          title="Run iPerf test"
+          description="The Huawei iPerf client will connect to the configured server through CWMP. The CPE must be online and able to reach the server."
+          size="large"
+          onClose={() => { if (!iperfRunning()) setShowIperfModal(false); }}
+        >
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-2">
+                <label for="iperf-server" class="block text-xs text-muted mb-1.5">iPerf server address</label>
+                <input id="iperf-server" type="text" value={iperfForm().serverAddr} onInput={(e) => setIperfForm(f => ({ ...f, serverAddr: e.currentTarget.value }))} placeholder="192.0.2.10 or iperf.example.net" class="input w-full font-mono text-xs" disabled={iperfRunning()} />
+              </div>
+              <div>
+                <label for="iperf-port" class="block text-xs text-muted mb-1.5">Port</label>
+                <input id="iperf-port" type="number" min="1" max="65535" value={iperfForm().port} onInput={(e) => setIperfForm(f => ({ ...f, port: e.currentTarget.value }))} class="input w-full" disabled={iperfRunning()} />
+              </div>
+              <div>
+                <label for="iperf-mode" class="block text-xs text-muted mb-1.5">Test mode</label>
+                <select id="iperf-mode" value={iperfForm().testMode} onChange={(e) => setIperfForm(f => ({ ...f, testMode: e.currentTarget.value as IperfForm['testMode'] }))} class="input w-full" disabled={iperfRunning()}>
+                  <option value="UPLOAD">Upload — CPE to server</option>
+                  <option value="DOWNLOAD">Download — server to CPE</option>
+                </select>
+              </div>
+              <div>
+                <label for="iperf-protocol" class="block text-xs text-muted mb-1.5">Protocol</label>
+                <select id="iperf-protocol" value={iperfForm().protocolType} onChange={(e) => setIperfForm(f => ({ ...f, protocolType: e.currentTarget.value as IperfForm['protocolType'] }))} class="input w-full" disabled={iperfRunning()}>
+                  <option value="TCP">TCP</option>
+                  <option value="UDP">UDP</option>
+                </select>
+              </div>
+              <div>
+                <label for="iperf-duration" class="block text-xs text-muted mb-1.5">Duration (seconds)</label>
+                <input id="iperf-duration" type="number" min="1" max="1800" value={iperfForm().maxTime} onInput={(e) => setIperfForm(f => ({ ...f, maxTime: e.currentTarget.value }))} class="input w-full" disabled={iperfRunning()} />
+              </div>
+              <div>
+                <label for="iperf-parallel" class="block text-xs text-muted mb-1.5">Parallel streams</label>
+                <input id="iperf-parallel" type="number" min="1" max="32" value={iperfForm().parallel} onInput={(e) => setIperfForm(f => ({ ...f, parallel: e.currentTarget.value }))} class="input w-full" disabled={iperfRunning()} />
+              </div>
+              <div>
+                <label for="iperf-bandwidth" class="block text-xs text-muted mb-1.5">Bandwidth (UDP, 0 = CPE default)</label>
+                <input id="iperf-bandwidth" type="number" min="0" step="1" value={iperfForm().bandwidth} onInput={(e) => setIperfForm(f => ({ ...f, bandwidth: e.currentTarget.value }))} class="input w-full" disabled={iperfRunning()} />
+              </div>
+            </div>
+            <p class="text-xs text-muted">The iPerf server must listen on the selected port and be reachable from the CPE network. Use an allowlisted test server only.</p>
+            <Show when={iperfResult()}>
+              <div class="border border-subtle rounded-md p-3">
+                <h3 class="text-sm font-medium text-secondary mb-2">Latest iPerf response</h3>
+                <div class="space-y-1">
+                  <For each={Object.entries(iperfResult()!) }>
+                    {([key, value]) => <div class="flex gap-3 text-xs"><span class="text-muted font-mono break-all">{key.split('.').pop()}</span><span class="text-primary font-mono break-all">{value || '-'}</span></div>}
+                  </For>
+                </div>
+              </div>
+            </Show>
+            <div class="flex gap-2 pt-2">
+              <button type="button" onClick={() => setShowIperfModal(false)} class="btn btn-secondary flex-1" disabled={iperfRunning()}>Close</button>
+              <button type="button" onClick={handleRunIperf} class="btn btn-primary flex-1" disabled={iperfRunning()}>
+                {iperfRunning() ? 'Running iPerf…' : 'Start test'}
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      </Show>
 
       {/* Parameter Detail Modal */}
       <Show when={selectedParam()}>

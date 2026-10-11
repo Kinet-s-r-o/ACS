@@ -380,7 +380,7 @@ func TestAddObjectResponseClearsLastSentContext(t *testing.T) {
 func TestBuildTaskRequestSetParameterValuesUsesStringType(t *testing.T) {
 	handler := NewHandler(nil)
 	task, err := models.NewTaskWithPayload(1, models.TaskTypeSetParameterValues, map[string]string{
-		"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.X_HW_LANBIND.Lan1Enable": "true",
+		"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.X_HW_LANBIND.Lan1Enable":  "true",
 		"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.X_HW_LANBIND.SSID1Enable": "false",
 	})
 	if err != nil {
@@ -402,5 +402,38 @@ func TestBuildTaskRequestSetParameterValuesUsesStringType(t *testing.T) {
 		if p.Type != "" {
 			t.Errorf("parameter %q: expected empty Type (xsd:string default), got %q", p.Name, p.Type)
 		}
+	}
+}
+
+func TestBuildTaskRequestIperfParametersUsesUnsignedIntType(t *testing.T) {
+	task, err := models.NewTaskWithPayload(1, models.TaskTypeSetParameterValues, map[string]string{
+		"InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.Port":       "5201",
+		"InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.MaxTime":    "10",
+		"InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.ServerAddr": "192.0.2.10",
+	})
+	if err != nil {
+		t.Fatalf("NewTaskWithPayload: %v", err)
+	}
+	handler := NewHandler(nil)
+	request, err := handler.buildTaskRequest(task)
+	if err != nil {
+		t.Fatalf("buildTaskRequest: %v", err)
+	}
+	spv, ok := request.(*SetParameterValues)
+	if !ok {
+		t.Fatalf("expected *SetParameterValues, got %T", request)
+	}
+	types := make(map[string]string, len(spv.ParameterList.Parameters))
+	for _, parameter := range spv.ParameterList.Parameters {
+		types[parameter.Name] = parameter.Type
+	}
+	if types["InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.Port"] != "unsignedInt" {
+		t.Fatalf("expected Port to use unsignedInt, got %q", types["InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.Port"])
+	}
+	if types["InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.MaxTime"] != "unsignedInt" {
+		t.Fatalf("expected MaxTime to use unsignedInt, got %q", types["InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.MaxTime"])
+	}
+	if types["InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.ServerAddr"] != "" {
+		t.Fatalf("expected ServerAddr to use the default string type, got %q", types["InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.ServerAddr"])
 	}
 }
