@@ -14,6 +14,46 @@ export interface HealthTile {
   pointer?: boolean;
 }
 
+export interface UnitScale {
+  divisor: number;
+  suffix: string;
+}
+
+export function computeUnitScale(value: number | null, mode: string): UnitScale {
+  const max = Math.max(0, value ?? 0);
+  if (max === 0) return { divisor: 1, suffix: '' };
+
+  if (mode === 'auto') {
+    if (max >= 1e12) return { divisor: 1e12, suffix: 'T' };
+    if (max >= 1e9) return { divisor: 1e9, suffix: 'G' };
+    if (max >= 1e6) return { divisor: 1e6, suffix: 'M' };
+    if (max >= 1e3) return { divisor: 1e3, suffix: 'K' };
+  } else if (mode === 'bytes') {
+    if (max >= 1024 ** 4) return { divisor: 1024 ** 4, suffix: 'TB' };
+    if (max >= 1024 ** 3) return { divisor: 1024 ** 3, suffix: 'GB' };
+    if (max >= 1024 ** 2) return { divisor: 1024 ** 2, suffix: 'MB' };
+    if (max >= 1024) return { divisor: 1024, suffix: 'KB' };
+    return { divisor: 1, suffix: 'B' };
+  } else if (mode === 'bits') {
+    if (max >= 1e12) return { divisor: 1e12, suffix: 'Tb' };
+    if (max >= 1e9) return { divisor: 1e9, suffix: 'Gb' };
+    if (max >= 1e6) return { divisor: 1e6, suffix: 'Mb' };
+    if (max >= 1e3) return { divisor: 1e3, suffix: 'Kb' };
+    return { divisor: 1, suffix: 'b' };
+  }
+  return { divisor: 1, suffix: '' };
+}
+
+export function effectiveUnit(unit: string, scaleMode: string, suffix: string): string {
+  if (!suffix) return unit;
+  if (scaleMode === 'auto') return suffix + unit;
+  if (scaleMode === 'bytes' || scaleMode === 'bits') {
+    const separator = unit.endsWith('/s') ? '/s' : '';
+    return separator ? `${suffix}${separator}` : suffix;
+  }
+  return unit;
+}
+
 export function formatUptime(seconds: number | string): string {
   const secs = typeof seconds === 'string' ? parseInt(seconds) : seconds;
   if (isNaN(secs) || secs <= 0) return '-';
@@ -36,8 +76,9 @@ export function findHealthValue(params: { name: string; value: string }[], def: 
 export function formatHealthValue(v: number | null, def: MetricDefinition): string {
   if (v === null) return '-';
   if (def.display_format === 'uptime') return formatUptime(v);
-  const unit = def.unit ? ` ${def.unit}` : '';
-  return `${v.toFixed(1)}${unit}`;
+  const scale = computeUnitScale(v, def.unit_scale);
+  const unit = effectiveUnit(def.unit, def.unit_scale, scale.suffix);
+  return `${(v / scale.divisor).toFixed(1)}${unit ? ` ${unit}` : ''}`;
 }
 
 /**

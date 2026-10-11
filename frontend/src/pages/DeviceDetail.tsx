@@ -348,6 +348,23 @@ const DeviceDetail: Component = () => {
     });
   });
 
+  const rateMetricValues = createResource(
+    () => {
+      const ids = healthPanelMetrics(matchingMetrics()).filter(m => m.transform === 'rate').map(m => m.id);
+      return `${serial()}|${ids.join(',')}`;
+    },
+    async (key) => {
+      const [deviceSerial, idsValue] = key.split('|');
+      const ids = idsValue ? idsValue.split(',').map(Number) : [];
+      const values = await Promise.all(ids.map(async (id) => {
+        const result = await api.getDeviceMetrics(deviceSerial, id, 'raw', 24);
+        const sample = result.samples?.[result.samples.length - 1];
+        return [id, sample?.value ?? null] as const;
+      }));
+      return new Map(values);
+    },
+  )[0];
+
   const groupedMetrics = createMemo(() => {
     const metrics = metricsTabMetrics(matchingMetrics());
     const groups: MetricDefinition[][] = [];
@@ -785,7 +802,8 @@ const DeviceDetail: Component = () => {
     const defs = healthPanelMetrics(matchingMetrics());
     if (defs.length > 0) {
       return defs.map(def => {
-        const v = findHealthValue(parameters() || [], def);
+        const rateValue = def.transform === 'rate' ? rateMetricValues()?.get(def.id) : undefined;
+        const v = rateValue ?? findHealthValue(parameters() || [], def);
         const range = def.display_format === 'gauge' ? gaugeRange(v, def) : undefined;
         return {
           label: def.name,

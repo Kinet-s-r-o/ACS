@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findHealthValue, formatHealthValue, healthColor, formatUptime, gaugeRange, thresholdBandColor, gaugeZones, thresholdLines } from '../src/lib/health.ts';
+import { findHealthValue, formatHealthValue, healthColor, formatUptime, gaugeRange, thresholdBandColor, gaugeZones, thresholdLines, computeUnitScale, effectiveUnit } from '../src/lib/health.ts';
 
 const baseDef = {
   id: 1, name: 'RX Power', description: '', device_type_match: '*',
@@ -33,6 +33,16 @@ test('formatHealthValue returns a dash for a null value', () => {
 
 test('formatHealthValue formats a number with its unit', () => {
   assert.equal(formatHealthValue(-20.2, baseDef), '-20.2 dBm');
+});
+
+test('formatHealthValue applies bit unit scaling', () => {
+  const def = { ...baseDef, unit: 'b/s', unit_scale: 'bits' };
+  assert.equal(formatHealthValue(5785963224, def), '5.8 Gb/s');
+});
+
+test('unit scaling matches metric chart unit labels', () => {
+  assert.deepEqual(computeUnitScale(5785963224, 'bits'), { divisor: 1e9, suffix: 'Gb' });
+  assert.equal(effectiveUnit('b/s', 'bits', 'Gb'), 'Gb/s');
 });
 
 test('formatHealthValue rounds to one decimal place', () => {

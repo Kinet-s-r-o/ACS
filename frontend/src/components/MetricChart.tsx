@@ -5,7 +5,7 @@ import { LineChart, BarChart, ScatterChart, EffectScatterChart, CandlestickChart
 import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { api, type MetricDefinition } from '../lib/api';
-import { thresholdLines } from '../lib/health';
+import { thresholdLines, effectiveUnit } from '../lib/health';
 import { isTimeSeriesType } from '../lib/echartsTypes';
 
 echarts.use([
@@ -78,16 +78,6 @@ const computeUnitScale = (values: number[], mode: string): UnitScale => {
     return { divisor: 1, suffix: 'b' };
   }
   return { divisor: 1, suffix: '' };
-};
-
-const effectiveUnit = (unit: string, scaleMode: string, suffix: string): string => {
-  if (scaleMode === 'bytes' || scaleMode === 'bits') {
-    return suffix || unit;
-  }
-  if (scaleMode === 'auto') {
-    return suffix ? suffix + unit : unit;
-  }
-  return unit;
 };
 
 const fmtVal = (v: number | null): string => (v == null ? '—' : v.toFixed(2));
