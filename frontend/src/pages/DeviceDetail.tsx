@@ -548,6 +548,9 @@ const DeviceDetail: Component = () => {
     setActionLoading('iperf');
     setIperfResult(null);
     const prefix = IPERF_CLIENT_ROOT;
+    const requestIperfSession = async () => {
+      try { await api.connectionRequest(serial()); } catch { /* The CPE may already have an active CWMP session. */ }
+    };
     try {
       const configTask = await api.setParameterValues(serial(), {
         [prefix + 'ServerAddr']: form.serverAddr.trim(),
@@ -558,11 +561,12 @@ const DeviceDetail: Component = () => {
         [prefix + 'Parallel']: String(parallel),
         [prefix + 'Bandwidth']: String(bandwidth),
       });
+      await requestIperfSession();
       await waitForTask(configTask.id, 'iPerf configuration');
 
       const startTask = await api.setParameterValues(serial(), { [prefix + 'DiagnosticsState']: 'Requested' });
+      await requestIperfSession();
       await waitForTask(startTask.id, 'iPerf start');
-      try { await api.connectionRequest(serial()); } catch { /* CPE may already be in an active CWMP session. */ }
 
       const deadline = Date.now() + Math.max(60_000, maxTime * 1000 + 45_000);
       let finalValues: Record<string, string> | null = null;
@@ -575,6 +579,7 @@ const DeviceDetail: Component = () => {
           prefix + 'ReportTime',
           prefix + 'ErrorDescription',
         ]);
+        await requestIperfSession();
         const completedRead = await waitForTask(readTask.id, 'iPerf result read');
         const values = (completedRead.result || {}) as Record<string, string>;
         finalValues = values;
