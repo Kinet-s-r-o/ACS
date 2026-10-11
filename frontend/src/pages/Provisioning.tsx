@@ -11,6 +11,7 @@ import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
+import { metricsForTemplate } from '../lib/metricViews';
 import MetricModal from '../components/MetricModal';
 
 interface ProvColumnConfig {
@@ -377,17 +378,12 @@ const Provisioning: Component = () => {
     finally { setPendingAction(null); }
   };
 
-  // Metrics tab: filter metrics matching the selected template's device type
+  // Metrics tab: show every metric that applies to the selected template's
+  // device scope (global / manufacturer / product class / concrete).
   const templateMetrics = createMemo(() => {
-    const all = metrics() || [];
     const t = selectedTemplate();
     if (!t) return [];
-    const deviceType = `${t.manufacturer || ''}/${t.product_class || ''}`;
-    return all.filter((def) => {
-      if (def.device_type_match === '' || def.device_type_match === '*') return true;
-      const pattern = def.device_type_match.replace(/\*/g, '.*');
-      return new RegExp(`^${pattern}$`).test(deviceType);
-    });
+    return metricsForTemplate(metrics() || [], t.manufacturer, t.product_class);
   });
 
   const openCreateMetric = () => {
