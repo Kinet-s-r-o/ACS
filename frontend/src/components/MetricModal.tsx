@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal, createResource, Show, For, on } from 'solid-js';
+import { createSignal, createResource, createEffect, Show, For } from 'solid-js';
 import { Plus, X } from 'lucide-solid';
 import { api, type MetricDefinition } from '../lib/api';
 import Dialog from './Dialog';
@@ -94,12 +94,14 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     setMetricTab('metric');
   };
 
-  on(
-    [() => props.open, () => props.editingMetric],
-    ([open, m]) => {
-      if (open) initForm(m);
-    }
-  );
+  // The modal stays mounted while the selected metric changes. Read both
+  // props inside the effect so Solid re-initializes the form for every edit
+  // action, including opening a different metric without unmounting first.
+  createEffect(() => {
+    const open = props.open;
+    const metric = props.editingMetric;
+    if (open) initForm(metric);
+  });
 
   const handleSave = async () => {
     const form = metricForm();
