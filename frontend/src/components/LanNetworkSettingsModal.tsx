@@ -14,7 +14,7 @@ interface LanNetworkSettingsModalProps {
 interface LanNetworkField {
   name: string;
   label: string;
-  section: 'DHCP server' | 'LAN IP interfaces';
+  section: 'DHCP server' | 'LAN IP interfaces' | 'IPv6';
   type: 'text' | 'number' | 'toggle';
   placeholder?: string;
 }
@@ -35,6 +35,16 @@ const IPV4_FIELDS: Array<{ suffix: string; label: string; section: LanNetworkFie
 const isIPv4 = (value: string): boolean => {
   const parts = value.split('.');
   return parts.length === 4 && parts.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+};
+
+const isIPv6 = (value: string): boolean => {
+  if (!value.includes(':')) return false;
+  try { new URL(`http://[${value}]/`); return true; } catch { return false; }
+};
+
+const isIPv6Prefix = (value: string): boolean => {
+  const [address, length, ...rest] = value.split('/');
+  return rest.length === 0 && isIPv6(address) && /^\d{1,3}$/.test(length || '') && Number(length) <= 128;
 };
 
 const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props) => {
@@ -65,6 +75,50 @@ const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props)
         if (byName.has(name)) result.push({ name, label: `Interface ${index} · ${label}`, section: 'LAN IP interfaces', type, placeholder: suffix === 'IPInterfaceIPAddress' ? '192.168.1.1' : suffix === 'IPInterfaceSubnetMask' ? '255.255.255.0' : undefined });
       }
     }
+    const ipv6Root = `${PREFIX}X_HW_IPv6Interface.`;
+    const ipv6Indexes = new Set(props.parameters.flatMap(parameter => {
+      const match = parameter.name.match(/^InternetGatewayDevice\.LANDevice\.1\.LANHostConfigManagement\.X_HW_IPv6Interface\.(\d+)\./);
+      return match ? [Number(match[1])] : [];
+    }));
+    for (const index of [...ipv6Indexes].sort((a, b) => a - b)) {
+      const interfacePrefix = `${ipv6Root}${index}.`;
+      for (const [suffix, label, type] of [
+        ['Enable', 'IPv6 enabled', 'toggle'],
+        ['ULAEnable', 'Unique local addresses (ULA)', 'toggle'],
+        ['ULAIPv6Prefix.ULAmode', 'ULA mode', 'text'],
+      ] as const) {
+        const name = interfacePrefix + suffix;
+        if (byName.has(name)) result.push({ name, label: `IPv6 interface ${index} · ${label}`, section: 'IPv6', type });
+      }
+      const addressIndexes = new Set(props.parameters.flatMap(parameter => {
+        const match = parameter.name.slice(interfacePrefix.length).match(/^IPv6Address\.(\d+)\.IPv6Address$/);
+        return match ? [Number(match[1])] : [];
+      }));
+      for (const addressIndex of [...addressIndexes].sort((a, b) => a - b)) {
+        const name = `${interfacePrefix}IPv6Address.${addressIndex}.IPv6Address`;
+        if (byName.has(name)) result.push({ name, label: `IPv6 interface ${index} · Address ${addressIndex}`, section: 'IPv6', type: 'text', placeholder: '2001:db8::1' });
+      }
+      const prefixIndexes = new Set(props.parameters.flatMap(parameter => {
+        const match = parameter.name.slice(interfacePrefix.length).match(/^IPv6Prefix\.(\d+)\./);
+        return match ? [Number(match[1])] : [];
+      }));
+      for (const prefixIndex of [...prefixIndexes].sort((a, b) => a - b)) {
+        const prefix = `${interfacePrefix}IPv6Prefix.${prefixIndex}.`;
+        for (const [suffix, label, placeholder] of [
+          ['Mode', 'Prefix mode', 'WANDelegated'],
+          ['Prefix', 'Prefix', '2001:db8:1::/64'],
+          ['ParentPrefix', 'Parent prefix', '2001:db8::/48'],
+          ['ChildPrefixMask', 'Child prefix mask', '::/64'],
+        ] as const) {
+          const name = prefix + suffix;
+          if (byName.has(name)) result.push({ name, label: `IPv6 interface ${index} · ${label} ${prefixIndex}`, section: 'IPv6', type: 'text', placeholder });
+        }
+        for (const [suffix, label] of [['PreferredLifeTime', 'Preferred lifetime'], ['ValidLifeTime', 'Valid lifetime']] as const) {
+          const name = prefix + suffix;
+          if (byName.has(name)) result.push({ name, label: `IPv6 interface ${index} · ${label} ${prefixIndex} (seconds)`, section: 'IPv6', type: 'number', placeholder: '0' });
+        }
+      }
+    }
     return result;
   });
 
@@ -81,6 +135,12 @@ const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props)
       if (['MinAddress', 'MaxAddress', 'SubnetMask', 'IPRouters', 'DNSServers'].some(suffix => field.name === PREFIX + suffix)
         || field.name.endsWith('.IPInterfaceIPAddress') || field.name.endsWith('.IPInterfaceSubnetMask')) {
         if (!value.split(',').every(address => isIPv4(address.trim()))) next[field.name] = 'Enter a valid IPv4 address.';
+      }
+      if (field.section === 'IPv6') {
+        const valid = field.name.endsWith('.IPv6Address') ? isIPv6(value)
+          : field.name.endsWith('.Prefix') || field.name.endsWith('.ParentPrefix') || field.name.endsWith('.ChildPrefixMask') ? isIPv6Prefix(value)
+            : field.type === 'number' ? /^\d+$/.test(value) : true;
+        if (!valid) next[field.name] = field.type === 'number' ? 'Enter a non-negative number.' : 'Enter a valid IPv6 address or prefix.';
       }
       if (field.name === PREFIX + 'DHCPLeaseTime' && (!/^\d+$/.test(value) || Number(value) < 1)) next[field.name] = 'Lease time must be a positive number of seconds.';
     }
@@ -110,7 +170,7 @@ const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props)
     } finally { setSummoning(false); }
   };
 
-  const sections: LanNetworkField['section'][] = ['DHCP server', 'LAN IP interfaces'];
+  const sections: LanNetworkField['section'][] = ['DHCP server', 'LAN IP interfaces', 'IPv6'];
   return (
     <Dialog
       title="LAN IP and DHCP settings"
