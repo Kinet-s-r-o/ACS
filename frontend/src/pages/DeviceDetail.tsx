@@ -225,7 +225,7 @@ const DeviceDetail: Component = () => {
     try {
       const detail = await api.getDeviceSnapshot(serial(), snapshot.id);
       setSelectedSnapshot(detail);
-      setCollapsedSnapshotPaths(new Set());
+      setCollapsedSnapshotPaths(new Set<string>());
       const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
       setSnapshotSelection((detail.parameters || []).filter(parameter => current.get(parameter.name) !== parameter.value).map(parameter => parameter.name));
     } catch (error) {
