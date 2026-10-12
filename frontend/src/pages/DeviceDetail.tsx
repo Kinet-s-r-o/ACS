@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
-import { api, type DeviceSnapshot, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
+import { api, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -11,6 +11,7 @@ import HealthGauge from '../components/HealthGauge';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import MetricChart from '../components/MetricChart';
+import InterfaceMetricChart from '../components/InterfaceMetricChart';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
@@ -113,6 +114,8 @@ const DeviceDetail: Component = () => {
   const [snapshots, { refetch: refetchSnapshots }] = createResource(serial, api.getDeviceSnapshots);
   const [deviceFaults, { refetch: refetchDeviceFaults }] = createResource(serial, api.getDeviceFaults);
   const [metricDefs] = createResource(api.getMetricDefinitions);
+  const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
+  const [statsInterface, setStatsInterface] = createSignal<{ type: 'wan' | 'lan'; name: string; path: string } | null>(null);
   const [taskPage, setTaskPage] = createSignal(0);
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
@@ -596,6 +599,25 @@ const DeviceDetail: Component = () => {
       groups.push(arr);
     }
     return groups;
+  });
+
+  const interfaceMetricGroups = createMemo(() => {
+    const target = statsInterface();
+    if (!target) return [] as InterfaceMetricDefinition[][];
+    const names = (parameters() || []).map(parameter => parameter.name);
+    const matching = (interfaceMetricDefs() || []).filter(def => def.active && def.interface_type === target.type && names.some(name => {
+      const pattern = def.parameter_pattern.split('.');
+      const path = name.split('.');
+      return name.startsWith(target.path) && pattern.length === path.length && pattern.every((part, index) => part === '*' || part === path[index]);
+    }));
+    const grouped = new Map<string, InterfaceMetricDefinition[]>();
+    for (const def of matching) {
+      const key = def.group?.trim() || `metric-${def.id}`;
+      const group = grouped.get(key) || [];
+      group.push(def);
+      grouped.set(key, group);
+    }
+    return [...grouped.values()];
   });
 
   let messageTimeout: number | undefined;
@@ -2317,6 +2339,14 @@ const DeviceDetail: Component = () => {
                               </Show>
                             </td>
                             <td class="px-2 py-2">
+                              <button
+                                onClick={() => setStatsInterface({ type: 'wan', name: wan.name, path: wan.path })}
+                                class="icon-button"
+                                aria-label={`Show statistics for WAN ${wan.name}`}
+                                title="Interface statistics"
+                              >
+                                <Activity size={14} />
+                              </button>
                               <Show when={isFullAccess()} fallback={<span class="text-muted text-xs">-</span>}>
                                 <button
                                   onClick={() => setWanModalPath(wan.path)}
@@ -2426,6 +2456,14 @@ const DeviceDetail: Component = () => {
                               </Show>
                             </td>
                             <td class="px-2 py-2">
+                              <button
+                                onClick={() => setStatsInterface({ type: 'lan', name: lan.name, path: `InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.${lan.index}.` })}
+                                class="icon-button"
+                                aria-label={`Show statistics for ${lan.name}`}
+                                title="Interface statistics"
+                              >
+                                <Activity size={14} />
+                              </button>
                               <Show when={isFullAccess()} fallback={<span class="text-muted text-xs">-</span>}>
                                 <button
                                   onClick={() => setLanModalIndex(lan.index)}
@@ -3061,6 +3099,23 @@ const DeviceDetail: Component = () => {
                 {iperfRunning() ? 'Running iPerf…' : 'Start test'}
               </button>
             </div>
+          </div>
+        </Dialog>
+      </Show>
+
+      <Show when={statsInterface()}>
+        <Dialog title={`${statsInterface()?.type.toUpperCase()} statistics — ${statsInterface()?.name}`} description="Charts show metrics configured for this interface in its provisioning template." size="large" onClose={() => setStatsInterface(null)} actions={<button type="button" class="btn btn-secondary" onClick={() => setStatsInterface(null)}>Close</button>}>
+          <Show when={interfaceMetricDefs.loading || parameters.loading}>
+            <div class="skeleton h-56 w-full" />
+          </Show>
+          <Show when={!interfaceMetricDefs.loading && !parameters.loading && interfaceMetricGroups().length === 0}>
+            <EmptyState compact title="No metrics configured for this interface" description="Add an active WAN/LAN metric to the device type template. Matching paths must exist in the stored parameter tree." />
+          </Show>
+          <div class="space-y-5">
+            <For each={interfaceMetricGroups()}>{(group) => <section class="rounded border border-subtle p-3">
+              <h3 class="mb-2 text-xs font-medium text-secondary">{group[0].group || group[0].name}</h3>
+              <InterfaceMetricChart serial={serial()} definitions={group} interfacePath={statsInterface()!.path} parameterNames={(parameters() || []).map(parameter => parameter.name)} />
+            </section>}</For>
           </div>
         </Dialog>
       </Show>

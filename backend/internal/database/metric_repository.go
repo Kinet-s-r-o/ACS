@@ -82,6 +82,10 @@ func (r *MetricRepository) InterfaceActiveParamNames(ctx context.Context, device
 	return names, nil
 }
 
+func (r *MetricRepository) InterfaceMetricDefinitionsForDevice(ctx context.Context, deviceType string) ([]models.InterfaceMetricDefinition, error) {
+	return r.interfaceMetricDefinitions(ctx, deviceType, true)
+}
+
 func (r *MetricRepository) ExtractAndStoreInterface(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
 	defs, err := r.interfaceMetricDefinitions(ctx, deviceType, true)
 	if err != nil || len(defs) == 0 {

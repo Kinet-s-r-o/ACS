@@ -152,6 +152,7 @@ export const api = {
   updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
   getInterfaceMetrics: (templateId: number) => request<InterfaceMetricDefinition[]>(`/provisioning/templates/${templateId}/interface-metrics`),
+  getDeviceInterfaceMetricDefinitions: (serial: string) => request<InterfaceMetricDefinition[]>(`/device/${encodeURIComponent(serial)}/interface-metric-definitions`),
   createInterfaceMetric: (templateId: number, body: Omit<InterfaceMetricDefinition, 'id' | 'template_id' | 'created_at' | 'updated_at'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics`, { method: 'POST', body: JSON.stringify(body) }),
   updateInterfaceMetric: (templateId: number, id: number, body: Omit<InterfaceMetricDefinition, 'id' | 'template_id' | 'created_at' | 'updated_at'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteInterfaceMetric: (templateId: number, id: number) => request<{ status: string }>(`/provisioning/templates/${templateId}/interface-metrics/${id}`, { method: 'DELETE' }),

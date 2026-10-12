@@ -25,6 +25,27 @@ func (r *Router) handleListInterfaceMetrics(w http.ResponseWriter, req *http.Req
 	respondJSON(w, http.StatusOK, defs)
 }
 
+func (r *Router) handleListDeviceInterfaceMetricDefinitions(w http.ResponseWriter, req *http.Request) {
+	device, err := r.deviceRepo.GetBySerial(req.Context(), req.PathValue("serial"))
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	manufacturer, productClass := "", ""
+	if device.Manufacturer != nil {
+		manufacturer = *device.Manufacturer
+	}
+	if device.ProductClass != nil {
+		productClass = *device.ProductClass
+	}
+	defs, err := r.metricRepo.InterfaceMetricDefinitionsForDevice(req.Context(), manufacturer+"/"+productClass)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load interface metric definitions")
+		return
+	}
+	respondJSON(w, http.StatusOK, defs)
+}
+
 func (r *Router) handleGetDeviceInterfaceMetric(w http.ResponseWriter, req *http.Request) {
 	device, err := r.deviceRepo.GetBySerial(req.Context(), req.PathValue("serial"))
 	if err != nil {
