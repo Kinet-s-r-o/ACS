@@ -5,6 +5,7 @@ import { LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChar
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { api, type InterfaceMetricDefinition } from '../lib/api';
+import { computeUnitScale, effectiveUnit } from '../lib/health';
 
 echarts.use([LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
@@ -37,15 +38,30 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     if (!values) return [];
     return values.flatMap((result, index) => {
       const request = requests()[index];
-      return result.samples?.length ? [{
+      if (!result.samples?.length) return [];
+      const max = Math.max(...result.samples.map(sample => Math.abs(sample.value)));
+      const scale = computeUnitScale(max, request.def.unit_scale);
+      return [{
         name: request.def.name,
         type: request.def.chart_type || 'line',
         showSymbol: false,
         itemStyle: { color: request.def.color || '#38bdf8' },
         lineStyle: { color: request.def.color || '#38bdf8' },
-        data: result.samples.map(sample => [new Date(sample.timestamp).getTime(), sample.value]),
-      }] : [];
+        data: result.samples.map(sample => [new Date(sample.timestamp).getTime(), sample.value / scale.divisor]),
+      }];
     });
+  });
+  const unitLabel = createMemo(() => {
+    const values = results();
+    if (!values) return '';
+    return [...new Set(values.flatMap((result, index) => {
+      if (!result.samples?.length) return [];
+      const def = requests()[index].def;
+      const max = Math.max(...result.samples.map(sample => Math.abs(sample.value)));
+      const scale = computeUnitScale(max, def.unit_scale);
+      const unit = effectiveUnit(def.unit, def.unit_scale, scale.suffix);
+      return unit ? [unit] : [];
+    }))].join(' / ');
   });
 
   createEffect(() => {
@@ -64,7 +80,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
       legend: { textStyle: { color: '#a1a1aa', fontSize: 10 } },
       grid: { left: 52, right: 18, top: 34, bottom: 48 },
       xAxis: { type: 'time', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false } },
-      yAxis: { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(71,85,105,0.15)' } } },
+      yAxis: { type: 'value', name: unitLabel(), nameTextStyle: { color: '#71717a', fontSize: 10 }, axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(71,85,105,0.15)' } } },
       dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4 }],
       series: data,
     }, { notMerge: true });

@@ -78,6 +78,7 @@ type InterfaceMetricDefinition struct {
 	InterfaceType    string    `json:"interface_type" gorm:"not null;size:16"`
 	ParameterPattern string    `json:"parameter_pattern" gorm:"not null;size:512"`
 	Unit             string    `json:"unit"`
+	UnitScale        string    `json:"unit_scale" gorm:"not null;default:''"`
 	Color            string    `json:"color" gorm:"default:''"`
 	Group            string    `json:"group" gorm:"default:''"`
 	ChartType        string    `json:"chart_type" gorm:"not null;default:'line'"`

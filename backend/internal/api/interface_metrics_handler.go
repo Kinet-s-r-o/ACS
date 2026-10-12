@@ -115,6 +115,12 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 	if def.ChartType == "" {
 		def.ChartType = "line"
 	}
+	switch def.UnitScale {
+	case "", "auto", "bytes", "bits":
+	default:
+		respondError(w, http.StatusBadRequest, "unit_scale must be '', 'auto', 'bytes', or 'bits'")
+		return
+	}
 	switch def.ChartType {
 	case "line", "bar", "pictorialBar", "scatter", "effectScatter", "candlestick", "boxplot", "heatmap":
 	default:
@@ -152,7 +158,7 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	def.ID = id
-	result := r.db.WithContext(req.Context()).Model(&models.InterfaceMetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
+	result := r.db.WithContext(req.Context()).Model(&models.InterfaceMetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "unit_scale": def.UnitScale, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update interface metric")
 		return
