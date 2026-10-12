@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
+import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
 import { api, type DeviceSnapshot, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
@@ -370,8 +370,6 @@ const DeviceDetail: Component = () => {
   const [modemCredsEdits, setModemCredsEdits] = createSignal<Record<string, string>>({});
   const [showFactoryResetModal, setShowFactoryResetModal] = createSignal(false);
   const [factoryResetPassword, setFactoryResetPassword] = createSignal('');
-  const [newTag, setNewTag] = createSignal('');
-  const [tagsLoading, setTagsLoading] = createSignal(false);
   const [paramColumnFilters, setParamColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const [hostColumnFilters, setHostColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const [hostColumns, setHostColumns] = createSignal<HostColumnConfig[]>([]);
@@ -512,7 +510,6 @@ const DeviceDetail: Component = () => {
     URL.revokeObjectURL(url);
   };
 
-  const deviceTags = createMemo(() => device()?.tags || []);
 
   const matchingMetrics = createMemo(() => {
     const defs = metricDefs() || [];
@@ -568,30 +565,6 @@ const DeviceDetail: Component = () => {
     return groups;
   });
 
-  const handleAddTag = async () => {
-    const tag = newTag().trim().toLowerCase();
-    if (!tag || tagsLoading()) return;
-    if (deviceTags().includes(tag)) { setNewTag(''); return; }
-    setTagsLoading(true);
-    try {
-      await api.setDeviceTags(serial(), [...deviceTags(), tag]);
-      setNewTag('');
-      refetchDevice();
-    } catch (err) {
-      showMessage('error', 'Tag was not added.', (err as Error).message);
-    } finally { setTagsLoading(false); }
-  };
-
-  const handleRemoveTag = async (tag: string) => {
-    if (tagsLoading()) return;
-    setTagsLoading(true);
-    try {
-      await api.setDeviceTags(serial(), deviceTags().filter(t => t !== tag));
-      refetchDevice();
-    } catch (err) {
-      showMessage('error', 'Tag was not removed.', (err as Error).message);
-    } finally { setTagsLoading(false); }
-  };
   let messageTimeout: number | undefined;
   const closeFactoryResetModal = () => {
     setShowFactoryResetModal(false);
@@ -1484,43 +1457,6 @@ const DeviceDetail: Component = () => {
                   <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
                 </div>
 
-                <div class="mt-4 pt-4 border-t border-subtle">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <Tags size={13} class="text-muted" />
-                    <span class="text-xs font-medium text-secondary">Tags</span>
-                    <For each={deviceTags()}>
-                      {(tag) => (
-                        <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400">
-                          {tag}
-                          <Show when={isFullAccess()}>
-                            <button onClick={() => handleRemoveTag(tag)} disabled={tagsLoading()} class="hover:text-rose-400 disabled:opacity-50" aria-label={`Remove tag ${tag}`}>
-                              <X size={10} />
-                            </button>
-                          </Show>
-                        </span>
-                      )}
-                    </For>
-                    <Show when={deviceTags().length === 0}>
-                      <span class="text-[11px] text-muted" title="Provisioning rules with a tag scope will not apply to this CPE">None</span>
-                    </Show>
-                  <Show when={isFullAccess()}>
-                    <form class="ml-auto flex items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); void handleAddTag(); }}>
-                      <input
-                        type="text"
-                        value={newTag()}
-                        onInput={(e) => setNewTag(e.currentTarget.value)}
-                        class="input w-32 py-1 text-[11px]"
-                        placeholder="Add tag"
-                        aria-label="New device tag"
-                        disabled={tagsLoading()}
-                      />
-                      <button type="submit" aria-label="Add tag" title="Add tag" disabled={tagsLoading() || !newTag().trim()} class="icon-button w-7 h-7 disabled:opacity-50">
-                        <Plus size={14} />
-                      </button>
-                    </form>
-                  </Show>
-                  </div>
-                </div>
               </div>
 
               {/* Device Health - Compact Horizontal */}

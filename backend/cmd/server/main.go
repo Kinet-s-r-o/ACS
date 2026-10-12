@@ -333,6 +333,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.MetricDefinition{},
 		&models.MetricSample{},
 		&models.DeviceSnapshot{},
+		&models.TagDefinition{},
 		&database.Setting{},
 	}
 
@@ -340,6 +341,9 @@ func runAutoMigrate(db *gorm.DB) error {
 		if err := db.AutoMigrate(model); err != nil {
 			return fmt.Errorf("migrate %T: %w", model, err)
 		}
+	}
+	if err := database.NewTagRepository(db).SeedLegacyDefinitions(context.Background()); err != nil {
+		return fmt.Errorf("seed legacy tag definitions: %w", err)
 	}
 	if db.Migrator().HasIndex(&models.ProvisioningApplication{}, "idx_provisioning_application") {
 		if err := db.Migrator().DropIndex(&models.ProvisioningApplication{}, "idx_provisioning_application"); err != nil {

@@ -12,6 +12,7 @@ import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
+import DeviceTagPicker from '../components/DeviceTagPicker';
 
 interface ColumnConfig {
   id: string;
@@ -63,7 +64,7 @@ const Devices: Component = () => {
   const [summoningAll, setSummoningAll] = createSignal(false);
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
-  const { isFullAccess } = useAuth();
+  const { isFullAccess, hasPermission } = useAuth();
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
@@ -97,6 +98,9 @@ const Devices: Component = () => {
     () => [page(), pageSize()],
     ([p, l]) => api.getDevices(l, p * l)
   );
+  const [tagCatalog] = createResource(api.getTags);
+
+  const getDeviceTagLabels = (device: Device) => (device.tags || []).map(id => tagCatalog()?.find(tag => tag.id === id)?.name || id).join(', ');
 
   const totalPages = () => Math.ceil((deviceList()?.total ?? 0) / pageSize());
 
@@ -183,7 +187,7 @@ const Devices: Component = () => {
       case 'last_inform':
         return <span class="text-muted text-xs">{formatDate(device.last_inform)}</span>;
       case 'tags':
-        return <TagChips tags={device.tags || []} />;
+        return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasPermission('devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
       default:
         return '-';
     }
@@ -203,7 +207,7 @@ const Devices: Component = () => {
       case 'ppp_username': return getPppUsername(device) === '-' ? '' : getPppUsername(device);
       case 'status': return device.online ? 'Online' : 'Offline';
       case 'last_inform': return device.last_inform || '';
-      case 'tags': return (device.tags || []).join(', ');
+      case 'tags': return getDeviceTagLabels(device);
       default: return '';
     }
   };
@@ -259,8 +263,8 @@ const Devices: Component = () => {
           bVal = b.last_inform ? new Date(b.last_inform).getTime() : 0;
           break;
         case 'tags':
-          aVal = (a.tags || []).join(', ');
-          bVal = (b.tags || []).join(', ');
+          aVal = getDeviceTagLabels(a);
+          bVal = getDeviceTagLabels(b);
           break;
         default:
           return 0;

@@ -211,6 +211,37 @@ func RequirePermission(perm string) func(http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// RequireAnyPermission allows access when a caller has at least one permission from the supplied set.
+func RequireAnyPermission(perms ...string) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			claims := GetUserFromContext(r.Context())
+			if claims == nil {
+				writeAuthError(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			userPermissions := GetPermissionsFromContext(r.Context())
+			if userPermissions != nil {
+				for _, required := range perms {
+					for _, actual := range userPermissions {
+						if actual == required {
+							next(w, r)
+							return
+						}
+					}
+				}
+				writeAuthError(w, `{"error":"forbidden - insufficient permissions"}`, http.StatusForbidden)
+				return
+			}
+			if claims.Role == models.RoleFull {
+				next(w, r)
+				return
+			}
+			writeAuthError(w, `{"error":"forbidden - insufficient permissions"}`, http.StatusForbidden)
+		}
+	}
+}
+
 func RequireFullAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetUserFromContext(r.Context())

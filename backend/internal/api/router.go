@@ -45,6 +45,7 @@ type Router struct {
 	blockedRepo      *database.BlockedDeviceRepository
 	metricRepo       *database.MetricRepository
 	snapshotRepo     *database.SnapshotRepository
+	tagRepo          *database.TagRepository
 	loginLimiter     *loginLimiter
 	downloadLimiter  *loginLimiter
 	uploadDir        string
@@ -87,6 +88,7 @@ func NewRouter(db *gorm.DB) *Router {
 		blockedRepo:      database.NewBlockedDeviceRepository(db),
 		metricRepo:       database.NewMetricRepository(db),
 		snapshotRepo:     database.NewSnapshotRepository(db),
+		tagRepo:          database.NewTagRepository(db),
 		loginLimiter:     newLoginLimiter(5, 15*time.Minute),
 		downloadLimiter:  newLoginLimiter(60, time.Minute),
 		uploadDir:        uploadDir,
@@ -140,6 +142,10 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /devices/{id}/download-firmware", auth.RequirePermission(models.PermDevicesWrite)(r.handleDownloadFirmware))
 
 	// Device endpoints (by serial - new)
+	apiMux.HandleFunc("GET /tags", auth.RequireAnyPermission(models.PermDevicesRead, models.PermSettingsRead, models.PermProvisioningRead)(r.handleListTags))
+	apiMux.HandleFunc("POST /tags", auth.RequirePermission(models.PermSettingsWrite)(r.handleCreateTag))
+	apiMux.HandleFunc("PUT /tags/{id}", auth.RequirePermission(models.PermSettingsWrite)(r.handleUpdateTag))
+	apiMux.HandleFunc("DELETE /tags/{id}", auth.RequirePermission(models.PermSettingsWrite)(r.handleDeleteTag))
 	apiMux.HandleFunc("GET /device/{serial}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceBySerial))
 	apiMux.HandleFunc("DELETE /device/{serial}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteDeviceBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParametersBySerial))
@@ -1732,6 +1738,21 @@ func (r *Router) handleSetDeviceTagsBySerial(w http.ResponseWriter, req *http.Re
 	for _, tag := range tags {
 		if len(tag) > 64 {
 			respondError(w, http.StatusBadRequest, "A tag must be 64 characters or fewer")
+			return
+		}
+	}
+	catalog, err := r.tagRepo.List(req.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to read tag catalog")
+		return
+	}
+	knownTags := make(map[string]struct{}, len(catalog))
+	for _, definition := range catalog {
+		knownTags[definition.ID] = struct{}{}
+	}
+	for _, tag := range tags {
+		if _, exists := knownTags[tag]; !exists {
+			respondError(w, http.StatusBadRequest, "Unknown tag: "+tag)
 			return
 		}
 	}
