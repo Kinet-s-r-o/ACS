@@ -1719,9 +1719,9 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
                   </div>
                   <div class="space-y-2">
-                    <div class="h-32 w-full" aria-hidden={!templateImageUrl()}>
+                    <div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
                       <Show when={templateImageUrl()}>
-                        <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full rounded border border-subtle object-cover" />
+                        <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full rounded border border-subtle object-contain object-center" />
                       </Show>
                     </div>
                     <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
