@@ -1714,6 +1714,9 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted">Serial:</span> <span class="text-primary font-mono">{d().serial_number}</span></div>
                     <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
                     <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
+                    <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
+                    <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
+                    <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
                     <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
                     <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
                     <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
@@ -1724,9 +1727,6 @@ const DeviceDetail: Component = () => {
                         <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full rounded border border-subtle object-contain object-center" />
                       </Show>
                     </div>
-                    <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
-                    <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
-                    <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
                   </div>
                 </div>
 
