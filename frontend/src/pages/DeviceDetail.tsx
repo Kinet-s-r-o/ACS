@@ -24,6 +24,7 @@ import LanSettingsModal from '../components/LanSettingsModal';
 import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
 import DeviceTagPicker from '../components/DeviceTagPicker';
+import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 
 interface HostColumnConfig {
   id: string;
@@ -31,7 +32,8 @@ interface HostColumnConfig {
   visible: boolean;
 }
 
-const HOST_COLUMNS_STORAGE_KEY = 'skyacs_connected_hosts_columns';
+const HOST_COLUMNS_STORAGE_KEY = 'acs_connected_hosts_columns';
+const LEGACY_HOST_COLUMNS_STORAGE_KEY = 'skyacs_connected_hosts_columns';
 const defaultHostColumns: HostColumnConfig[] = [
   { id: 'hostname', label: 'Hostname', visible: true },
   { id: 'ip', label: 'IP address', visible: true },
@@ -74,7 +76,8 @@ const NSLOOKUP_ROOTS = ['InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnosti
 const IPPING_ROOTS = ['InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.'];
 const TRACEROUTE_ROOTS = ['InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'];
 
-const PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
+const PARAM_COLUMNS_STORAGE_KEY = 'acs_all_params_columns';
+const LEGACY_PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
 const defaultParamColumns: ParamColumnConfig[] = [
   { id: 'object', label: 'Object', visible: false },
   { id: 'name', label: 'Name', visible: true },
@@ -432,7 +435,7 @@ const DeviceDetail: Component = () => {
   });
 
   onMount(() => {
-    const saved = localStorage.getItem(HOST_COLUMNS_STORAGE_KEY);
+    const saved = readMigratedStorageValue(localStorage, HOST_COLUMNS_STORAGE_KEY, LEGACY_HOST_COLUMNS_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as HostColumnConfig[];
@@ -481,12 +484,12 @@ const DeviceDetail: Component = () => {
   createEffect(() => {
     const columns = hostColumns();
     if (columns.length > 0) {
-      localStorage.setItem(HOST_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
+      writeMigratedStorageValue(localStorage, HOST_COLUMNS_STORAGE_KEY, LEGACY_HOST_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
     }
   });
 
   onMount(() => {
-    const saved = localStorage.getItem(PARAM_COLUMNS_STORAGE_KEY);
+    const saved = readMigratedStorageValue(localStorage, PARAM_COLUMNS_STORAGE_KEY, LEGACY_PARAM_COLUMNS_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ParamColumnConfig[];
@@ -505,7 +508,7 @@ const DeviceDetail: Component = () => {
   createEffect(() => {
     const columns = paramColumns();
     if (columns.length > 0) {
-      localStorage.setItem(PARAM_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
+      writeMigratedStorageValue(localStorage, PARAM_COLUMNS_STORAGE_KEY, LEGACY_PARAM_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
     }
   });
 
@@ -617,7 +620,7 @@ const DeviceDetail: Component = () => {
   });
 
   const handleReboot = async () => {
-    if (!await confirm({ title: `Reboot CPE ${serial()}?`, description: 'SKYACS will queue a reboot task for the next available CWMP session. Service may be interrupted while the CPE restarts.', confirmLabel: 'Queue reboot' })) return;
+    if (!await confirm({ title: `Reboot CPE ${serial()}?`, description: 'ACS will queue a reboot task for the next available CWMP session. Service may be interrupted while the CPE restarts.', confirmLabel: 'Queue reboot' })) return;
     setActionLoading('reboot');
     try {
       await api.rebootDevice(serial());
@@ -1864,7 +1867,7 @@ const DeviceDetail: Component = () => {
                   <div class="flex items-center justify-between gap-3 mb-3">
                     <div>
                       <h2 class="text-sm font-medium text-secondary">Configuration Snapshots</h2>
-                      <p class="text-xs text-muted mt-1">Stored from the parameters currently cached by SKYACS.</p>
+                      <p class="text-xs text-muted mt-1">Stored from the parameters currently cached by ACS.</p>
                     </div>
                     <span class="text-xs text-muted">{snapshots()?.length || 0}</span>
                   </div>
@@ -2983,7 +2986,7 @@ const DeviceDetail: Component = () => {
 		  {/* Factory reset step-up confirmation */}
 		  <Show when={showFactoryResetModal()}>
 			<Dialog title={`Factory reset ${serial()}?`} description="All CPE configuration will be erased and service may not recover automatically. This operation cannot be undone." size="small" closeOnBackdrop={false} onClose={closeFactoryResetModal} actions={<><button onClick={closeFactoryResetModal} class="btn btn-secondary">Cancel</button><button onClick={handleFactoryReset} disabled={!factoryResetPassword() || actionLoading() !== null} class="btn btn-danger">Confirm factory reset</button></>}>
-				<label for="factory-reset-password" class="block text-xs text-muted mb-1.5">Current SKYACS account password</label>
+				<label for="factory-reset-password" class="block text-xs text-muted mb-1.5">Current ACS account password</label>
 				<input
 				  id="factory-reset-password"
 			  type="password"

@@ -149,7 +149,7 @@ const UsersPage: Component = () => {
           </div>
         </div>
 
-        <Show when={users.error}><ResourceError title="Operator accounts are unavailable" description="SKYACS could not read the account directory. Retry before changing access." onRetry={() => refetchUsers()} /></Show>
+        <Show when={users.error}><ResourceError title="Operator accounts are unavailable" description="ACS could not read the account directory. Retry before changing access." onRetry={() => refetchUsers()} /></Show>
         <Show when={users.loading}><div class="space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
         <Show when={!users.loading && !users.error && (users()?.length ?? 0) > 0}>
           <div class="overflow-x-auto table-scroll"><table class="data-table w-full text-sm min-w-[620px]">

@@ -72,7 +72,7 @@ const Security: Component = () => {
     } finally { setSaving(false); }
   };
   const unblock = async (serialNumber: string) => {
-    if (!await confirm({ title: `Allow ${serialNumber} to reconnect?`, description: 'The CPE will be admitted again when its next CWMP session reaches SKYACS. The unblock event remains in the audit trail.', confirmLabel: 'Unblock CPE' })) return;
+    if (!await confirm({ title: `Allow ${serialNumber} to reconnect?`, description: 'The CPE will be admitted again when its next CWMP session reaches ACS. The unblock event remains in the audit trail.', confirmLabel: 'Unblock CPE' })) return;
     if (pendingUnblock()) return;
     setPendingUnblock(serialNumber);
     try {

@@ -235,7 +235,7 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) handleMeta(w http.ResponseWriter, req *http.Request) {
-	appName := "SKYACS"
+	appName := "ACS"
 	if s, err := r.settingsRepo.Get(req.Context(), "app_name"); err == nil && s != nil && s.Value != "" {
 		appName = s.Value
 	}

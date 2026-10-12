@@ -1,5 +1,6 @@
 import { createContext, createSignal, onMount, useContext, type Accessor, type ParentComponent } from 'solid-js';
 import { API_BASE, clearStoredSession, getStoredToken, request, type User } from './api';
+import { writeMigratedStorageValue } from './storage';
 
 interface AuthContextType {
   user: Accessor<User | null>;
@@ -50,7 +51,7 @@ export const AuthProvider: ParentComponent = (props) => {
     const body = await response.json().catch(() => ({ error: 'Login service unavailable' }));
     if (!response.ok) throw new Error(body.error || 'Login failed');
 
-    sessionStorage.setItem('skyacs_token', body.token);
+    writeMigratedStorageValue(sessionStorage, 'acs_token', 'skyacs_token', body.token);
     setToken(body.token);
     setUser(body.user);
     setPermissions(body.permissions || []);

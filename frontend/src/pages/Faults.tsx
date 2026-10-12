@@ -154,7 +154,7 @@ const Faults: Component = () => {
       </PageHeader>
 
       <Show when={faults.error || stats.error}>
-        <div class="card"><ResourceError title="Fault data is unavailable" description="SKYACS could not read the protocol fault register. Retry the request without changing the selected filter." onRetry={() => { refetch(); refetchStats(); }} /></div>
+        <div class="card"><ResourceError title="Fault data is unavailable" description="ACS could not read the protocol fault register. Retry the request without changing the selected filter." onRetry={() => { refetch(); refetchStats(); }} /></div>
       </Show>
 
       <dl class="ops-register fault-register" aria-label="Fault status register" aria-busy={stats.loading}>

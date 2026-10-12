@@ -99,7 +99,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		username, password, ok := r.BasicAuth()
 		if !ok || !secureEqual(username, h.cwmpUsername) || !secureEqual(password, h.cwmpPassword) {
-			w.Header().Set("WWW-Authenticate", `Basic realm="SKYACS CWMP"`)
+			w.Header().Set("WWW-Authenticate", `Basic realm="ACS CWMP"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

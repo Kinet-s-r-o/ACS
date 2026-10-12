@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { api } from './api';
 
-export const APP_NAME = import.meta.env.VITE_APP_NAME || 'SKYACS';
+export const APP_NAME = import.meta.env.VITE_APP_NAME || 'ACS';
 
 const [appName, setAppName] = createSignal<string>(APP_NAME);
 

@@ -49,7 +49,7 @@ const Delivery: Component = () => {
 
   return (
     <div class="space-y-5">
-      <PageHeader title="Delivery & Connection Request" description="Firmware delivery endpoint and credentials used when SKYACS contacts a CPE." />
+      <PageHeader title="Delivery & Connection Request" description="Firmware delivery endpoint and credentials used when ACS contacts a CPE." />
 
       <div class="card p-5">
         <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
@@ -57,10 +57,10 @@ const Delivery: Component = () => {
           Delivery & Connection Request
         </h2>
         <p class="text-muted text-xs mb-4">
-          Firmware delivery endpoint and credentials used when SKYACS contacts a CPE.
+          Firmware delivery endpoint and credentials used when ACS contacts a CPE.
         </p>
 
-        <Show when={settings.error}><ResourceError title="Connection settings are unavailable" description="SKYACS could not read the current firmware and connection-request configuration. Retry before changing deployment settings." onRetry={() => refetch()} /></Show>
+        <Show when={settings.error}><ResourceError title="Connection settings are unavailable" description="ACS could not read the current firmware and connection-request configuration. Retry before changing deployment settings." onRetry={() => refetch()} /></Show>
         <Show when={!settings.loading && !settings.error} fallback={settings.loading ?
           <div class="space-y-4">
             <div class="skeleton h-10 w-full" />
@@ -93,7 +93,7 @@ const Delivery: Component = () => {
               <div class="flex items-center justify-between mb-3">
                 <div>
                   <span class="block text-xs text-muted">Connection-request credential mode</span>
-                  <p class="text-xs text-muted mt-0.5">Choose how SKYACS authenticates outbound connection requests to each CPE.</p>
+                  <p class="text-xs text-muted mt-0.5">Choose how ACS authenticates outbound connection requests to each CPE.</p>
                 </div>
                 <button
                   onClick={() => handleChange('use_auto_conn_credentials', getValue('use_auto_conn_credentials') === 'true' ? 'false' : 'true')}
@@ -180,13 +180,13 @@ const Delivery: Component = () => {
           CPE Configuration Guide
         </h2>
         <div class="text-muted text-xs space-y-2">
-          <p>To connect a CPE to SKYACS:</p>
+          <p>To connect a CPE to ACS:</p>
           <ol class="list-decimal list-inside space-y-1 ml-2">
             <li>Sign in to the CPE management interface.</li>
             <li>Open its TR-069 or CWMP settings.</li>
             <li>Set the ACS URL to the published CWMP endpoint, for example <code class="bg-elevated px-2 py-0.5 rounded text-sky-400">https://cwmp.example.com/</code>.</li>
             <li>Configure <code>CWMP_USERNAME</code> and <code>CWMP_PASSWORD</code> when endpoint authentication is enabled.</li>
-            <li>Save the configuration and verify that an Inform reaches SKYACS.</li>
+            <li>Save the configuration and verify that an Inform reaches ACS.</li>
           </ol>
         </div>
       </div>

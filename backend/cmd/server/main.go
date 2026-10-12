@@ -33,8 +33,8 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found; using process environment")
 	}
-	if err := godotenv.Load(".skyacs.env"); err != nil {
-		log.Println("No .skyacs.env file found")
+	if err := godotenv.Load(".acs.env", ".skyacs.env"); err != nil {
+		log.Println("No .acs.env or legacy .skyacs.env file found")
 	}
 	if err := auth.ConfigureJWT(os.Getenv("JWT_SECRET")); err != nil {
 		log.Fatalf("Security configuration error: %v", err)
@@ -123,14 +123,14 @@ func main() {
 	go watchdog.Start(ctx)
 
 	go func() {
-		log.Printf("SKYACS CWMP server listening on %s", cwmpServer.Addr)
+	log.Printf("ACS CWMP server listening on %s", cwmpServer.Addr)
 		if err := cwmpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("CWMP server failed: %v", err)
 		}
 	}()
 
 	go func() {
-		log.Printf("SKYACS API server listening on %s", apiServer.Addr)
+	log.Printf("ACS API server listening on %s", apiServer.Addr)
 		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("API server failed: %v", err)
 		}
@@ -380,12 +380,15 @@ func runAutoMigrate(db *gorm.DB) error {
 		{Key: "use_auto_conn_credentials", Value: "false", Description: "Derive unique per-device credentials with HMAC-SHA256"},
 		{Key: "default_page_size", Value: "20", Description: "Default number of rows per page in list views"},
 		{Key: "chart_show_points", Value: "true", Description: "Show data points on metric charts"},
-		{Key: "app_name", Value: "SKYACS", Description: "Application name displayed in the UI"},
+		{Key: "app_name", Value: "ACS", Description: "Application name displayed in the UI"},
 	}
 	for index := range defaultSettings {
 		if err := db.Where(database.Setting{Key: defaultSettings[index].Key}).FirstOrCreate(&defaultSettings[index]).Error; err != nil {
 			return fmt.Errorf("seed setting %s: %w", defaultSettings[index].Key, err)
 		}
+	}
+	if err := db.Model(&database.Setting{}).Where("key = ? AND value = ?", "app_name", "SKYACS").Update("value", "ACS").Error; err != nil {
+		return fmt.Errorf("migrate default application name: %w", err)
 	}
 	if err := db.Where("key IN ?", []string{"acs_url", "acs_username", "acs_password", "inform_interval", "default_refresh_interval"}).Delete(&database.Setting{}).Error; err != nil {
 		return fmt.Errorf("remove obsolete settings: %w", err)
@@ -680,5 +683,5 @@ func generateBootstrapPassword() string {
 	if _, err := rand.Read(buffer); err != nil {
 		panic(fmt.Sprintf("cannot generate bootstrap password: %v", err))
 	}
-	return "SKYACS-" + hex.EncodeToString(buffer)
+	return "ACS-" + hex.EncodeToString(buffer)
 }

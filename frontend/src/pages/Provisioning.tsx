@@ -13,6 +13,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { metricsForTemplate } from '../lib/metricViews';
 import MetricModal from '../components/MetricModal';
+import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 
 interface ProvColumnConfig {
   id: string;
@@ -30,7 +31,8 @@ const defaultProvColumns: ProvColumnConfig[] = [
   { id: 'status', label: 'Status', visible: true, order: 5 },
 ];
 
-const PROV_STORAGE_KEY = 'skyacs-prov-columns';
+const PROV_STORAGE_KEY = 'acs-prov-columns';
+const LEGACY_PROV_STORAGE_KEY = 'skyacs-prov-columns';
 
 const Provisioning: Component = () => {
   const { isFullAccess } = useAuth();
@@ -71,7 +73,7 @@ const Provisioning: Component = () => {
   // Provisioning column visibility
   const [provColumns, setProvColumns] = createSignal<ProvColumnConfig[]>((() => {
     try {
-      const stored = localStorage.getItem(PROV_STORAGE_KEY);
+      const stored = readMigratedStorageValue(localStorage, PROV_STORAGE_KEY, LEGACY_PROV_STORAGE_KEY);
       if (stored) return JSON.parse(stored) as ProvColumnConfig[];
     } catch { /* ignore */ }
     return defaultProvColumns;
@@ -207,7 +209,7 @@ const Provisioning: Component = () => {
 
   createEffect(() => {
     const cols = provColumns();
-    localStorage.setItem(PROV_STORAGE_KEY, JSON.stringify(cols));
+    writeMigratedStorageValue(localStorage, PROV_STORAGE_KEY, LEGACY_PROV_STORAGE_KEY, JSON.stringify(cols));
   });
 
   const visibleProvColumns = () => provColumns().filter(c => c.visible).sort((a, b) => a.order - b.order);

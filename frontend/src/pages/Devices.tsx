@@ -13,6 +13,7 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
+import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 
 interface ColumnConfig {
   id: string;
@@ -34,7 +35,8 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'tags', label: 'Tags', visible: true, order: 9 },
 ];
 
-const STORAGE_KEY = 'skyacs_device_columns';
+const STORAGE_KEY = 'acs_device_columns';
+const LEGACY_STORAGE_KEY = 'skyacs_device_columns';
 
 const TableSkeleton: Component<{ cols: number }> = (props) => (
   <tr>
@@ -70,7 +72,7 @@ const Devices: Component = () => {
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
 
   onMount(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = readMigratedStorageValue(localStorage, STORAGE_KEY, LEGACY_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -90,7 +92,7 @@ const Devices: Component = () => {
   createEffect(() => {
     const cols = columns();
     if (cols.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cols));
+      writeMigratedStorageValue(localStorage, STORAGE_KEY, LEGACY_STORAGE_KEY, JSON.stringify(cols));
     }
   });
 
@@ -425,7 +427,7 @@ const Devices: Component = () => {
                           compact
                           icon={<RouterIcon size={22} />}
                           title={searchQuery() ? 'No CPEs match this search' : 'No CPEs have registered'}
-                          description={searchQuery() ? 'Change the serial, model, vendor, or IP search to return to the current inventory.' : 'CPEs appear after their first CWMP Inform reaches SKYACS. Verify the published endpoint and device ACS URL.'}
+                          description={searchQuery() ? 'Change the serial, model, vendor, or IP search to return to the current inventory.' : 'CPEs appear after their first CWMP Inform reaches ACS. Verify the published endpoint and device ACS URL.'}
                           action={searchQuery() ? <button type="button" class="btn btn-secondary" onClick={() => setSearchQuery('')}>Clear search</button> : undefined}
                         />
                       </td>

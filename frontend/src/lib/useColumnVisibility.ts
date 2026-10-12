@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { readMigratedStorageValue, writeMigratedStorageValue } from './storage';
 
 /** A single toggleable table column. */
 export interface ColumnDef {
@@ -13,7 +14,7 @@ export interface ColumnDef {
  */
 const readStored = (key: string, defaults: ColumnDef[]): ColumnDef[] => {
   try {
-    const stored = localStorage.getItem(key);
+    const stored = readMigratedStorageValue(localStorage, key, key.replace(/^acs_/, 'skyacs_'));
     if (stored) {
       const parsed = JSON.parse(stored) as ColumnDef[];
       if (Array.isArray(parsed)) {
@@ -33,13 +34,14 @@ const readStored = (key: string, defaults: ColumnDef[]): ColumnDef[] => {
  * `toggle` flips a column and persists immediately; `isVisible` is a reactive read.
  */
 export const useColumnVisibility = (storageKey: string, defaults: ColumnDef[]) => {
-  const key = `skyacs_columns_${storageKey}`;
+  const key = `acs_columns_${storageKey}`;
+  const legacyKey = `skyacs_columns_${storageKey}`;
   const [columns, setColumns] = createSignal<ColumnDef[]>(readStored(key, defaults));
 
   const toggle = (id: string) => {
     setColumns((cols) => {
       const next = cols.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c));
-      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* ignore */ }
+      writeMigratedStorageValue(localStorage, key, legacyKey, JSON.stringify(next));
       return next;
     });
   };

@@ -120,7 +120,7 @@ const RolesTab: Component = () => {
       </div>
 
       <Show when={roles.error}>
-        <ResourceError title="Roles are unavailable" description="SKYACS could not read the role definitions. Retry before managing permissions." onRetry={refetchRoles} />
+        <ResourceError title="Roles are unavailable" description="ACS could not read the role definitions. Retry before managing permissions." onRetry={refetchRoles} />
       </Show>
 
       <Show when={!roles.loading && !roles.error}>

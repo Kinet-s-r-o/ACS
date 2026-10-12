@@ -73,7 +73,7 @@ const Dashboard: Component = () => {
       <Show when={!dashboard.loading && !dashboard.error && (stats()?.total ?? 0) === 0}>
         <div class="data-panel"><EmptyState
           icon={<Router size={22} />}
-          title="No CPEs have reported to SKYACS"
+          title="No CPEs have reported to ACS"
           description="The fleet register will populate after a device sends its first CWMP Inform. Verify the published CWMP endpoint and the CPE ACS URL."
           action={<A class="btn btn-secondary" href="/settings/delivery">Review CWMP connection settings</A>}
         /></div>
@@ -93,7 +93,7 @@ const Dashboard: Component = () => {
       </Show>
 
       <Show when={dashboard.error}>
-        <div class="data-panel"><ResourceError title="Fleet telemetry is unavailable" description="SKYACS could not read the current device statistics. Confirm the API and database are reachable, then retry." onRetry={() => refetch()} /></div>
+        <div class="data-panel"><ResourceError title="Fleet telemetry is unavailable" description="ACS could not read the current device statistics. Confirm the API and database are reachable, then retry." onRetry={() => refetch()} /></div>
       </Show>
 
       <Show when={!dashboard.loading && !dashboard.error && (stats()?.total ?? 0) > 0}>

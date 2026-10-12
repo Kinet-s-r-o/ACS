@@ -218,7 +218,7 @@ const Firmwares: Component = () => {
           </div>
         </div>
         <Show when={firmwares.loading}><div class="p-4 space-y-3" aria-label="Loading firmware library"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
-        <Show when={firmwares.error}><ResourceError title="Firmware library is unavailable" description="SKYACS could not retrieve the artifact inventory. No firmware data was changed." onRetry={() => refetch()} /></Show>
+        <Show when={firmwares.error}><ResourceError title="Firmware library is unavailable" description="ACS could not retrieve the artifact inventory. No firmware data was changed." onRetry={() => refetch()} /></Show>
         <Show when={!firmwares.loading && !firmwares.error && (firmwares()?.length || 0) > 0} fallback={!firmwares.loading && !firmwares.error ?
           <EmptyState icon={<HardDrive size={22} />} title="No firmware artifacts are stored" description={isFullAccess() ? 'Upload a vendor firmware file with an exact version and compatibility scope before creating a deployment task.' : 'A full-access operator must upload and validate an artifact before it can be selected for deployment.'} /> : undefined
         }>

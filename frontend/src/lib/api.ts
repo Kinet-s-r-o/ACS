@@ -48,10 +48,12 @@ export interface MetricDefinition { id: number; name: string; description: strin
 export interface MetricSample { device_id: number; metric_id: number; value: number; timestamp: string }
 export interface AggregatedMetric { timestamp: string; avg: number; min: number; max: number; count: number }
 
-export const getStoredToken = () => sessionStorage.getItem('skyacs_token');
+import { readMigratedStorageValue, removeMigratedStorageValue } from './storage';
+
+export const getStoredToken = () => readMigratedStorageValue(sessionStorage, 'acs_token', 'skyacs_token');
 
 export const clearStoredSession = () => {
-  sessionStorage.removeItem('skyacs_token');
+  removeMigratedStorageValue(sessionStorage, 'acs_token', 'skyacs_token');
   localStorage.removeItem('token');
 };
 

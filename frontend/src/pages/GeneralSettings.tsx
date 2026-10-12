@@ -57,7 +57,7 @@ const GeneralSettings: Component = () => {
         </p>
 
         <Show when={settings.error}>
-          <ResourceError title="Settings are unavailable" description="SKYACS could not read the current general configuration. Retry before making changes." onRetry={() => refetch()} />
+          <ResourceError title="Settings are unavailable" description="ACS could not read the current general configuration. Retry before making changes." onRetry={() => refetch()} />
         </Show>
 
         <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-10 w-full" /> : undefined}>
@@ -82,9 +82,9 @@ const GeneralSettings: Component = () => {
               <input
                 id="app-name"
                 type="text"
-                value={getValue('app_name') || 'SKYACS'}
+                value={getValue('app_name') || 'ACS'}
                 onInput={(e) => setFormData((prev) => ({ ...prev, app_name: e.currentTarget.value }))}
-                placeholder="SKYACS"
+                placeholder="ACS"
                 maxlength={64}
                 class="input w-48"
                 disabled={!isFullAccess()}
