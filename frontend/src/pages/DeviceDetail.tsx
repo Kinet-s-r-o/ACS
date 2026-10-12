@@ -343,6 +343,8 @@ const DeviceDetail: Component = () => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = createSignal(false);
   let actionsMenu: HTMLDivElement | undefined;
+  const [showLanContextMenu, setShowLanContextMenu] = createSignal(false);
+  let lanContextMenu: HTMLDivElement | undefined;
   const [message, setMessage] = createSignal<{ type: 'success' | 'error'; text: string; detail?: string } | null>(null);
   const [paramFilter, setParamFilter] = createSignal('');
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
@@ -404,6 +406,21 @@ const DeviceDetail: Component = () => {
     } else {
       setHostColumns([...defaultHostColumns]);
     }
+  });
+
+  onMount(() => {
+    const closeMenu = (event: MouseEvent) => {
+      if (!lanContextMenu?.contains(event.target as Node)) setShowLanContextMenu(false);
+    };
+    const closeMenuOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowLanContextMenu(false);
+    };
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', closeMenuOnEscape);
+    onCleanup(() => {
+      document.removeEventListener('click', closeMenu);
+      document.removeEventListener('keydown', closeMenuOnEscape);
+    });
   });
 
   onMount(() => {
@@ -2010,22 +2027,26 @@ const DeviceDetail: Component = () => {
 
             {/* Row 2.5: LAN Interfaces */}
             <div class="card p-5">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h2 class="text-sm font-medium text-secondary flex items-center gap-2"><Network size={14} />LAN IP and DHCP</h2>
-                  <p class="text-xs text-muted mt-1">Configure LAN interface addresses and the DHCP server.</p>
-                </div>
-                <Show when={isFullAccess()} fallback={<span class="text-xs text-muted">Read only</span>}>
-                  <button type="button" class="btn btn-secondary text-xs" onClick={() => setShowLanNetworkModal(true)}>Configure</button>
+              <div class="flex items-center justify-between gap-3 mb-4">
+                <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
+                  <Network size={14} />
+                  LAN Interfaces ({getLanInterfaces().length})
+                </h2>
+                <Show when={isFullAccess()}>
+                  <div class="relative" ref={lanContextMenu}>
+                    <button type="button" class="icon-button" aria-label="LAN Interfaces menu" aria-haspopup="menu" aria-expanded={showLanContextMenu()} onClick={() => setShowLanContextMenu(value => !value)}>
+                      <MoreVertical size={18} />
+                    </button>
+                    <Show when={showLanContextMenu()}>
+                      <div class="absolute right-0 top-full z-50 mt-2 min-w-48 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
+                        <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowLanContextMenu(false); setShowLanNetworkModal(true); }}>
+                          LAN IP and DHCP
+                        </button>
+                      </div>
+                    </Show>
+                  </div>
                 </Show>
               </div>
-            </div>
-
-            <div class="card p-5">
-              <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
-                <Network size={14} />
-                LAN Interfaces ({getLanInterfaces().length})
-              </h2>
               <Show when={getLanInterfaces().length > 0} fallback={
                 <p class="text-muted text-sm">No LAN interface data. Click Summon to fetch.</p>
               }>
