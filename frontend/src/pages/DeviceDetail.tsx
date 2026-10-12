@@ -1738,7 +1738,7 @@ const DeviceDetail: Component = () => {
                 </nav>
                 <Show when={searchParams.diagnosticTab === undefined || searchParams.diagnosticTab === 'speedtest' || searchParams.diagnosticTab === 'diagnostic'}>
                   <div class="space-y-4">
-                  <details class="card group" open>
+                  <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
                       <div><h2 class="text-sm font-medium text-secondary">Speedtest</h2><p class="text-xs text-muted mt-1">Run an iPerf speed test from this CPE.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
@@ -1765,7 +1765,7 @@ const DeviceDetail: Component = () => {
                     </Show>
                     </div>
                   </details>
-                  <details class="card group" open>
+                  <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
                       <div><h2 class="text-sm font-medium text-secondary">NS lookup</h2><p class="text-xs text-muted mt-1">Resolve a hostname from the CPE using its DNS diagnostics.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
@@ -1794,7 +1794,7 @@ const DeviceDetail: Component = () => {
                     </Show>
                     </div>
                   </details>
-                  <details class="card group" open>
+                  <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
                       <div><h2 class="text-sm font-medium text-secondary">IP ping</h2><p class="text-xs text-muted mt-1">Send ICMP echo requests from the CPE and review packet loss and response times.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
@@ -1825,7 +1825,7 @@ const DeviceDetail: Component = () => {
                     </Show>
                     </div>
                   </details>
-                  <details class="card group" open>
+                  <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
                       <div><h2 class="text-sm font-medium text-secondary">Traceroute</h2><p class="text-xs text-muted mt-1">Show the network hops from the CPE to a destination.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
