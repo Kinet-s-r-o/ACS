@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical } from 'lucide-solid';
+import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink } from 'lucide-solid';
 import { api, type DeviceSnapshot, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
@@ -78,6 +78,17 @@ const defaultParamColumns: ParamColumnConfig[] = [
   { id: 'value_type', label: 'Value type', visible: false },
   { id: 'value', label: 'Value', visible: true },
 ];
+
+const cpeWebUiUrl = (address: string): string | null => {
+  const value = address.trim();
+  if (!value || value === '-') return null;
+  const octets = value.split('.');
+  if (octets.length === 4 && octets.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255)) return `http://${value}`;
+  if (value.includes(':')) {
+    try { new URL(`http://[${value}]/`); return `http://[${value}]`; } catch { return null; }
+  }
+  return null;
+};
 
 const DeviceDetail: Component = () => {
   const params = useParams<{ serial: string }>();
@@ -1942,7 +1953,14 @@ const DeviceDetail: Component = () => {
                             <td class="px-3 py-2.5">
                               <span class="text-secondary font-mono">{wan.username}</span>
                             </td>
-                            <td class="px-3 py-2.5 text-primary font-mono">{wan.ipAddress}</td>
+                            <td class="px-3 py-2.5 text-primary font-mono">
+                              <div class="flex items-center gap-1.5">
+                                <span>{wan.ipAddress}</span>
+                                <Show when={cpeWebUiUrl(wan.ipAddress)}>
+                                  {(url) => <a href={url()} target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded p-1 text-muted hover:text-primary hover:bg-elevated" aria-label={`Open CPE web interface at ${wan.ipAddress}`} title="Open CPE web interface in a new tab"><ExternalLink size={13} /></a>}
+                                </Show>
+                              </div>
+                            </td>
                             <td class="px-3 py-2.5 text-secondary">{wan.service}</td>
                             <td class="px-3 py-2.5 text-secondary">{wan.nat}</td>
                             <td class="px-2 py-2.5 text-center">
