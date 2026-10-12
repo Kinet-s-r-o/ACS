@@ -1711,21 +1711,22 @@ const DeviceDetail: Component = () => {
                 </h2>
                 <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                   <div class="space-y-2">
-                    <Show when={templateImageUrl()}>
-                      <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-32 w-full rounded border border-subtle object-cover" />
-                    </Show>
-                    <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
                     <div><span class="text-muted">Serial:</span> <span class="text-primary font-mono">{d().serial_number}</span></div>
-                    <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
-                    <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
-                  </div>
-                  <div class="space-y-2">
                     <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
                     <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
-                    <div><span class="text-muted">Model:</span> <span class="text-primary">{d().model_name || getParamValue(['ModelName', 'X_HW_ModelName', 'DeviceInfo.ModelName']) || '-'}</span></div>
+                    <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
+                    <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
+                    <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="h-32 w-full" aria-hidden={!templateImageUrl()}>
+                      <Show when={templateImageUrl()}>
+                        <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full rounded border border-subtle object-cover" />
+                      </Show>
+                    </div>
+                    <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
                     <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
                     <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
-                    <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
                   </div>
                 </div>
 
