@@ -133,6 +133,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     if (!baseTimes) return null;
 
     const series: (number | null)[][] = [];
+    const seriesTimes: number[][] = [];
     const suffixes: string[] = [];
 
     for (let i = 0; i < results.length; i++) {
@@ -146,14 +147,17 @@ const MetricChart: Component<MetricChartProps> = (props) => {
 
       if (r.aggregates && r.aggregates.length > 0) {
         series.push(r.aggregates.map((a) => a.avg / scale.divisor));
+        seriesTimes.push(r.aggregates.map((a) => new Date(a.timestamp).getTime()));
       } else if (r.samples && r.samples.length > 0) {
         series.push(r.samples.map((s) => s.value / scale.divisor));
+        seriesTimes.push(r.samples.map((s) => new Date(s.timestamp).getTime()));
       } else {
         series.push(baseTimes.map(() => null));
+        seriesTimes.push(baseTimes);
       }
     }
 
-    return { baseTimes, series, suffixes };
+    return { baseTimes, series, seriesTimes, suffixes };
   });
 
   const chartTitle = createMemo(() => {
@@ -239,7 +243,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
       const label = m.name + (unit ? ` (${unit})` : '');
       const yAxisIndex = m.axis === 'right' ? 1 : 0;
 
-      const dataPoints: [number, number | null][] = s.baseTimes.map((t, j) => [t, s.series[i][j]]);
+      const dataPoints: [number, number | null][] = s.seriesTimes[i].map((t, j) => [t, s.series[i][j]]);
 
       const tLines = thresholdLines(m);
       const markLine = tLines.length > 0 ? {
