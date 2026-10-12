@@ -87,8 +87,17 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if def.Name == "" || len(def.Name) > 128 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) {
+	if def.Name == "" || len(def.Name) > 128 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) || len(def.Group) > 64 {
 		respondError(w, http.StatusBadRequest, "Invalid interface metric definition")
+		return
+	}
+	if def.ChartType == "" {
+		def.ChartType = "line"
+	}
+	switch def.ChartType {
+	case "line", "bar", "pictorialBar", "scatter", "effectScatter", "candlestick", "boxplot", "heatmap":
+	default:
+		respondError(w, http.StatusBadRequest, "chart_type must be a supported time-series type")
 		return
 	}
 	if strings.Contains(def.ParameterPattern, "*") {
@@ -122,7 +131,7 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	def.ID = id
-	result := r.db.WithContext(req.Context()).Model(&models.InterfaceMetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "color": def.Color, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
+	result := r.db.WithContext(req.Context()).Model(&models.InterfaceMetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update interface metric")
 		return
