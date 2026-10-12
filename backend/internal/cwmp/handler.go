@@ -459,9 +459,23 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	// Active metric polling: schedule a GPV fetch if the interval has elapsed.
 	if h.metricRepo != nil && deviceID > 0 && h.metricPollInterval > 0 {
 		if time.Since(session.LastMetricFetch) >= h.metricPollInterval {
-			if params, err := h.metricRepo.ActiveParamNames(ctx, session.DeviceType); err == nil && len(params) > 0 {
-				session.MetricFetchReady = true
-				session.MetricFetchParams = params
+			if params, err := h.metricRepo.ActiveParamNames(ctx, session.DeviceType); err == nil {
+				if interfaceParams, interfaceErr := h.metricRepo.InterfaceActiveParamNames(ctx, deviceID, session.DeviceType); interfaceErr == nil {
+					seen := make(map[string]bool, len(params))
+					for _, name := range params {
+						seen[name] = true
+					}
+					for _, name := range interfaceParams {
+						if !seen[name] {
+							params = append(params, name)
+							seen[name] = true
+						}
+					}
+				}
+				if len(params) > 0 {
+					session.MetricFetchReady = true
+					session.MetricFetchParams = params
+				}
 			}
 		}
 	}
@@ -635,6 +649,9 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		}
 		if err := h.metricRepo.ExtractAndStore(ctx, session.DeviceID, session.DeviceType, paramMap); err != nil {
 			log.Printf("Error extracting metrics from GPV response: %v", err)
+		}
+		if err := h.metricRepo.ExtractAndStoreInterface(ctx, session.DeviceID, session.DeviceType, paramMap); err != nil {
+			log.Printf("Error extracting interface metrics from GPV response: %v", err)
 		}
 		session.LastMetricFetch = time.Now()
 	}

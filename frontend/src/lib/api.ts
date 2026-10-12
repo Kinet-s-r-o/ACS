@@ -36,6 +36,8 @@ export interface User { id: number; username: string; role: 'full' | 'read'; rol
 export interface TagDefinition { id: string; name: string; color: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; created_at: string; updated_at: string }
+export interface InterfaceMetricDefinition { id: number; template_id: number; name: string; description: string; interface_type: 'wan' | 'lan'; parameter_pattern: string; unit: string; transform: string; multiplier: number; active: boolean; created_at: string; updated_at: string }
+export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
 export interface AuditLog { id: number; user_id?: number; username: string; action: string; resource: string; status: number; ip_address: string; user_agent?: string; created_at: string }
 export interface BlockedDevice { id: number; serial_number: string; reason: string; created_by: string; created_at: string }
@@ -149,6 +151,14 @@ export const api = {
   createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
   updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
+  getInterfaceMetrics: (templateId: number) => request<InterfaceMetricDefinition[]>(`/provisioning/templates/${templateId}/interface-metrics`),
+  createInterfaceMetric: (templateId: number, body: Omit<InterfaceMetricDefinition, 'id' | 'template_id' | 'created_at' | 'updated_at'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics`, { method: 'POST', body: JSON.stringify(body) }),
+  updateInterfaceMetric: (templateId: number, id: number, body: Omit<InterfaceMetricDefinition, 'id' | 'template_id' | 'created_at' | 'updated_at'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteInterfaceMetric: (templateId: number, id: number) => request<{ status: string }>(`/provisioning/templates/${templateId}/interface-metrics/${id}`, { method: 'DELETE' }),
+  getDeviceInterfaceMetric: (serial: string, metricId: number, parameterName: string, hours = 24) => {
+    const from = new Date(Date.now() - hours * 3600_000).toISOString();
+    return request<{ samples: InterfaceMetricSample[] }>(`/device/${encodeURIComponent(serial)}/interface-metrics?metric_id=${metricId}&parameter_name=${encodeURIComponent(parameterName)}&from=${from}`);
+  },
 
   getSecurityOverview: () => request<{ total_users: number; full_access_admins: number; recorded_failures: number; jwt_configured: boolean; login_rate_limit_enabled: boolean; cors_restricted: boolean; audit_logging_enabled: boolean }>('/security/overview'),
   getAuditLogs: (limit = 100) => request<{ entries: AuditLog[]; total: number; limit: number; offset: number }>(`/audit-logs?limit=${limit}`),

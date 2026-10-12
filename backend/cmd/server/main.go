@@ -123,14 +123,14 @@ func main() {
 	go watchdog.Start(ctx)
 
 	go func() {
-	log.Printf("ACS CWMP server listening on %s", cwmpServer.Addr)
+		log.Printf("ACS CWMP server listening on %s", cwmpServer.Addr)
 		if err := cwmpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("CWMP server failed: %v", err)
 		}
 	}()
 
 	go func() {
-	log.Printf("ACS API server listening on %s", apiServer.Addr)
+		log.Printf("ACS API server listening on %s", apiServer.Addr)
 		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("API server failed: %v", err)
 		}
@@ -332,6 +332,8 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.BlockedDevice{},
 		&models.MetricDefinition{},
 		&models.MetricSample{},
+		&models.InterfaceMetricDefinition{},
+		&models.InterfaceMetricSample{},
 		&models.DeviceSnapshot{},
 		&models.TagDefinition{},
 		&database.Setting{},

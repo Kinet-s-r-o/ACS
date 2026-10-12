@@ -59,6 +59,101 @@ func (r *MetricRepository) BatchInsert(ctx context.Context, samples []models.Met
 	return r.db.WithContext(ctx).CreateInBatches(&samples, 500).Error
 }
 
+func (r *MetricRepository) InterfaceActiveParamNames(ctx context.Context, deviceID int64, deviceType string) ([]string, error) {
+	defs, err := r.interfaceMetricDefinitions(ctx, deviceType, true)
+	if err != nil || len(defs) == 0 {
+		return nil, err
+	}
+	var params []models.DeviceParameter
+	if err := r.db.WithContext(ctx).Select("name").Where("device_id = ?", deviceID).Find(&params).Error; err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, p := range params {
+		for _, def := range defs {
+			if interfacePathMatches(def.ParameterPattern, p.Name) && !seen[p.Name] {
+				names = append(names, p.Name)
+				seen[p.Name] = true
+				break
+			}
+		}
+	}
+	return names, nil
+}
+
+func (r *MetricRepository) ExtractAndStoreInterface(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
+	defs, err := r.interfaceMetricDefinitions(ctx, deviceType, true)
+	if err != nil || len(defs) == 0 {
+		return err
+	}
+	now := time.Now()
+	var samples []models.InterfaceMetricSample
+	for _, def := range defs {
+		for name, value := range paramMap {
+			if !interfacePathMatches(def.ParameterPattern, name) {
+				continue
+			}
+			fv, parseErr := strconv.ParseFloat(value, 64)
+			if parseErr != nil || math.IsNaN(fv) || math.IsInf(fv, 0) {
+				continue
+			}
+			samples = append(samples, models.InterfaceMetricSample{DeviceID: deviceID, MetricID: def.ID, ParameterName: name, Value: fv, Timestamp: now})
+		}
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).CreateInBatches(&samples, 500).Error
+}
+
+func (r *MetricRepository) QueryInterfaceMetric(ctx context.Context, deviceID, metricID int64, parameterName string, from, to time.Time, rate bool, multiplier float64) ([]models.InterfaceMetricSample, error) {
+	var samples []models.InterfaceMetricSample
+	query := `SELECT device_id, metric_id, parameter_name, value * $5 AS value, timestamp FROM interface_metric_samples WHERE device_id = $1 AND metric_id = $2 AND parameter_name = $3 AND timestamp BETWEEN $4 AND $6 ORDER BY timestamp ASC`
+	if rate {
+		query = `WITH samples AS (SELECT device_id, metric_id, parameter_name, value, timestamp, LAG(value) OVER (PARTITION BY parameter_name ORDER BY timestamp) AS previous_value, LAG(timestamp) OVER (PARTITION BY parameter_name ORDER BY timestamp) AS previous_time FROM interface_metric_samples WHERE device_id = $1 AND metric_id = $2 AND parameter_name = $3 AND timestamp <= $6) SELECT device_id, metric_id, parameter_name, CASE WHEN previous_value IS NULL OR value < previous_value THEN 0 ELSE (value - previous_value) / GREATEST(EXTRACT(EPOCH FROM (timestamp - previous_time)), 1) * $5 END AS value, timestamp FROM samples WHERE timestamp BETWEEN $4 AND $6 ORDER BY timestamp ASC`
+	}
+	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, parameterName, from, multiplier, to).Scan(&samples).Error
+	return samples, err
+}
+
+func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, deviceType string, activeOnly bool) ([]models.InterfaceMetricDefinition, error) {
+	parts := strings.SplitN(deviceType, "/", 2)
+	manufacturer, productClass := "", ""
+	if len(parts) > 0 {
+		manufacturer = parts[0]
+	}
+	if len(parts) > 1 {
+		productClass = parts[1]
+	}
+	var template models.ProvisioningTemplate
+	err := r.db.WithContext(ctx).Where("(manufacturer = '' OR LOWER(manufacturer) = LOWER(?)) AND (product_class = '' OR LOWER(product_class) = LOWER(?))", manufacturer, productClass).
+		Order("(CASE WHEN manufacturer <> '' THEN 1 ELSE 0 END + CASE WHEN product_class <> '' THEN 1 ELSE 0 END) DESC").First(&template).Error
+	if err != nil {
+		return nil, err
+	}
+	query := r.db.WithContext(ctx).Where("template_id = ?", template.ID)
+	if activeOnly {
+		query = query.Where("active = ?", true)
+	}
+	var defs []models.InterfaceMetricDefinition
+	err = query.Order("id ASC").Find(&defs).Error
+	return defs, err
+}
+
+func interfacePathMatches(pattern, name string) bool {
+	patternParts, nameParts := strings.Split(pattern, "."), strings.Split(name, ".")
+	if len(patternParts) != len(nameParts) {
+		return false
+	}
+	for i := range patternParts {
+		if patternParts[i] != "*" && patternParts[i] != nameParts[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // GetByID returns a single metric definition by its ID.
 func (r *MetricRepository) GetByID(ctx context.Context, id int64) (*models.MetricDefinition, error) {
 	var def models.MetricDefinition

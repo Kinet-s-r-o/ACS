@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, type Component } from 'solid-js';
 import { Activity, Copy, Edit, Edit2, GripVertical, MoreVertical, Plus, Search, Settings as SettingsIcon, Trash2, X, ChevronLeft } from 'lucide-solid';
-import { api, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate } from '../lib/api';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -62,6 +62,10 @@ const Provisioning: Component = () => {
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
+  const [interfaceMetrics, { refetch: refetchInterfaceMetrics }] = createResource(() => selectedTemplate()?.id, (id) => api.getInterfaceMetrics(id!));
+  const [editingInterfaceMetric, setEditingInterfaceMetric] = createSignal<InterfaceMetricDefinition | null>(null);
+  const [showInterfaceMetricModal, setShowInterfaceMetricModal] = createSignal(false);
+  const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', transform: '', multiplier: 1, active: true });
 
   const provisioningPayload = (form: typeof emptyProvisioningRule) => {
     const base = isAddObjectRule()
@@ -398,6 +402,35 @@ const Provisioning: Component = () => {
     setShowMetricModal(true);
   };
 
+  const openInterfaceMetric = (def: InterfaceMetricDefinition | null = null) => {
+    setEditingInterfaceMetric(def);
+    setInterfaceMetricForm(def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan', parameter_pattern: '', unit: 'bytes', transform: '', multiplier: 1, active: true });
+    setShowInterfaceMetricModal(true);
+  };
+
+  const saveInterfaceMetric = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const template = selectedTemplate();
+    if (!template) return;
+    try {
+      const form = interfaceMetricForm();
+      const payload = { ...form, name: form.name.trim(), parameter_pattern: form.parameter_pattern.trim() };
+      const editing = editingInterfaceMetric();
+      if (editing) await api.updateInterfaceMetric(template.id, editing.id, payload);
+      else await api.createInterfaceMetric(template.id, payload);
+      setShowInterfaceMetricModal(false);
+      refetchInterfaceMetrics();
+      notify({ tone: 'success', title: editing ? 'Interface metric updated' : 'Interface metric created' });
+    } catch (error) { notify({ tone: 'error', title: 'Could not save interface metric', message: (error as Error).message, persistent: true }); }
+  };
+
+  const deleteInterfaceMetric = async (def: InterfaceMetricDefinition) => {
+    const template = selectedTemplate();
+    if (!template || !await confirm({ title: `Delete ${def.name}?`, description: 'Historical samples remain in storage.', confirmLabel: 'Delete metric', tone: 'danger' })) return;
+    try { await api.deleteInterfaceMetric(template.id, def.id); refetchInterfaceMetrics(); }
+    catch (error) { notify({ tone: 'error', title: 'Could not delete interface metric', message: (error as Error).message, persistent: true }); }
+  };
+
   const handleDeleteMetric = async (def: MetricDefinition) => {
     if (!await confirm({ title: `Delete metric "${def.name}"?`, description: 'Historical samples remain but will no longer be collected.', confirmLabel: 'Delete metric', tone: 'danger' })) return;
     if (pendingAction()) return;
@@ -523,6 +556,10 @@ const Provisioning: Component = () => {
                   <button onClick={openCreateMetric} class="btn btn-primary text-xs py-1.5">
                     <Plus size={12} />
                     Add metric
+                  </button>
+                  <button onClick={() => openInterfaceMetric()} class="btn btn-secondary text-xs py-1.5">
+                    <Plus size={12} />
+                    Add WAN/LAN metric
                   </button>
                 </Show>
               </div>
@@ -714,6 +751,13 @@ const Provisioning: Component = () => {
                 <EmptyState compact title="No metrics match this template" description="Add a metric to start collecting time-series data for this device type." action={<button type="button" class="btn btn-primary" onClick={openCreateMetric}>Add metric</button>} />
               </Show>
             </Show>
+            <section class="mt-6 border-t border-subtle pt-4">
+              <h3 class="text-sm font-semibold text-primary mb-3">Per-interface WAN/LAN metrics</h3>
+              <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
+                <div class="overflow-x-auto table-scroll"><table class="w-full text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Parameter pattern</th><th class="py-2 pr-3">Transform</th><th class="py-2 pr-3">Multiplier</th><th class="py-2 text-right">Actions</th></tr></thead>
+                  <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 text-right"><button class="btn btn-ghost text-xs" onClick={() => openInterfaceMetric(def)}><Edit size={12} /></button><button class="btn btn-ghost text-xs text-red-400" onClick={() => void deleteInterfaceMetric(def)}><Trash2 size={12} /></button></td></tr>}</For></tbody></table></div>
+              </Show>
+            </section>
           </Show>
           </div>
         </Show>
@@ -882,6 +926,18 @@ const Provisioning: Component = () => {
       </Show>
 
       {/* Metric Modal */}
+      <Show when={showInterfaceMetricModal()}>
+        <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." onClose={() => setShowInterfaceMetricModal(false)} actions={<><button type="button" class="btn btn-secondary" onClick={() => setShowInterfaceMetricModal(false)}>Cancel</button><button type="submit" form="interface-metric-form" class="btn btn-primary">Save metric</button></>}>
+          <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}>
+            <label class="block text-xs text-muted">Name<input required class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
+            <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
+            <label class="block text-xs text-muted">Parameter path pattern<input required class="input mt-1 w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Stats.EthernetBytesReceived" value={interfaceMetricForm().parameter_pattern} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, parameter_pattern: e.currentTarget.value }))} /></label>
+            <div class="grid grid-cols-3 gap-3"><label class="block text-xs text-muted">Unit<input class="input mt-1 w-full" value={interfaceMetricForm().unit} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} /></label><label class="block text-xs text-muted">Transform<select class="input mt-1 w-full" value={interfaceMetricForm().transform} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, transform: e.currentTarget.value }))}><option value="">Raw value</option><option value="rate">Rate</option></select></label><label class="block text-xs text-muted">Multiplier<input type="number" min="0" step="any" class="input mt-1 w-full" value={interfaceMetricForm().multiplier} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, multiplier: Number(e.currentTarget.value) }))} /></label></div>
+            <label class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></label>
+            <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={interfaceMetricForm().active} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} />Active</label>
+          </form>
+        </Dialog>
+      </Show>
       <MetricModal
         open={showMetricModal()}
         editingMetric={editingMetric()}

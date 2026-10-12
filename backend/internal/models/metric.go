@@ -68,6 +68,37 @@ func (MetricSample) TableName() string {
 	return "metric_samples"
 }
 
+// InterfaceMetricDefinition configures collection of a metric for each matching
+// interface path on devices resolved to a provisioning template.
+type InterfaceMetricDefinition struct {
+	ID               int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	TemplateID       int64     `json:"template_id" gorm:"not null;index"`
+	Name             string    `json:"name" gorm:"not null;size:128"`
+	Description      string    `json:"description"`
+	InterfaceType    string    `json:"interface_type" gorm:"not null;size:16"`
+	ParameterPattern string    `json:"parameter_pattern" gorm:"not null;size:512"`
+	Unit             string    `json:"unit"`
+	Transform        string    `json:"transform" gorm:"not null;default:''"`
+	Multiplier       float64   `json:"multiplier" gorm:"not null;default:1"`
+	Active           bool      `json:"active" gorm:"not null;default:true"`
+	CreatedAt        time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt        time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+func (InterfaceMetricDefinition) TableName() string { return "interface_metric_definitions" }
+
+// InterfaceMetricSample retains the raw cumulative value and concrete parameter
+// path so interfaces and their counter history remain distinct.
+type InterfaceMetricSample struct {
+	DeviceID      int64     `json:"device_id" gorm:"primaryKey"`
+	MetricID      int64     `json:"metric_id" gorm:"primaryKey"`
+	ParameterName string    `json:"parameter_name" gorm:"primaryKey;size:512"`
+	Value         float64   `json:"value" gorm:"not null"`
+	Timestamp     time.Time `json:"timestamp" gorm:"primaryKey"`
+}
+
+func (InterfaceMetricSample) TableName() string { return "interface_metric_samples" }
+
 // AggregatedMetric is a row returned from a continuous aggregate query.
 type AggregatedMetric struct {
 	Timestamp time.Time `json:"timestamp"`

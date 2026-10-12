@@ -193,6 +193,11 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /provisioning/templates", auth.RequirePermission(models.PermProvisioningWrite)(r.handleCreateProvisioningTemplate))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleUpdateProvisioningTemplate))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplate))
+	apiMux.HandleFunc("GET /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleListInterfaceMetrics))
+	apiMux.HandleFunc("POST /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
+	apiMux.HandleFunc("PUT /provisioning/templates/{id}/interface-metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
+	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/interface-metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteInterfaceMetric))
+	apiMux.HandleFunc("GET /device/{serial}/interface-metrics", auth.RequirePermission(models.PermMetricsRead)(r.handleGetDeviceInterfaceMetric))
 
 	// Metric endpoints
 	apiMux.HandleFunc("GET /metrics/definitions", auth.RequirePermission(models.PermMetricsRead)(r.handleListMetricDefinitions))
