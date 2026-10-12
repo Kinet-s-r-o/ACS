@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink } from 'lucide-solid';
+import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
 import { api, type DeviceSnapshot, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
@@ -356,6 +356,7 @@ const DeviceDetail: Component = () => {
   let actionsMenu: HTMLDivElement | undefined;
   const [showLanContextMenu, setShowLanContextMenu] = createSignal(false);
   let lanContextMenu: HTMLDivElement | undefined;
+  const [expandedWanPaths, setExpandedWanPaths] = createSignal<Set<string>>(new Set());
   const [message, setMessage] = createSignal<{ type: 'success' | 'error'; text: string; detail?: string } | null>(null);
   const [paramFilter, setParamFilter] = createSignal('');
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
@@ -1906,7 +1907,6 @@ const DeviceDetail: Component = () => {
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Uptime</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Type</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">VLAN</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Username</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">IP Address</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Service</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">NAT</th>
@@ -1927,10 +1927,24 @@ const DeviceDetail: Component = () => {
                     </thead>
                     <tbody>
                       <For each={wanProfiles()}>
-                        {(wan) => (
+                        {(wan) => {
+                          const getWanDetail = (suffix: string) => parameters()?.find(parameter => parameter.name === wan.path + suffix)?.value || '-';
+                          const expanded = () => expandedWanPaths().has(wan.path);
+                          const toggleExpanded = () => setExpandedWanPaths(previous => {
+                            const next = new Set(previous);
+                            if (next.has(wan.path)) next.delete(wan.path); else next.add(wan.path);
+                            return next;
+                          });
+                          const dmzEnabled = () => ['1', 'true', 'enabled'].includes(getWanDetail('X_HW_DMZ.DMZEnable').toLowerCase());
+                          return <>
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                             <td class="px-3 py-2.5 text-primary font-medium">
-                              <div title={wan.path}>{wan.name}</div>
+                              <div class="flex items-center gap-1.5" title={wan.path}>
+                                <button type="button" class="icon-button w-6 h-6 shrink-0" aria-label={`${expanded() ? 'Collapse' : 'Expand'} WAN ${wan.name}`} aria-expanded={expanded()} onClick={toggleExpanded}>
+                                  <Show when={expanded()} fallback={<ChevronRight size={14} />}><ChevronDown size={14} /></Show>
+                                </button>
+                                <span>{wan.name}</span>
+                              </div>
                             </td>
                             <td class="px-3 py-2.5">
                               <span class={`badge ${statusBadgeClass(wan.status)}`}>{wan.status}</span>
@@ -1950,9 +1964,6 @@ const DeviceDetail: Component = () => {
                             <td class="px-3 py-2.5 text-secondary">{formatUptime(wan.uptime)}</td>
                             <td class="px-3 py-2.5 text-secondary">{wan.type}</td>
                             <td class="px-3 py-2.5 text-primary font-mono">{wan.vlan}</td>
-                            <td class="px-3 py-2.5">
-                              <span class="text-secondary font-mono">{wan.username}</span>
-                            </td>
                             <td class="px-3 py-2.5 text-primary font-mono">
                               <div class="flex items-center gap-1.5">
                                 <span>{wan.ipAddress}</span>
@@ -1962,7 +1973,7 @@ const DeviceDetail: Component = () => {
                               </div>
                             </td>
                             <td class="px-3 py-2.5 text-secondary">{wan.service}</td>
-                            <td class="px-3 py-2.5 text-secondary">{wan.nat}</td>
+                            <td class="px-3 py-2.5"><span class={`badge ${wan.nat === 'Enabled' ? 'badge-success' : wan.nat === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.nat}</span></td>
                             <td class="px-2 py-2.5 text-center">
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan1} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.lan1} onChange={() => handleWanTie(wan, 1, 'lan', !wan.lan1)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L1 to ${wan.name}`} />
@@ -2035,7 +2046,22 @@ const DeviceDetail: Component = () => {
                               </Show>
                             </td>
                           </tr>
-                        )}
+                          <Show when={expanded()}>
+                            <tr class="border-t border-subtle/60 bg-elevated/20">
+                              <td colspan={22} class="px-5 py-3">
+                                <div class="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">IP Address</div><div class="mt-1 text-xs font-mono text-primary break-all">{getWanDetail('ExternalIPAddress') !== '-' ? getWanDetail('ExternalIPAddress') : getWanDetail('IPAddress')}</div></div>
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">Subnet Mask</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('SubnetMask')}</div></div>
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">Default Gateway</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('DefaultGateway')}</div></div>
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">DNS Servers</div><div class="mt-1 text-xs font-mono text-primary break-all">{getWanDetail('DNSServers')}</div></div>
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">DMZ</div><div class={`mt-1 text-xs ${getWanDetail('X_HW_DMZ.DMZEnable') === '-' ? 'text-muted' : dmzEnabled() ? 'text-emerald-400' : 'text-secondary'}`}>{getWanDetail('X_HW_DMZ.DMZEnable') === '-' ? '-' : dmzEnabled() ? 'Enabled' : 'Disabled'}</div></div>
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">DMZ Host IP</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('X_HW_DMZ.DMZHostIPAddress')}</div></div>
+                                </div>
+                              </td>
+                            </tr>
+                          </Show>
+                          </>;
+                        }}
                       </For>
                     </tbody>
                   </table>
