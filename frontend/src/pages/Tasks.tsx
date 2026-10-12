@@ -31,6 +31,14 @@ const Tasks: Component = () => {
   const [taskPage, setTaskPage] = createSignal(0);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('global_tasks', 20);
   const [tasks, { refetch }] = createResource(api.getTasks);
+  const taskCounts = createMemo(() => {
+    const counts = { pending: 0, sent: 0, completed: 0, failed: 0, total: 0 };
+    for (const task of tasks() || []) {
+      counts.total += 1;
+      if (task.status in counts && task.status !== 'total') counts[task.status as keyof Omit<typeof counts, 'total'>] += 1;
+    }
+    return counts;
+  });
 
   const filteredTasks = createMemo(() => {
     let all = tasks() || [];
@@ -82,6 +90,14 @@ const Tasks: Component = () => {
           Refresh
         </button>
       </PageHeader>
+
+      <dl class="ops-register task-register" aria-label="CWMP task status register" aria-busy={tasks.loading}>
+        <div class="ops-register-cell is-warning"><dt>Pending</dt><dd>{taskCounts().pending}</dd><small>Waiting to be sent</small></div>
+        <div class="ops-register-cell"><dt>Sent</dt><dd>{taskCounts().sent}</dd><small>Dispatched to CPE</small></div>
+        <div class="ops-register-cell is-online"><dt>Completed</dt><dd>{taskCounts().completed}</dd><small>Successfully finished</small></div>
+        <div class="ops-register-cell is-offline"><dt>Failed</dt><dd>{taskCounts().failed}</dd><small>Require review</small></div>
+        <div class="ops-register-cell"><dt>Total tasks</dt><dd>{taskCounts().total}</dd><small>All CWMP tasks</small></div>
+      </dl>
 
       <div class="card overflow-hidden">
         <div class="p-5 border-b border-subtle flex items-center justify-between">
