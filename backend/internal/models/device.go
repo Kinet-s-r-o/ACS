@@ -38,6 +38,14 @@ type DeviceStats struct {
 	Offline int `json:"offline"`
 }
 
+type WANInterface struct {
+	SerialNumber string `json:"serial_number"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	IPAddress    string `json:"ip_address"`
+	MACAddress   string `json:"mac_address"`
+}
+
 type DeviceParameter struct {
 	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
 	DeviceID  int64     `json:"device_id" gorm:"uniqueIndex:idx_device_parameters_unique,priority:1;not null"`

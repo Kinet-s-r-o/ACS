@@ -151,6 +151,7 @@ func (r *Router) Handler() http.Handler {
 
 	// Device endpoints (by ID - legacy)
 	apiMux.HandleFunc("GET /devices", auth.RequirePermission(models.PermDevicesRead)(r.handleListDevices))
+	apiMux.HandleFunc("GET /wan-interfaces", auth.RequirePermission(models.PermDevicesRead)(r.handleListWANInterfaces))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
 	apiMux.HandleFunc("GET /devices/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDevice))
@@ -305,6 +306,17 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		"limit":   limit,
 		"offset":  offset,
 	})
+}
+
+func (r *Router) handleListWANInterfaces(w http.ResponseWriter, req *http.Request) {
+	interfaces, err := r.deviceRepo.ListWANInterfaces(req.Context())
+	if err != nil {
+		log.Printf("Error listing WAN interfaces: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list WAN interfaces")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, interfaces)
 }
 
 func (r *Router) handleGetDevice(w http.ResponseWriter, req *http.Request) {

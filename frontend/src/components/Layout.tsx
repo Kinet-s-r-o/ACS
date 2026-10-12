@@ -14,7 +14,9 @@ import { useTheme } from '../lib/theme';
 const navigation = [
   { section: 'Monitor', items: [
     { href: '/', label: 'Fleet status', icon: LayoutDashboard },
-    { href: '/devices', label: 'CPE inventory', icon: Router },
+    { href: '/devices', label: 'CPE inventory', icon: Router, children: [
+      { href: '/devices/wan-interfaces', label: 'WAN interfaces' },
+    ] },
     { href: '/faults', label: 'CWMP faults', icon: AlertTriangle },
   ] },
   { section: 'Control', items: [
@@ -33,6 +35,7 @@ const navigation = [
 const pageNames: Record<string, string> = {
   '/': 'Fleet status',
   '/devices': 'CPE inventory',
+  '/devices/wan-interfaces': 'WAN interfaces',
   '/faults': 'Fault center',
   '/firmwares': 'Firmware library',
   '/security': 'Security center',
@@ -61,6 +64,7 @@ const Layout: ParentComponent = (props) => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false);
   const [apiOnline, setAPIOnline] = createSignal<boolean | null>(null);
   const [settingsExpanded, setSettingsExpanded] = createSignal(true);
+  const [inventoryExpanded, setInventoryExpanded] = createSignal(true);
   const { isDark, toggleTheme } = useTheme();
   const { user, logout, isFullAccess } = useAuth();
   let menuButton: HTMLButtonElement | undefined;
@@ -107,14 +111,14 @@ const Layout: ParentComponent = (props) => {
                       <Show when={item.children}>
                         <button
                           class={`nav-link nav-toggle ${isActive(item.href) ? 'is-active' : ''}`}
-                          onClick={() => setSettingsExpanded(!settingsExpanded())}
-                          aria-expanded={settingsExpanded()}
+                          onClick={() => item.href === '/devices' ? setInventoryExpanded(!inventoryExpanded()) : setSettingsExpanded(!settingsExpanded())}
+                          aria-expanded={item.href === '/devices' ? inventoryExpanded() : settingsExpanded()}
                         >
                           <item.icon size={17} stroke-width={1.7} />
                           <span>{item.label}</span>
-                          <ChevronDown size={13} class={`nav-chevron-down ${settingsExpanded() ? 'is-expanded' : ''}`} />
+                          <ChevronDown size={13} class={`nav-chevron-down ${(item.href === '/devices' ? inventoryExpanded() : settingsExpanded()) ? 'is-expanded' : ''}`} />
                         </button>
-                        <Show when={settingsExpanded()}>
+                        <Show when={item.href === '/devices' ? inventoryExpanded() : settingsExpanded()}>
                           <div class="nav-submenu">
                             <For each={item.children ?? []}>
                               {(child) => (

@@ -2,6 +2,9 @@ package database
 
 import (
 	"context"
+	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -113,6 +116,88 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 	}
 
 	return devices, int(total), nil
+}
+
+var wanInterfacePathPattern = regexp.MustCompile(`^InternetGatewayDevice\.WANDevice\.(\d+)\.WANConnectionDevice\.(\d+)\.(WANPPPConnection|WANIPConnection)\.(\d+)(?:\.|$)`)
+
+type wanInterfaceGroup struct {
+	path   string
+	parent string
+	params []models.DeviceParameter
+}
+
+func (r *DeviceRepository) ListWANInterfaces(ctx context.Context) ([]models.WANInterface, error) {
+	var devices []*models.Device
+	if err := r.db.WithContext(ctx).
+		Preload("Parameters", "name LIKE ?", "InternetGatewayDevice.WANDevice.%").
+		Order("serial_number ASC").
+		Find(&devices).Error; err != nil {
+		return nil, err
+	}
+
+	interfaces := make([]models.WANInterface, 0)
+	for _, device := range devices {
+		groups := make(map[string]*wanInterfaceGroup)
+		for _, parameter := range device.Parameters {
+			match := wanInterfacePathPattern.FindStringSubmatch(parameter.Name)
+			if len(match) == 0 {
+				continue
+			}
+			path := fmt.Sprintf("InternetGatewayDevice.WANDevice.%s.WANConnectionDevice.%s.%s.%s.", match[1], match[2], match[3], match[4])
+			parent := fmt.Sprintf("InternetGatewayDevice.WANDevice.%s.WANConnectionDevice.%s.", match[1], match[2])
+			if groups[path] == nil {
+				groups[path] = &wanInterfaceGroup{path: path, parent: parent}
+			}
+			groups[path].params = append(groups[path].params, parameter)
+		}
+
+		paths := make([]string, 0, len(groups))
+		for path := range groups {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+		for _, path := range paths {
+			group := groups[path]
+			parentParams := make([]models.DeviceParameter, 0)
+			for _, parameter := range device.Parameters {
+				if strings.HasPrefix(parameter.Name, group.parent) && !wanInterfacePathPattern.MatchString(parameter.Name) {
+					parentParams = append(parentParams, parameter)
+				}
+			}
+			relevant := append(append([]models.DeviceParameter{}, group.params...), parentParams...)
+			ownValue := func(suffix string) string {
+				for _, parameter := range group.params {
+					if parameter.Name == group.path+suffix && parameter.Value != "" {
+						return parameter.Value
+					}
+				}
+				return "-"
+			}
+			firstValue := func(names ...string) string {
+				for _, name := range names {
+					for _, parameter := range relevant {
+						if (strings.HasSuffix(parameter.Name, "."+name) || strings.HasSuffix(parameter.Name, name)) && parameter.Value != "" {
+							return parameter.Value
+						}
+					}
+				}
+				return "-"
+			}
+			name := ownValue("Name")
+			if name == "-" {
+				name = path
+			}
+			interfaces = append(interfaces, models.WANInterface{
+				SerialNumber: device.SerialNumber,
+				Name:         name,
+				Status:       ownValue("ConnectionStatus"),
+				IPAddress:    firstValue("ExternalIPAddress", "IPAddress"),
+				MACAddress:   firstValue("MACAddress", "MAC"),
+			})
+		}
+	}
+
+	return interfaces, nil
 }
 
 func (r *DeviceRepository) GetStats(ctx context.Context) (*models.DeviceStats, error) {
