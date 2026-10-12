@@ -117,6 +117,9 @@ func (r *MetricRepository) InterfaceActiveParamNames(ctx context.Context, device
 	var names []string
 	for _, p := range params {
 		for _, def := range defs {
+			if def.Source != "active" && def.Source != "universal" {
+				continue
+			}
 			if interfacePathMatches(def.ParameterPattern, p.Name) && !seen[p.Name] {
 				names = append(names, p.Name)
 				seen[p.Name] = true
@@ -439,6 +442,7 @@ func SetupTimescaleDB(db *gorm.DB) error {
 	statements := []string{
 		`CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
 		`SELECT create_hypertable('metric_samples', 'timestamp', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day')`,
+		`SELECT create_hypertable('interface_metric_samples', 'timestamp', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day')`,
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS metric_samples_5min
 		 WITH (timescaledb.continuous) AS
 		 SELECT
@@ -485,6 +489,12 @@ func SetupTimescaleDB(db *gorm.DB) error {
 			timescaledb.compress_orderby = 'timestamp DESC'
 		)`,
 		`SELECT add_compression_policy('metric_samples', INTERVAL '2 hours', if_not_exists => TRUE)`,
+		`ALTER TABLE interface_metric_samples SET (
+			timescaledb.compress = TRUE,
+			timescaledb.compress_segmentby = 'device_id, metric_id, parameter_name',
+			timescaledb.compress_orderby = 'timestamp DESC'
+		)`,
+		`SELECT add_compression_policy('interface_metric_samples', INTERVAL '2 hours', if_not_exists => TRUE)`,
 
 		// Continuous aggregate refresh policies — without these the CAs stay empty.
 		`SELECT add_continuous_aggregate_policy('metric_samples_5min', start_offset => INTERVAL '7 days', end_offset => INTERVAL '5 minutes', schedule_interval => INTERVAL '5 minutes', if_not_exists => TRUE)`,

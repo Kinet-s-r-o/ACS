@@ -116,6 +116,15 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		respondError(w, http.StatusBadRequest, "Invalid interface metric definition")
 		return
 	}
+	if def.Source == "" {
+		def.Source = "active"
+	}
+	switch def.Source {
+	case "passive", "active", "universal":
+	default:
+		respondError(w, http.StatusBadRequest, "source must be 'passive', 'active', or 'universal'")
+		return
+	}
 	if def.ChartType == "" {
 		def.ChartType = "line"
 	}
@@ -146,7 +155,6 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 	}
 	def.TemplateID = &templateID
 	def.DeviceTypeMatch = template.Manufacturer + "/" + template.ProductClass
-	def.Source = "active"
 	if def.Multiplier == 0 {
 		def.Multiplier = 1
 	}
