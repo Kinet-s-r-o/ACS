@@ -77,7 +77,7 @@ const WANInterfaces: Component = () => {
           </div>
           <label class="relative block w-full sm:w-72">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input class="input w-full pl-9" value={searchQuery()} onInput={(event) => setSearchQuery(event.currentTarget.value)} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
+            <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => setSearchQuery(event.currentTarget.value)} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
           </label>
         </div>
       </div>
