@@ -57,7 +57,7 @@ WORKDIR /app
 
 COPY --from=backend-builder /out/skyacs /app/skyacs
 
-RUN mkdir -p /var/lib/skyacs/firmware && \
+RUN mkdir -p /var/lib/skyacs/firmware /var/lib/skyacs/template-images && \
     chown -R skyacs:skyacs /var/lib/skyacs
 
 USER skyacs
