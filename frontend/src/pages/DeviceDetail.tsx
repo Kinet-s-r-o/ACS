@@ -71,6 +71,8 @@ interface SnapshotTreeRow {
 
 const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
 const NSLOOKUP_ROOTS = ['InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.'];
+const IPPING_ROOTS = ['InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.'];
+const TRACEROUTE_ROOTS = ['InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'];
 
 const PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
 const defaultParamColumns: ParamColumnConfig[] = [
@@ -382,7 +384,6 @@ const DeviceDetail: Component = () => {
   const [connCredUsername, setConnCredUsername] = createSignal('');
   const [connCredPassword, setConnCredPassword] = createSignal('');
   const [generatedCred, setGeneratedCred] = createSignal<{ username: string; password: string } | null>(null);
-  const [showIperfModal, setShowIperfModal] = createSignal(false);
   const [iperfRunning, setIperfRunning] = createSignal(false);
   const [iperfForm, setIperfForm] = createSignal<IperfForm>({ serverAddr: '', port: '5201', testMode: 'UPLOAD', protocolType: 'TCP', maxTime: '10', parallel: '1', bandwidth: '0' });
   const [iperfResult, setIperfResult] = createSignal<Record<string, string> | null>(null);
@@ -393,12 +394,32 @@ const DeviceDetail: Component = () => {
   const [nsLookupTimeout, setNsLookupTimeout] = createSignal('5000');
   const [nsLookupRunning, setNsLookupRunning] = createSignal(false);
   const [nsLookupResult, setNsLookupResult] = createSignal<Record<string, string> | null>(null);
+  const [ipPingHost, setIpPingHost] = createSignal('');
+  const [ipPingInterface, setIpPingInterface] = createSignal('');
+  const [ipPingRepetitions, setIpPingRepetitions] = createSignal('4');
+  const [ipPingTimeout, setIpPingTimeout] = createSignal('10000');
+  const [ipPingDataBlockSize, setIpPingDataBlockSize] = createSignal('56');
+  const [ipPingDscp, setIpPingDscp] = createSignal('0');
+  const [ipPingRunning, setIpPingRunning] = createSignal(false);
+  const [ipPingResult, setIpPingResult] = createSignal<Record<string, string> | null>(null);
+  const [traceRouteHost, setTraceRouteHost] = createSignal('');
+  const [traceRouteInterface, setTraceRouteInterface] = createSignal('');
+  const [traceRouteMaxHops, setTraceRouteMaxHops] = createSignal('30');
+  const [traceRouteTries, setTraceRouteTries] = createSignal('3');
+  const [traceRouteTimeout, setTraceRouteTimeout] = createSignal('120000');
+  const [traceRouteDataBlockSize, setTraceRouteDataBlockSize] = createSignal('38');
+  const [traceRouteDscp, setTraceRouteDscp] = createSignal('0');
+  const [traceRouteRunning, setTraceRouteRunning] = createSignal(false);
+  const [traceRouteResult, setTraceRouteResult] = createSignal<Record<string, string> | null>(null);
 
   const iperfSupported = createMemo(() => (parameters() || []).some(p => p.name.startsWith(IPERF_CLIENT_ROOT)));
   const nsLookupRoot = createMemo(() => NSLOOKUP_ROOTS.find(root => (parameters() || []).some(parameter => parameter.name.startsWith(root))) || '');
+  const ipPingRoot = createMemo(() => IPPING_ROOTS.find(root => (parameters() || []).some(parameter => parameter.name.startsWith(root))) || '');
+  const traceRouteRoot = createMemo(() => TRACEROUTE_ROOTS.find(root => (parameters() || []).some(parameter => parameter.name.startsWith(root))) || '');
   const iperfParameter = (suffix: string) => (parameters() || []).find(p => p.name === IPERF_CLIENT_ROOT + suffix)?.value || '';
 
-  const openIperfModal = () => {
+  createEffect(() => {
+    if (!iperfSupported() || iperfForm().serverAddr) return;
     setIperfForm({
       serverAddr: iperfParameter('ServerAddr'),
       port: iperfParameter('Port') || '5201',
@@ -408,9 +429,7 @@ const DeviceDetail: Component = () => {
       parallel: iperfParameter('Parallel') || '1',
       bandwidth: iperfParameter('Bandwidth') || '0',
     });
-    setIperfResult(null);
-    setShowIperfModal(true);
-  };
+  });
 
   onMount(() => {
     const saved = localStorage.getItem(HOST_COLUMNS_STORAGE_KEY);
@@ -789,6 +808,134 @@ const DeviceDetail: Component = () => {
       showMessage('error', 'NS lookup was not completed.', (error as Error).message);
     } finally {
       setNsLookupRunning(false);
+      setActionLoading(null);
+    }
+  };
+
+  const handleRunIpPing = async () => {
+    const root = ipPingRoot();
+    const host = ipPingHost().trim();
+    const repetitions = Number(ipPingRepetitions());
+    const timeout = Number(ipPingTimeout());
+    const dataBlockSize = Number(ipPingDataBlockSize());
+    const dscp = Number(ipPingDscp());
+    if (!host) { showMessage('error', 'Enter an IP address or hostname to ping.'); return; }
+    if (!Number.isInteger(repetitions) || repetitions < 1 || repetitions > 50 || !Number.isInteger(timeout) || timeout < 1 || timeout > 60000 || !Number.isInteger(dataBlockSize) || dataBlockSize < 1 || dataBlockSize > 65500 || !Number.isInteger(dscp) || dscp < 0 || dscp > 63) {
+      showMessage('error', 'Check the ping values: repetitions 1–50, timeout 1–60000 ms, packet size 1–65500 bytes and DSCP 0–63.');
+      return;
+    }
+
+    setIpPingRunning(true);
+    setActionLoading('ipping');
+    setIpPingResult(null);
+    const requestPingSession = async () => {
+      try { await api.connectionRequest(serial()); } catch { /* The CPE may already have an active CWMP session. */ }
+    };
+    try {
+      const values: Record<string, string> = {
+        [root + 'Host']: host,
+        [root + 'NumberOfRepetitions']: String(repetitions),
+        [root + 'Timeout']: String(timeout),
+        [root + 'DataBlockSize']: String(dataBlockSize),
+        [root + 'DSCP']: String(dscp),
+      };
+      if (ipPingInterface().trim()) values[root + 'Interface'] = ipPingInterface().trim();
+      const configTask = await api.setParameterValues(serial(), values);
+      await requestPingSession();
+      await waitForTask(configTask.id, 'IP ping configuration');
+
+      const startTask = await api.setParameterValues(serial(), { [root + 'DiagnosticsState']: 'Requested' });
+      await requestPingSession();
+      await waitForTask(startTask.id, 'IP ping start');
+
+      const deadline = Date.now() + Math.min(300_000, Math.max(60_000, timeout * repetitions + 45_000));
+      let finalValues: Record<string, string> | null = null;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const readTask = await api.getParameterValues(serial(), [root]);
+        await requestPingSession();
+        const completedRead = await waitForTask(readTask.id, 'IP ping result read');
+        finalValues = (completedRead.result || {}) as Record<string, string>;
+        const state = (finalValues[root + 'DiagnosticsState'] || '').toLowerCase();
+        if (state.includes('complete') || state.startsWith('error')) break;
+      }
+      if (!finalValues) throw new Error('The CPE did not return an IP ping result.');
+      setIpPingResult(finalValues);
+      const state = (finalValues[root + 'DiagnosticsState'] || '').toLowerCase();
+      if (state.startsWith('error')) showMessage('error', 'IP ping completed with a CPE error.', state);
+      else if (state.includes('complete')) showMessage('success', 'IP ping completed.');
+      else showMessage('error', 'IP ping timed out before the CPE completed it.');
+      await refetchParams();
+      await refetchTasks();
+    } catch (error) {
+      showMessage('error', 'IP ping was not completed.', (error as Error).message);
+    } finally {
+      setIpPingRunning(false);
+      setActionLoading(null);
+    }
+  };
+
+  const handleRunTraceRoute = async () => {
+    const root = traceRouteRoot();
+    const host = traceRouteHost().trim();
+    const maxHops = Number(traceRouteMaxHops());
+    const tries = Number(traceRouteTries());
+    const timeout = Number(traceRouteTimeout());
+    const dataBlockSize = Number(traceRouteDataBlockSize());
+    const dscp = Number(traceRouteDscp());
+    if (!host) { showMessage('error', 'Enter a destination IP address or hostname.'); return; }
+    if (!Number.isInteger(maxHops) || maxHops < 1 || maxHops > 64 || !Number.isInteger(tries) || tries < 1 || tries > 10 || !Number.isInteger(timeout) || timeout < 1 || timeout > 120000 || !Number.isInteger(dataBlockSize) || dataBlockSize < 1 || dataBlockSize > 65500 || !Number.isInteger(dscp) || dscp < 0 || dscp > 63) {
+      showMessage('error', 'Check the traceroute values: hops 1–64, tries 1–10, timeout 1–120000 ms, packet size 1–65500 bytes and DSCP 0–63.');
+      return;
+    }
+
+    setTraceRouteRunning(true);
+    setActionLoading('traceroute');
+    setTraceRouteResult(null);
+    const requestTraceRouteSession = async () => {
+      try { await api.connectionRequest(serial()); } catch { /* The CPE may already have an active CWMP session. */ }
+    };
+    try {
+      const values: Record<string, string> = {
+        [root + 'Host']: host,
+        [root + 'MaxHopCount']: String(maxHops),
+        [root + 'NumberOfTries']: String(tries),
+        [root + 'Timeout']: String(timeout),
+        [root + 'DataBlockSize']: String(dataBlockSize),
+        [root + 'DSCP']: String(dscp),
+      };
+      if (traceRouteInterface().trim()) values[root + 'Interface'] = traceRouteInterface().trim();
+      const configTask = await api.setParameterValues(serial(), values);
+      await requestTraceRouteSession();
+      await waitForTask(configTask.id, 'Traceroute configuration');
+
+      const startTask = await api.setParameterValues(serial(), { [root + 'DiagnosticsState']: 'Requested' });
+      await requestTraceRouteSession();
+      await waitForTask(startTask.id, 'Traceroute start');
+
+      const deadline = Date.now() + Math.min(600_000, Math.max(120_000, timeout * maxHops + 60_000));
+      let finalValues: Record<string, string> | null = null;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 2500));
+        const readTask = await api.getParameterValues(serial(), [root]);
+        await requestTraceRouteSession();
+        const completedRead = await waitForTask(readTask.id, 'Traceroute result read');
+        finalValues = (completedRead.result || {}) as Record<string, string>;
+        const state = (finalValues[root + 'DiagnosticsState'] || '').toLowerCase();
+        if (state.includes('complete') || state.startsWith('error')) break;
+      }
+      if (!finalValues) throw new Error('The CPE did not return a traceroute result.');
+      setTraceRouteResult(finalValues);
+      const state = (finalValues[root + 'DiagnosticsState'] || '').toLowerCase();
+      if (state.startsWith('error')) showMessage('error', 'Traceroute completed with a CPE error.', state);
+      else if (state.includes('complete')) showMessage('success', 'Traceroute completed.');
+      else showMessage('error', 'Traceroute timed out before the CPE completed it.');
+      await refetchParams();
+      await refetchTasks();
+    } catch (error) {
+      showMessage('error', 'Traceroute was not completed.', (error as Error).message);
+    } finally {
+      setTraceRouteRunning(false);
       setActionLoading(null);
     }
   };
@@ -1588,25 +1735,39 @@ const DeviceDetail: Component = () => {
                 </nav>
                 <Show when={searchParams.diagnosticTab === undefined || searchParams.diagnosticTab === 'speedtest' || searchParams.diagnosticTab === 'diagnostic'}>
                   <div class="space-y-4">
-                  <div class="card p-5">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <h2 class="text-sm font-medium text-secondary">Speedtest</h2>
-                        <p class="text-xs text-muted mt-1">Run an iPerf speed test from this CPE.</p>
+                  <details class="card group" open>
+                    <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
+                      <div><h2 class="text-sm font-medium text-secondary">Speedtest</h2><p class="text-xs text-muted mt-1">Run an iPerf speed test from this CPE.</p></div>
+                      <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div class="px-5 pb-5 space-y-4">
+                    <Show when={iperfSupported()} fallback={<p class="text-xs text-muted">iPerf testing is not available for this device.</p>}>
+                      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        <label class="text-xs text-muted md:col-span-2">iPerf server address<input class="input w-full mt-1 font-mono" value={iperfForm().serverAddr} onInput={event => setIperfForm(form => ({ ...form, serverAddr: event.currentTarget.value }))} placeholder="192.0.2.10 or iperf.example.net" disabled={iperfRunning()} /></label>
+                        <label class="text-xs text-muted">Port<input class="input w-full mt-1" type="number" min="1" max="65535" value={iperfForm().port} onInput={event => setIperfForm(form => ({ ...form, port: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
+                        <label class="text-xs text-muted">Test mode<select class="input w-full mt-1" value={iperfForm().testMode} onChange={event => setIperfForm(form => ({ ...form, testMode: event.currentTarget.value as IperfForm['testMode'] }))} disabled={iperfRunning()}><option value="UPLOAD">Upload — CPE to server</option><option value="DOWNLOAD">Download — server to CPE</option></select></label>
+                        <label class="text-xs text-muted">Protocol<select class="input w-full mt-1" value={iperfForm().protocolType} onChange={event => setIperfForm(form => ({ ...form, protocolType: event.currentTarget.value as IperfForm['protocolType'] }))} disabled={iperfRunning()}><option value="TCP">TCP</option><option value="UDP">UDP</option></select></label>
+                        <label class="text-xs text-muted">Duration (seconds)<input class="input w-full mt-1" type="number" min="1" max="1800" value={iperfForm().maxTime} onInput={event => setIperfForm(form => ({ ...form, maxTime: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
+                        <label class="text-xs text-muted">Parallel streams<input class="input w-full mt-1" type="number" min="1" max="32" value={iperfForm().parallel} onInput={event => setIperfForm(form => ({ ...form, parallel: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
+                        <label class="text-xs text-muted">Bandwidth (UDP, 0 = CPE default)<input class="input w-full mt-1" type="number" min="0" step="1" value={iperfForm().bandwidth} onInput={event => setIperfForm(form => ({ ...form, bandwidth: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
                       </div>
-                      <Show when={isFullAccess() && iperfSupported()} fallback={<span class="text-xs text-muted">iPerf testing is not available for this device.</span>}>
-                        <button onClick={openIperfModal} disabled={actionLoading() !== null} class="btn btn-secondary text-xs sm:text-sm">
-                          <Activity size={14} />
-                          <span>iPerf test</span>
-                        </button>
-                      </Show>
+                      <p class="text-xs text-muted">The iPerf server must listen on the selected port and be reachable from the CPE network.</p>
+                      <div class="flex justify-end"><button type="button" onClick={() => void handleRunIperf()} class="btn btn-primary text-sm" disabled={!isFullAccess() || iperfRunning() || actionLoading() !== null}><Activity size={14} />{iperfRunning() ? 'Running iPerf…' : 'Start speedtest'}</button></div>
+                    </Show>
+                    <Show when={iperfResult()}>
+                      <div class="border-t border-subtle pt-3">
+                        <h3 class="text-xs font-medium text-secondary mb-2">Latest iPerf result</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2"><For each={Object.entries(iperfResult()!)}>{([key, value]) => <div class="rounded bg-base px-3 py-2"><div class="text-[10px] text-muted">{key.split('.').pop()}</div><div class="text-sm text-primary font-mono break-all">{value || '-'}</div></div>}</For></div>
+                      </div>
+                    </Show>
                     </div>
-                  </div>
-                  <div class="card p-5 space-y-4">
-                    <div>
-                      <h2 class="text-sm font-medium text-secondary">NS lookup</h2>
-                      <p class="text-xs text-muted mt-1">Resolve a hostname from the CPE using its DNS diagnostics.</p>
-                    </div>
+                  </details>
+                  <details class="card group" open>
+                    <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
+                      <div><h2 class="text-sm font-medium text-secondary">NS lookup</h2><p class="text-xs text-muted mt-1">Resolve a hostname from the CPE using its DNS diagnostics.</p></div>
+                      <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div class="px-5 pb-5 space-y-4">
                     <Show when={nsLookupRoot()} fallback={<p class="text-xs text-muted">NS lookup is not available for this device.</p>}>
                       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         <label class="text-xs text-muted">Host name<input class="input w-full mt-1" value={nsLookupHost()} onInput={event => setNsLookupHost(event.currentTarget.value)} placeholder="example.com" disabled={nsLookupRunning()} /></label>
@@ -1628,7 +1789,70 @@ const DeviceDetail: Component = () => {
                         </div>;
                       }}
                     </Show>
-                  </div>
+                    </div>
+                  </details>
+                  <details class="card group" open>
+                    <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
+                      <div><h2 class="text-sm font-medium text-secondary">IP ping</h2><p class="text-xs text-muted mt-1">Send ICMP echo requests from the CPE and review packet loss and response times.</p></div>
+                      <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div class="px-5 pb-5 space-y-4">
+                    <Show when={ipPingRoot()} fallback={<p class="text-xs text-muted">IP ping is not available for this device.</p>}>
+                      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        <label class="text-xs text-muted md:col-span-2">Host or IP address<input class="input w-full mt-1 font-mono" value={ipPingHost()} onInput={event => setIpPingHost(event.currentTarget.value)} placeholder="192.0.2.1 or example.com" disabled={ipPingRunning()} /></label>
+                        <label class="text-xs text-muted">Interface (optional)<input class="input w-full mt-1" value={ipPingInterface()} onInput={event => setIpPingInterface(event.currentTarget.value)} placeholder="Default interface" disabled={ipPingRunning()} /></label>
+                        <label class="text-xs text-muted">Repetitions<input class="input w-full mt-1" type="number" min="1" max="50" value={ipPingRepetitions()} onInput={event => setIpPingRepetitions(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
+                        <label class="text-xs text-muted">Timeout (ms)<input class="input w-full mt-1" type="number" min="1" max="60000" value={ipPingTimeout()} onInput={event => setIpPingTimeout(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
+                        <label class="text-xs text-muted">Packet size (bytes)<input class="input w-full mt-1" type="number" min="1" max="65500" value={ipPingDataBlockSize()} onInput={event => setIpPingDataBlockSize(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
+                        <label class="text-xs text-muted">DSCP (0–63)<input class="input w-full mt-1" type="number" min="0" max="63" value={ipPingDscp()} onInput={event => setIpPingDscp(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
+                      </div>
+                      <div class="flex justify-end"><button type="button" class="btn btn-primary text-sm" onClick={() => void handleRunIpPing()} disabled={!isFullAccess() || ipPingRunning() || actionLoading() !== null}>{ipPingRunning() ? 'Pinging…' : 'Start IP ping'}</button></div>
+                    </Show>
+                    <Show when={ipPingResult()}>
+                      {(result) => {
+                        const root = ipPingRoot();
+                        const fields = ['DiagnosticsState', 'SuccessCount', 'FailureCount', 'MinimumResponseTime', 'AverageResponseTime', 'MaximumResponseTime'];
+                        const rows = fields.map(field => [field, result()[root + field] || '']).filter(([, value]) => value !== '');
+                        return <div class="border-t border-subtle pt-3">
+                          <h3 class="text-xs font-medium text-secondary mb-2">Latest result</h3>
+                          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">{rows.map(([name, value]) => <div class="rounded bg-base px-3 py-2"><div class="text-[10px] text-muted">{name === 'SuccessCount' ? 'Successful packets' : name === 'FailureCount' ? 'Failed packets' : name === 'MinimumResponseTime' ? 'Min. response (ms)' : name === 'AverageResponseTime' ? 'Avg. response (ms)' : name === 'MaximumResponseTime' ? 'Max. response (ms)' : 'State'}</div><div class="text-sm text-primary font-mono break-all">{value}</div></div>)}</div>
+                          <Show when={rows.length === 0}><p class="text-xs text-muted">No result values were returned.</p></Show>
+                        </div>;
+                      }}
+                    </Show>
+                    </div>
+                  </details>
+                  <details class="card group" open>
+                    <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
+                      <div><h2 class="text-sm font-medium text-secondary">Traceroute</h2><p class="text-xs text-muted mt-1">Show the network hops from the CPE to a destination.</p></div>
+                      <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div class="px-5 pb-5 space-y-4">
+                      <Show when={traceRouteRoot()} fallback={<p class="text-xs text-muted">Traceroute is not available for this device.</p>}>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                          <label class="text-xs text-muted md:col-span-2">Destination host or IP<input class="input w-full mt-1 font-mono" value={traceRouteHost()} onInput={event => setTraceRouteHost(event.currentTarget.value)} placeholder="192.0.2.1 or example.com" disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">Interface (optional)<input class="input w-full mt-1" value={traceRouteInterface()} onInput={event => setTraceRouteInterface(event.currentTarget.value)} placeholder="Default interface" disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">Maximum hops<input class="input w-full mt-1" type="number" min="1" max="64" value={traceRouteMaxHops()} onInput={event => setTraceRouteMaxHops(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">Tries per hop<input class="input w-full mt-1" type="number" min="1" max="10" value={traceRouteTries()} onInput={event => setTraceRouteTries(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">Timeout (ms)<input class="input w-full mt-1" type="number" min="1" max="120000" value={traceRouteTimeout()} onInput={event => setTraceRouteTimeout(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">Packet size (bytes)<input class="input w-full mt-1" type="number" min="1" max="65500" value={traceRouteDataBlockSize()} onInput={event => setTraceRouteDataBlockSize(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">DSCP (0–63)<input class="input w-full mt-1" type="number" min="0" max="63" value={traceRouteDscp()} onInput={event => setTraceRouteDscp(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
+                        </div>
+                        <div class="flex justify-end"><button type="button" class="btn btn-primary text-sm" onClick={() => void handleRunTraceRoute()} disabled={!isFullAccess() || traceRouteRunning() || actionLoading() !== null}>{traceRouteRunning() ? 'Tracing route…' : 'Start traceroute'}</button></div>
+                      </Show>
+                      <Show when={traceRouteResult()}>
+                        {(result) => {
+                          const root = traceRouteRoot();
+                          const rows = Object.entries(result()).filter(([name, value]) => name.startsWith(root) && value !== '' && (name.endsWith('DiagnosticsState') || name.endsWith('ResponseTime') || name.endsWith('RouteHopsNumberOfEntries') || name.includes('.RouteHops.')));
+                          return <div class="border-t border-subtle pt-3">
+                            <h3 class="text-xs font-medium text-secondary mb-2">Route results</h3>
+                            <div class="space-y-1">{rows.map(([name, value]) => <div class="grid grid-cols-[minmax(130px,0.5fr)_minmax(0,1fr)] gap-3 rounded bg-base px-3 py-2 text-xs"><span class="text-muted font-mono break-all">{name.slice(root.length)}</span><span class="text-primary font-mono break-all">{value}</span></div>)}</div>
+                            <Show when={rows.length === 0}><p class="text-xs text-muted">No route hops were returned.</p></Show>
+                          </div>;
+                        }}
+                      </Show>
+                    </div>
+                  </details>
                   </div>
                 </Show>
               </div>
@@ -2773,12 +2997,12 @@ const DeviceDetail: Component = () => {
 			</Dialog>
 		  </Show>
 
-      <Show when={showIperfModal()}>
+      <Show when={false}>
         <Dialog
           title="Run iPerf test"
           description="The Huawei iPerf client will connect to the configured server through CWMP. The CPE must be online and able to reach the server."
           size="large"
-          onClose={() => { if (!iperfRunning()) setShowIperfModal(false); }}
+          onClose={() => {}}
         >
           <div class="space-y-4">
             <div class="grid grid-cols-2 gap-3">
@@ -2829,7 +3053,7 @@ const DeviceDetail: Component = () => {
               </div>
             </Show>
             <div class="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowIperfModal(false)} class="btn btn-secondary flex-1" disabled={iperfRunning()}>Close</button>
+              <button type="button" class="btn btn-secondary flex-1" disabled={iperfRunning()}>Close</button>
               <button type="button" onClick={handleRunIperf} class="btn btn-primary flex-1" disabled={iperfRunning()}>
                 {iperfRunning() ? 'Running iPerf…' : 'Start test'}
               </button>
