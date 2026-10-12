@@ -1872,7 +1872,7 @@ const DeviceDetail: Component = () => {
                         const rows = fields.map(field => [field, result()[root + field] || '']).filter(([, value]) => value !== '');
                         return <div class="border-t border-subtle pt-3">
                           <h3 class="text-xs font-medium text-secondary mb-2">Latest result</h3>
-                          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">{rows.map(([name, value]) => <div class="rounded bg-base px-3 py-2"><div class="text-[10px] text-muted">{name === 'SuccessCount' ? 'Successful packets' : name === 'FailureCount' ? 'Failed packets' : name === 'MinimumResponseTime' ? 'Min. response (ms)' : name === 'AverageResponseTime' ? 'Avg. response (ms)' : name === 'MaximumResponseTime' ? 'Max. response (ms)' : 'State'}</div><div class="text-sm text-primary font-mono break-all">{value}</div></div>)}</div>
+                          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">{rows.map(([name, value]) => <div class="rounded bg-base px-3 py-2" style={{ background: name === 'SuccessCount' ? '#34d399' : name === 'FailureCount' ? '#fb923c' : undefined }}><div class="text-[10px] text-muted">{name === 'SuccessCount' ? 'Successful packets' : name === 'FailureCount' ? 'Failed packets' : name === 'MinimumResponseTime' ? 'Min. response (ms)' : name === 'AverageResponseTime' ? 'Avg. response (ms)' : name === 'MaximumResponseTime' ? 'Max. response (ms)' : 'State'}</div><div class="text-sm text-primary font-mono break-all">{value}</div></div>)}</div>
                           <Show when={rows.length === 0}><p class="text-xs text-muted">No result values were returned.</p></Show>
                         </div>;
                       }}
@@ -1900,11 +1900,47 @@ const DeviceDetail: Component = () => {
                       <Show when={traceRouteResult()}>
                         {(result) => {
                           const root = traceRouteRoot();
-                          const rows = Object.entries(result()).filter(([name, value]) => name.startsWith(root) && value !== '' && (name.endsWith('DiagnosticsState') || name.endsWith('ResponseTime') || name.endsWith('RouteHopsNumberOfEntries') || name.includes('.RouteHops.')));
+                          const hops = new Map<number, { hop: number; hopRTTimes: string; hopHost: string; hopHostAddress: string }>();
+                          for (const [name, value] of Object.entries(result())) {
+                            if (!name.startsWith(root) || value === '') continue;
+                            const match = name.slice(root.length).match(/^RouteHops\.(\d+)\.(HopRTTimes|HopHost|HopHostAddress)$/);
+                            if (!match) continue;
+                            const hop = Number(match[1]);
+                            const row = hops.get(hop) || { hop, hopRTTimes: '-', hopHost: '-', hopHostAddress: '-' };
+                            if (match[2] === 'HopRTTimes') row.hopRTTimes = value;
+                            if (match[2] === 'HopHost') row.hopHost = value;
+                            if (match[2] === 'HopHostAddress') row.hopHostAddress = value;
+                            hops.set(hop, row);
+                          }
+                          const rows = [...hops.values()].sort((a, b) => a.hop - b.hop);
                           return <div class="border-t border-subtle pt-3">
                             <h3 class="text-xs font-medium text-secondary mb-2">Route results</h3>
-                            <div class="space-y-1">{rows.map(([name, value]) => <div class="grid grid-cols-[minmax(130px,0.5fr)_minmax(0,1fr)] gap-3 rounded bg-base px-3 py-2 text-xs"><span class="text-muted font-mono break-all">{name.slice(root.length)}</span><span class="text-primary font-mono break-all">{value}</span></div>)}</div>
-                            <Show when={rows.length === 0}><p class="text-xs text-muted">No route hops were returned.</p></Show>
+                            <Show when={rows.length > 0} fallback={<p class="text-xs text-muted">No route hops were returned.</p>}>
+                              <div class="overflow-x-auto">
+                                <table class="data-table w-full text-xs min-w-[620px]">
+                                  <thead>
+                                    <tr class="border-b border-subtle">
+                                      <th class="text-left px-3 py-2 font-medium text-muted">Hop</th>
+                                      <th class="text-left px-3 py-2 font-medium text-muted">HopRTTimes</th>
+                                      <th class="text-left px-3 py-2 font-medium text-muted">HopHost</th>
+                                      <th class="text-left px-3 py-2 font-medium text-muted">HopHostAddress</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <For each={rows}>
+                                      {(row) => (
+                                        <tr class="border-t border-subtle/50">
+                                          <td class="px-3 py-2 text-primary font-mono">{row.hop}</td>
+                                          <td class="px-3 py-2 text-primary font-mono">{row.hopRTTimes}</td>
+                                          <td class="px-3 py-2 text-primary">{row.hopHost}</td>
+                                          <td class="px-3 py-2 text-primary font-mono">{row.hopHostAddress}</td>
+                                        </tr>
+                                      )}
+                                    </For>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </Show>
                           </div>;
                         }}
                       </Show>
