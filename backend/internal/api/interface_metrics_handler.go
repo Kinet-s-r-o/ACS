@@ -17,8 +17,8 @@ func (r *Router) handleListInterfaceMetrics(w http.ResponseWriter, req *http.Req
 		respondError(w, http.StatusBadRequest, "Invalid template ID")
 		return
 	}
-	var defs []models.InterfaceMetricDefinition
-	if err := r.db.WithContext(req.Context()).Where("template_id = ?", templateID).Order("id ASC").Find(&defs).Error; err != nil {
+	var defs []models.MetricDefinition
+	if err := r.db.WithContext(req.Context()).Where("template_id = ? AND parameter_pattern <> ''", templateID).Order("id ASC").Find(&defs).Error; err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to list interface metrics")
 		return
 	}
@@ -62,8 +62,12 @@ func (r *Router) handleGetDeviceInterfaceMetric(w http.ResponseWriter, req *http
 		respondError(w, http.StatusBadRequest, "parameter_name is required")
 		return
 	}
-	var def models.InterfaceMetricDefinition
+	var def models.MetricDefinition
 	if err := r.db.WithContext(req.Context()).First(&def, metricID).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Interface metric not found")
+		return
+	}
+	if def.TemplateID == nil || def.ParameterPattern == "" {
 		respondError(w, http.StatusNotFound, "Interface metric not found")
 		return
 	}
@@ -101,7 +105,7 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		respondError(w, http.StatusBadRequest, "Invalid template ID")
 		return
 	}
-	var def models.InterfaceMetricDefinition
+	var def models.MetricDefinition
 	decoder := json.NewDecoder(req.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&def); err != nil {
@@ -140,7 +144,9 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		respondError(w, http.StatusNotFound, "Template not found")
 		return
 	}
-	def.TemplateID = templateID
+	def.TemplateID = &templateID
+	def.DeviceTypeMatch = template.Manufacturer + "/" + template.ProductClass
+	def.Source = "active"
 	if def.Multiplier == 0 {
 		def.Multiplier = 1
 	}
@@ -158,7 +164,7 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	def.ID = id
-	result := r.db.WithContext(req.Context()).Model(&models.InterfaceMetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "unit_scale": def.UnitScale, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
+	result := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "device_type_match": def.DeviceTypeMatch, "source": def.Source, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "unit_scale": def.UnitScale, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update interface metric")
 		return
@@ -186,7 +192,12 @@ func (r *Router) handleDeleteInterfaceMetric(w http.ResponseWriter, req *http.Re
 		respondError(w, http.StatusBadRequest, "Invalid metric ID")
 		return
 	}
-	result := r.db.WithContext(req.Context()).Where("id = ? AND template_id = ?", id, templateID).Delete(&models.InterfaceMetricDefinition{})
+	var def models.MetricDefinition
+	if err := r.db.WithContext(req.Context()).Where("id = ? AND template_id = ?", id, templateID).First(&def).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Interface metric not found")
+		return
+	}
+	result := r.db.WithContext(req.Context()).Delete(&def)
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to delete interface metric")
 		return
@@ -194,6 +205,9 @@ func (r *Router) handleDeleteInterfaceMetric(w http.ResponseWriter, req *http.Re
 	if result.RowsAffected == 0 {
 		respondError(w, http.StatusNotFound, "Interface metric not found")
 		return
+	}
+	if def.LegacyInterfaceID != nil {
+		_ = r.db.WithContext(req.Context()).Delete(&models.InterfaceMetricDefinition{}, *def.LegacyInterfaceID).Error
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

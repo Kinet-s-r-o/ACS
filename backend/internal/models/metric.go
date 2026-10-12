@@ -19,9 +19,13 @@ type Threshold struct {
 //   - "universal": collected from both sources
 type MetricDefinition struct {
 	ID                 int64       `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name               string      `json:"name" gorm:"not null;uniqueIndex:idx_metric_name_match,priority:1"`
+	Name               string      `json:"name" gorm:"not null"`
 	Description        string      `json:"description"`
-	DeviceTypeMatch    string      `json:"device_type_match" gorm:"not null;default:'*';uniqueIndex:idx_metric_name_match,priority:2"`
+	DeviceTypeMatch    string      `json:"device_type_match" gorm:"not null;default:'*'"`
+	TemplateID         *int64      `json:"template_id,omitempty" gorm:"index"`
+	InterfaceType      string      `json:"interface_type,omitempty" gorm:"size:16"`
+	ParameterPattern   string      `json:"parameter_pattern,omitempty" gorm:"size:512"`
+	LegacyInterfaceID  *int64      `json:"-" gorm:"uniqueIndex"`
 	ParameterName      string      `json:"parameter_name" gorm:"not null"`
 	Unit               string      `json:"unit"`
 	Source             string      `json:"source" gorm:"not null;default:'passive'"`

@@ -22,17 +22,62 @@ func NewMetricRepository(db *gorm.DB) *MetricRepository {
 	return &MetricRepository{db: db}
 }
 
+// MigrateInterfaceMetricDefinitions moves legacy template metrics into the shared metric catalog.
+func MigrateInterfaceMetricDefinitions(ctx context.Context, db *gorm.DB) error {
+	var legacy []models.InterfaceMetricDefinition
+	if err := db.WithContext(ctx).Find(&legacy).Error; err != nil {
+		return err
+	}
+	for _, old := range legacy {
+		if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var existing models.MetricDefinition
+			if err := tx.Where("legacy_interface_id = ?", old.ID).First(&existing).Error; err == nil {
+				return copyLegacyInterfaceSamples(tx, old.ID, existing.ID)
+			} else if err != gorm.ErrRecordNotFound {
+				return err
+			}
+			var template models.ProvisioningTemplate
+			if err := tx.First(&template, old.TemplateID).Error; err != nil {
+				return err
+			}
+			templateID, legacyID := old.TemplateID, old.ID
+			def := models.MetricDefinition{
+				Name: old.Name, Description: old.Description,
+				DeviceTypeMatch: template.Manufacturer + "/" + template.ProductClass,
+				TemplateID:      &templateID, InterfaceType: old.InterfaceType,
+				ParameterPattern: old.ParameterPattern, Unit: old.Unit, Source: "active",
+				Active: old.Active, Group: old.Group, Color: old.Color, Transform: old.Transform,
+				Multiplier: old.Multiplier, UnitScale: old.UnitScale, ChartType: old.ChartType,
+				LegacyInterfaceID: &legacyID,
+			}
+			if err := tx.Create(&def).Error; err != nil {
+				return err
+			}
+			return copyLegacyInterfaceSamples(tx, old.ID, def.ID)
+		}); err != nil {
+			return fmt.Errorf("migrate interface metric %d: %w", old.ID, err)
+		}
+	}
+	return nil
+}
+
+func copyLegacyInterfaceSamples(tx *gorm.DB, oldID, newID int64) error {
+	return tx.Exec(`INSERT INTO interface_metric_samples (device_id, metric_id, parameter_name, value, timestamp)
+		SELECT device_id, ?, parameter_name, value, timestamp FROM interface_metric_samples WHERE metric_id = ?
+		ON CONFLICT (device_id, metric_id, parameter_name, timestamp) DO NOTHING`, newID, oldID).Error
+}
+
 // ListActive returns all active metric definitions.
 func (r *MetricRepository) ListActive(ctx context.Context) ([]models.MetricDefinition, error) {
 	var defs []models.MetricDefinition
-	err := r.db.WithContext(ctx).Where("active = ?", true).Order("name ASC").Find(&defs).Error
+	err := r.db.WithContext(ctx).Where("active = ? AND template_id IS NULL", true).Order("name ASC").Find(&defs).Error
 	return defs, err
 }
 
 // ListAll returns all metric definitions (for the settings UI).
 func (r *MetricRepository) ListAll(ctx context.Context) ([]models.MetricDefinition, error) {
 	var defs []models.MetricDefinition
-	err := r.db.WithContext(ctx).Order("name ASC").Find(&defs).Error
+	err := r.db.WithContext(ctx).Where("template_id IS NULL").Order("name ASC").Find(&defs).Error
 	return defs, err
 }
 
@@ -82,7 +127,7 @@ func (r *MetricRepository) InterfaceActiveParamNames(ctx context.Context, device
 	return names, nil
 }
 
-func (r *MetricRepository) InterfaceMetricDefinitionsForDevice(ctx context.Context, deviceType string) ([]models.InterfaceMetricDefinition, error) {
+func (r *MetricRepository) InterfaceMetricDefinitionsForDevice(ctx context.Context, deviceType string) ([]models.MetricDefinition, error) {
 	return r.interfaceMetricDefinitions(ctx, deviceType, true)
 }
 
@@ -121,7 +166,7 @@ func (r *MetricRepository) QueryInterfaceMetric(ctx context.Context, deviceID, m
 	return samples, err
 }
 
-func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, deviceType string, activeOnly bool) ([]models.InterfaceMetricDefinition, error) {
+func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, deviceType string, activeOnly bool) ([]models.MetricDefinition, error) {
 	parts := strings.SplitN(deviceType, "/", 2)
 	manufacturer, productClass := "", ""
 	if len(parts) > 0 {
@@ -136,11 +181,11 @@ func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, devic
 	if err != nil {
 		return nil, err
 	}
-	query := r.db.WithContext(ctx).Where("template_id = ?", template.ID)
+	query := r.db.WithContext(ctx).Where("template_id = ? AND parameter_pattern <> ''", template.ID)
 	if activeOnly {
 		query = query.Where("active = ?", true)
 	}
-	var defs []models.InterfaceMetricDefinition
+	var defs []models.MetricDefinition
 	err = query.Order("id ASC").Find(&defs).Error
 	return defs, err
 }
@@ -238,6 +283,13 @@ func (r *MetricRepository) QueryRaw(ctx context.Context, deviceID, metricID int6
 // ExtractAndStore matches parameters against active metric definitions for a device
 // and stores any numeric values found. deviceType is "Manufacturer/ProductClass".
 func (r *MetricRepository) ExtractAndStore(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
+	if err := r.extractStandard(ctx, deviceID, deviceType, paramMap); err != nil {
+		return err
+	}
+	return r.ExtractAndStoreInterface(ctx, deviceID, deviceType, paramMap)
+}
+
+func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
 	defs, err := r.ListActive(ctx)
 	if err != nil || len(defs) == 0 {
 		return err

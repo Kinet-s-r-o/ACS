@@ -80,6 +80,10 @@ func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Invalid metric ID")
 		return
 	}
+	if current, err := r.metricRepo.GetByID(req.Context(), id); err == nil && current.TemplateID != nil {
+		respondError(w, http.StatusBadRequest, "Manage interface metrics through their provisioning template")
+		return
+	}
 
 	var body models.MetricDefinition
 	decoder := json.NewDecoder(req.Body)
@@ -117,6 +121,10 @@ func (r *Router) handleDeleteMetricDefinition(w http.ResponseWriter, req *http.R
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid metric ID")
+		return
+	}
+	if def, err := r.metricRepo.GetByID(req.Context(), id); err == nil && def.TemplateID != nil {
+		respondError(w, http.StatusBadRequest, "Manage interface metrics through their provisioning template")
 		return
 	}
 

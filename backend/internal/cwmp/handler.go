@@ -650,9 +650,6 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		if err := h.metricRepo.ExtractAndStore(ctx, session.DeviceID, session.DeviceType, paramMap); err != nil {
 			log.Printf("Error extracting metrics from GPV response: %v", err)
 		}
-		if err := h.metricRepo.ExtractAndStoreInterface(ctx, session.DeviceID, session.DeviceType, paramMap); err != nil {
-			log.Printf("Error extracting interface metrics from GPV response: %v", err)
-		}
 		session.LastMetricFetch = time.Now()
 	}
 

@@ -50,6 +50,9 @@ func (r *ProvisioningRepository) UpdateTemplate(ctx context.Context, template *m
 
 func (r *ProvisioningRepository) DeleteTemplate(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("template_id = ?", id).Delete(&models.MetricDefinition{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("template_id = ?", id).Delete(&models.InterfaceMetricDefinition{}).Error; err != nil {
 			return err
 		}

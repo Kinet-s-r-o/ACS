@@ -358,8 +358,16 @@ func runAutoMigrate(db *gorm.DB) error {
 			return fmt.Errorf("drop obsolete metric name index: %w", err)
 		}
 	}
-	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_metric_name_match ON metric_definitions (name, device_type_match)").Error; err != nil {
+	if db.Migrator().HasIndex(&models.MetricDefinition{}, "idx_metric_name_match") {
+		if err := db.Migrator().DropIndex(&models.MetricDefinition{}, "idx_metric_name_match"); err != nil {
+			return fmt.Errorf("drop old metric name index: %w", err)
+		}
+	}
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_metric_name_scope ON metric_definitions (name, device_type_match, COALESCE(template_id, 0))").Error; err != nil {
 		return fmt.Errorf("create composite metric name index: %w", err)
+	}
+	if err := database.MigrateInterfaceMetricDefinitions(context.Background(), db); err != nil {
+		return fmt.Errorf("merge interface metric definitions: %w", err)
 	}
 	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_command_key_unique ON tasks (command_key) WHERE command_key <> ''").Error; err != nil {
 		return fmt.Errorf("create unique task command key index: %w", err)
