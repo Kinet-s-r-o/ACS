@@ -442,7 +442,7 @@ func SetupTimescaleDB(db *gorm.DB) error {
 	statements := []string{
 		`CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
 		`SELECT create_hypertable('metric_samples', 'timestamp', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day')`,
-		`SELECT create_hypertable('interface_metric_samples', 'timestamp', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day')`,
+		`SELECT create_hypertable('interface_metric_samples', 'timestamp', if_not_exists => TRUE, migrate_data => TRUE, chunk_time_interval => INTERVAL '1 day')`,
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS metric_samples_5min
 		 WITH (timescaledb.continuous) AS
 		 SELECT
