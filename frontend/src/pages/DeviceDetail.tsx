@@ -70,6 +70,7 @@ interface SnapshotTreeRow {
 }
 
 const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
+const NSLOOKUP_ROOTS = ['InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.'];
 
 const PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
 const defaultParamColumns: ParamColumnConfig[] = [
@@ -385,8 +386,16 @@ const DeviceDetail: Component = () => {
   const [iperfRunning, setIperfRunning] = createSignal(false);
   const [iperfForm, setIperfForm] = createSignal<IperfForm>({ serverAddr: '', port: '5201', testMode: 'UPLOAD', protocolType: 'TCP', maxTime: '10', parallel: '1', bandwidth: '0' });
   const [iperfResult, setIperfResult] = createSignal<Record<string, string> | null>(null);
+  const [nsLookupHost, setNsLookupHost] = createSignal('');
+  const [nsLookupServer, setNsLookupServer] = createSignal('');
+  const [nsLookupInterface, setNsLookupInterface] = createSignal('');
+  const [nsLookupRepetitions, setNsLookupRepetitions] = createSignal('5');
+  const [nsLookupTimeout, setNsLookupTimeout] = createSignal('5000');
+  const [nsLookupRunning, setNsLookupRunning] = createSignal(false);
+  const [nsLookupResult, setNsLookupResult] = createSignal<Record<string, string> | null>(null);
 
   const iperfSupported = createMemo(() => (parameters() || []).some(p => p.name.startsWith(IPERF_CLIENT_ROOT)));
+  const nsLookupRoot = createMemo(() => NSLOOKUP_ROOTS.find(root => (parameters() || []).some(parameter => parameter.name.startsWith(root))) || '');
   const iperfParameter = (suffix: string) => (parameters() || []).find(p => p.name === IPERF_CLIENT_ROOT + suffix)?.value || '';
 
   const openIperfModal = () => {
@@ -720,6 +729,66 @@ const DeviceDetail: Component = () => {
       showMessage('error', 'iPerf test was not completed.', (err as Error).message);
     } finally {
       setIperfRunning(false);
+      setActionLoading(null);
+    }
+  };
+
+  const handleRunNsLookup = async () => {
+    const root = nsLookupRoot();
+    const host = nsLookupHost().trim();
+    const repetitions = Number(nsLookupRepetitions());
+    const timeout = Number(nsLookupTimeout());
+    if (!host) { showMessage('error', 'Enter a hostname to look up.'); return; }
+    if (!Number.isInteger(repetitions) || repetitions < 1 || repetitions > 100 || !Number.isInteger(timeout) || timeout < 1 || timeout > 300000) {
+      showMessage('error', 'Repetitions must be 1–100 and timeout must be 1–300000 ms.');
+      return;
+    }
+
+    setNsLookupRunning(true);
+    setActionLoading('nslookup');
+    setNsLookupResult(null);
+    const requestLookupSession = async () => {
+      try { await api.connectionRequest(serial()); } catch { /* The CPE may already have an active CWMP session. */ }
+    };
+    try {
+      const values: Record<string, string> = {
+        [root + 'HostName']: host,
+        [root + 'NumberOfRepetitions']: String(repetitions),
+        [root + 'Timeout']: String(timeout),
+      };
+      if (nsLookupServer().trim()) values[root + 'DNSServer'] = nsLookupServer().trim();
+      if (nsLookupInterface().trim()) values[root + 'Interface'] = nsLookupInterface().trim();
+      const configTask = await api.setParameterValues(serial(), values);
+      await requestLookupSession();
+      await waitForTask(configTask.id, 'NS lookup configuration');
+
+      const startTask = await api.setParameterValues(serial(), { [root + 'DiagnosticsState']: 'Requested' });
+      await requestLookupSession();
+      await waitForTask(startTask.id, 'NS lookup start');
+
+      const deadline = Date.now() + Math.max(120_000, timeout + 60_000);
+      let finalValues: Record<string, string> | null = null;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const readTask = await api.getParameterValues(serial(), [root]);
+        await requestLookupSession();
+        const completedRead = await waitForTask(readTask.id, 'NS lookup result read');
+        finalValues = (completedRead.result || {}) as Record<string, string>;
+        const state = (finalValues[root + 'DiagnosticsState'] || '').toLowerCase();
+        if (state.includes('complete') || state.includes('error')) break;
+      }
+      if (!finalValues) throw new Error('The CPE did not return an NS lookup result.');
+      setNsLookupResult(finalValues);
+      const state = (finalValues[root + 'DiagnosticsState'] || '').toLowerCase();
+      if (state.includes('error')) showMessage('error', 'NS lookup completed with a CPE error.', state);
+      else if (state.includes('complete')) showMessage('success', 'NS lookup completed.');
+      else showMessage('error', 'NS lookup timed out before the CPE completed it.');
+      await refetchParams();
+      await refetchTasks();
+    } catch (error) {
+      showMessage('error', 'NS lookup was not completed.', (error as Error).message);
+    } finally {
+      setNsLookupRunning(false);
       setActionLoading(null);
     }
   };
@@ -1401,7 +1470,7 @@ const DeviceDetail: Component = () => {
         <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>
           Connected Hosts
         </button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'speedtest' })}>Diagnostic</button>
+        <button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'diagnostic' })}>Maintenance</button>
       </nav>
 
       <Show when={message()}>
@@ -1515,9 +1584,10 @@ const DeviceDetail: Component = () => {
             <Show when={activeTab() === 'diagnostic'}>
               <div class="space-y-4">
                 <nav role="tablist" class="tab-bar" aria-label="Diagnostic sections">
-                  <button role="tab" class="tab-btn is-active" aria-selected="true" onClick={() => setSearchParams({ diagnosticTab: 'speedtest' })}>Speedtest</button>
+                  <button role="tab" class="tab-btn is-active" aria-selected="true" onClick={() => setSearchParams({ diagnosticTab: 'diagnostic' })}>Diagnostic</button>
                 </nav>
-                <Show when={searchParams.diagnosticTab === undefined || searchParams.diagnosticTab === 'speedtest'}>
+                <Show when={searchParams.diagnosticTab === undefined || searchParams.diagnosticTab === 'speedtest' || searchParams.diagnosticTab === 'diagnostic'}>
+                  <div class="space-y-4">
                   <div class="card p-5">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
@@ -1531,6 +1601,34 @@ const DeviceDetail: Component = () => {
                         </button>
                       </Show>
                     </div>
+                  </div>
+                  <div class="card p-5 space-y-4">
+                    <div>
+                      <h2 class="text-sm font-medium text-secondary">NS lookup</h2>
+                      <p class="text-xs text-muted mt-1">Resolve a hostname from the CPE using its DNS diagnostics.</p>
+                    </div>
+                    <Show when={nsLookupRoot()} fallback={<p class="text-xs text-muted">NS lookup is not available for this device.</p>}>
+                      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        <label class="text-xs text-muted">Host name<input class="input w-full mt-1" value={nsLookupHost()} onInput={event => setNsLookupHost(event.currentTarget.value)} placeholder="example.com" disabled={nsLookupRunning()} /></label>
+                        <label class="text-xs text-muted">DNS server (optional)<input class="input w-full mt-1 font-mono" value={nsLookupServer()} onInput={event => setNsLookupServer(event.currentTarget.value)} placeholder="Use device default" disabled={nsLookupRunning()} /></label>
+                        <label class="text-xs text-muted">Interface (optional)<input class="input w-full mt-1" value={nsLookupInterface()} onInput={event => setNsLookupInterface(event.currentTarget.value)} placeholder="Default interface" disabled={nsLookupRunning()} /></label>
+                        <label class="text-xs text-muted">Repetitions<input class="input w-full mt-1" type="number" min="1" max="100" value={nsLookupRepetitions()} onInput={event => setNsLookupRepetitions(event.currentTarget.value)} disabled={nsLookupRunning()} /></label>
+                        <label class="text-xs text-muted">Timeout (ms)<input class="input w-full mt-1" type="number" min="1" max="300000" value={nsLookupTimeout()} onInput={event => setNsLookupTimeout(event.currentTarget.value)} disabled={nsLookupRunning()} /></label>
+                      </div>
+                      <div class="flex justify-end"><button type="button" class="btn btn-primary text-sm" onClick={() => void handleRunNsLookup()} disabled={!isFullAccess() || nsLookupRunning() || actionLoading() !== null}>{nsLookupRunning() ? 'Looking up…' : 'Start NS lookup'}</button></div>
+                    </Show>
+                    <Show when={nsLookupResult()}>
+                      {(result) => {
+                        const root = nsLookupRoot();
+                        const rows = Object.entries(result()).filter(([name, value]) => name.startsWith(root) && value !== '' && (name.includes('.Result.') || name.endsWith('SuccessCount') || name.endsWith('ResultNumberOfEntries') || name.endsWith('DiagnosticsState')));
+                        return <div class="border-t border-subtle pt-3">
+                          <h3 class="text-xs font-medium text-secondary mb-2">Latest result</h3>
+                          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">{rows.map(([name, value]) => <div class="rounded bg-base px-3 py-2"><div class="text-[10px] text-muted break-all">{name.slice(root.length)}</div><div class="text-sm text-primary font-mono break-all">{value}</div></div>)}</div>
+                          <Show when={rows.length === 0}><p class="text-xs text-muted">No result records were returned.</p></Show>
+                        </div>;
+                      }}
+                    </Show>
+                  </div>
                   </div>
                 </Show>
               </div>
