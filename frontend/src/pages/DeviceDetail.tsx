@@ -21,6 +21,7 @@ import { usePageSize } from '../lib/usePageSize';
 import { appName } from '../lib/appName';
 import WifiSettingsModal from '../components/WifiSettingsModal';
 import LanSettingsModal from '../components/LanSettingsModal';
+import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
 
 interface HostColumnConfig {
@@ -346,6 +347,7 @@ const DeviceDetail: Component = () => {
   const [paramFilter, setParamFilter] = createSignal('');
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
   const [lanModalIndex, setLanModalIndex] = createSignal<number | null>(null);
+  const [showLanNetworkModal, setShowLanNetworkModal] = createSignal(false);
   const [wanModalPath, setWanModalPath] = createSignal<string | null>(null);
 
   const [selectedParam, setSelectedParam] = createSignal<{ name: string; value: string } | null>(null);
@@ -2008,6 +2010,18 @@ const DeviceDetail: Component = () => {
 
             {/* Row 2.5: LAN Interfaces */}
             <div class="card p-5">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h2 class="text-sm font-medium text-secondary flex items-center gap-2"><Network size={14} />LAN IP and DHCP</h2>
+                  <p class="text-xs text-muted mt-1">Configure LAN interface addresses and the DHCP server.</p>
+                </div>
+                <Show when={isFullAccess()} fallback={<span class="text-xs text-muted">Read only</span>}>
+                  <button type="button" class="btn btn-secondary text-xs" onClick={() => setShowLanNetworkModal(true)}>Configure</button>
+                </Show>
+              </div>
+            </div>
+
+            <div class="card p-5">
               <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
                 <Network size={14} />
                 LAN Interfaces ({getLanInterfaces().length})
@@ -2736,6 +2750,15 @@ const DeviceDetail: Component = () => {
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setLanModalIndex(null)}
+          onSaved={() => { refetchParams(); refetchTasks(); }}
+        />
+      </Show>
+
+      <Show when={showLanNetworkModal() && parameters()}>
+        <LanNetworkSettingsModal
+          parameters={parameters()!}
+          serial={serial()}
+          onClose={() => setShowLanNetworkModal(false)}
           onSaved={() => { refetchParams(); refetchTasks(); }}
         />
       </Show>
