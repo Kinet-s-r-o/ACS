@@ -29,6 +29,7 @@ export interface DeviceListResponse { devices: Device[]; total: number; limit: n
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
 export interface WANInterface { serial_number: string; name: string; status: string; ip_address: string; mac_address: string }
 export interface Task { id: number; device_id: number; type: string; payload: unknown; status: string; result: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string }
+export interface GlobalTask extends Task { serial_number: string }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
 export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
@@ -99,6 +100,7 @@ export const api = {
   health: () => request<{ status: string }>('/health'),
   getDevices: (limit = 50, offset = 0) => request<DeviceListResponse>(`/devices?limit=${limit}&offset=${offset}`),
   getWANInterfaces: () => request<WANInterface[]>('/wan-interfaces'),
+  getTasks: () => request<GlobalTask[]>('/tasks'),
   getDevice: (serial: string) => request<Device>(`/device/${encodeURIComponent(serial)}`),
   setDeviceTags: (serial: string, tags: string[]) => request<{ status: string; tags: string[] }>(`/device/${encodeURIComponent(serial)}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }),
   getTags: () => request<TagDefinition[]>('/tags'),

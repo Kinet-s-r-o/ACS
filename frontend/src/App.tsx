@@ -10,6 +10,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Devices = lazy(() => import('./pages/Devices'));
 const WANInterfaces = lazy(() => import('./pages/WANInterfaces'));
+const Tasks = lazy(() => import('./pages/Tasks'));
 const DeviceDetail = lazy(() => import('./pages/DeviceDetail'));
 const Faults = lazy(() => import('./pages/Faults'));
 const Firmwares = lazy(() => import('./pages/Firmwares'));
@@ -48,6 +49,7 @@ const App: Component = () => {
             <Route path="/" component={Dashboard} />
             <Route path="/devices" component={Devices} />
             <Route path="/devices/wan-interfaces" component={WANInterfaces} />
+            <Route path="/tasks" component={Tasks} />
             <Route path="/device/:serial" component={DeviceDetail} />
             <Route path="/faults" component={Faults} />
             <Route path="/firmwares" component={Firmwares} />

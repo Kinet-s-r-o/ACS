@@ -15,8 +15,10 @@ const navigation = [
   { section: 'Monitor', items: [
     { href: '/', label: 'Fleet status', icon: LayoutDashboard },
     { href: '/devices', label: 'CPE inventory', icon: Router, children: [
+      { href: '/devices', label: 'CPEs' },
       { href: '/devices/wan-interfaces', label: 'WAN interfaces' },
     ] },
+    { href: '/tasks', label: 'CWMP tasks', icon: Activity },
     { href: '/faults', label: 'CWMP faults', icon: AlertTriangle },
   ] },
   { section: 'Control', items: [
@@ -36,6 +38,7 @@ const pageNames: Record<string, string> = {
   '/': 'Fleet status',
   '/devices': 'CPE inventory',
   '/devices/wan-interfaces': 'WAN interfaces',
+  '/tasks': 'CWMP tasks',
   '/faults': 'Fault center',
   '/firmwares': 'Firmware library',
   '/security': 'Security center',
@@ -63,8 +66,8 @@ const Layout: ParentComponent = (props) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = createSignal(false);
   const [apiOnline, setAPIOnline] = createSignal<boolean | null>(null);
-  const [settingsExpanded, setSettingsExpanded] = createSignal(true);
-  const [inventoryExpanded, setInventoryExpanded] = createSignal(true);
+  const [settingsExpanded, setSettingsExpanded] = createSignal(false);
+  const [inventoryExpanded, setInventoryExpanded] = createSignal(false);
   const { isDark, toggleTheme } = useTheme();
   const { user, logout, isFullAccess } = useAuth();
   let menuButton: HTMLButtonElement | undefined;

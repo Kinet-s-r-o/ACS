@@ -16,8 +16,24 @@ type TaskRepository struct {
 	db *gorm.DB
 }
 
+type TaskWithDevice struct {
+	models.Task
+	SerialNumber string `json:"serial_number"`
+}
+
 func NewTaskRepository(db *gorm.DB) *TaskRepository {
 	return &TaskRepository{db: db}
+}
+
+func (r *TaskRepository) ListWithDevices(ctx context.Context) ([]TaskWithDevice, error) {
+	var tasks []TaskWithDevice
+	err := r.db.WithContext(ctx).
+		Table("tasks").
+		Select("tasks.*, devices.serial_number").
+		Joins("JOIN devices ON devices.id = tasks.device_id").
+		Order("tasks.created_at DESC").
+		Find(&tasks).Error
+	return tasks, err
 }
 
 func (r *TaskRepository) Create(ctx context.Context, task *models.Task) error {

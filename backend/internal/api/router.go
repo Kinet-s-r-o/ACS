@@ -152,6 +152,7 @@ func (r *Router) Handler() http.Handler {
 	// Device endpoints (by ID - legacy)
 	apiMux.HandleFunc("GET /devices", auth.RequirePermission(models.PermDevicesRead)(r.handleListDevices))
 	apiMux.HandleFunc("GET /wan-interfaces", auth.RequirePermission(models.PermDevicesRead)(r.handleListWANInterfaces))
+	apiMux.HandleFunc("GET /tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListTasks))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
 	apiMux.HandleFunc("GET /devices/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDevice))
@@ -317,6 +318,17 @@ func (r *Router) handleListWANInterfaces(w http.ResponseWriter, req *http.Reques
 	}
 
 	respondJSON(w, http.StatusOK, interfaces)
+}
+
+func (r *Router) handleListTasks(w http.ResponseWriter, req *http.Request) {
+	tasks, err := r.taskRepo.ListWithDevices(req.Context())
+	if err != nil {
+		log.Printf("Error listing tasks: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list tasks")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, tasks)
 }
 
 func (r *Router) handleGetDevice(w http.ResponseWriter, req *http.Request) {
