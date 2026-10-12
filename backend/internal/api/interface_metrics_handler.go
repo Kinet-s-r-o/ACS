@@ -120,9 +120,9 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		def.ChartType = "line"
 	}
 	switch def.UnitScale {
-	case "", "auto", "bytes", "bits":
+	case "", "auto", "bytes", "bits", "pps":
 	default:
-		respondError(w, http.StatusBadRequest, "unit_scale must be '', 'auto', 'bytes', or 'bits'")
+		respondError(w, http.StatusBadRequest, "unit_scale must be '', 'auto', 'bytes', 'bits', or 'pps'")
 		return
 	}
 	switch def.ChartType {

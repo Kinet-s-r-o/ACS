@@ -43,7 +43,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
       const max = Math.max(...result.samples.map(sample => Math.abs(sample.value)));
       const scale = computeUnitScale(max, request.def.unit_scale);
       const unit = effectiveUnit(request.def.unit, request.def.unit_scale, scale.suffix);
-      const displayUnit = request.def.transform === 'rate' && unit && !unit.endsWith('/s') ? `${unit}/s` : unit;
+      const displayUnit = request.def.transform === 'rate' && request.def.unit_scale !== 'pps' && unit && !unit.endsWith('/s') ? `${unit}/s` : unit;
       const scaledValues = result.samples.map(sample => sample.value / scale.divisor);
       summaries.push({
         name: request.def.name,

@@ -54,6 +54,12 @@ interface UnitScale { divisor: number; suffix: string }
 
 const computeUnitScale = (values: number[], mode: string): UnitScale => {
   const max = Math.max(0, ...values.filter((v) => v != null));
+  if (mode === 'pps') {
+    if (max >= 1e9) return { divisor: 1e9, suffix: 'Gpps' };
+    if (max >= 1e6) return { divisor: 1e6, suffix: 'Mpps' };
+    if (max >= 1e3) return { divisor: 1e3, suffix: 'Kpps' };
+    return { divisor: 1, suffix: 'pps' };
+  }
   if (max === 0) return { divisor: 1, suffix: '' };
 
   if (mode === 'auto') {

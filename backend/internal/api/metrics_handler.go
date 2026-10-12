@@ -292,9 +292,9 @@ func validateMetricDefinition(def *models.MetricDefinition) error {
 		return errors.New("multiplier must be non-negative")
 	}
 	switch def.UnitScale {
-	case "", "auto", "bytes", "bits":
+	case "", "auto", "bytes", "bits", "pps":
 	default:
-		return errors.New("unit_scale must be '', 'auto', 'bytes', or 'bits'")
+		return errors.New("unit_scale must be '', 'auto', 'bytes', 'bits', or 'pps'")
 	}
 	switch def.ThresholdDirection {
 	case "", "higher_is_worse", "lower_is_worse":

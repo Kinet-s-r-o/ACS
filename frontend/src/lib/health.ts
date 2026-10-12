@@ -28,6 +28,12 @@ export interface UnitScale {
 
 export function computeUnitScale(value: number | null, mode: string): UnitScale {
   const max = Math.max(0, value ?? 0);
+  if (mode === 'pps') {
+    if (max >= 1e9) return { divisor: 1e9, suffix: 'Gpps' };
+    if (max >= 1e6) return { divisor: 1e6, suffix: 'Mpps' };
+    if (max >= 1e3) return { divisor: 1e3, suffix: 'Kpps' };
+    return { divisor: 1, suffix: 'pps' };
+  }
   if (max === 0) return { divisor: 1, suffix: '' };
 
   if (mode === 'auto') {
@@ -52,6 +58,7 @@ export function computeUnitScale(value: number | null, mode: string): UnitScale 
 }
 
 export function effectiveUnit(unit: string, scaleMode: string, suffix: string): string {
+  if (scaleMode === 'pps') return suffix || 'pps';
   if (!suffix) return unit;
   if (scaleMode === 'auto') return suffix + unit;
   if (scaleMode === 'bytes' || scaleMode === 'bits') {

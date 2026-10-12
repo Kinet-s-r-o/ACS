@@ -231,6 +231,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 <option value="">None</option>
                 <option value="bytes">Bytes (KB/MB/GB/TB)</option>
                 <option value="bits">Bits (Kb/Mb/Gb/Tb)</option>
+                <option value="pps">Packets per second (pps/Kpps/Mpps/Gpps)</option>
               </select>
             </div>
             <div>
