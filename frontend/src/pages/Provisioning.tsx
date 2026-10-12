@@ -13,6 +13,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { metricsForTemplate } from '../lib/metricViews';
 import MetricModal from '../components/MetricModal';
+import ColorSwatch from '../components/ColorSwatch';
 import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 
 interface ProvColumnConfig {
@@ -65,7 +66,7 @@ const Provisioning: Component = () => {
   const [interfaceMetrics, { refetch: refetchInterfaceMetrics }] = createResource(() => selectedTemplate()?.id, (id) => api.getInterfaceMetrics(id!));
   const [editingInterfaceMetric, setEditingInterfaceMetric] = createSignal<InterfaceMetricDefinition | null>(null);
   const [showInterfaceMetricModal, setShowInterfaceMetricModal] = createSignal(false);
-  const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', transform: '', multiplier: 1, active: true });
+  const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', color: '', transform: '', multiplier: 1, active: true });
 
   const provisioningPayload = (form: typeof emptyProvisioningRule) => {
     const base = isAddObjectRule()
@@ -404,7 +405,7 @@ const Provisioning: Component = () => {
 
   const openInterfaceMetric = (def: InterfaceMetricDefinition | null = null) => {
     setEditingInterfaceMetric(def);
-    setInterfaceMetricForm(def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan', parameter_pattern: '', unit: 'bytes', transform: '', multiplier: 1, active: true });
+    setInterfaceMetricForm(def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', color: def.color || '', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan', parameter_pattern: '', unit: 'bytes', color: '', transform: '', multiplier: 1, active: true });
     setShowInterfaceMetricModal(true);
   };
 
@@ -754,8 +755,8 @@ const Provisioning: Component = () => {
             <section class="mt-6 border-t border-subtle pt-4">
               <h3 class="text-sm font-semibold text-primary mb-3">Per-interface WAN/LAN metrics</h3>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="w-full text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Parameter pattern</th><th class="py-2 pr-3">Transform</th><th class="py-2 pr-3">Multiplier</th><th class="py-2 text-right">Actions</th></tr></thead>
-                  <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 text-right"><button class="btn btn-ghost text-xs" onClick={() => openInterfaceMetric(def)}><Edit size={12} /></button><button class="btn btn-ghost text-xs text-red-400" onClick={() => void deleteInterfaceMetric(def)}><Trash2 size={12} /></button></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table class="w-full text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Parameter pattern</th><th class="py-2 pr-3">Color</th><th class="py-2 pr-3">Transform</th><th class="py-2 pr-3">Multiplier</th><th class="py-2 text-right">Actions</th></tr></thead>
+                  <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3"><span class="inline-block h-3 w-6 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /></td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 text-right"><button class="btn btn-ghost text-xs" onClick={() => openInterfaceMetric(def)}><Edit size={12} /></button><button class="btn btn-ghost text-xs text-red-400" onClick={() => void deleteInterfaceMetric(def)}><Trash2 size={12} /></button></td></tr>}</For></tbody></table></div>
               </Show>
             </section>
           </Show>
@@ -933,6 +934,7 @@ const Provisioning: Component = () => {
             <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
             <label class="block text-xs text-muted">Parameter path pattern<input required class="input mt-1 w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Stats.EthernetBytesReceived" value={interfaceMetricForm().parameter_pattern} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, parameter_pattern: e.currentTarget.value }))} /></label>
             <div class="grid grid-cols-3 gap-3"><label class="block text-xs text-muted">Unit<input class="input mt-1 w-full" value={interfaceMetricForm().unit} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} /></label><label class="block text-xs text-muted">Transform<select class="input mt-1 w-full" value={interfaceMetricForm().transform} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, transform: e.currentTarget.value }))}><option value="">Raw value</option><option value="rate">Rate</option></select></label><label class="block text-xs text-muted">Multiplier<input type="number" min="0" step="any" class="input mt-1 w-full" value={interfaceMetricForm().multiplier} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, multiplier: Number(e.currentTarget.value) }))} /></label></div>
+            <label class="block text-xs text-muted">Line color<ColorSwatch value={interfaceMetricForm().color} onChange={(color) => setInterfaceMetricForm(f => ({ ...f, color }))} /></label>
             <label class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></label>
             <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={interfaceMetricForm().active} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} />Active</label>
           </form>

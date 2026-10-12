@@ -36,7 +36,7 @@ export interface User { id: number; username: string; role: 'full' | 'read'; rol
 export interface TagDefinition { id: string; name: string; color: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; created_at: string; updated_at: string }
-export interface InterfaceMetricDefinition { id: number; template_id: number; name: string; description: string; interface_type: 'wan' | 'lan'; parameter_pattern: string; unit: string; transform: string; multiplier: number; active: boolean; created_at: string; updated_at: string }
+export interface InterfaceMetricDefinition { id: number; template_id: number; name: string; description: string; interface_type: 'wan' | 'lan'; parameter_pattern: string; unit: string; color: string; transform: string; multiplier: number; active: boolean; created_at: string; updated_at: string }
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
 export interface AuditLog { id: number; user_id?: number; username: string; action: string; resource: string; status: number; ip_address: string; user_agent?: string; created_at: string }
