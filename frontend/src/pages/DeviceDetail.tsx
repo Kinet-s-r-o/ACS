@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical } from 'lucide-solid';
+import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Tags, Activity, AlertTriangle, Check, Download, Search, MoreVertical } from 'lucide-solid';
 import { api, type DeviceSnapshot, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
@@ -64,6 +64,7 @@ interface SnapshotTreeRow {
   parameter?: SnapshotParameter;
   currentValue?: string;
   descendants: string[];
+  hasChildren: boolean;
 }
 
 const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
@@ -168,6 +169,7 @@ const DeviceDetail: Component = () => {
   const [snapshotSelection, setSnapshotSelection] = createSignal<string[]>([]);
   const [snapshotName, setSnapshotName] = createSignal('');
   const [snapshotLoading, setSnapshotLoading] = createSignal<string | null>(null);
+  const [collapsedSnapshotPaths, setCollapsedSnapshotPaths] = createSignal<Set<string>>(new Set());
 
   const snapshotRows = createMemo<SnapshotTreeRow[]>(() => {
     const snapshot = selectedSnapshot();
@@ -185,7 +187,7 @@ const DeviceDetail: Component = () => {
         nodes.set(path, node);
       }
     }
-    return [...nodes.entries()]
+    const rows = [...nodes.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([path, node]) => ({
         path,
@@ -194,8 +196,22 @@ const DeviceDetail: Component = () => {
         parameter: node.parameter,
         currentValue: node.parameter ? current.get(node.parameter.name) : undefined,
         descendants: node.descendants,
+        hasChildren: [...nodes.keys()].some(candidate => candidate.startsWith(`${path}.`)),
       }));
+    const collapsed = collapsedSnapshotPaths();
+    return rows.filter(row => {
+      const parts = row.path.split('.');
+      return !parts.slice(1).some((_, index) => collapsed.has(parts.slice(0, index + 1).join('.')));
+    });
   });
+
+  const toggleSnapshotBranch = (path: string) => {
+    setCollapsedSnapshotPaths(previous => {
+      const next = new Set(previous);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  };
 
   const toggleSnapshotPath = (row: SnapshotTreeRow) => {
     const selected = new Set(snapshotSelection());
@@ -209,6 +225,7 @@ const DeviceDetail: Component = () => {
     try {
       const detail = await api.getDeviceSnapshot(serial(), snapshot.id);
       setSelectedSnapshot(detail);
+      setCollapsedSnapshotPaths(new Set());
       const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
       setSnapshotSelection((detail.parameters || []).filter(parameter => current.get(parameter.name) !== parameter.value).map(parameter => parameter.name));
     } catch (error) {
@@ -1594,10 +1611,15 @@ const DeviceDetail: Component = () => {
                               <For each={snapshotRows()}>
                                 {(row) => {
                                   const selectedCount = () => row.descendants.filter(name => snapshotSelection().includes(name)).length;
-                                  const isBranch = row.descendants.length > 1 || !row.parameter;
+                                  const isBranch = row.hasChildren;
                                   return (
                                     <div class="grid grid-cols-[minmax(280px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-3 items-center border-t border-subtle/60 px-3 py-2 text-xs">
                                       <div style={{ 'padding-left': `${row.depth * 16}px` }} class="flex items-center gap-2 min-w-0">
+                                        <Show when={row.hasChildren} fallback={<span class="w-4 shrink-0" />}>
+                                          <button type="button" class="icon-button w-4 h-4 shrink-0" aria-label={`${collapsedSnapshotPaths().has(row.path) ? 'Expand' : 'Collapse'} ${row.path}`} onClick={() => toggleSnapshotBranch(row.path)}>
+                                            <Show when={collapsedSnapshotPaths().has(row.path)} fallback={<Minus size={12} />}><Plus size={12} /></Show>
+                                          </button>
+                                        </Show>
                                         <input type="checkbox" checked={selectedCount() === row.descendants.length} ref={(element) => { element.indeterminate = selectedCount() > 0 && selectedCount() < row.descendants.length; }} onChange={() => toggleSnapshotPath(row)} disabled={!isFullAccess()} />
                                         <span class={isBranch ? 'text-secondary font-medium' : 'text-primary font-mono truncate'} title={row.path}>{row.label}</span>
                                       </div>
