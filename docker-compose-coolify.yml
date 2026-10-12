@@ -75,10 +75,12 @@ services:
       CONNECTION_REQUEST_ALLOWED_CIDRS: ${CONNECTION_REQUEST_ALLOWED_CIDRS:-}
 
       FIRMWARE_UPLOAD_DIR: /var/lib/skyacs/firmware
+      TEMPLATE_IMAGE_UPLOAD_DIR: /var/lib/skyacs/template-images
       ALLOW_INSECURE_FIRMWARE_URL: "false"
 
     volumes:
       - skyacs-firmware:/var/lib/skyacs/firmware
+      - skyacs-template-images:/var/lib/skyacs/template-images
 
     expose:
       - "7547"
@@ -130,6 +132,8 @@ volumes:
   skyacs-postgres:
 
   skyacs-firmware:
+
+  skyacs-template-images:
 
 
 networks:

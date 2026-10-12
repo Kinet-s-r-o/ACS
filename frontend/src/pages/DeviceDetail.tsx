@@ -108,6 +108,7 @@ const DeviceDetail: Component = () => {
   const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
+  const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
   const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
   const [tasks, { refetch: refetchTasks }] = createResource(serial, api.getDeviceTasks);
@@ -115,6 +116,30 @@ const DeviceDetail: Component = () => {
   const [deviceFaults, { refetch: refetchDeviceFaults }] = createResource(serial, api.getDeviceFaults);
   const [metricDefs] = createResource(api.getMetricDefinitions);
   const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
+  const matchingProvisioningTemplate = createMemo(() => {
+    const current = device();
+    if (!current) return null;
+    const manufacturer = (current.manufacturer || '').toLowerCase();
+    const productClass = (current.product_class || '').toLowerCase();
+    return (provisioningTemplates() || [])
+      .filter(template => (!template.manufacturer || template.manufacturer.toLowerCase() === manufacturer) && (!template.product_class || template.product_class.toLowerCase() === productClass))
+      .sort((a, b) => {
+        const score = (template: typeof a) => Number(Boolean(template.manufacturer)) + Number(Boolean(template.product_class));
+        return score(b) - score(a) || a.id - b.id;
+      })[0] || null;
+  });
+  const [templateImageBlob] = createResource(() => matchingProvisioningTemplate()?.image_url ? matchingProvisioningTemplate()!.id : undefined, (id) => api.getProvisioningTemplateImage(id));
+  const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
+  let templateImageObjectUrl: string | null = null;
+  createEffect(() => {
+    const blob = templateImageBlob();
+    if (templateImageObjectUrl) URL.revokeObjectURL(templateImageObjectUrl);
+    templateImageObjectUrl = blob ? URL.createObjectURL(blob) : null;
+    setTemplateImageUrl(templateImageObjectUrl);
+  });
+  onCleanup(() => {
+    if (templateImageObjectUrl) URL.revokeObjectURL(templateImageObjectUrl);
+  });
   const [statsInterface, setStatsInterface] = createSignal<{ type: 'wan' | 'lan'; name: string; path: string } | null>(null);
   const [taskPage, setTaskPage] = createSignal(0);
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
@@ -1684,18 +1709,24 @@ const DeviceDetail: Component = () => {
                   <Server size={14} />
                   ONT Information
                 </h2>
-                <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                  <div><span class="text-muted">Serial:</span> <span class="text-primary font-mono">{d().serial_number}</span></div>
-                  <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
-                  <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
-                  <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
-                  <div><span class="text-muted">Model:</span> <span class="text-primary">{d().model_name || getParamValue(['ModelName', 'X_HW_ModelName', 'DeviceInfo.ModelName']) || '-'}</span></div>
-                  <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
-                  <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
-                  <div><span class="text-muted">IP Address:</span> <span class="text-primary font-mono">{d().ip_address || getParamValue(['ExternalIPAddress', 'IPAddress']) || '-'}</span></div>
-                  <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
-                  <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
-                  <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
+                <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                  <div class="space-y-2">
+                    <Show when={templateImageUrl()}>
+                      <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-32 w-full rounded border border-subtle object-cover" />
+                    </Show>
+                    <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
+                    <div><span class="text-muted">Serial:</span> <span class="text-primary font-mono">{d().serial_number}</span></div>
+                    <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
+                    <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
+                  </div>
+                  <div class="space-y-2">
+                    <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
+                    <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
+                    <div><span class="text-muted">Model:</span> <span class="text-primary">{d().model_name || getParamValue(['ModelName', 'X_HW_ModelName', 'DeviceInfo.ModelName']) || '-'}</span></div>
+                    <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
+                    <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
+                    <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
+                  </div>
                 </div>
 
               </div>

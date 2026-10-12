@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, type Component } from 'solid-js';
-import { Activity, Copy, Edit, Edit2, GripVertical, MoreVertical, Plus, Search, Settings as SettingsIcon, Trash2, X, ChevronLeft } from 'lucide-solid';
+import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -60,6 +60,10 @@ const Provisioning: Component = () => {
   const [showTemplateModal, setShowTemplateModal] = createSignal(false);
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '' });
+  const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
+  const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
+  let templateImageInput: HTMLInputElement | undefined;
+  let templateImageObjectUrl: string | null = null;
   const [templateTab, setTemplateTab] = createSignal<'rules' | 'metrics'>('rules');
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
@@ -140,6 +144,7 @@ const Provisioning: Component = () => {
     onCleanup(() => {
       document.removeEventListener('click', closeMenu);
       document.removeEventListener('keydown', closeOnEscape);
+      clearTemplateImagePreview();
     });
   });
 
@@ -162,6 +167,24 @@ const Provisioning: Component = () => {
     }
   };
 
+  const clearTemplateImagePreview = () => {
+    if (templateImageObjectUrl) URL.revokeObjectURL(templateImageObjectUrl);
+    templateImageObjectUrl = null;
+    setTemplateImageUrl(null);
+  };
+
+  const loadTemplateImage = async (template: ProvisioningTemplate) => {
+    clearTemplateImagePreview();
+    if (!template.image_url) return;
+    try {
+      const blob = await api.getProvisioningTemplateImage(template.id);
+      templateImageObjectUrl = URL.createObjectURL(blob);
+      setTemplateImageUrl(templateImageObjectUrl);
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not load device image', detail: (error as Error).message });
+    }
+  };
+
   const refetchProvRules = async () => {
     await loadProvRules();
   };
@@ -171,12 +194,55 @@ const Provisioning: Component = () => {
     setProvRules(null);
     setProvError(null);
     loadProvRules();
+    void loadTemplateImage(template);
   };
 
   const backToTemplates = () => {
+    clearTemplateImagePreview();
     setSelectedTemplate(null);
     setProvRules(null);
     setProvError(null);
+  };
+
+  const handleTemplateImageSelected = async (event: Event) => {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    const template = selectedTemplate();
+    if (!file || !template) return;
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      notify({ tone: 'error', title: 'Invalid device image', message: 'Use a JPEG, PNG, GIF, or WebP image up to 5 MB.' });
+      if (templateImageInput) templateImageInput.value = '';
+      return;
+    }
+    setTemplateImageUploading(true);
+    try {
+      const updated = await api.uploadProvisioningTemplateImage(template.id, file);
+      setSelectedTemplate(updated);
+      await loadTemplateImage(updated);
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'Device image uploaded' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Device image upload failed', detail: (error as Error).message, persistent: true });
+    } finally {
+      setTemplateImageUploading(false);
+      if (templateImageInput) templateImageInput.value = '';
+    }
+  };
+
+  const handleDeleteTemplateImage = async () => {
+    const template = selectedTemplate();
+    if (!template || !template.image_url || !await confirm({ title: 'Remove device image?', description: 'The image will be removed from this provisioning template.', confirmLabel: 'Remove image', tone: 'danger' })) return;
+    setTemplateImageUploading(true);
+    try {
+      await api.deleteProvisioningTemplateImage(template.id);
+      setSelectedTemplate({ ...template, image_url: undefined });
+      clearTemplateImagePreview();
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'Device image removed' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not remove device image', detail: (error as Error).message, persistent: true });
+    } finally {
+      setTemplateImageUploading(false);
+    }
   };
 
   const openRefreshSettings = async () => {
@@ -528,6 +594,11 @@ const Provisioning: Component = () => {
                 <button onClick={backToTemplates} class="icon-button" aria-label="Back to templates">
                   <ChevronLeft size={16} />
                 </button>
+                <div class="h-12 w-16 shrink-0 overflow-hidden rounded border border-subtle bg-elevated grid place-items-center">
+                  <Show when={templateImageUrl()} fallback={<ImageIcon size={18} class="text-muted" />}>
+                    <img src={templateImageUrl()!} alt={`Device image for ${selectedTemplate()!.name}`} class="h-full w-full object-cover" />
+                  </Show>
+                </div>
                 <div>
                   <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
                     <SettingsIcon size={14} />
@@ -541,6 +612,14 @@ const Provisioning: Component = () => {
                 </div>
               </div>
               <div class="flex items-center gap-2">
+                <input id="template-device-image" ref={(element) => { templateImageInput = element; }} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="sr-only" onChange={(event) => void handleTemplateImageSelected(event)} disabled={templateImageUploading()} />
+                <label for="template-device-image" class="btn btn-secondary text-xs py-1.5 cursor-pointer" aria-disabled={templateImageUploading()}>
+                  <Upload size={12} />
+                  {templateImageUploading() ? 'Uploading…' : 'Device photo'}
+                </label>
+                <Show when={selectedTemplate()!.image_url}>
+                  <button type="button" class="btn btn-ghost text-xs" onClick={() => void handleDeleteTemplateImage()} disabled={templateImageUploading()}>Remove photo</button>
+                </Show>
                 <Show when={templateTab() === 'rules'}>
                   <div class="relative">
                     <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />

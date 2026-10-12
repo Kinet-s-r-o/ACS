@@ -31,26 +31,30 @@ import (
 )
 
 type Router struct {
-	db               *gorm.DB
-	deviceRepo       *database.DeviceRepository
-	settingsRepo     *database.SettingsRepository
-	taskRepo         *database.TaskRepository
-	parameterRepo    *database.ParameterRepository
-	firmwareRepo     *database.FirmwareRepository
-	faultRepo        *database.FaultRepository
-	userRepo         *database.UserRepository
-	roleRepo         *database.RoleRepository
-	provisioningRepo *database.ProvisioningRepository
-	auditRepo        *database.AuditRepository
-	blockedRepo      *database.BlockedDeviceRepository
-	metricRepo       *database.MetricRepository
-	snapshotRepo     *database.SnapshotRepository
-	tagRepo          *database.TagRepository
-	loginLimiter     *loginLimiter
-	downloadLimiter  *loginLimiter
-	uploadDir        string
-	uploadInitErr    error
+	db                   *gorm.DB
+	deviceRepo           *database.DeviceRepository
+	settingsRepo         *database.SettingsRepository
+	taskRepo             *database.TaskRepository
+	parameterRepo        *database.ParameterRepository
+	firmwareRepo         *database.FirmwareRepository
+	faultRepo            *database.FaultRepository
+	userRepo             *database.UserRepository
+	roleRepo             *database.RoleRepository
+	provisioningRepo     *database.ProvisioningRepository
+	auditRepo            *database.AuditRepository
+	blockedRepo          *database.BlockedDeviceRepository
+	metricRepo           *database.MetricRepository
+	snapshotRepo         *database.SnapshotRepository
+	tagRepo              *database.TagRepository
+	loginLimiter         *loginLimiter
+	downloadLimiter      *loginLimiter
+	uploadDir            string
+	uploadInitErr        error
+	templateImageDir     string
+	templateImageInitErr error
 }
+
+const maxTemplateImageSize = 5 << 20
 
 func NewRouter(db *gorm.DB) *Router {
 	uploadDir := os.Getenv("FIRMWARE_UPLOAD_DIR")
@@ -72,27 +76,48 @@ func NewRouter(db *gorm.DB) *Router {
 	if uploadInitErr != nil {
 		log.Printf("Firmware storage is not writable: %v", uploadInitErr)
 	}
+	templateImageDir := os.Getenv("TEMPLATE_IMAGE_UPLOAD_DIR")
+	if templateImageDir == "" {
+		templateImageDir = "./uploads/template-images"
+	}
+	templateImageInitErr := os.MkdirAll(templateImageDir, 0750)
+	if templateImageInitErr == nil {
+		var probe *os.File
+		probe, templateImageInitErr = os.CreateTemp(templateImageDir, ".write-probe-*")
+		if templateImageInitErr == nil {
+			probeName := probe.Name()
+			templateImageInitErr = probe.Close()
+			if removeErr := os.Remove(probeName); templateImageInitErr == nil {
+				templateImageInitErr = removeErr
+			}
+		}
+	}
+	if templateImageInitErr != nil {
+		log.Printf("Template image storage is not writable: %v", templateImageInitErr)
+	}
 
 	return &Router{
-		db:               db,
-		deviceRepo:       database.NewDeviceRepository(db),
-		settingsRepo:     database.NewSettingsRepository(db),
-		taskRepo:         database.NewTaskRepository(db),
-		parameterRepo:    database.NewParameterRepository(db),
-		firmwareRepo:     database.NewFirmwareRepository(db),
-		faultRepo:        database.NewFaultRepository(db),
-		userRepo:         database.NewUserRepository(db),
-		roleRepo:         database.NewRoleRepository(db),
-		provisioningRepo: database.NewProvisioningRepository(db),
-		auditRepo:        database.NewAuditRepository(db),
-		blockedRepo:      database.NewBlockedDeviceRepository(db),
-		metricRepo:       database.NewMetricRepository(db),
-		snapshotRepo:     database.NewSnapshotRepository(db),
-		tagRepo:          database.NewTagRepository(db),
-		loginLimiter:     newLoginLimiter(5, 15*time.Minute),
-		downloadLimiter:  newLoginLimiter(60, time.Minute),
-		uploadDir:        uploadDir,
-		uploadInitErr:    uploadInitErr,
+		db:                   db,
+		deviceRepo:           database.NewDeviceRepository(db),
+		settingsRepo:         database.NewSettingsRepository(db),
+		taskRepo:             database.NewTaskRepository(db),
+		parameterRepo:        database.NewParameterRepository(db),
+		firmwareRepo:         database.NewFirmwareRepository(db),
+		faultRepo:            database.NewFaultRepository(db),
+		userRepo:             database.NewUserRepository(db),
+		roleRepo:             database.NewRoleRepository(db),
+		provisioningRepo:     database.NewProvisioningRepository(db),
+		auditRepo:            database.NewAuditRepository(db),
+		blockedRepo:          database.NewBlockedDeviceRepository(db),
+		metricRepo:           database.NewMetricRepository(db),
+		snapshotRepo:         database.NewSnapshotRepository(db),
+		tagRepo:              database.NewTagRepository(db),
+		loginLimiter:         newLoginLimiter(5, 15*time.Minute),
+		downloadLimiter:      newLoginLimiter(60, time.Minute),
+		uploadDir:            uploadDir,
+		uploadInitErr:        uploadInitErr,
+		templateImageDir:     templateImageDir,
+		templateImageInitErr: templateImageInitErr,
 	}
 }
 
@@ -193,6 +218,9 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /provisioning/templates", auth.RequirePermission(models.PermProvisioningWrite)(r.handleCreateProvisioningTemplate))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleUpdateProvisioningTemplate))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplate))
+	apiMux.HandleFunc("GET /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningRead)(r.handleGetProvisioningTemplateImage))
+	apiMux.HandleFunc("POST /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningWrite)(r.handleUploadProvisioningTemplateImage))
+	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplateImage))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleListInterfaceMetrics))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}/interface-metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
@@ -3052,6 +3080,9 @@ func (r *Router) handleListProvisioningTemplates(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusInternalServerError, "Failed to list provisioning templates")
 		return
 	}
+	for _, template := range templates {
+		r.templateImageURL(template)
+	}
 	respondJSON(w, http.StatusOK, templates)
 }
 
@@ -3096,6 +3127,7 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusInternalServerError, "Failed to create template")
 		return
 	}
+	r.templateImageURL(template)
 	respondJSON(w, http.StatusCreated, template)
 }
 
@@ -3148,7 +3180,13 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusInternalServerError, "Failed to update template")
 		return
 	}
-	respondJSON(w, http.StatusOK, template)
+	updated, err := r.provisioningRepo.GetTemplate(req.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load updated template")
+		return
+	}
+	r.templateImageURL(updated)
+	respondJSON(w, http.StatusOK, updated)
 }
 
 func (r *Router) handleDeleteProvisioningTemplate(w http.ResponseWriter, req *http.Request) {
@@ -3165,9 +3203,15 @@ func (r *Router) handleDeleteProvisioningTemplate(w http.ResponseWriter, req *ht
 		return
 	}
 
+	template, _ := r.provisioningRepo.GetTemplate(req.Context(), id)
 	if err := r.provisioningRepo.DeleteTemplate(req.Context(), id); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to delete template")
 		return
+	}
+	if template != nil && template.ImagePath != "" {
+		if imagePath, pathErr := secureTemplateImagePath(r.templateImageDir, template.ImagePath); pathErr == nil {
+			_ = os.Remove(imagePath)
+		}
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

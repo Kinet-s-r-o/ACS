@@ -48,6 +48,16 @@ func (r *ProvisioningRepository) UpdateTemplate(ctx context.Context, template *m
 	}).Error
 }
 
+func (r *ProvisioningRepository) UpdateTemplateImage(ctx context.Context, id int64, path, contentType string) error {
+	return r.db.WithContext(ctx).Model(&models.ProvisioningTemplate{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"image_path": path, "image_type": contentType}).Error
+}
+
+func (r *ProvisioningRepository) ClearTemplateImage(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Model(&models.ProvisioningTemplate{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"image_path": "", "image_type": ""}).Error
+}
+
 func (r *ProvisioningRepository) DeleteTemplate(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("template_id = ?", id).Delete(&models.MetricDefinition{}).Error; err != nil {

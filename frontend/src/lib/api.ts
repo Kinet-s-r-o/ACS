@@ -35,7 +35,7 @@ export interface Fault { id: number; device_id: number; serial_number: string; f
 export interface User { id: number; username: string; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
 export interface TagDefinition { id: string; name: string; color: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
-export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; created_at: string; updated_at: string }
+export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
@@ -76,6 +76,22 @@ export async function request<T>(endpoint: string, options: RequestInit = {}): P
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function requestBlob(endpoint: string, options: RequestInit = {}): Promise<Blob> {
+  const token = getStoredToken();
+  const headers = new Headers(options.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredSession();
+      if (window.location.pathname !== '/login') window.location.assign('/login');
+    }
+    const error = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
+    throw new Error(error.error || `Request failed (${response.status})`);
+  }
+  return response.blob();
 }
 
 export const api = {
@@ -151,6 +167,13 @@ export const api = {
   createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
   updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
+  getProvisioningTemplateImage: (id: number) => requestBlob(`/provisioning/templates/${id}/image`),
+  uploadProvisioningTemplateImage: (id: number, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return request<ProvisioningTemplate>(`/provisioning/templates/${id}/image`, { method: 'POST', body });
+  },
+  deleteProvisioningTemplateImage: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}/image`, { method: 'DELETE' }),
   getInterfaceMetrics: (templateId: number) => request<InterfaceMetricDefinition[]>(`/provisioning/templates/${templateId}/interface-metrics`),
   getDeviceInterfaceMetricDefinitions: (serial: string) => request<InterfaceMetricDefinition[]>(`/device/${encodeURIComponent(serial)}/interface-metric-definitions`),
   createInterfaceMetric: (templateId: number, body: Pick<InterfaceMetricDefinition, 'name' | 'description' | 'interface_type' | 'parameter_pattern' | 'unit' | 'source' | 'unit_scale' | 'color' | 'group' | 'chart_type' | 'transform' | 'multiplier' | 'active'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics`, { method: 'POST', body: JSON.stringify(body) }),
