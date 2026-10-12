@@ -1485,44 +1485,41 @@ const DeviceDetail: Component = () => {
                 </div>
 
                 <div class="mt-4 pt-4 border-t border-subtle">
-                  <div class="flex items-center gap-1.5 mb-2">
+                  <div class="flex flex-wrap items-center gap-2">
                     <Tags size={13} class="text-muted" />
                     <span class="text-xs font-medium text-secondary">Tags</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-2">
                     <For each={deviceTags()}>
                       {(tag) => (
-                        <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400">
+                        <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400">
                           {tag}
                           <Show when={isFullAccess()}>
                             <button onClick={() => handleRemoveTag(tag)} disabled={tagsLoading()} class="hover:text-rose-400 disabled:opacity-50" aria-label={`Remove tag ${tag}`}>
-                              <X size={12} />
+                              <X size={10} />
                             </button>
                           </Show>
                         </span>
                       )}
                     </For>
                     <Show when={deviceTags().length === 0}>
-                      <span class="text-xs text-muted">No tags — provisioning rules with a tag scope will not apply to this CPE.</span>
+                      <span class="text-[11px] text-muted" title="Provisioning rules with a tag scope will not apply to this CPE">None</span>
                     </Show>
-                  </div>
                   <Show when={isFullAccess()}>
-                    <div class="flex gap-2">
+                    <form class="ml-auto flex items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); void handleAddTag(); }}>
                       <input
                         type="text"
                         value={newTag()}
                         onInput={(e) => setNewTag(e.currentTarget.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleAddTag(); } }}
-                        class="input flex-1 py-1 text-xs"
-                        placeholder="Add tag (e.g. branch-a)"
+                        class="input w-32 py-1 text-[11px]"
+                        placeholder="Add tag"
+                        aria-label="New device tag"
                         disabled={tagsLoading()}
                       />
-                      <button onClick={() => void handleAddTag()} disabled={tagsLoading() || !newTag().trim()} class="btn btn-secondary text-xs py-1">
-                        <Plus size={12} />
-                        Add
+                      <button type="submit" aria-label="Add tag" title="Add tag" disabled={tagsLoading() || !newTag().trim()} class="icon-button w-7 h-7 disabled:opacity-50">
+                        <Plus size={14} />
                       </button>
-                    </div>
+                    </form>
                   </Show>
+                  </div>
                 </div>
               </div>
 
