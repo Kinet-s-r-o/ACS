@@ -108,10 +108,10 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     <Show when={!results.loading && !results.error && chartData().series.length > 0}>
       <div ref={setElement} class="h-64 w-full" />
       <div class="space-y-1 px-2 text-xs text-muted">
-        <For each={chartData().summaries}>{item => <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span class="inline-block h-2 w-2 rounded-full" style={{ 'background-color': item.color }} />
-          <span class="font-medium text-foreground">{item.name}</span>
-          <span>Min {formatValue(item.min)}{item.unit ? ` ${item.unit}` : ''} · Avg {formatValue(item.avg)}{item.unit ? ` ${item.unit}` : ''} · Max {formatValue(item.max)}{item.unit ? ` ${item.unit}` : ''}</span>
+        <For each={chartData().summaries}>{item => <div class="flex items-center gap-2">
+          <span class="inline-block h-2 w-2 shrink-0 rounded-full" style={{ 'background-color': item.color }} />
+          <span class="min-w-0 flex-1 truncate font-medium text-foreground">{item.name}</span>
+          <span class="shrink-0 text-right">Min {formatValue(item.min)}{item.unit ? ` ${item.unit}` : ''} · Avg {formatValue(item.avg)}{item.unit ? ` ${item.unit}` : ''} · Max {formatValue(item.max)}{item.unit ? ` ${item.unit}` : ''}</span>
         </div>}</For>
       </div>
     </Show>
