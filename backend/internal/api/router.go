@@ -1502,6 +1502,9 @@ func (r *Router) handleCreateSnapshotBySerial(w http.ResponseWriter, req *http.R
 	}
 	snapshotParameters := make([]models.SnapshotParameter, 0, len(parameters))
 	for _, parameter := range parameters {
+		if parameter.Writable == nil || !*parameter.Writable {
+			continue
+		}
 		value := parameter.Value
 		if database.IsSensitiveParameterName(parameter.Name) {
 			value, err = database.EncryptValue(value)
@@ -1513,6 +1516,10 @@ func (r *Router) handleCreateSnapshotBySerial(w http.ResponseWriter, req *http.R
 		snapshotParameters = append(snapshotParameters, models.SnapshotParameter{
 			Name: parameter.Name, Value: value, ValueType: parameter.ValueType, Writable: parameter.Writable,
 		})
+	}
+	if len(snapshotParameters) == 0 {
+		respondError(w, http.StatusConflict, "No writable device parameters are available")
+		return
 	}
 	encoded, err := json.Marshal(snapshotParameters)
 	if err != nil {
