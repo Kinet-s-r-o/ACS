@@ -23,6 +23,7 @@ import WifiSettingsModal from '../components/WifiSettingsModal';
 import LanSettingsModal from '../components/LanSettingsModal';
 import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
+import DeviceTagPicker from '../components/DeviceTagPicker';
 
 interface HostColumnConfig {
   id: string;
@@ -97,9 +98,10 @@ const DeviceDetail: Component = () => {
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' ? searchParams.tab : 'overview';
+  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
+  const [tagCatalog] = createResource(api.getTags);
   const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
   const [tasks, { refetch: refetchTasks }] = createResource(serial, api.getDeviceTasks);
   const [snapshots, { refetch: refetchSnapshots }] = createResource(serial, api.getDeviceSnapshots);
@@ -1344,11 +1346,8 @@ const DeviceDetail: Component = () => {
           </Show>
         </div>
         <div class="flex gap-2 items-center">
-          <Show when={isFullAccess() && iperfSupported()}>
-            <button onClick={openIperfModal} disabled={actionLoading() !== null} class="btn btn-secondary text-xs sm:text-sm">
-              <Activity size={14} />
-              <span class="hidden sm:inline">iPerf test</span>
-            </button>
+          <Show when={device()}>
+            <DeviceTagPicker device={device()!} tags={tagCatalog() || []} writable={isFullAccess()} onUpdated={() => { void refetchDevice(); }} />
           </Show>
           <Show when={isFullAccess()}><button onClick={handleSummon} disabled={actionLoading() !== null} class="btn btn-primary text-xs sm:text-sm">
             <Zap size={14} />
@@ -1402,6 +1401,7 @@ const DeviceDetail: Component = () => {
         <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>
           Connected Hosts
         </button>
+        <button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'speedtest' })}>Diagnostic</button>
       </nav>
 
       <Show when={message()}>
@@ -1510,6 +1510,30 @@ const DeviceDetail: Component = () => {
               </div>
             </div>
 
+            </Show>
+
+            <Show when={activeTab() === 'diagnostic'}>
+              <div class="space-y-4">
+                <nav role="tablist" class="tab-bar" aria-label="Diagnostic sections">
+                  <button role="tab" class="tab-btn is-active" aria-selected="true" onClick={() => setSearchParams({ diagnosticTab: 'speedtest' })}>Speedtest</button>
+                </nav>
+                <Show when={searchParams.diagnosticTab === undefined || searchParams.diagnosticTab === 'speedtest'}>
+                  <div class="card p-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h2 class="text-sm font-medium text-secondary">Speedtest</h2>
+                        <p class="text-xs text-muted mt-1">Run an iPerf speed test from this CPE.</p>
+                      </div>
+                      <Show when={isFullAccess() && iperfSupported()} fallback={<span class="text-xs text-muted">iPerf testing is not available for this device.</span>}>
+                        <button onClick={openIperfModal} disabled={actionLoading() !== null} class="btn btn-secondary text-xs sm:text-sm">
+                          <Activity size={14} />
+                          <span>iPerf test</span>
+                        </button>
+                      </Show>
+                    </div>
+                  </div>
+                </Show>
+              </div>
             </Show>
 
             <Show when={activeTab() === 'snapshots'}>
