@@ -43,9 +43,21 @@ func (r *ProvisioningRepository) GetTemplate(ctx context.Context, id int64) (*mo
 }
 
 func (r *ProvisioningRepository) UpdateTemplate(ctx context.Context, template *models.ProvisioningTemplate) error {
-	return r.db.WithContext(ctx).Model(&models.ProvisioningTemplate{}).Where("id = ?", template.ID).Updates(map[string]interface{}{
-		"name": template.Name, "manufacturer": template.Manufacturer, "product_class": template.ProductClass, "description": template.Description,
-	}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		query := tx.Model(&models.ProvisioningTemplate{}).Where("id = ?", template.ID)
+		var err error
+		if template.Variables != nil {
+			err = query.Select("name", "manufacturer", "product_class", "description", "variables").Updates(template).Error
+		} else {
+			err = query.Select("name", "manufacturer", "product_class", "description").Updates(template).Error
+		}
+		if err != nil || template.Variables == nil {
+			return err
+		}
+		return tx.Model(&models.ProvisioningRule{}).
+			Where("template_id = ? AND parameter_value LIKE ?", template.ID, "%{{%").
+			UpdateColumn("version", gorm.Expr("version + 1")).Error
+	})
 }
 
 func (r *ProvisioningRepository) UpdateTemplateImage(ctx context.Context, id int64, path, contentType string) error {

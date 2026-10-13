@@ -3163,6 +3163,11 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Manufacturer: strings.ToLower(strings.TrimSpace(body.Manufacturer)),
 		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
 		Description:  strings.TrimSpace(body.Description),
+		Variables:    body.Variables,
+	}
+	if err := validateProvisioningVariables(template.Variables); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := r.provisioningRepo.CreateTemplate(req.Context(), template); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create template")
@@ -3216,6 +3221,11 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Manufacturer: strings.ToLower(strings.TrimSpace(body.Manufacturer)),
 		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
 		Description:  strings.TrimSpace(body.Description),
+		Variables:    body.Variables,
+	}
+	if err := validateProvisioningVariables(template.Variables); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := r.provisioningRepo.UpdateTemplate(req.Context(), template); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update template")
@@ -3255,4 +3265,57 @@ func (r *Router) handleDeleteProvisioningTemplate(w http.ResponseWriter, req *ht
 		}
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func validateProvisioningVariables(variables []models.ProvisioningVariable) error {
+	if len(variables) > 100 {
+		return errors.New("a template can define at most 100 variables")
+	}
+	namePattern := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,63}$`)
+	allowedSources := map[string]bool{"": true, "literal": true, "serial_number": true, "manufacturer": true, "product_class": true, "oui": true, "parameter": true}
+	allowedFunctions := map[string]bool{"trim": true, "upper": true, "lower": true, "prefix": true, "suffix": true, "slice": true, "replace": true, "regex_replace": true, "pad_start": true, "pad_end": true, "default": true, "random_string": true, "sha256": true, "base64_encode": true, "base64_decode": true, "hex_encode": true, "hex_decode": true}
+	seen := make(map[string]bool, len(variables))
+	for _, variable := range variables {
+		if !namePattern.MatchString(variable.Name) || seen[variable.Name] {
+			return fmt.Errorf("variable names must be unique identifiers: %q", variable.Name)
+		}
+		seen[variable.Name] = true
+		if !allowedSources[variable.Source] {
+			return fmt.Errorf("unsupported source %q for variable %s", variable.Source, variable.Name)
+		}
+		if variable.Source == "parameter" {
+			if variable.Value == "" || len(variable.Value) > 512 {
+				return fmt.Errorf("parameter source for variable %s requires a parameter path up to 512 characters", variable.Name)
+			}
+			if err := validateParameterNames([]string{variable.Value}); err != nil {
+				return fmt.Errorf("invalid parameter source for variable %s: %w", variable.Name, err)
+			}
+		}
+		if len(variable.Value) > 4096 || len(variable.Steps) > 20 {
+			return fmt.Errorf("variable %s exceeds the value or transformation limit", variable.Name)
+		}
+		for _, step := range variable.Steps {
+			if !allowedFunctions[step.Function] {
+				return fmt.Errorf("unsupported transformation %q for variable %s", step.Function, variable.Name)
+			}
+			for _, value := range step.Args {
+				if len(value) > 4096 {
+					return fmt.Errorf("transformation argument for %s is too long", variable.Name)
+				}
+			}
+			if step.Function == "regex_replace" {
+				if _, err := regexp.Compile(step.Args["pattern"]); err != nil {
+					return fmt.Errorf("invalid regex in variable %s: %w", variable.Name, err)
+				}
+			}
+			if step.Function == "random_string" {
+				length, err := strconv.Atoi(step.Args["length"])
+				charset := step.Args["charset"]
+				if err != nil || length < 1 || length > 256 || (charset != "alphanumeric" && charset != "digits" && charset != "lowercase" && charset != "uppercase" && charset != "hex") {
+					return fmt.Errorf("random_string in variable %s requires length 1–256 and a supported charset", variable.Name)
+				}
+			}
+		}
+	}
+	return nil
 }

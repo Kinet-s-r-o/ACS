@@ -3,16 +3,29 @@ package models
 import "time"
 
 type ProvisioningTemplate struct {
-	ID           int64     `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name         string    `json:"name" gorm:"not null;size:256"`
-	Manufacturer string    `json:"manufacturer" gorm:"size:128;default:''"`
-	ProductClass string    `json:"product_class" gorm:"size:128;default:''"`
-	Description  string    `json:"description,omitempty"`
-	ImagePath    string    `json:"-" gorm:"size:512;default:''"`
-	ImageType    string    `json:"-" gorm:"size:64;default:''"`
-	ImageURL     string    `json:"image_url,omitempty" gorm:"-"`
-	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt    time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	ID           int64                  `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name         string                 `json:"name" gorm:"not null;size:256"`
+	Manufacturer string                 `json:"manufacturer" gorm:"size:128;default:''"`
+	ProductClass string                 `json:"product_class" gorm:"size:128;default:''"`
+	Description  string                 `json:"description,omitempty"`
+	Variables    []ProvisioningVariable `json:"variables" gorm:"type:jsonb;serializer:json"`
+	ImagePath    string                 `json:"-" gorm:"size:512;default:''"`
+	ImageType    string                 `json:"-" gorm:"size:64;default:''"`
+	ImageURL     string                 `json:"image_url,omitempty" gorm:"-"`
+	CreatedAt    time.Time              `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt    time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type ProvisioningVariable struct {
+	Name   string                  `json:"name"`
+	Source string                  `json:"source"`
+	Value  string                  `json:"value,omitempty"`
+	Steps  []ProvisioningTransform `json:"steps"`
+}
+
+type ProvisioningTransform struct {
+	Function string            `json:"function"`
+	Args     map[string]string `json:"args,omitempty"`
 }
 
 func (ProvisioningTemplate) TableName() string {
@@ -69,10 +82,11 @@ type CreateProvisioningRuleRequest struct {
 }
 
 type CreateProvisioningTemplateRequest struct {
-	Name         string `json:"name"`
-	Manufacturer string `json:"manufacturer"`
-	ProductClass string `json:"product_class"`
-	Description  string `json:"description"`
+	Name         string                 `json:"name"`
+	Manufacturer string                 `json:"manufacturer"`
+	ProductClass string                 `json:"product_class"`
+	Description  string                 `json:"description"`
+	Variables    []ProvisioningVariable `json:"variables"`
 }
 
 type ProvisioningApplication struct {

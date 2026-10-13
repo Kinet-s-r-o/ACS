@@ -316,8 +316,20 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	var sessionPendingData []*models.ProvisioningRule
 	var sessionCondFetchActive bool
 	var sessionImmediateEval bool
+	provisioningVariableValues := map[string]string{}
 
 	if deviceID > 0 && h.provisioningRepo != nil {
+		if template, err := h.provisioningRepo.ResolveTemplateForDevice(ctx, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass); err == nil {
+			parameterValues := make(map[string]string, len(inform.ParameterList.Parameters))
+			for _, parameter := range inform.ParameterList.Parameters {
+				parameterValues[parameter.Name] = parameter.Value
+			}
+			if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues); err != nil {
+				log.Printf("Could not resolve provisioning variables for device %s: %v", inform.DeviceId.SerialNumber, err)
+			} else {
+				provisioningVariableValues = values
+			}
+		}
 		var allRules []*models.ProvisioningRule
 
 		// Default phase rules apply on every inform (re-applied when rule version changes)
@@ -345,13 +357,19 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 					conditionalRules = append(conditionalRules, rule)
 					continue
 				}
-				provisioningRules = append(provisioningRules, models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version})
 				if rule.AddObjectPath != "" {
+					provisioningRules = append(provisioningRules, models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version})
 					addObjectQueue = append(addObjectQueue, addObjectForPath(rule.AddObjectPath))
 				} else {
+					value, err := expandProvisioningValue(rule.ParameterValue, provisioningVariableValues)
+					if err != nil {
+						log.Printf("Could not expand provisioning rule %d for device %s: %v", rule.ID, inform.DeviceId.SerialNumber, err)
+						continue
+					}
+					provisioningRules = append(provisioningRules, models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version})
 					spv.ParameterList.Parameters = append(spv.ParameterList.Parameters, ParameterValueStruct{
 						Name:  rule.ParameterName,
-						Value: rule.ParameterValue,
+						Value: value,
 						Type:  rule.ParameterType,
 					})
 				}
@@ -420,6 +438,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
 	session.ProvisioningRules = provisioningRules
+	session.ProvisioningVariables = provisioningVariableValues
 	session.AddObjectInstances = nil
 	session.AddObjectQueue = addObjectQueue
 	session.AddObjectPhase = 0
@@ -871,13 +890,19 @@ func (h *Handler) evaluateConditionalRules(session *Session, params map[string]s
 		}
 		rule := session.PendingConditionalData[i]
 		log.Printf("Condition satisfied for rule %d (serial: %s)", rule.ID, session.SerialNumber)
-		satisfiedApps = append(satisfiedApps, session.PendingConditionalRules[i])
 		if rule.AddObjectPath != "" {
+			satisfiedApps = append(satisfiedApps, session.PendingConditionalRules[i])
 			addObjectQueue = append(addObjectQueue, addObjectForPath(rule.AddObjectPath))
 		} else {
+			value, err := expandProvisioningValue(rule.ParameterValue, session.ProvisioningVariables)
+			if err != nil {
+				log.Printf("Could not expand conditional provisioning rule %d for device %s: %v", rule.ID, session.SerialNumber, err)
+				continue
+			}
+			satisfiedApps = append(satisfiedApps, session.PendingConditionalRules[i])
 			spvParams = append(spvParams, ParameterValueStruct{
 				Name:  rule.ParameterName,
-				Value: rule.ParameterValue,
+				Value: value,
 				Type:  rule.ParameterType,
 			})
 		}

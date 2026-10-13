@@ -19,20 +19,21 @@ const (
 
 // Session represents single CPE session
 type Session struct {
-	mu                  sync.Mutex
-	ID                  string
-	SerialNumber        string
-	DeviceID            int64
-	CurrentTaskID       int64
-	AutoFetchPhase      int
-	DataModelRoot       string
-	CWMPNamespace       string
-	AutoFetchReady      bool
-	OverviewFetchReady  bool
-	OverviewFetchActive bool
-	OverviewFetchParams []string
-	Provisioning        *SetParameterValues
-	ProvisioningRules   []models.ProvisioningApplication
+	mu                    sync.Mutex
+	ID                    string
+	SerialNumber          string
+	DeviceID              int64
+	CurrentTaskID         int64
+	AutoFetchPhase        int
+	DataModelRoot         string
+	CWMPNamespace         string
+	AutoFetchReady        bool
+	OverviewFetchReady    bool
+	OverviewFetchActive   bool
+	OverviewFetchParams   []string
+	Provisioning          *SetParameterValues
+	ProvisioningRules     []models.ProvisioningApplication
+	ProvisioningVariables map[string]string
 
 	// AddObject queue for creating new objects before SetParameterValues
 	AddObjectQueue     []*AddObject

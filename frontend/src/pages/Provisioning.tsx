@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, type Component } from 'solid-js';
-import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate } from '../lib/api';
+import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -64,7 +64,9 @@ const Provisioning: Component = () => {
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
   let templateImageInput: HTMLInputElement | undefined;
   let templateImageObjectUrl: string | null = null;
-  const [templateTab, setTemplateTab] = createSignal<'rules' | 'metrics'>('rules');
+  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics'>('rules');
+  const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
+  const [variablesSaving, setVariablesSaving] = createSignal(false);
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -191,6 +193,7 @@ const Provisioning: Component = () => {
 
   const selectTemplate = (template: ProvisioningTemplate) => {
     setSelectedTemplate(template);
+    setTemplateVariables(template.variables || []);
     setProvRules(null);
     setProvError(null);
     loadProvRules();
@@ -200,6 +203,7 @@ const Provisioning: Component = () => {
   const backToTemplates = () => {
     clearTemplateImagePreview();
     setSelectedTemplate(null);
+    setTemplateVariables([]);
     setProvRules(null);
     setProvError(null);
   };
@@ -443,6 +447,46 @@ const Provisioning: Component = () => {
     finally { setPendingAction(null); }
   };
 
+  const updateTemplateVariable = (index: number, patch: Partial<ProvisioningVariable>) => {
+    setTemplateVariables(previous => previous.map((variable, current) => current === index ? { ...variable, ...patch } : variable));
+  };
+
+  const updateVariableTransform = (variableIndex: number, stepIndex: number, patch: Partial<ProvisioningTransform>) => {
+    setTemplateVariables(previous => previous.map((variable, current) => current !== variableIndex ? variable : {
+      ...variable,
+      steps: variable.steps.map((step, index) => index === stepIndex ? { ...step, ...patch } : step),
+    }));
+  };
+
+  const addTemplateVariable = () => setTemplateVariables(previous => [...previous, { name: `variable_${previous.length + 1}`, source: '', steps: [] }]);
+
+  const addVariableTransform = (variableIndex: number) => {
+    setTemplateVariables(previous => previous.map((variable, current) => current === variableIndex
+      ? { ...variable, steps: [...variable.steps, { function: 'trim', args: {} }] }
+      : variable));
+  };
+
+  const saveTemplateVariables = async () => {
+    const template = selectedTemplate();
+    if (!template || variablesSaving()) return;
+    setVariablesSaving(true);
+    try {
+      const updated = await api.updateProvisioningTemplate(template.id, {
+        name: template.name,
+        manufacturer: template.manufacturer,
+        product_class: template.product_class,
+        description: template.description || '',
+        variables: templateVariables(),
+      });
+      setSelectedTemplate(updated);
+      setTemplateVariables(updated.variables || []);
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'Variables saved', message: `Variables updated for ${template.name}.` });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not save variables', detail: (error as Error).message, persistent: true });
+    } finally { setVariablesSaving(false); }
+  };
+
   const handleDeleteTemplate = async (id: number) => {
     if (!await confirm({ title: 'Delete provisioning template?', description: 'All rules in this template will be permanently deleted.', confirmLabel: 'Delete template', tone: 'danger' })) return;
     if (pendingAction()) return;
@@ -643,11 +687,16 @@ const Provisioning: Component = () => {
                     Add WAN/LAN metric
                   </button>
                 </Show>
+                <Show when={templateTab() === 'variables'}>
+                  <button onClick={addTemplateVariable} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add variable</button>
+                  <button onClick={() => void saveTemplateVariables()} class="btn btn-primary text-xs py-1.5" disabled={variablesSaving()}><Save size={12} />{variablesSaving() ? 'Saving…' : 'Save variables'}</button>
+                </Show>
               </div>
             </div>
 
             <div class="flex gap-1 border-b border-subtle mb-4">
               <button type="button" onClick={() => setTemplateTab('rules')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'rules' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Rules</button>
+              <button type="button" onClick={() => setTemplateTab('variables')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'variables' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Variables</button>
               <button type="button" onClick={() => setTemplateTab('metrics')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'metrics' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
@@ -771,6 +820,54 @@ const Provisioning: Component = () => {
           </Show>
           </Show>
 
+          <Show when={templateTab() === 'variables'}>
+            <div class="space-y-4">
+              <div class="rounded border border-subtle bg-base p-3 text-xs text-muted">
+                Define reusable values for this template. Sources may be device identity, a literal, or a parameter reported in Inform. Leave the source empty to start with an empty value, then use a transformation such as Random string. Use <code class="text-primary">{'{{variable_name}}'}</code> in provisioning rule values. Transformations run in order.
+              </div>
+              <Show when={templateVariables().length > 0} fallback={<p class="py-8 text-center text-sm text-muted">No template variables defined yet.</p>}>
+                <For each={templateVariables()}>{(variable, variableIndex) => <section class="card p-4 space-y-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <h3 class="text-sm font-medium text-primary">Variable {variableIndex() + 1}</h3>
+                    <button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => setTemplateVariables(previous => previous.filter((_, index) => index !== variableIndex()))} aria-label={`Remove variable ${variable.name}`}><Trash2 size={13} />Remove</button>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <label class="block text-xs text-muted">Variable name<input class="input mt-1 w-full font-mono" value={variable.name} onInput={event => updateTemplateVariable(variableIndex(), { name: event.currentTarget.value })} placeholder="serial_suffix" /></label>
+                    <label class="block text-xs text-muted">Source<select class="input mt-1 w-full" value={variable.source} onChange={event => updateTemplateVariable(variableIndex(), { source: event.currentTarget.value })}>
+                      <option value="">No source</option><option value="literal">Literal value</option><option value="serial_number">Device serial number</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><option value="oui">OUI</option><option value="parameter">CWMP parameter from Inform</option>
+                    </select></label>
+                    <Show when={variable.source === 'literal' || variable.source === 'parameter'}>
+                      <label class="block text-xs text-muted">{variable.source === 'literal' ? 'Literal value' : 'Parameter path'}<input class="input mt-1 w-full font-mono text-xs" value={variable.value || ''} onInput={event => updateTemplateVariable(variableIndex(), { value: event.currentTarget.value })} placeholder={variable.source === 'parameter' ? 'InternetGatewayDevice.DeviceInfo.SerialNumber' : 'Enter a starting value'} /></label>
+                    </Show>
+                  </div>
+                  <div class="space-y-2">
+                    <For each={variable.steps}>{(step, stepIndex) => {
+                      const argumentFields: Record<string, Array<[string, string]>> = {
+                        prefix: [['text', 'Prefix']], suffix: [['text', 'Suffix']],
+                        slice: [['start', 'Start index'], ['end', 'End index (optional)']],
+                        replace: [['search', 'Find'], ['replace', 'Replace with']],
+                        regex_replace: [['pattern', 'Regular expression'], ['replace', 'Replace with']],
+                        pad_start: [['length', 'Final length'], ['text', 'Padding characters']],
+                        pad_end: [['length', 'Final length'], ['text', 'Padding characters']],
+                        default: [['value', 'Fallback value']],
+                        random_string: [['length', 'Length'], ['charset', 'Character set (alphanumeric, digits, lowercase, uppercase, hex)']],
+                      };
+                      return <div class="grid grid-cols-1 md:grid-cols-12 items-end gap-2 rounded bg-base p-3">
+                        <label class="block text-xs text-muted md:col-span-3">Transformation<select class="input mt-1 w-full" value={step.function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex(), stepIndex(), { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : {} }); }}>
+                          <option value="trim">Trim whitespace</option><option value="upper">Uppercase</option><option value="lower">Lowercase</option><option value="prefix">Add prefix</option><option value="suffix">Add suffix</option><option value="slice">Slice by indexes</option><option value="replace">Replace text</option><option value="regex_replace">Replace by regex</option><option value="pad_start">Pad at start</option><option value="pad_end">Pad at end</option><option value="default">Fallback if empty</option><option value="random_string">Generate random string</option><option value="sha256">SHA-256 hash</option><option value="base64_encode">Base64 encode</option><option value="base64_decode">Base64 decode</option><option value="hex_encode">Hex encode</option><option value="hex_decode">Hex decode</option>
+                        </select></label>
+                        <For each={argumentFields[step.function] || []}>{([key, label]) => <label class="block text-xs text-muted md:col-span-2">{label}<input class="input mt-1 w-full" value={step.args?.[key] || (step.function === 'random_string' && key === 'charset' ? 'alphanumeric' : '')} onInput={event => updateVariableTransform(variableIndex(), stepIndex(), { args: { ...step.args, [key]: event.currentTarget.value } })} /></label>}</For>
+                        <button type="button" class="btn btn-ghost text-rose-400 md:col-span-1" onClick={() => updateTemplateVariable(variableIndex(), { steps: variable.steps.filter((_, index) => index !== stepIndex()) })} aria-label="Remove transformation"><Trash2 size={13} /></button>
+                      </div>;
+                    }}</For>
+                    <button type="button" class="btn btn-secondary text-xs" onClick={() => addVariableTransform(variableIndex())}><Plus size={12} />Add transformation</button>
+                  </div>
+                </section>}</For>
+              </Show>
+              <p class="text-xs text-muted">Slice indexes are zero-based. Start 10 removes the first 10 characters; start -10 selects from the last 10 characters. Random strings use cryptographically secure randomness. Each variable is resolved once per device session and can be referenced by later variables.</p>
+            </div>
+          </Show>
+
           <Show when={templateTab() === 'metrics'}>
             <Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
@@ -887,6 +984,9 @@ const Provisioning: Component = () => {
               <div>
                 <label for="provisioning-value" class="block text-xs text-muted mb-1.5">Parameter value</label>
                 <input id="provisioning-value" type="text" value={provForm().parameter_value} onInput={(e) => setProvForm(f => ({ ...f, parameter_value: e.currentTarget.value }))} class="input w-full" placeholder="Enter the parameter value" />
+                <Show when={selectedTemplate()?.variables?.length}>
+                  <p class="text-xs text-muted mt-1">Use <code class="text-primary">{'{{variable_name}}'}</code> to substitute a template variable. Available: {selectedTemplate()!.variables!.map(variable => variable.name).join(', ')}</p>
+                </Show>
               </div>
             </Show>
             <div>

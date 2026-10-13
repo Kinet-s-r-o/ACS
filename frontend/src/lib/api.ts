@@ -37,7 +37,9 @@ export interface Fault { id: number; device_id: number; serial_number: string; f
 export interface User { id: number; username: string; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
 export interface TagDefinition { id: string; name: string; color: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
-export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; image_url?: string; created_at: string; updated_at: string }
+export interface ProvisioningTransform { function: string; args?: Record<string, string> }
+export interface ProvisioningVariable { name: string; source: string; value?: string; steps: ProvisioningTransform[] }
+export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
@@ -169,7 +171,7 @@ export const api = {
   reorderProvisioningRules: (templateId: number, ids: number[]) => request<{ status: string }>('/provisioning/reorder', { method: 'POST', body: JSON.stringify({ template_id: templateId, ids }) }),
   getProvisioningTemplates: () => request<ProvisioningTemplate[]>('/provisioning/templates'),
   createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
-  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
   getProvisioningTemplateImage: (id: number) => requestBlob(`/provisioning/templates/${id}/image`),
   uploadProvisioningTemplateImage: (id: number, file: File) => {
