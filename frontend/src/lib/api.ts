@@ -41,7 +41,9 @@ export interface TagDefinition { id: string; name: string; color: string; create
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string> }
 export interface ProvisioningVariable { name: string; source: string; value?: string; steps: ProvisioningTransform[] }
-export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; image_url?: string; created_at: string; updated_at: string }
+export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'object'; parameter: string; enabled_value?: string; disabled_value?: string; group?: string; description?: string }
+export interface ProvisioningFeature { id: string; name: string; description?: string; controls: ProvisioningFeatureControl[] }
+export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
@@ -185,6 +187,10 @@ export const api = {
     return request<ProvisioningTemplate>(`/provisioning/templates/${id}/image`, { method: 'POST', body });
   },
   deleteProvisioningTemplateImage: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}/image`, { method: 'DELETE' }),
+  importTemplateFeature: (templateId: number, name: string, csv: string) => request<ProvisioningFeature>(`/provisioning/templates/${templateId}/features/import`, { method: 'POST', body: JSON.stringify({ name, csv }) }),
+  deleteTemplateFeature: (templateId: number, featureId: string) => request<{ status: string }>(`/provisioning/templates/${templateId}/features/${encodeURIComponent(featureId)}`, { method: 'DELETE' }),
+  setTemplateFeatureControl: (serial: string, featureId: string, key: string, enabled: boolean) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ enabled }) }),
+  addTemplateFeatureObject: (serial: string, featureId: string, key: string) => request<Task>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/objects/${encodeURIComponent(key)}`, { method: 'POST' }),
   getInterfaceMetrics: (templateId: number) => request<InterfaceMetricDefinition[]>(`/provisioning/templates/${templateId}/interface-metrics`),
   getDeviceInterfaceMetricDefinitions: (serial: string) => request<InterfaceMetricDefinition[]>(`/device/${encodeURIComponent(serial)}/interface-metric-definitions`),
   createInterfaceMetric: (templateId: number, body: Pick<InterfaceMetricDefinition, 'name' | 'description' | 'interface_type' | 'parameter_pattern' | 'unit' | 'source' | 'unit_scale' | 'color' | 'group' | 'chart_type' | 'transform' | 'multiplier' | 'active'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics`, { method: 'POST', body: JSON.stringify(body) }),

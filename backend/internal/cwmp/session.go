@@ -24,6 +24,10 @@ type Session struct {
 	SerialNumber          string
 	DeviceID              int64
 	CurrentTaskID         int64
+	FeatureObjectPath     string
+	FeatureObjectInstance string
+	FeatureObjectStage    int
+	FeatureObjectNames    []string
 	AutoFetchPhase        int
 	DataModelRoot         string
 	CWMPNamespace         string

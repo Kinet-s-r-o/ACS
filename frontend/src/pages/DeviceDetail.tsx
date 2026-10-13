@@ -108,7 +108,7 @@ const DeviceDetail: Component = () => {
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' ? searchParams.tab : 'overview';
+  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
@@ -129,6 +129,8 @@ const DeviceDetail: Component = () => {
   };
   const [metricDefs] = createResource(api.getMetricDefinitions);
   const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
+  const [featureAction, setFeatureAction] = createSignal<string | null>(null);
+  const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
   const matchingProvisioningTemplate = createMemo(() => {
     const current = device();
     if (!current) return null;
@@ -140,6 +142,41 @@ const DeviceDetail: Component = () => {
         const score = (template: typeof a) => Number(Boolean(template.manufacturer)) + Number(Boolean(template.product_class));
         return score(b) - score(a) || a.id - b.id;
       })[0] || null;
+  });
+  const featureObjectInstances = (path: string) => {
+    const ids = new Set<string>();
+    for (const parameter of parameters() || []) {
+      if (!parameter.name.startsWith(path)) continue;
+      const tail = parameter.name.slice(path.length);
+      const instance = tail.split('.')[0];
+      if (/^\d+$/.test(instance)) ids.add(instance);
+    }
+    return [...ids].sort((a, b) => Number(a) - Number(b));
+  };
+  const featureObjectColumns = (path: string) => {
+    const columns = new Set<string>();
+    for (const instance of featureObjectInstances(path)) {
+      const prefix = `${path}${instance}.`;
+      for (const parameter of parameters() || []) {
+        if (!parameter.name.startsWith(prefix)) continue;
+        const leaf = parameter.name.slice(prefix.length);
+        if (leaf && !leaf.endsWith('.')) columns.add(leaf);
+      }
+    }
+    return [...columns].sort();
+  };
+  const featureObjectValue = (path: string, instance: string, column: string) => (parameters() || []).find(parameter => parameter.name === `${path}${instance}.${column}`)?.value || '—';
+  createEffect(() => {
+    const taskID = featureRefreshTaskID();
+    if (taskID === null) return;
+    const refresh = async () => {
+      const [rows] = await Promise.all([refetchTasks(), refetchParams()]);
+      const status = rows?.find(task => task.id === taskID)?.status;
+      if (status === 'completed' || status === 'failed') setFeatureRefreshTaskID(null);
+    };
+    const interval = window.setInterval(() => void refresh(), 4000);
+    const timeout = window.setTimeout(() => setFeatureRefreshTaskID(null), 5 * 60 * 1000);
+    onCleanup(() => { window.clearInterval(interval); window.clearTimeout(timeout); });
   });
   const [templateImageBlob] = createResource(() => matchingProvisioningTemplate()?.image_url ? matchingProvisioningTemplate()!.id : undefined, (id) => api.getProvisioningTemplateImage(id));
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
@@ -355,6 +392,35 @@ const DeviceDetail: Component = () => {
     } catch (error) {
       notify({ tone: 'error', title: 'Could not delete fault', detail: (error as Error).message, persistent: true });
     } finally { setPendingFault(null); }
+  };
+
+  const toggleTemplateFeature = async (featureID: string, key: string, label: string, group: string | undefined, enabled: boolean) => {
+    if (!isFullAccess() || featureAction()) return;
+    if (!enabled && /wan/i.test(`${group || ''} ${label}`) && !await confirm({ title: `Disable ${label}?`, description: 'This may remove remote access to the ONT. Continue only if you have another way to manage it.', confirmLabel: 'Disable service', tone: 'danger' })) return;
+    const actionKey = `${featureID}:${key}`;
+    setFeatureAction(actionKey);
+    try {
+      const tasks = await api.setTemplateFeatureControl(serial(), featureID, key, enabled);
+      setFeatureRefreshTaskID(tasks.refresh_task.id);
+      notify({ tone: 'success', title: `${label} change queued`, detail: `CWMP task #${tasks.task.id} will apply at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not change ${label}`, detail: (error as Error).message, persistent: true });
+    } finally { setFeatureAction(null); }
+  };
+
+  const addTemplateFeatureObject = async (featureID: string, key: string, label: string) => {
+    if (!isFullAccess() || featureAction()) return;
+    const actionKey = `${featureID}:${key}`;
+    setFeatureAction(actionKey);
+    try {
+      const task = await api.addTemplateFeatureObject(serial(), featureID, key);
+      setFeatureRefreshTaskID(task.id);
+      notify({ tone: 'success', title: `${label} creation queued`, detail: `CWMP task #${task.id} will create and discover the object at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not create ${label}`, detail: (error as Error).message, persistent: true });
+    } finally { setFeatureAction(null); }
   };
 
   const [selectedDeviceFaults, setSelectedDeviceFaults] = createSignal<Set<number>>(new Set());
@@ -1684,6 +1750,7 @@ const DeviceDetail: Component = () => {
       <nav role="tablist" class="tab-bar" aria-label="Device detail sections">
         <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
+        <Show when={(matchingProvisioningTemplate()?.features?.length || 0) > 0}><button role="tab" class={`tab-btn ${activeTab() === 'features' ? 'is-active' : ''}`} aria-selected={activeTab() === 'features'} onClick={() => setSearchParams({ tab: 'features' })}>Features</button></Show>
         <button role="tab" class={`tab-btn ${activeTab() === 'snapshots' ? 'is-active' : ''}`} aria-selected={activeTab() === 'snapshots'} onClick={() => setSearchParams({ tab: 'snapshots' })}>Snapshots</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'tasks' ? 'is-active' : ''}`} aria-selected={activeTab() === 'tasks'} onClick={() => setSearchParams({ tab: 'tasks' })}>
           Tasks
@@ -2095,6 +2162,38 @@ const DeviceDetail: Component = () => {
                 </div>
               </div>
               </Show>
+            </Show>
+
+            <Show when={activeTab() === 'features' && (matchingProvisioningTemplate()?.features?.length || 0) > 0}>
+              <div class="space-y-4">
+                <div class="flex justify-end"><button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchParams()} disabled={parameters.loading}><RefreshCw size={13} class={parameters.loading ? 'animate-spin' : ''} />Refresh device parameters</button></div>
+                <For each={matchingProvisioningTemplate()?.features || []}>{feature => <section class="card p-5 space-y-4">
+                  <div><h2 class="text-sm font-medium text-secondary">{feature.name}</h2><p class="mt-1 text-xs text-muted">Template feature for {matchingProvisioningTemplate()?.name}. Changes are sent to the device as CWMP tasks.</p></div>
+                  <div class="grid gap-3 lg:grid-cols-2">
+                    <For each={feature.controls}>{control => {
+                      const parameter = () => (parameters() || []).find(item => item.name === control.parameter);
+                      return <Show when={control.type === 'boolean'} fallback={
+                        <Show when={parameter()?.writable === true}>
+                          <div class="rounded border border-subtle p-4 lg:col-span-2">
+                            <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
+                            <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
+                              <div class="overflow-x-auto"><table class="data-table w-full text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => <td class="max-w-64 truncate font-mono" title={featureObjectValue(control.parameter, instance, column)}>{featureObjectValue(control.parameter, instance, column)}</td>}</For></tr>}</For></tbody></table></div>
+                            </Show>
+                          </div>
+                        </Show>
+                      }>
+                        <Show when={parameter()?.writable === true}>
+                          <label class="flex items-center justify-between gap-3 rounded border border-subtle p-4">
+                            <span class="min-w-0"><span class="block text-sm font-medium text-primary">{control.label}</span><span class="block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span><Show when={control.group}><span class="mt-1 inline-flex rounded bg-elevated px-1.5 py-0.5 text-[10px] text-muted">{control.group}</span></Show></span>
+                            <input type="checkbox" class="h-4 w-4 accent-sky-500" checked={parameter()?.value.toLowerCase() === (control.enabled_value || '1').toLowerCase()} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void toggleTemplateFeature(feature.id, control.key, control.label, control.group, event.currentTarget.checked)} />
+                          </label>
+                        </Show>
+                      </Show>;
+                    }}</For>
+                  </div>
+                  <Show when={parameters.loading}><p class="text-xs text-muted">Refreshing device parameters…</p></Show>
+                </section>}</For>
+              </div>
             </Show>
 
             <Show when={activeTab() === 'credentials'}>

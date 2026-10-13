@@ -42,6 +42,11 @@ func (r *ProvisioningRepository) GetTemplate(ctx context.Context, id int64) (*mo
 	return &template, nil
 }
 
+func (r *ProvisioningRepository) UpdateTemplateFeatures(ctx context.Context, id int64, features []models.ProvisioningFeature) error {
+	template := models.ProvisioningTemplate{ID: id, Features: features}
+	return r.db.WithContext(ctx).Model(&template).Select("features").Updates(&template).Error
+}
+
 func (r *ProvisioningRepository) UpdateTemplate(ctx context.Context, template *models.ProvisioningTemplate) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		query := tx.Model(&models.ProvisioningTemplate{}).Where("id = ?", template.ID)

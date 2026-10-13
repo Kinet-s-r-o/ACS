@@ -692,6 +692,22 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 	if session.AutoFetchPhase > 0 {
 		return h.continueAutoFetch(session)
 	}
+	if session.FeatureObjectStage == 2 && session.CurrentTaskID > 0 {
+		result := make(map[string]string, len(resp.ParameterList.Parameters))
+		for _, parameter := range resp.ParameterList.Parameters {
+			if database.IsSensitiveParameterName(parameter.Name) {
+				result[parameter.Name] = "[REDACTED]"
+			} else {
+				result[parameter.Name] = parameter.Value
+			}
+		}
+		if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusCompleted, map[string]interface{}{"instance": session.FeatureObjectInstance, "parameters": result}, ""); err != nil {
+			return nil, fmt.Errorf("complete object creation task: %w", err)
+		}
+		session.CurrentTaskID = 0
+		session.FeatureObjectPath, session.FeatureObjectInstance, session.FeatureObjectStage, session.FeatureObjectNames = "", "", 0, nil
+		return h.getNextTask(ctx, session)
+	}
 	if session.OverviewFetchActive {
 		session.OverviewFetchActive = false
 		return h.getNextTask(ctx, session)
@@ -743,6 +759,26 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 		if err := h.parameterRepo.UpsertWritable(ctx, session.DeviceID, params); err != nil {
 			log.Printf("Error saving writable parameter flags: %v", err)
 		}
+	}
+	if session.FeatureObjectStage == 1 && session.CurrentTaskID > 0 {
+		names := make([]string, 0, len(resp.ParameterList))
+		for _, parameter := range resp.ParameterList {
+			if parameter.Name != "" && !strings.HasSuffix(parameter.Name, ".") {
+				names = append(names, parameter.Name)
+			}
+		}
+		if len(names) == 0 {
+			if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusCompleted, map[string]interface{}{"instance": session.FeatureObjectInstance, "parameters": map[string]string{}}, ""); err != nil {
+				return nil, fmt.Errorf("complete object creation task: %w", err)
+			}
+			session.CurrentTaskID = 0
+			session.FeatureObjectPath, session.FeatureObjectInstance, session.FeatureObjectStage = "", "", 0
+			return h.getNextTask(ctx, session)
+		}
+		session.FeatureObjectNames = names
+		session.FeatureObjectStage = 2
+		session.LastSentContext = strings.Join(names, ", ")
+		return &GetParameterValues{ParameterNames: names}, nil
 	}
 	session.AutoFetchPhase = 0
 	session.State = StateIdle
@@ -801,6 +837,26 @@ func (h *Handler) handleAddObjectResponse(ctx context.Context, resp *AddObjectRe
 
 	if session.State != StateProcessingTasks {
 		return nil, nil
+	}
+	if session.FeatureObjectStage == 1 && session.CurrentTaskID > 0 {
+		invalidInstance := resp.InstanceNumber == "" || strings.IndexFunc(resp.InstanceNumber, func(value rune) bool { return value < '0' || value > '9' }) >= 0
+		if resp.Status != 0 || invalidInstance {
+			message := fmt.Sprintf("CPE did not create object (status %d)", resp.Status)
+			if invalidInstance {
+				message = "CPE returned an invalid object instance number"
+			}
+			if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusFailed, nil, message); err != nil {
+				return nil, fmt.Errorf("fail object creation task: %w", err)
+			}
+			session.CurrentTaskID = 0
+			session.FeatureObjectPath, session.FeatureObjectInstance, session.FeatureObjectStage = "", "", 0
+			return h.getNextTask(ctx, session)
+		}
+		session.FeatureObjectInstance = resp.InstanceNumber
+		objectPath := strings.TrimSuffix(session.FeatureObjectPath, ".") + "." + resp.InstanceNumber + "."
+		session.FeatureObjectStage = 1
+		session.LastSentContext = objectPath
+		return &GetParameterNames{ParameterPath: objectPath, NextLevel: false}, nil
 	}
 
 	// Preserve every AddObject result so later rules can refer to any instance.
@@ -1092,6 +1148,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 				return nil, fmt.Errorf("fail task after CWMP fault: %w", err)
 			}
 			session.CurrentTaskID = 0
+			session.FeatureObjectPath, session.FeatureObjectInstance, session.FeatureObjectStage, session.FeatureObjectNames = "", "", 0, nil
 		}
 		return h.getNextTask(ctx, session)
 	}
@@ -1124,6 +1181,7 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 		if task == nil {
 			session.State = StateIdle
 			session.CurrentTaskID = 0
+			session.FeatureObjectPath, session.FeatureObjectInstance, session.FeatureObjectStage, session.FeatureObjectNames = "", "", 0, nil
 			return nil, nil
 		}
 
@@ -1131,6 +1189,11 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 		session.State = StateProcessingTasks
 		request, err := h.buildTaskRequest(task)
 		if err == nil {
+			if object, ok := request.(*AddObject); ok {
+				session.FeatureObjectPath = object.ObjectName
+				session.FeatureObjectStage = 1
+				session.FeatureObjectNames = nil
+			}
 			if spv, ok := request.(*SetParameterValues); ok {
 				names := make([]string, 0, len(spv.ParameterList.Parameters))
 				for _, p := range spv.ParameterList.Parameters {
@@ -1149,6 +1212,17 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 
 func (h *Handler) buildTaskRequest(task *models.Task) (interface{}, error) {
 	switch task.Type {
+	case models.TaskTypeAddObject:
+		var payload struct {
+			ObjectName string `json:"object_name"`
+		}
+		if err := json.Unmarshal(task.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("decode add-object payload: %w", err)
+		}
+		if payload.ObjectName != "" {
+			return addObjectForPath(payload.ObjectName), nil
+		}
+
 	case models.TaskTypeGetParameterValues:
 		var params []string
 		if err := json.Unmarshal(task.Payload, &params); err != nil {

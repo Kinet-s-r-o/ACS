@@ -9,11 +9,30 @@ type ProvisioningTemplate struct {
 	ProductClass string                 `json:"product_class" gorm:"size:128;default:''"`
 	Description  string                 `json:"description,omitempty"`
 	Variables    []ProvisioningVariable `json:"variables" gorm:"type:jsonb;serializer:json"`
+	Features     []ProvisioningFeature  `json:"features" gorm:"type:jsonb;serializer:json"`
 	ImagePath    string                 `json:"-" gorm:"size:512;default:''"`
 	ImageType    string                 `json:"-" gorm:"size:64;default:''"`
 	ImageURL     string                 `json:"image_url,omitempty" gorm:"-"`
 	CreatedAt    time.Time              `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt    time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type ProvisioningFeature struct {
+	ID          string                       `json:"id"`
+	Name        string                       `json:"name"`
+	Description string                       `json:"description,omitempty"`
+	Controls    []ProvisioningFeatureControl `json:"controls"`
+}
+
+type ProvisioningFeatureControl struct {
+	Key           string `json:"key"`
+	Label         string `json:"label"`
+	Type          string `json:"type"`
+	Parameter     string `json:"parameter"`
+	EnabledValue  string `json:"enabled_value,omitempty"`
+	DisabledValue string `json:"disabled_value,omitempty"`
+	Group         string `json:"group,omitempty"`
+	Description   string `json:"description,omitempty"`
 }
 
 type ProvisioningVariable struct {

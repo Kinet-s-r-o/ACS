@@ -64,9 +64,12 @@ const Provisioning: Component = () => {
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
   let templateImageInput: HTMLInputElement | undefined;
   let templateImageObjectUrl: string | null = null;
-  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics'>('rules');
+  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features'>('rules');
   const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
   const [variablesSaving, setVariablesSaving] = createSignal(false);
+  const [featureName, setFeatureName] = createSignal('');
+  const [featureCSV, setFeatureCSV] = createSignal('key,label,type,parameter,enabled_value,disabled_value,group,description\nftp_lan,FTP LAN,boolean,InternetGatewayDevice.X_HW_Security.AclServices.FTPLanEnable,1,0,LAN,Allow FTP from LAN\naccess_control_list,Access control list,object,InternetGatewayDevice.X_HW_Security.AclServices.AccessControl.List.,,,,');
+  const [featureSaving, setFeatureSaving] = createSignal(false);
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -487,6 +490,35 @@ const Provisioning: Component = () => {
     } finally { setVariablesSaving(false); }
   };
 
+  const importTemplateFeature = async () => {
+    const template = selectedTemplate();
+    if (!template || !featureName().trim() || featureSaving()) return;
+    setFeatureSaving(true);
+    try {
+      const feature = await api.importTemplateFeature(template.id, featureName().trim(), featureCSV());
+      setSelectedTemplate({ ...template, features: [...(template.features || []), feature] });
+      setFeatureName('');
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'Feature added', message: `${feature.name} is available to devices matching ${template.name}.` });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not import feature CSV', detail: (error as Error).message, persistent: true });
+    } finally { setFeatureSaving(false); }
+  };
+
+  const deleteTemplateFeature = async (featureID: string) => {
+    const template = selectedTemplate();
+    const feature = template?.features?.find(item => item.id === featureID);
+    if (!template || !feature || !await confirm({ title: `Delete ${feature.name}?`, description: 'Devices matching this template will no longer show this feature.', confirmLabel: 'Delete feature', tone: 'danger' })) return;
+    try {
+      await api.deleteTemplateFeature(template.id, featureID);
+      setSelectedTemplate({ ...template, features: template.features!.filter(item => item.id !== featureID) });
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'Feature deleted' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not delete feature', detail: (error as Error).message, persistent: true });
+    }
+  };
+
   const handleDeleteTemplate = async (id: number) => {
     if (!await confirm({ title: 'Delete provisioning template?', description: 'All rules in this template will be permanently deleted.', confirmLabel: 'Delete template', tone: 'danger' })) return;
     if (pendingAction()) return;
@@ -700,7 +732,38 @@ const Provisioning: Component = () => {
               <button type="button" onClick={() => setTemplateTab('metrics')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'metrics' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
+              <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Features</button>
             </div>
+
+          <Show when={templateTab() === 'features'}>
+            <div class="space-y-4">
+              <div class="rounded border border-subtle bg-elevated/30 p-3 text-xs text-secondary">
+                Define model-specific controls with CSV. Supported types are <code>boolean</code> and <code>object</code>; object paths must end in a dot and are created with CWMP AddObject.
+                Required columns: <code>key,label,type,parameter</code>. Optional columns: <code>enabled_value,disabled_value,group,description</code>.
+              </div>
+              <div class="grid gap-3 lg:grid-cols-2">
+                <label class="block text-xs text-muted">Feature name
+                  <input class="input mt-1 w-full" maxlength="128" value={featureName()} onInput={event => setFeatureName(event.currentTarget.value)} placeholder="Services" />
+                </label>
+                <div class="flex items-end text-xs text-muted">This feature is scoped to <strong class="ml-1 text-secondary">{selectedTemplate()!.name}</strong>.</div>
+              </div>
+              <label class="block text-xs text-muted">Load CSV file
+                <input class="input mt-1 w-full" type="file" accept=".csv,text/csv" onChange={async event => { const file = event.currentTarget.files?.[0]; if (file) setFeatureCSV(await file.text()); }} />
+              </label>
+              <label class="block text-xs text-muted">CSV definition
+                <textarea class="input mt-1 min-h-40 w-full font-mono text-xs" spellcheck={false} value={featureCSV()} onInput={event => setFeatureCSV(event.currentTarget.value)} />
+              </label>
+              <div class="flex justify-end"><button type="button" class="btn btn-primary text-xs" disabled={!featureName().trim() || featureSaving()} onClick={() => void importTemplateFeature()}><Upload size={13} />{featureSaving() ? 'Importing…' : 'Import feature'}</button></div>
+              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No template features yet" description="Imported feature definitions will appear on matching devices." />}>
+                <div class="space-y-3">
+                  <For each={selectedTemplate()?.features || []}>{feature => <section class="card p-4 space-y-3">
+                    <div class="flex items-center justify-between"><div><h3 class="text-sm font-medium text-primary">{feature.name}</h3><p class="text-xs text-muted">{feature.controls.length} controls</p></div><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature.id)}><Trash2 size={13} />Delete</button></div>
+                    <div class="overflow-x-auto"><table class="data-table w-full text-xs"><thead><tr><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">CWMP path</th><th class="text-left">Group</th></tr></thead><tbody><For each={feature.controls}>{control => <tr><td>{control.label}</td><td>{control.type}</td><td class="font-mono">{control.parameter}</td><td>{control.group || '—'}</td></tr>}</For></tbody></table></div>
+                  </section>}</For>
+                </div>
+              </Show>
+            </div>
+          </Show>
 
           <Show when={templateTab() === 'rules'}>
           <Show when={provError()}>
