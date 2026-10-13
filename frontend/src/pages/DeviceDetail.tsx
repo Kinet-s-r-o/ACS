@@ -56,12 +56,14 @@ interface ParamColumnConfig {
 interface IperfForm {
   serverAddr: string;
   port: string;
-  testMode: 'UPLOAD' | 'DOWNLOAD';
+  testMode: 'UPLOAD' | 'DOWNLOAD' | 'BOTH';
   protocolType: 'TCP' | 'UDP';
   maxTime: string;
   parallel: string;
   bandwidth: string;
 }
+
+interface IperfRunResult { mode: 'UPLOAD' | 'DOWNLOAD'; values: Record<string, string> }
 
 interface SnapshotTreeRow {
   path: string;
@@ -418,7 +420,7 @@ const DeviceDetail: Component = () => {
   const [generatedCred, setGeneratedCred] = createSignal<{ username: string; password: string } | null>(null);
   const [iperfRunning, setIperfRunning] = createSignal(false);
   const [iperfForm, setIperfForm] = createSignal<IperfForm>({ serverAddr: '', port: '5201', testMode: 'UPLOAD', protocolType: 'TCP', maxTime: '10', parallel: '1', bandwidth: '0' });
-  const [iperfResult, setIperfResult] = createSignal<Record<string, string> | null>(null);
+  const [iperfResult, setIperfResult] = createSignal<IperfRunResult[] | null>(null);
   const [nsLookupHost, setNsLookupHost] = createSignal('');
   const [nsLookupServer, setNsLookupServer] = createSignal('');
   const [nsLookupInterface, setNsLookupInterface] = createSignal('');
@@ -455,7 +457,7 @@ const DeviceDetail: Component = () => {
     setIperfForm({
       serverAddr: iperfParameter('ServerAddr'),
       port: iperfParameter('Port') || '5201',
-      testMode: iperfParameter('TestMode') === 'DOWNLOAD' ? 'DOWNLOAD' : 'UPLOAD',
+      testMode: iperfParameter('TestMode') === 'DOWNLOAD' ? 'DOWNLOAD' : iperfParameter('TestMode') === 'BOTH' ? 'BOTH' : 'UPLOAD',
       protocolType: iperfParameter('ProtocolType') === 'UDP' ? 'UDP' : 'TCP',
       maxTime: iperfParameter('MaxTime') || '10',
       parallel: iperfParameter('Parallel') || '1',
@@ -754,45 +756,47 @@ const DeviceDetail: Component = () => {
       try { await api.connectionRequest(serial()); } catch { /* The CPE may already have an active CWMP session. */ }
     };
     try {
-      const configTask = await api.setParameterValues(serial(), {
-        [prefix + 'ServerAddr']: form.serverAddr.trim(),
-        [prefix + 'Port']: String(port),
-        [prefix + 'TestMode']: form.testMode,
-        [prefix + 'ProtocolType']: form.protocolType,
-        [prefix + 'MaxTime']: String(maxTime),
-        [prefix + 'Parallel']: String(parallel),
-        [prefix + 'Bandwidth']: String(bandwidth),
-      });
-      await requestIperfSession();
-      await waitForTask(configTask.id, 'iPerf configuration');
-
-      const startTask = await api.setParameterValues(serial(), { [prefix + 'DiagnosticsState']: 'Requested' });
-      await requestIperfSession();
-      await waitForTask(startTask.id, 'iPerf start');
-
-      const deadline = Date.now() + Math.max(60_000, maxTime * 1000 + 45_000);
-      let finalValues: Record<string, string> | null = null;
-      while (Date.now() < deadline) {
-        await new Promise(resolve => window.setTimeout(resolve, 2000));
-        const readTask = await api.getParameterValues(serial(), [
-          prefix + 'DiagnosticsState',
-          prefix + 'TestResult',
-          prefix + 'Result',
-          prefix + 'ReportTime',
-          prefix + 'ErrorDescription',
-        ]);
+      const runTest = async (mode: 'UPLOAD' | 'DOWNLOAD'): Promise<IperfRunResult> => {
+        const configTask = await api.setParameterValues(serial(), {
+          [prefix + 'ServerAddr']: form.serverAddr.trim(),
+          [prefix + 'Port']: String(port),
+          [prefix + 'TestMode']: mode,
+          [prefix + 'ProtocolType']: form.protocolType,
+          [prefix + 'MaxTime']: String(maxTime),
+          [prefix + 'Parallel']: String(parallel),
+          [prefix + 'Bandwidth']: String(bandwidth),
+        });
         await requestIperfSession();
-        const completedRead = await waitForTask(readTask.id, 'iPerf result read');
-        const values = (completedRead.result || {}) as Record<string, string>;
-        finalValues = values;
-        const state = (values[prefix + 'DiagnosticsState'] || '').toLowerCase();
-        if (state.includes('complete') || state.includes('error') || values[prefix + 'ErrorDescription']) break;
-      }
-      if (!finalValues) throw new Error('The CPE did not return an iPerf result.');
-      setIperfResult(finalValues);
-      const error = finalValues[prefix + 'ErrorDescription'];
-      if (error) showMessage('error', 'iPerf test completed with a CPE error.', error);
-      else showMessage('success', 'iPerf test completed.');
+        await waitForTask(configTask.id, `${mode.toLowerCase()} iPerf configuration`);
+
+        const startTask = await api.setParameterValues(serial(), { [prefix + 'DiagnosticsState']: 'Requested' });
+        await requestIperfSession();
+        await waitForTask(startTask.id, `${mode.toLowerCase()} iPerf start`);
+
+        const deadline = Date.now() + Math.max(60_000, maxTime * 1000 + 45_000);
+        let finalValues: Record<string, string> | null = null;
+        while (Date.now() < deadline) {
+          await new Promise(resolve => window.setTimeout(resolve, 2000));
+          const readTask = await api.getParameterValues(serial(), [
+            prefix + 'DiagnosticsState', prefix + 'TestResult', prefix + 'Result',
+            prefix + 'ReportTime', prefix + 'ErrorDescription',
+          ]);
+          await requestIperfSession();
+          const completedRead = await waitForTask(readTask.id, `${mode.toLowerCase()} iPerf result read`);
+          finalValues = (completedRead.result || {}) as Record<string, string>;
+          const state = (finalValues[prefix + 'DiagnosticsState'] || '').toLowerCase();
+          if (state.includes('complete') || state.includes('error') || finalValues[prefix + 'ErrorDescription']) break;
+        }
+        if (!finalValues) throw new Error(`The CPE did not return an iPerf ${mode.toLowerCase()} result.`);
+        return { mode, values: finalValues };
+      };
+      const modes: Array<'UPLOAD' | 'DOWNLOAD'> = form.testMode === 'BOTH' ? ['UPLOAD', 'DOWNLOAD'] : [form.testMode];
+      const results: IperfRunResult[] = [];
+      for (const mode of modes) results.push(await runTest(mode));
+      setIperfResult(results);
+      const hasError = results.some(result => result.values[prefix + 'ErrorDescription']);
+      if (hasError) showMessage('error', 'iPerf test completed with a CPE error.');
+      else showMessage('success', form.testMode === 'BOTH' ? 'Upload and download tests completed.' : 'iPerf test completed.');
       await refetchParams();
       await refetchTasks();
     } catch (err) {
@@ -1806,7 +1810,7 @@ const DeviceDetail: Component = () => {
                       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         <label class="text-xs text-muted md:col-span-2">iPerf server address<input class="input w-full mt-1 font-mono" value={iperfForm().serverAddr} onInput={event => setIperfForm(form => ({ ...form, serverAddr: event.currentTarget.value }))} placeholder="192.0.2.10 or iperf.example.net" disabled={iperfRunning()} /></label>
                         <label class="text-xs text-muted">Port<input class="input w-full mt-1" type="number" min="1" max="65535" value={iperfForm().port} onInput={event => setIperfForm(form => ({ ...form, port: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
-                        <label class="text-xs text-muted">Test mode<select class="input w-full mt-1" value={iperfForm().testMode} onChange={event => setIperfForm(form => ({ ...form, testMode: event.currentTarget.value as IperfForm['testMode'] }))} disabled={iperfRunning()}><option value="UPLOAD">Upload — CPE to server</option><option value="DOWNLOAD">Download — server to CPE</option></select></label>
+                        <label class="text-xs text-muted">Test mode<select class="input w-full mt-1" value={iperfForm().testMode} onChange={event => setIperfForm(form => ({ ...form, testMode: event.currentTarget.value as IperfForm['testMode'] }))} disabled={iperfRunning()}><option value="UPLOAD">Upload — CPE to server</option><option value="DOWNLOAD">Download — server to CPE</option><option value="BOTH">Both — upload and download</option></select></label>
                         <label class="text-xs text-muted">Protocol<select class="input w-full mt-1" value={iperfForm().protocolType} onChange={event => setIperfForm(form => ({ ...form, protocolType: event.currentTarget.value as IperfForm['protocolType'] }))} disabled={iperfRunning()}><option value="TCP">TCP</option><option value="UDP">UDP</option></select></label>
                         <label class="text-xs text-muted">Duration (seconds)<input class="input w-full mt-1" type="number" min="1" max="1800" value={iperfForm().maxTime} onInput={event => setIperfForm(form => ({ ...form, maxTime: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
                         <label class="text-xs text-muted">Parallel streams<input class="input w-full mt-1" type="number" min="1" max="32" value={iperfForm().parallel} onInput={event => setIperfForm(form => ({ ...form, parallel: event.currentTarget.value }))} disabled={iperfRunning()} /></label>
@@ -1818,7 +1822,7 @@ const DeviceDetail: Component = () => {
                     <Show when={iperfResult()}>
                       <div class="border-t border-subtle pt-3">
                         <h3 class="text-sm font-medium text-secondary mb-3">Latest speedtest result</h3>
-                        <IperfResult result={iperfResult()!} />
+                        <IperfResult runs={iperfResult()!} />
                       </div>
                     </Show>
                     </div>
@@ -3130,6 +3134,7 @@ const DeviceDetail: Component = () => {
                 <select id="iperf-mode" value={iperfForm().testMode} onChange={(e) => setIperfForm(f => ({ ...f, testMode: e.currentTarget.value as IperfForm['testMode'] }))} class="input w-full" disabled={iperfRunning()}>
                   <option value="UPLOAD">Upload — CPE to server</option>
                   <option value="DOWNLOAD">Download — server to CPE</option>
+                  <option value="BOTH">Both — upload and download</option>
                 </select>
               </div>
               <div>
@@ -3156,11 +3161,7 @@ const DeviceDetail: Component = () => {
             <Show when={iperfResult()}>
               <div class="border border-subtle rounded-md p-3">
                 <h3 class="text-sm font-medium text-secondary mb-2">Latest iPerf response</h3>
-                <div class="space-y-1">
-                  <For each={Object.entries(iperfResult()!) }>
-                    {([key, value]) => <div class="flex gap-3 text-xs"><span class="text-muted font-mono break-all">{key.split('.').pop()}</span><span class="text-primary font-mono break-all">{value || '-'}</span></div>}
-                  </For>
-                </div>
+                <IperfResult runs={iperfResult()!} />
               </div>
             </Show>
             <div class="flex gap-2 pt-2">
