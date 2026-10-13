@@ -2276,7 +2276,6 @@ const DeviceDetail: Component = () => {
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Enable</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Uptime</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Type</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">VLAN</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">IP Address</th>
@@ -2333,7 +2332,6 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                            <td class="px-3 py-2.5 text-secondary">{formatUptime(wan.uptime)}</td>
                             <td class="px-3 py-2.5 text-secondary">{wan.type}</td>
                             <td class="px-3 py-2.5 text-primary font-mono">{wan.vlan}</td>
                             <td class="px-3 py-2.5 text-primary font-mono">
