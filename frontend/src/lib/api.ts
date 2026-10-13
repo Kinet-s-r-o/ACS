@@ -41,7 +41,7 @@ export interface TagDefinition { id: string; name: string; color: string; create
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string> }
 export interface ProvisioningVariable { name: string; source: string; value?: string; steps: ProvisioningTransform[] }
-export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'object'; parameter: string; enabled_value?: string; disabled_value?: string; group?: string; description?: string }
+export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'string' | 'object'; parameter: string; options?: string[]; enabled_value?: string; disabled_value?: string; group?: string; description?: string }
 export interface ProvisioningFeature { id: string; name: string; description?: string; controls: ProvisioningFeatureControl[] }
 export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
@@ -190,6 +190,7 @@ export const api = {
   importTemplateFeature: (templateId: number, name: string, csv: string) => request<ProvisioningFeature>(`/provisioning/templates/${templateId}/features/import`, { method: 'POST', body: JSON.stringify({ name, csv }) }),
   deleteTemplateFeature: (templateId: number, featureId: string) => request<{ status: string }>(`/provisioning/templates/${templateId}/features/${encodeURIComponent(featureId)}`, { method: 'DELETE' }),
   setTemplateFeatureControl: (serial: string, featureId: string, key: string, enabled: boolean) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ enabled }) }),
+  setTemplateFeatureStringControl: (serial: string, featureId: string, key: string, value: string) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ value }) }),
   addTemplateFeatureObject: (serial: string, featureId: string, key: string) => request<Task>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/objects/${encodeURIComponent(key)}`, { method: 'POST' }),
   getInterfaceMetrics: (templateId: number) => request<InterfaceMetricDefinition[]>(`/provisioning/templates/${templateId}/interface-metrics`),
   getDeviceInterfaceMetricDefinitions: (serial: string) => request<InterfaceMetricDefinition[]>(`/device/${encodeURIComponent(serial)}/interface-metric-definitions`),

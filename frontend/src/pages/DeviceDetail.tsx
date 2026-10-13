@@ -409,6 +409,20 @@ const DeviceDetail: Component = () => {
     } finally { setFeatureAction(null); }
   };
 
+  const setTemplateFeatureString = async (featureID: string, key: string, label: string, value: string) => {
+    if (!isFullAccess() || featureAction()) return;
+    const actionKey = `${featureID}:${key}`;
+    setFeatureAction(actionKey);
+    try {
+      const tasks = await api.setTemplateFeatureStringControl(serial(), featureID, key, value);
+      setFeatureRefreshTaskID(tasks.refresh_task.id);
+      notify({ tone: 'success', title: `${label} change queued`, detail: `CWMP task #${tasks.task.id} will apply at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not change ${label}`, detail: (error as Error).message, persistent: true });
+    } finally { setFeatureAction(null); }
+  };
+
   const addTemplateFeatureObject = async (featureID: string, key: string, label: string) => {
     if (!isFullAccess() || featureAction()) return;
     const actionKey = `${featureID}:${key}`;
@@ -2173,13 +2187,26 @@ const DeviceDetail: Component = () => {
                     <For each={feature.controls}>{control => {
                       const parameter = () => (parameters() || []).find(item => item.name === control.parameter);
                       return <Show when={control.type === 'boolean'} fallback={
-                        <Show when={parameter()?.writable === true}>
-                          <div class="rounded border border-subtle p-4 lg:col-span-2">
-                            <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
-                            <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
-                              <div class="overflow-x-auto"><table class="data-table w-full text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => <td class="max-w-64 truncate font-mono" title={featureObjectValue(control.parameter, instance, column)}>{featureObjectValue(control.parameter, instance, column)}</td>}</For></tr>}</For></tbody></table></div>
-                            </Show>
-                          </div>
+                        <Show when={control.type === 'string'} fallback={
+                          <Show when={parameter()?.writable === true}>
+                            <div class="rounded border border-subtle p-4 lg:col-span-2">
+                              <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
+                              <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
+                                <div class="overflow-x-auto"><table class="data-table w-full text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => <td class="max-w-64 truncate font-mono" title={featureObjectValue(control.parameter, instance, column)}>{featureObjectValue(control.parameter, instance, column)}</td>}</For></tr>}</For></tbody></table></div>
+                              </Show>
+                            </div>
+                          </Show>
+                        }>
+                          <Show when={parameter()?.writable === true}>
+                            <label class="block rounded border border-subtle p-4">
+                              <span class="mb-2 block text-sm font-medium text-primary">{control.label}</span>
+                              <span class="mb-2 block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span>
+                              <select class="input w-full" value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)}>
+                                <Show when={!control.options?.includes(parameter()?.value || '')}><option value={parameter()?.value || ''}>{parameter()?.value || 'Select a value'}</option></Show>
+                                <For each={control.options || []}>{option => <option value={option}>{option}</option>}</For>
+                              </select>
+                            </label>
+                          </Show>
                         </Show>
                       }>
                         <Show when={parameter()?.writable === true}>

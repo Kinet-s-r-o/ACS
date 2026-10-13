@@ -738,8 +738,8 @@ const Provisioning: Component = () => {
           <Show when={templateTab() === 'features'}>
             <div class="space-y-4">
               <div class="rounded border border-subtle bg-elevated/30 p-3 text-xs text-secondary">
-                Define model-specific controls with CSV. Supported types are <code>boolean</code> and <code>object</code>; object paths must end in a dot and are created with CWMP AddObject.
-                Required columns: <code>key,label,type,parameter</code>. Optional columns: <code>enabled_value,disabled_value,group,description</code>.
+                Define model-specific controls with CSV. Supported types are <code>boolean</code>, <code>string</code>, and <code>object</code>; string controls use pipe-separated values in <code>options</code>, and object paths must end in a dot.
+                Required columns: <code>key,label,type,parameter</code>. Optional columns: <code>options,enabled_value,disabled_value,group,description</code>.
               </div>
               <div class="grid gap-3 lg:grid-cols-2">
                 <label class="block text-xs text-muted">Feature name

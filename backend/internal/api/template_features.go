@@ -167,7 +167,7 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 		if featureFormat {
 			control = models.ProvisioningFeatureControl{
 				Key: strings.ToLower(get(row, "key")), Label: get(row, "label"), Type: strings.ToLower(get(row, "type")),
-				Parameter: get(row, "parameter"), EnabledValue: get(row, "enabled_value"), DisabledValue: get(row, "disabled_value"),
+				Parameter: get(row, "parameter"), Options: parseFeatureOptions(get(row, "options")), EnabledValue: get(row, "enabled_value"), DisabledValue: get(row, "disabled_value"),
 				Group: get(row, "group"), Description: get(row, "description"),
 			}
 		} else {
@@ -180,6 +180,8 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 			switch {
 			case valueType == "boolean" && !strings.HasSuffix(parameter, "."):
 				control.Type = "boolean"
+			case valueType == "string" && len(parseFeatureOptions(get(row, "options"))) > 0 && !strings.HasSuffix(parameter, "."):
+				control.Type = "string"
 			case valueType == "" && strings.HasSuffix(parameter, "."):
 				control.Type = "object"
 			default:
@@ -199,6 +201,7 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 			}
 			control.Label = label
 			control.Parameter = parameter
+			control.Options = parseFeatureOptions(get(row, "options"))
 		}
 		if !featureKeyPattern.MatchString(control.Key) || control.Label == "" || len(control.Label) > 128 {
 			return nil, fmt.Errorf("CSV line %d: key or label is invalid", line)
@@ -206,8 +209,8 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 		if keys[control.Key] || parameters[control.Parameter] {
 			return nil, fmt.Errorf("CSV line %d: duplicate key or parameter", line)
 		}
-		if control.Type != "boolean" && control.Type != "object" {
-			return nil, fmt.Errorf("CSV line %d: type must be boolean or object", line)
+		if control.Type != "boolean" && control.Type != "object" && control.Type != "string" {
+			return nil, fmt.Errorf("CSV line %d: type must be boolean, string, or object", line)
 		}
 		if err := validateParameterNames([]string{control.Parameter}); err != nil {
 			return nil, fmt.Errorf("CSV line %d: %w", line, err)
@@ -228,11 +231,18 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 			if len(control.EnabledValue) > 64 || len(control.DisabledValue) > 64 {
 				return nil, fmt.Errorf("CSV line %d: enabled/disabled values exceed 64 characters", line)
 			}
-		} else {
+		} else if control.Type == "object" {
 			if !strings.HasSuffix(control.Parameter, ".") {
 				return nil, fmt.Errorf("CSV line %d: object parameter must end with a dot", line)
 			}
 			control.EnabledValue, control.DisabledValue = "", ""
+		} else {
+			if strings.HasSuffix(control.Parameter, ".") || len(control.Options) == 0 {
+				return nil, fmt.Errorf("CSV line %d: string controls require a parameter and at least one option", line)
+			}
+			if len(control.EnabledValue) > 0 || len(control.DisabledValue) > 0 {
+				return nil, fmt.Errorf("CSV line %d: string controls use the options column, not enabled_value/disabled_value", line)
+			}
 		}
 		if len(control.Group) > 128 || len(control.Description) > 512 {
 			return nil, fmt.Errorf("CSV line %d: group or description is too long", line)
@@ -247,6 +257,21 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 		return nil, fmt.Errorf("CSV contains no controls")
 	}
 	return controls, nil
+}
+
+func parseFeatureOptions(raw string) []string {
+	parts := strings.Split(raw, "|")
+	options := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		option := strings.TrimSpace(part)
+		if option == "" || seen[option] {
+			continue
+		}
+		seen[option] = true
+		options = append(options, option)
+	}
+	return options
 }
 
 func featureSlug(name string) string {
@@ -306,16 +331,17 @@ func (r *Router) handleSetFeatureControl(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	control, err := r.featureControlForDevice(req, device)
-	if err != nil || control.Type != "boolean" {
+	if err != nil || (control.Type != "boolean" && control.Type != "string") {
 		respondError(w, http.StatusNotFound, "Feature control not found")
 		return
 	}
 	var body struct {
-		Enabled *bool `json:"enabled"`
+		Enabled *bool   `json:"enabled"`
+		Value   *string `json:"value"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil || body.Enabled == nil {
+	if err := decoder.Decode(&body); err != nil || (control.Type == "boolean" && body.Enabled == nil) || (control.Type == "string" && body.Value == nil) {
 		respondError(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
@@ -335,9 +361,25 @@ func (r *Router) handleSetFeatureControl(w http.ResponseWriter, req *http.Reques
 		respondError(w, http.StatusConflict, "Device does not report this parameter as writable")
 		return
 	}
-	value := control.DisabledValue
-	if *body.Enabled {
-		value = control.EnabledValue
+	value := ""
+	if control.Type == "boolean" {
+		value = control.DisabledValue
+		if *body.Enabled {
+			value = control.EnabledValue
+		}
+	} else {
+		value = *body.Value
+		allowed := false
+		for _, option := range control.Options {
+			if value == option {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			respondError(w, http.StatusBadRequest, "Value is not an allowed option")
+			return
+		}
 	}
 	setTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeSetParameterValues, map[string]string{control.Parameter: value})
 	if err != nil {
