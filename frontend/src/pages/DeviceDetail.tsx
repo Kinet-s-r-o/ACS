@@ -12,6 +12,7 @@ import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import MetricChart from '../components/MetricChart';
 import InterfaceMetricChart from '../components/InterfaceMetricChart';
+import IperfResult from '../components/IperfResult';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
@@ -1816,8 +1817,8 @@ const DeviceDetail: Component = () => {
                     </Show>
                     <Show when={iperfResult()}>
                       <div class="border-t border-subtle pt-3">
-                        <h3 class="text-xs font-medium text-secondary mb-2">Latest iPerf result</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2"><For each={Object.entries(iperfResult()!)}>{([key, value]) => <div class="rounded bg-base px-3 py-2"><div class="text-[10px] text-muted">{key.split('.').pop()}</div><div class="text-sm text-primary font-mono break-all">{value || '-'}</div></div>}</For></div>
+                        <h3 class="text-sm font-medium text-secondary mb-3">Latest speedtest result</h3>
+                        <IperfResult result={iperfResult()!} />
                       </div>
                     </Show>
                     </div>
