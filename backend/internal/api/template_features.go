@@ -128,9 +128,17 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 	for i, item := range header {
 		columns[strings.ToLower(strings.TrimSpace(strings.TrimPrefix(item, "\ufeff")))] = i
 	}
+	featureFormat := true
 	for _, required := range []string{"key", "label", "type", "parameter"} {
 		if _, ok := columns[required]; !ok {
-			return nil, fmt.Errorf("CSV is missing required column %q", required)
+			featureFormat = false
+		}
+	}
+	if !featureFormat {
+		for _, required := range []string{"name", "writable", "value type"} {
+			if _, ok := columns[required]; !ok {
+				return nil, fmt.Errorf("CSV must contain either key/label/type/parameter columns or Name/Writable/Value type columns")
+			}
 		}
 	}
 	get := func(row []string, key string) string {
@@ -155,10 +163,42 @@ func parseFeatureCSV(content string) ([]models.ProvisioningFeatureControl, error
 		if len(row) == 1 && strings.TrimSpace(row[0]) == "" {
 			continue
 		}
-		control := models.ProvisioningFeatureControl{
-			Key: strings.ToLower(get(row, "key")), Label: get(row, "label"), Type: strings.ToLower(get(row, "type")),
-			Parameter: get(row, "parameter"), EnabledValue: get(row, "enabled_value"), DisabledValue: get(row, "disabled_value"),
-			Group: get(row, "group"), Description: get(row, "description"),
+		control := models.ProvisioningFeatureControl{}
+		if featureFormat {
+			control = models.ProvisioningFeatureControl{
+				Key: strings.ToLower(get(row, "key")), Label: get(row, "label"), Type: strings.ToLower(get(row, "type")),
+				Parameter: get(row, "parameter"), EnabledValue: get(row, "enabled_value"), DisabledValue: get(row, "disabled_value"),
+				Group: get(row, "group"), Description: get(row, "description"),
+			}
+		} else {
+			parameter := get(row, "name")
+			writable := strings.ToLower(get(row, "writable"))
+			valueType := strings.ToLower(get(row, "value type"))
+			if writable != "yes" && writable != "true" && writable != "1" {
+				continue
+			}
+			switch {
+			case valueType == "boolean" && !strings.HasSuffix(parameter, "."):
+				control.Type = "boolean"
+			case valueType == "" && strings.HasSuffix(parameter, "."):
+				control.Type = "object"
+			default:
+				continue
+			}
+			label := strings.TrimSuffix(parameter, ".")
+			if dot := strings.LastIndex(label, "."); dot >= 0 {
+				label = label[dot+1:]
+			}
+			control.Key = featureSlug(label)
+			if control.Key == "" {
+				continue
+			}
+			baseKey := control.Key
+			for suffix := 2; keys[control.Key]; suffix++ {
+				control.Key = fmt.Sprintf("%.59s-%d", baseKey, suffix)
+			}
+			control.Label = label
+			control.Parameter = parameter
 		}
 		if !featureKeyPattern.MatchString(control.Key) || control.Label == "" || len(control.Label) > 128 {
 			return nil, fmt.Errorf("CSV line %d: key or label is invalid", line)
