@@ -421,14 +421,14 @@ const DeviceDetail: Component = () => {
   const [nsLookupHost, setNsLookupHost] = createSignal('');
   const [nsLookupServer, setNsLookupServer] = createSignal('');
   const [nsLookupInterface, setNsLookupInterface] = createSignal('');
-  const [nsLookupRepetitions, setNsLookupRepetitions] = createSignal('5');
+  const [nsLookupRepetitions, setNsLookupRepetitions] = createSignal('1');
   const [nsLookupTimeout, setNsLookupTimeout] = createSignal('5000');
   const [nsLookupRunning, setNsLookupRunning] = createSignal(false);
   const [nsLookupResult, setNsLookupResult] = createSignal<Record<string, string> | null>(null);
   const [ipPingHost, setIpPingHost] = createSignal('');
   const [ipPingInterface, setIpPingInterface] = createSignal('');
   const [ipPingRepetitions, setIpPingRepetitions] = createSignal('4');
-  const [ipPingTimeout, setIpPingTimeout] = createSignal('10000');
+  const [ipPingTimeout, setIpPingTimeout] = createSignal('2000');
   const [ipPingDataBlockSize, setIpPingDataBlockSize] = createSignal('56');
   const [ipPingDscp, setIpPingDscp] = createSignal('0');
   const [ipPingRunning, setIpPingRunning] = createSignal(false);
@@ -437,7 +437,7 @@ const DeviceDetail: Component = () => {
   const [traceRouteInterface, setTraceRouteInterface] = createSignal('');
   const [traceRouteMaxHops, setTraceRouteMaxHops] = createSignal('30');
   const [traceRouteTries, setTraceRouteTries] = createSignal('3');
-  const [traceRouteTimeout, setTraceRouteTimeout] = createSignal('120000');
+  const [traceRouteTimeout, setTraceRouteTimeout] = createSignal('5000');
   const [traceRouteDataBlockSize, setTraceRouteDataBlockSize] = createSignal('38');
   const [traceRouteDscp, setTraceRouteDscp] = createSignal('0');
   const [traceRouteRunning, setTraceRouteRunning] = createSignal(false);
