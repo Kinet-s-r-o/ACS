@@ -332,6 +332,9 @@ func (p *ParameterValueStruct) UnmarshalXML(decoder *xml.Decoder, start xml.Star
 				if err := decoder.DecodeElement(&value, &t); err != nil {
 					return err
 				}
+				if p.ValueType == "" || p.ValueType == "string" {
+					value = strings.Trim(value, " ")
+				}
 				p.Value = value
 			}
 		case xml.EndElement:

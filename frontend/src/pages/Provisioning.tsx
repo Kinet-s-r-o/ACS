@@ -1,4 +1,4 @@
-import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, type Component } from 'solid-js';
+import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
 import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -826,22 +826,22 @@ const Provisioning: Component = () => {
                 Define reusable values for this template. Sources may be device identity, a literal, or a parameter reported in Inform. Leave the source empty to start with an empty value, then use a transformation such as Random string. Use <code class="text-primary">{'{{variable_name}}'}</code> in provisioning rule values. Transformations run in order.
               </div>
               <Show when={templateVariables().length > 0} fallback={<p class="py-8 text-center text-sm text-muted">No template variables defined yet.</p>}>
-                <For each={templateVariables()}>{(variable, variableIndex) => <section class="card p-4 space-y-3">
+                <Index each={templateVariables()}>{(variable, variableIndex) => <section class="card p-4 space-y-3">
                   <div class="flex items-center justify-between gap-3">
-                    <h3 class="text-sm font-medium text-primary">Variable {variableIndex() + 1}</h3>
-                    <button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => setTemplateVariables(previous => previous.filter((_, index) => index !== variableIndex()))} aria-label={`Remove variable ${variable.name}`}><Trash2 size={13} />Remove</button>
+                    <h3 class="text-sm font-medium text-primary">Variable {variableIndex + 1}</h3>
+                    <button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => setTemplateVariables(previous => previous.filter((_, index) => index !== variableIndex))} aria-label={`Remove variable ${variable().name}`}><Trash2 size={13} />Remove</button>
                   </div>
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <label class="block text-xs text-muted">Variable name<input class="input mt-1 w-full font-mono" value={variable.name} onInput={event => updateTemplateVariable(variableIndex(), { name: event.currentTarget.value })} placeholder="serial_suffix" /></label>
-                    <label class="block text-xs text-muted">Source<select class="input mt-1 w-full" value={variable.source} onChange={event => updateTemplateVariable(variableIndex(), { source: event.currentTarget.value })}>
+                    <label class="block text-xs text-muted">Variable name<input class="input mt-1 w-full font-mono" value={variable().name} onInput={event => updateTemplateVariable(variableIndex, { name: event.currentTarget.value })} placeholder="serial_suffix" /></label>
+                    <label class="block text-xs text-muted">Source<select class="input mt-1 w-full" value={variable().source} onChange={event => updateTemplateVariable(variableIndex, { source: event.currentTarget.value })}>
                       <option value="">No source</option><option value="literal">Literal value</option><option value="serial_number">Device serial number</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><option value="oui">OUI</option><option value="parameter">CWMP parameter from Inform</option>
                     </select></label>
-                    <Show when={variable.source === 'literal' || variable.source === 'parameter'}>
-                      <label class="block text-xs text-muted">{variable.source === 'literal' ? 'Literal value' : 'Parameter path'}<input class="input mt-1 w-full font-mono text-xs" value={variable.value || ''} onInput={event => updateTemplateVariable(variableIndex(), { value: event.currentTarget.value })} placeholder={variable.source === 'parameter' ? 'InternetGatewayDevice.DeviceInfo.SerialNumber' : 'Enter a starting value'} /></label>
+                    <Show when={variable().source === 'literal' || variable().source === 'parameter'}>
+                      <label class="block text-xs text-muted">{variable().source === 'literal' ? 'Literal value' : 'Parameter path'}<input class="input mt-1 w-full font-mono text-xs" value={variable().value || ''} onInput={event => updateTemplateVariable(variableIndex, { value: event.currentTarget.value })} placeholder={variable().source === 'parameter' ? 'InternetGatewayDevice.DeviceInfo.SerialNumber' : 'Enter a starting value'} /></label>
                     </Show>
                   </div>
                   <div class="space-y-2">
-                    <For each={variable.steps}>{(step, stepIndex) => {
+                    <Index each={variable().steps}>{(step, stepIndex) => {
                       const argumentFields: Record<string, Array<[string, string]>> = {
                         prefix: [['text', 'Prefix']], suffix: [['text', 'Suffix']],
                         slice: [['start', 'Start index'], ['end', 'End index (optional)']],
@@ -853,16 +853,16 @@ const Provisioning: Component = () => {
                         random_string: [['length', 'Length'], ['charset', 'Character set (alphanumeric, digits, lowercase, uppercase, hex)']],
                       };
                       return <div class="grid grid-cols-1 md:grid-cols-12 items-end gap-2 rounded bg-base p-3">
-                        <label class="block text-xs text-muted md:col-span-3">Transformation<select class="input mt-1 w-full" value={step.function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex(), stepIndex(), { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : {} }); }}>
+                        <label class="block text-xs text-muted md:col-span-3">Transformation<select class="input mt-1 w-full" value={step().function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex, stepIndex, { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : {} }); }}>
                           <option value="trim">Trim whitespace</option><option value="upper">Uppercase</option><option value="lower">Lowercase</option><option value="prefix">Add prefix</option><option value="suffix">Add suffix</option><option value="slice">Slice by indexes</option><option value="replace">Replace text</option><option value="regex_replace">Replace by regex</option><option value="pad_start">Pad at start</option><option value="pad_end">Pad at end</option><option value="default">Fallback if empty</option><option value="random_string">Generate random string</option><option value="sha256">SHA-256 hash</option><option value="base64_encode">Base64 encode</option><option value="base64_decode">Base64 decode</option><option value="hex_encode">Hex encode</option><option value="hex_decode">Hex decode</option>
                         </select></label>
-                        <For each={argumentFields[step.function] || []}>{([key, label]) => <label class="block text-xs text-muted md:col-span-2">{label}<input class="input mt-1 w-full" value={step.args?.[key] || (step.function === 'random_string' && key === 'charset' ? 'alphanumeric' : '')} onInput={event => updateVariableTransform(variableIndex(), stepIndex(), { args: { ...step.args, [key]: event.currentTarget.value } })} /></label>}</For>
-                        <button type="button" class="btn btn-ghost text-rose-400 md:col-span-1" onClick={() => updateTemplateVariable(variableIndex(), { steps: variable.steps.filter((_, index) => index !== stepIndex()) })} aria-label="Remove transformation"><Trash2 size={13} /></button>
+                        <For each={argumentFields[step().function] || []}>{([key, label]) => <label class="block text-xs text-muted md:col-span-2">{label}<input class="input mt-1 w-full" value={step().args?.[key] || (step().function === 'random_string' && key === 'charset' ? 'alphanumeric' : '')} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, [key]: event.currentTarget.value } })} /></label>}</For>
+                        <button type="button" class="btn btn-ghost text-rose-400 md:col-span-1" onClick={() => updateTemplateVariable(variableIndex, { steps: variable().steps.filter((_, index) => index !== stepIndex) })} aria-label="Remove transformation"><Trash2 size={13} /></button>
                       </div>;
-                    }}</For>
-                    <button type="button" class="btn btn-secondary text-xs" onClick={() => addVariableTransform(variableIndex())}><Plus size={12} />Add transformation</button>
+                    }}</Index>
+                    <button type="button" class="btn btn-secondary text-xs" onClick={() => addVariableTransform(variableIndex)}><Plus size={12} />Add transformation</button>
                   </div>
-                </section>}</For>
+                </section>}</Index>
               </Show>
               <p class="text-xs text-muted">Slice indexes are zero-based. Start 10 removes the first 10 characters; start -10 selects from the last 10 characters. Random strings use cryptographically secure randomness. Each variable is resolved once per device session and can be referenced by later variables.</p>
             </div>
