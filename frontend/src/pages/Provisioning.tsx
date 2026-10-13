@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
+import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -737,12 +737,12 @@ const Provisioning: Component = () => {
             </div>
 
             <div class="flex gap-1 border-b border-subtle mb-4">
-              <button type="button" onClick={() => setTemplateTab('rules')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'rules' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Rules</button>
-              <button type="button" onClick={() => setTemplateTab('variables')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'variables' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Variables</button>
+              <button type="button" onClick={() => setTemplateTab('rules')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'rules' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />Rules</span></button>
+              <button type="button" onClick={() => setTemplateTab('variables')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'variables' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Variable size={12} />Variables</span></button>
               <button type="button" onClick={() => setTemplateTab('metrics')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'metrics' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
-              <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Features</button>
+              <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Features</span></button>
             </div>
 
           <Show when={templateTab() === 'features'}>
