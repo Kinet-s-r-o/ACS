@@ -1725,7 +1725,7 @@ const DeviceDetail: Component = () => {
                         <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full rounded border border-subtle object-contain object-center" />
                       </Show>
                     </div>
-                    <div class="space-y-2 text-sm">
+                    <div class="space-y-2 text-sm mt-4">
                       <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
                       <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
                     </div>
