@@ -1722,7 +1722,7 @@ const DeviceDetail: Component = () => {
                   <div class="space-y-2">
                     <div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
                       <Show when={templateImageUrl()}>
-                        <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full rounded border border-subtle object-contain object-center" />
+                        <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full object-contain object-center" />
                       </Show>
                     </div>
                     <div class="space-y-2 text-sm mt-4">
