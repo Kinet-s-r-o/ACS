@@ -30,6 +30,7 @@ type MetricDefinition struct {
 	Unit               string      `json:"unit"`
 	Source             string      `json:"source" gorm:"not null;default:'passive'"`
 	Active             bool        `json:"active" gorm:"default:true"`
+	StoreHistory       *bool       `json:"store_history" gorm:"not null;default:true"`
 	Group              string      `json:"group" gorm:"default:''"`
 	Color              string      `json:"color" gorm:"default:''"`
 	Axis               string      `json:"axis" gorm:"default:'left'"`
@@ -56,6 +57,10 @@ type MetricDefinition struct {
 
 func (MetricDefinition) TableName() string {
 	return "metric_definitions"
+}
+
+func (m MetricDefinition) StoresHistory() bool {
+	return m.StoreHistory == nil || *m.StoreHistory
 }
 
 // MetricSample is a single time-series data point stored in a TimescaleDB hypertable.

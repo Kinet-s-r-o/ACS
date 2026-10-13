@@ -37,6 +37,7 @@ func (r *Router) handleCreateMetricDefinition(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	defaultMetricHistory(&body)
 
 	if err := validateMetricDefinition(&body); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -92,6 +93,7 @@ func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	defaultMetricHistory(&body)
 
 	if err := validateMetricDefinition(&body); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -251,6 +253,13 @@ func (r *Router) handleGetDeviceTypes(w http.ResponseWriter, req *http.Request) 
 	respondJSON(w, http.StatusOK, types)
 }
 
+func defaultMetricHistory(def *models.MetricDefinition) {
+	if def.StoreHistory == nil {
+		storeHistory := true
+		def.StoreHistory = &storeHistory
+	}
+}
+
 func validateMetricDefinition(def *models.MetricDefinition) error {
 	if def.Name == "" || len(def.Name) > 128 {
 		return errors.New("metric name is required and must be at most 128 characters")
@@ -290,6 +299,9 @@ func validateMetricDefinition(def *models.MetricDefinition) error {
 	}
 	if def.Multiplier < 0 {
 		return errors.New("multiplier must be non-negative")
+	}
+	if !def.StoresHistory() && def.Transform == "rate" {
+		return errors.New("rate transform requires metric history")
 	}
 	switch def.UnitScale {
 	case "", "auto", "bytes", "bits", "pps":

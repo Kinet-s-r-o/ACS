@@ -321,6 +321,9 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 			log.Printf("Metric %q (id=%d): value %q for param %q is not numeric", def.Name, def.ID, value, def.ParameterName)
 			continue
 		}
+		if !def.StoresHistory() {
+			continue
+		}
 		samples = append(samples, models.MetricSample{
 			DeviceID:  deviceID,
 			MetricID:  def.ID,

@@ -25,6 +25,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   unit: '',
   source: 'passive',
   active: true,
+  store_history: true,
   group: '',
   color: '',
   axis: 'left',
@@ -71,6 +72,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
         unit: m.unit,
         source: m.source,
         active: m.active,
+        store_history: m.store_history !== false,
         group: m.group,
         color: m.color,
         axis: m.axis,
@@ -260,6 +262,14 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                   <option value="false">No — Metrics tab only</option>
                   <option value="true">Yes — Metrics tab + Device Health</option>
                 </select>
+              </div>
+              <div>
+                <label for="metric-store-history" class="block text-xs text-muted mb-1.5">Store metric history</label>
+                <select id="metric-store-history" value={metricForm().store_history ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, store_history: e.currentTarget.value === 'true', transform: e.currentTarget.value === 'false' ? '' : f.transform }))} class="input w-full">
+                  <option value="true">Yes — include in Metrics charts</option>
+                  <option value="false">No — current value only</option>
+                </select>
+                <p class="text-xs text-muted mt-1">Current-only metrics use the latest device parameter and are not saved as time-series samples.</p>
               </div>
               <div>
                 <label for="metric-display-format" class="block text-xs text-muted mb-1.5">Display format</label>

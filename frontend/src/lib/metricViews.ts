@@ -9,7 +9,7 @@ import type { MetricDefinition } from './api';
  * appearing as a number or gauge tile in the Health panel.
  */
 export function metricsTabMetrics(defs: MetricDefinition[]): MetricDefinition[] {
-  return defs;
+  return defs.filter(d => d.store_history !== false);
 }
 
 /**
