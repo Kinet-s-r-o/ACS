@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
+import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, Trash2, Upload, X, ChevronLeft } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -505,6 +505,16 @@ const Provisioning: Component = () => {
     } finally { setFeatureSaving(false); }
   };
 
+  const downloadFeatureCSVTemplate = () => {
+    const blob = new Blob(['key,label,type,parameter,options,enabled_value,disabled_value,group,description\n'], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'feature-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const deleteTemplateFeature = async (featureID: string) => {
     const template = selectedTemplate();
     const feature = template?.features?.find(item => item.id === featureID);
@@ -738,7 +748,7 @@ const Provisioning: Component = () => {
           <Show when={templateTab() === 'features'}>
             <div class="space-y-4">
               <div class="rounded border border-subtle bg-elevated/30 p-3 text-xs text-secondary">
-                Define model-specific controls with CSV. Supported types are <code>boolean</code>, <code>string</code>, and <code>object</code>; string controls use pipe-separated values in <code>options</code>, and object paths must end in a dot.
+                Define model-specific controls with CSV. Supported types are <code>boolean</code>, <code>string</code>, <code>int</code>, <code>unsignedInt</code>, and <code>object</code>; string controls may use pipe-separated values in <code>options</code>, and object paths must end in a dot.
                 Required columns: <code>key,label,type,parameter</code>. Optional columns: <code>options,enabled_value,disabled_value,group,description</code>.
               </div>
               <div class="grid gap-3 lg:grid-cols-2">
@@ -747,9 +757,12 @@ const Provisioning: Component = () => {
                 </label>
                 <div class="flex items-end text-xs text-muted">This feature is scoped to <strong class="ml-1 text-secondary">{selectedTemplate()!.name}</strong>.</div>
               </div>
-              <label class="block text-xs text-muted">Load CSV file
-                <input class="input mt-1 w-full" type="file" accept=".csv,text/csv" onChange={async event => { const file = event.currentTarget.files?.[0]; if (file) setFeatureCSV(await file.text()); }} />
-              </label>
+              <div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                <label class="block text-xs text-muted">Load CSV file
+                  <input class="input mt-1 w-full" type="file" accept=".csv,text/csv" onChange={async event => { const file = event.currentTarget.files?.[0]; if (file) setFeatureCSV(await file.text()); }} />
+                </label>
+                <button type="button" class="btn btn-secondary text-xs" onClick={downloadFeatureCSVTemplate}><Download size={13} />Download CSV template</button>
+              </div>
               <label class="block text-xs text-muted">CSV definition
                 <textarea class="input mt-1 min-h-40 w-full font-mono text-xs" spellcheck={false} value={featureCSV()} onInput={event => setFeatureCSV(event.currentTarget.value)} />
               </label>

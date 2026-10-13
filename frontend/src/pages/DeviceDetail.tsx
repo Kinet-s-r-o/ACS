@@ -2187,7 +2187,7 @@ const DeviceDetail: Component = () => {
                     <For each={feature.controls}>{control => {
                       const parameter = () => (parameters() || []).find(item => item.name === control.parameter);
                       return <Show when={control.type === 'boolean'} fallback={
-                        <Show when={control.type === 'string'} fallback={
+                        <Show when={control.type === 'string' || control.type === 'int' || control.type === 'unsignedInt'} fallback={
                           <Show when={parameter()?.writable === true}>
                             <div class="rounded border border-subtle p-4 lg:col-span-2">
                               <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
@@ -2201,10 +2201,14 @@ const DeviceDetail: Component = () => {
                             <label class="block rounded border border-subtle p-4">
                               <span class="mb-2 block text-sm font-medium text-primary">{control.label}</span>
                               <span class="mb-2 block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span>
-                              <select class="input w-full" value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)}>
-                                <Show when={!control.options?.includes(parameter()?.value || '')}><option value={parameter()?.value || ''}>{parameter()?.value || 'Select a value'}</option></Show>
-                                <For each={control.options || []}>{option => <option value={option}>{option}</option>}</For>
-                              </select>
+                              <Show when={control.type === 'string' && (control.options?.length || 0) > 0} fallback={
+                                <input class="input w-full" type={control.type === 'string' ? 'text' : 'number'} step={control.type === 'string' ? undefined : '1'} min={control.type === 'unsignedInt' ? '0' : undefined} value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)} />
+                              }>
+                                <select class="input w-full" value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)}>
+                                  <Show when={!control.options?.includes(parameter()?.value || '')}><option value={parameter()?.value || ''}>{parameter()?.value || 'Select a value'}</option></Show>
+                                  <For each={control.options || []}>{option => <option value={option}>{option}</option>}</For>
+                                </select>
+                              </Show>
                             </label>
                           </Show>
                         </Show>

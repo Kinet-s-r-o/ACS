@@ -30,6 +30,36 @@ func TestNormalizeTags(t *testing.T) {
 	}
 }
 
+func TestParseFeatureCSVSupportsScalarTypes(t *testing.T) {
+	csv := "key,label,type,parameter,options\n" +
+		"name,Name,string,Device.Info.Name,\n" +
+		"count,Count,int,Device.Info.Count,\n" +
+		"limit,Limit,unsignedInt,Device.Info.Limit,"
+
+	controls, err := parseFeatureCSV(csv)
+	if err != nil {
+		t.Fatalf("parseFeatureCSV returned error: %v", err)
+	}
+	if len(controls) != 3 {
+		t.Fatalf("got %d controls, want 3", len(controls))
+	}
+	for i, want := range []string{"string", "int", "unsignedInt"} {
+		if controls[i].Type != want {
+			t.Errorf("control %d type = %q, want %q", i, controls[i].Type, want)
+		}
+	}
+}
+
+func TestParseFeatureCSVSupportsLegacyUnsignedInt(t *testing.T) {
+	controls, err := parseFeatureCSV("Name,Writable,Value type\nDevice.Info.Limit,Yes,unsignedInt\n")
+	if err != nil {
+		t.Fatalf("parseFeatureCSV returned error: %v", err)
+	}
+	if len(controls) != 1 || controls[0].Type != "unsignedInt" {
+		t.Fatalf("got %#v, want one unsignedInt control", controls)
+	}
+}
+
 func TestValidateProvisioningRuleTag(t *testing.T) {
 	base := func(tags []string) error {
 		return validateProvisioningRule("InternetGatewayDevice.ManagementServer.URL", "http://acs.example.com", "string", "", "bootstrap", tags, "")
