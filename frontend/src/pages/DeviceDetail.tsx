@@ -114,9 +114,19 @@ const DeviceDetail: Component = () => {
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
   const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
-  const [tasks, { refetch: refetchTasks }] = createResource(serial, api.getDeviceTasks);
+  const [tasks, { refetch: refetchTaskRows }] = createResource(serial, api.getDeviceTasks);
+  const [deviceTaskCounts, { refetch: refetchDeviceTaskCounts }] = createResource(serial, api.getDeviceTaskCounts);
+  const refetchTasks = async () => {
+    const [taskRows] = await Promise.all([refetchTaskRows(), refetchDeviceTaskCounts()]);
+    return taskRows;
+  };
   const [snapshots, { refetch: refetchSnapshots }] = createResource(serial, api.getDeviceSnapshots);
-  const [deviceFaults, { refetch: refetchDeviceFaults }] = createResource(serial, api.getDeviceFaults);
+  const [deviceFaults, { refetch: refetchFaultRows }] = createResource(serial, api.getDeviceFaults);
+  const [deviceFaultCounts, { refetch: refetchFaultCounts }] = createResource(serial, api.getDeviceFaultCounts);
+  const refetchDeviceFaults = async () => {
+    const [faultRows] = await Promise.all([refetchFaultRows(), refetchFaultCounts()]);
+    return faultRows;
+  };
   const [metricDefs] = createResource(api.getMetricDefinitions);
   const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
   const matchingProvisioningTemplate = createMemo(() => {
@@ -214,7 +224,8 @@ const DeviceDetail: Component = () => {
   });
   const deviceFaultTotalPages = createMemo(() => Math.ceil(filteredDeviceFaults().length / faultPageSize()));
   const unresolvedFaultCount = createMemo(() => (deviceFaults() || []).filter(f => !f.resolved).length);
-  const pendingTaskCount = createMemo(() => (tasks() || []).filter(t => t.status !== 'completed').length);
+  const pendingTaskCount = createMemo(() => (tasks() || []).filter(t => t.status === 'pending' || t.status === 'sent').length);
+  const [deletingTask, setDeletingTask] = createSignal<number | null>(null);
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<DeviceSnapshot | null>(null);
   const [snapshotSelection, setSnapshotSelection] = createSignal<string[]>([]);
@@ -705,6 +716,22 @@ const DeviceDetail: Component = () => {
     } catch (err) {
       showMessage('error', 'The CPE record was not deleted. Retry after checking your permission and the API status.', (err as Error).message);
       setActionLoading(null);
+    }
+  };
+
+  const deletePendingTask = async (task: Task) => {
+    if (task.status !== 'pending' || !isFullAccess()) return;
+    if (!await confirm({ title: `Delete pending task #${task.id}?`, description: `The ${task.type} task will be marked deleted and will not be sent to this CPE.`, confirmLabel: 'Delete task', tone: 'danger' })) return;
+    setDeletingTask(task.id);
+    try {
+      await api.deletePendingTask(task.id);
+      showMessage('success', 'Pending task deleted.');
+      await refetchTasks();
+    } catch (err) {
+      showMessage('error', 'Could not delete the task. It may already have been sent to the CPE.', (err as Error).message);
+      await refetchTasks();
+    } finally {
+      setDeletingTask(null);
     }
   };
 
@@ -1593,6 +1620,7 @@ const DeviceDetail: Component = () => {
       case 'pending': return 'badge-warning';
       case 'sent': return 'bg-sky-500/15 text-sky-400';
       case 'failed': return 'badge-error';
+      case 'deleted': return 'bg-zinc-500/15 text-zinc-400';
       default: return 'bg-zinc-700 text-secondary';
     }
   };
@@ -2740,6 +2768,14 @@ const DeviceDetail: Component = () => {
 
             {/* Row 5: Task History */}
             <Show when={activeTab() === 'tasks'}>
+            <dl class="ops-register task-register" aria-label="Device CWMP task status register" aria-busy={deviceTaskCounts.loading}>
+              <div class="ops-register-cell is-warning"><dt>Pending</dt><dd>{deviceTaskCounts()?.pending ?? 0}</dd><small>Waiting to be sent</small></div>
+              <div class="ops-register-cell"><dt>Sent</dt><dd>{deviceTaskCounts()?.sent ?? 0}</dd><small>Dispatched to CPE</small></div>
+              <div class="ops-register-cell is-online"><dt>Completed</dt><dd>{deviceTaskCounts()?.completed ?? 0}</dd><small>Successfully finished</small></div>
+              <div class="ops-register-cell is-offline"><dt>Failed</dt><dd>{deviceTaskCounts()?.failed ?? 0}</dd><small>Require review</small></div>
+              <div class="ops-register-cell"><dt>Deleted</dt><dd>{deviceTaskCounts()?.deleted ?? 0}</dd><small>Cancelled before dispatch</small></div>
+              <div class="ops-register-cell"><dt>Total tasks</dt><dd>{deviceTaskCounts()?.total ?? 0}</dd><small>All tasks for this CPE</small></div>
+            </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
                 <h2 class="text-sm font-medium text-secondary">Task History ({tasks()?.length || 0})</h2>
@@ -2754,7 +2790,7 @@ const DeviceDetail: Component = () => {
               <Show when={!tasks.loading} fallback={<div class="p-5 space-y-2" aria-label="Loading CPE task history"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /></div>}>
               <Show when={(tasks()?.length || 0) > 0} fallback={<EmptyState compact title="No remote tasks have been queued" description="Reboot, parameter, firmware, and connection-request operations will appear here after an operator creates them." />}>
                 <div class="table-scroll">
-                  <table class="data-table w-full text-sm min-w-[900px]">
+                  <table class="data-table w-full text-sm min-w-[980px]">
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
@@ -2782,6 +2818,7 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="created_by" label="User" active={taskColumnFilters()['created_by'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_by'] = s; else delete n['created_by']; return n; }); }} />
                           </div>
                         </th>
+                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">Deleted by</th>
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Error
                             <ColumnFilter columnId="error" label="Error" active={taskColumnFilters()['error'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['error'] = s; else delete n['error']; return n; }); }} />
@@ -2799,15 +2836,21 @@ const DeviceDetail: Component = () => {
                             <td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td>
                             <td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td>
                             <td class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td>
+                            <td class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td>
                             <td class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td>
                             <td class="px-4 py-2 text-right">
-                              <button
-                                class="btn btn-ghost btn-xs"
-                                onClick={() => { setSelectedTask(task); setTaskDetailTab('requested'); }}
-                              >
-                                <Eye size={13} />
-                                Details
-                              </button>
+                              <div class="inline-flex items-center gap-1">
+                                <button
+                                  class="btn btn-ghost btn-xs"
+                                  onClick={() => { setSelectedTask(task); setTaskDetailTab('requested'); }}
+                                >
+                                  <Eye size={13} />
+                                  Details
+                                </button>
+                                <Show when={task.status === 'pending' && isFullAccess()}>
+                                  <button type="button" class="btn btn-ghost btn-xs text-rose-400" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button>
+                                </Show>
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -2830,6 +2873,7 @@ const DeviceDetail: Component = () => {
                   <div class="grid grid-cols-2 gap-3 text-sm">
                     <div><span class="text-muted text-xs">Status</span><div class="mt-0.5"><span class={`badge ${getStatusBadge(selectedTask()!.status)}`}>{selectedTask()!.status}</span></div></div>
                     <div><span class="text-muted text-xs">User</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
+                    <Show when={selectedTask()!.deleted_by}><div><span class="text-muted text-xs">Deleted by</span><div class="mt-0.5 text-primary">{selectedTask()!.deleted_by}</div></div></Show>
                     <div><span class="text-muted text-xs">Created</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.created_at)}</div></div>
                     <div><span class="text-muted text-xs">Completed</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.completed_at)}</div></div>
                   </div>
@@ -2876,6 +2920,11 @@ const DeviceDetail: Component = () => {
 
             <Show when={activeTab() === 'faults'}>
             {/* Row 5.5: CWMP Faults */}
+            <dl class="ops-register fault-register mb-4" aria-label="Fault status register" aria-busy={deviceFaultCounts.loading}>
+              <div class="ops-register-cell is-offline"><dt>Active faults</dt><dd>{deviceFaultCounts()?.active ?? 0}</dd><small>Awaiting operator action</small></div>
+              <div class="ops-register-cell is-online"><dt>Resolved</dt><dd>{deviceFaultCounts()?.resolved ?? 0}</dd><small>Closed fault records</small></div>
+              <div class="ops-register-cell"><dt>Total recorded</dt><dd>{deviceFaultCounts()?.total ?? 0}</dd><small>All CWMP fault events</small></div>
+            </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
                 <h2 class="text-sm font-medium text-secondary flex items-center gap-2">

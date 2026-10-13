@@ -153,6 +153,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /devices", auth.RequirePermission(models.PermDevicesRead)(r.handleListDevices))
 	apiMux.HandleFunc("GET /wan-interfaces", auth.RequirePermission(models.PermDevicesRead)(r.handleListWANInterfaces))
 	apiMux.HandleFunc("GET /tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListTasks))
+	apiMux.HandleFunc("DELETE /tasks/{id}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeletePendingTask))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
 	apiMux.HandleFunc("GET /devices/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDevice))
@@ -177,12 +178,14 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /device/{serial}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteDeviceBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParametersBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/task-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTaskCountsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesRead)(r.handleListSnapshotsBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesWrite)(r.handleCreateSnapshotBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/snapshots/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetSnapshotBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/snapshots/{id}/restore", auth.RequirePermission(models.PermDevicesWrite)(r.handleRestoreSnapshotBySerial))
 	apiMux.HandleFunc("DELETE /device/{serial}/snapshots/{id}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteSnapshotBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/faults", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceFaultsBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/fault-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceFaultCountsBySerial))
 	apiMux.HandleFunc("PUT /device/{serial}/tags", auth.RequirePermission(models.PermDevicesWrite)(r.handleSetDeviceTagsBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/get-parameters", auth.RequirePermission(models.PermDevicesWrite)(r.handleGetParameterValuesBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/set-parameters", auth.RequirePermission(models.PermDevicesWrite)(r.handleSetParameterValuesBySerial))
@@ -333,6 +336,31 @@ func (r *Router) handleListTasks(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, tasks)
+}
+
+func (r *Router) handleDeletePendingTask(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid task ID")
+		return
+	}
+
+	deleted, err := r.taskRepo.MarkPendingDeleted(req.Context(), id, claims.Username)
+	if err != nil {
+		log.Printf("Error deleting pending task %d: %v", id, err)
+		respondError(w, http.StatusInternalServerError, "Failed to mark pending task as deleted")
+		return
+	}
+	if !deleted {
+		respondError(w, http.StatusConflict, "Only pending tasks can be marked as deleted")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted", "deleted_by": claims.Username})
 }
 
 func (r *Router) handleGetDevice(w http.ResponseWriter, req *http.Request) {
@@ -1534,6 +1562,25 @@ func (r *Router) handleGetDeviceTasksBySerial(w http.ResponseWriter, req *http.R
 	respondJSON(w, http.StatusOK, tasks)
 }
 
+func (r *Router) handleGetDeviceTaskCountsBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	counts, err := r.taskRepo.CountByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to count device tasks")
+		return
+	}
+	result := map[string]int64{}
+	for _, status := range []models.TaskStatus{models.TaskStatusPending, models.TaskStatusSent, models.TaskStatusCompleted, models.TaskStatusFailed, models.TaskStatusDeleted} {
+		result[string(status)] = counts[status]
+		result["total"] += counts[status]
+	}
+	respondJSON(w, http.StatusOK, result)
+}
+
 func (r *Router) handleListSnapshotsBySerial(w http.ResponseWriter, req *http.Request) {
 	device, err := r.parseDeviceBySerial(req)
 	if err != nil || device == nil {
@@ -1786,6 +1833,20 @@ func (r *Router) handleGetDeviceFaultsBySerial(w http.ResponseWriter, req *http.
 		return
 	}
 	respondJSON(w, http.StatusOK, faults)
+}
+
+func (r *Router) handleGetDeviceFaultCountsBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	counts, err := r.faultRepo.GetStatsByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get fault counts")
+		return
+	}
+	respondJSON(w, http.StatusOK, counts)
 }
 
 func (r *Router) handleSetDeviceTagsBySerial(w http.ResponseWriter, req *http.Request) {

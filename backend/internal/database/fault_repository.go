@@ -60,6 +60,24 @@ func (r *FaultRepository) GetByDeviceID(ctx context.Context, deviceID int64) ([]
 	return faults, err
 }
 
+func (r *FaultRepository) GetStatsByDeviceID(ctx context.Context, deviceID int64) (map[string]int, error) {
+	var counts struct {
+		Active   int64 `gorm:"column:active"`
+		Resolved int64 `gorm:"column:resolved"`
+		Total    int64 `gorm:"column:total"`
+	}
+	err := r.db.WithContext(ctx).Model(&models.Fault{}).
+		Select("COUNT(*) FILTER (WHERE resolved = false) AS active, COUNT(*) FILTER (WHERE resolved = true) AS resolved, COUNT(*) AS total").
+		Where("device_id = ?", deviceID).
+		Scan(&counts).Error
+	if err != nil {
+		return nil, err
+	}
+	return map[string]int{
+		"active": int(counts.Active), "resolved": int(counts.Resolved), "total": int(counts.Total),
+	}, nil
+}
+
 func (r *FaultRepository) Resolve(ctx context.Context, id int64) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).Model(&models.Fault{}).

@@ -15,6 +15,7 @@ const (
 	TaskStatusSent      TaskStatus = "sent"
 	TaskStatusCompleted TaskStatus = "completed"
 	TaskStatusFailed    TaskStatus = "failed"
+	TaskStatusDeleted   TaskStatus = "deleted"
 )
 
 const (
@@ -75,6 +76,7 @@ type Task struct {
 	SentAt       *time.Time `json:"sent_at,omitempty" gorm:"index:idx_tasks_status_sent,priority:2"`
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 	CreatedBy    string     `json:"created_by,omitempty" gorm:"size:128"`
+	DeletedBy    string     `json:"deleted_by,omitempty" gorm:"size:128"`
 }
 
 func (Task) TableName() string {

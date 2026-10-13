@@ -339,12 +339,13 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
   .content-area { padding: 20px 18px 40px; }
   .fleet-register, .security-register { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .fault-register { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .task-register { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .task-register { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .data-panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .data-panel-section + .data-panel-section { border-top: 0; border-left: 1px solid rgb(var(--border-subtle)); }
 }
 @media (min-width: 1024px) {
   .lg\:hidden { display: none !important; }
+  .task-register { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .app-sidebar { position: fixed; transform: none; }
   .app-main { padding-left: 256px; }
   .topbar { padding: 0 24px; }

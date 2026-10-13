@@ -131,6 +131,13 @@ func (r *TaskRepository) UpdateStatus(ctx context.Context, id int64, status mode
 	return r.db.WithContext(ctx).Model(&models.Task{}).Where("id = ?", id).Updates(updates).Error
 }
 
+func (r *TaskRepository) MarkPendingDeleted(ctx context.Context, id int64, username string) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&models.Task{}).
+		Where("id = ? AND status = ?", id, models.TaskStatusPending).
+		Updates(map[string]interface{}{"status": models.TaskStatusDeleted, "deleted_by": username})
+	return result.RowsAffected > 0, result.Error
+}
+
 func (r *TaskRepository) GetByDeviceID(ctx context.Context, deviceID int64, limit int) ([]*models.Task, error) {
 	var tasks []*models.Task
 	err := r.db.WithContext(ctx).Where("device_id = ?", deviceID).
@@ -145,6 +152,27 @@ func (r *TaskRepository) GetByDeviceID(ctx context.Context, deviceID int64, limi
 		redactGetTaskResult(task)
 	}
 	return tasks, nil
+}
+
+func (r *TaskRepository) CountByDeviceID(ctx context.Context, deviceID int64) (map[models.TaskStatus]int64, error) {
+	type statusCount struct {
+		Status models.TaskStatus
+		Count  int64
+	}
+	var rows []statusCount
+	err := r.db.WithContext(ctx).Model(&models.Task{}).
+		Select("status, COUNT(*) AS count").
+		Where("device_id = ?", deviceID).
+		Group("status").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[models.TaskStatus]int64, len(rows))
+	for _, row := range rows {
+		counts[row.Status] = row.Count
+	}
+	return counts, nil
 }
 
 func (r *TaskRepository) CountActiveFirmwareTasks(ctx context.Context, firmwareID int64) (int64, error) {
