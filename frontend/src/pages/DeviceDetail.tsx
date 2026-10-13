@@ -1346,6 +1346,7 @@ const DeviceDetail: Component = () => {
   });
 
   const wanProfiles = createMemo(() => getWanProfiles(parameters() || []));
+  const diagnosticInterfaces = createMemo(() => wanProfiles().map(wan => ({ path: wan.path, name: wan.name })));
 
   const getLanInterfaces = () => {
     const params = parameters() || [];
@@ -1831,7 +1832,7 @@ const DeviceDetail: Component = () => {
                       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         <label class="text-xs text-muted">Host name<input class="input w-full mt-1" value={nsLookupHost()} onInput={event => setNsLookupHost(event.currentTarget.value)} placeholder="example.com" disabled={nsLookupRunning()} /></label>
                         <label class="text-xs text-muted">DNS server (optional)<input class="input w-full mt-1 font-mono" value={nsLookupServer()} onInput={event => setNsLookupServer(event.currentTarget.value)} placeholder="Use device default" disabled={nsLookupRunning()} /></label>
-                        <label class="text-xs text-muted">Interface (optional)<input class="input w-full mt-1" value={nsLookupInterface()} onInput={event => setNsLookupInterface(event.currentTarget.value)} placeholder="Default interface" disabled={nsLookupRunning()} /></label>
+                        <label class="text-xs text-muted">Interface<select class="input w-full mt-1" value={nsLookupInterface()} onChange={event => setNsLookupInterface(event.currentTarget.value)} disabled={nsLookupRunning()}><option value="">Default interface</option><For each={diagnosticInterfaces()}>{(iface) => <option value={iface.path}>{iface.name}</option>}</For></select></label>
                         <label class="text-xs text-muted">Repetitions<input class="input w-full mt-1" type="number" min="1" max="100" value={nsLookupRepetitions()} onInput={event => setNsLookupRepetitions(event.currentTarget.value)} disabled={nsLookupRunning()} /></label>
                         <label class="text-xs text-muted">Timeout (ms)<input class="input w-full mt-1" type="number" min="1" max="300000" value={nsLookupTimeout()} onInput={event => setNsLookupTimeout(event.currentTarget.value)} disabled={nsLookupRunning()} /></label>
                       </div>
@@ -1859,7 +1860,7 @@ const DeviceDetail: Component = () => {
                     <Show when={ipPingRoot()} fallback={<p class="text-xs text-muted">IP ping is not available for this device.</p>}>
                       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         <label class="text-xs text-muted md:col-span-2">Host or IP address<input class="input w-full mt-1 font-mono" value={ipPingHost()} onInput={event => setIpPingHost(event.currentTarget.value)} placeholder="192.0.2.1 or example.com" disabled={ipPingRunning()} /></label>
-                        <label class="text-xs text-muted">Interface (optional)<input class="input w-full mt-1" value={ipPingInterface()} onInput={event => setIpPingInterface(event.currentTarget.value)} placeholder="Default interface" disabled={ipPingRunning()} /></label>
+                        <label class="text-xs text-muted">Interface<select class="input w-full mt-1" value={ipPingInterface()} onChange={event => setIpPingInterface(event.currentTarget.value)} disabled={ipPingRunning()}><option value="">Default interface</option><For each={diagnosticInterfaces()}>{(iface) => <option value={iface.path}>{iface.name}</option>}</For></select></label>
                         <label class="text-xs text-muted">Repetitions<input class="input w-full mt-1" type="number" min="1" max="50" value={ipPingRepetitions()} onInput={event => setIpPingRepetitions(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
                         <label class="text-xs text-muted">Timeout (ms)<input class="input w-full mt-1" type="number" min="1" max="60000" value={ipPingTimeout()} onInput={event => setIpPingTimeout(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
                         <label class="text-xs text-muted">Packet size (bytes)<input class="input w-full mt-1" type="number" min="1" max="65500" value={ipPingDataBlockSize()} onInput={event => setIpPingDataBlockSize(event.currentTarget.value)} disabled={ipPingRunning()} /></label>
@@ -1890,7 +1891,7 @@ const DeviceDetail: Component = () => {
                       <Show when={traceRouteRoot()} fallback={<p class="text-xs text-muted">Traceroute is not available for this device.</p>}>
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                           <label class="text-xs text-muted md:col-span-2">Destination host or IP<input class="input w-full mt-1 font-mono" value={traceRouteHost()} onInput={event => setTraceRouteHost(event.currentTarget.value)} placeholder="192.0.2.1 or example.com" disabled={traceRouteRunning()} /></label>
-                          <label class="text-xs text-muted">Interface (optional)<input class="input w-full mt-1" value={traceRouteInterface()} onInput={event => setTraceRouteInterface(event.currentTarget.value)} placeholder="Default interface" disabled={traceRouteRunning()} /></label>
+                          <label class="text-xs text-muted">Interface<select class="input w-full mt-1" value={traceRouteInterface()} onChange={event => setTraceRouteInterface(event.currentTarget.value)} disabled={traceRouteRunning()}><option value="">Default interface</option><For each={diagnosticInterfaces()}>{(iface) => <option value={iface.path}>{iface.name}</option>}</For></select></label>
                           <label class="text-xs text-muted">Maximum hops<input class="input w-full mt-1" type="number" min="1" max="64" value={traceRouteMaxHops()} onInput={event => setTraceRouteMaxHops(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
                           <label class="text-xs text-muted">Tries per hop<input class="input w-full mt-1" type="number" min="1" max="10" value={traceRouteTries()} onInput={event => setTraceRouteTries(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
                           <label class="text-xs text-muted">Timeout (ms)<input class="input w-full mt-1" type="number" min="1" max="120000" value={traceRouteTimeout()} onInput={event => setTraceRouteTimeout(event.currentTarget.value)} disabled={traceRouteRunning()} /></label>
