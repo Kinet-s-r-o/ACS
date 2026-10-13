@@ -1753,7 +1753,7 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
                     <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
                   </div>
-                  <div class="space-y-2">
+                  <div class="space-y-2 lg:-mt-8">
                     <div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
                       <Show when={templateImageUrl()}>
                         <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full object-contain object-center" />
