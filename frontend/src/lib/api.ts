@@ -149,7 +149,7 @@ export const api = {
   deleteFault: (id: number) => request<{ status: string }>(`/faults/${id}`, { method: 'DELETE' }),
   deleteFaults: (ids: number[]) => request<{ deleted: number }>('/faults/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
 
-  getMeta: () => request<{ app_name: string }>('/meta'),
+  getMeta: () => request<{ app_name: string; app_logo?: string }>('/meta'),
   getSettings: () => request<Record<string, string>>('/settings'),
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getUsers: () => request<User[]>('/users'),

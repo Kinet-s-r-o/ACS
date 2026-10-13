@@ -8,7 +8,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { APP_VERSION } from '../lib/version';
-import { appName } from '../lib/appName';
+import { appName, appLogo } from '../lib/appName';
 import { useTheme } from '../lib/theme';
 
 const navigation = [
@@ -52,9 +52,9 @@ const pageNames: Record<string, string> = {
 
 const Brand = () => (
   <div class="brand-lockup">
-    <div class="brand-mark" aria-hidden="true">
-      <span /><span /><span />
-    </div>
+    <Show when={appLogo()} fallback={<div class="brand-mark" aria-hidden="true"><span /><span /><span /></div>}>
+      <img class="brand-logo" src={appLogo()} alt="" />
+    </Show>
     <div>
       <div class="brand-name">{appName()}</div>
       <div class="brand-subtitle">Independent CWMP control plane</div>

@@ -275,7 +275,11 @@ func (r *Router) handleMeta(w http.ResponseWriter, req *http.Request) {
 	if s, err := r.settingsRepo.Get(req.Context(), "app_name"); err == nil && s != nil && s.Value != "" {
 		appName = s.Value
 	}
-	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName})
+	appLogo := ""
+	if s, err := r.settingsRepo.Get(req.Context(), "app_logo"); err == nil && s != nil {
+		appLogo = s.Value
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName, "app_logo": appLogo})
 }
 
 func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
@@ -949,6 +953,7 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"firmware_base_url": true, "connection_request_username": true,
 		"connection_request_password": true, "use_auto_conn_credentials": true,
 		"default_page_size": true, "chart_show_points": true, "app_name": true,
+		"app_logo":               true,
 		"overview_poll_interval": true, "full_tree_poll_interval": true,
 	}
 	for key, value := range settings {
@@ -1013,6 +1018,18 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 		settings["app_name"] = trimmed
+	}
+	if value, ok := settings["app_logo"]; ok && value != "" {
+		const logoPrefix = "data:image/webp;base64,"
+		if !strings.HasPrefix(value, logoPrefix) {
+			respondError(w, http.StatusBadRequest, "app_logo must be a WebP image")
+			return
+		}
+		logoBytes, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, logoPrefix))
+		if err != nil || len(logoBytes) > 128*1024 {
+			respondError(w, http.StatusBadRequest, "app_logo must not exceed 128 KiB")
+			return
+		}
 	}
 	autoCredentials := settings["use_auto_conn_credentials"] == "true"
 	if _, supplied := settings["use_auto_conn_credentials"]; !supplied {

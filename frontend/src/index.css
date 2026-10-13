@@ -126,6 +126,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sidebar-brand { min-height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgb(var(--border-subtle)); }
 .brand-lockup { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .brand-mark { width: 34px; height: 34px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; padding: 8px 6px; border: 1px solid rgb(var(--accent) / .7); background: rgb(var(--accent) / .1); border-radius: 3px; }
+.brand-logo { display: block; flex: 0 0 auto; max-width: 120px; max-height: 40px; object-fit: contain; }
 .brand-mark span { width: 4px; background: rgb(var(--accent)); }
 .brand-mark span:nth-child(1) { height: 7px; }.brand-mark span:nth-child(2) { height: 13px; }.brand-mark span:nth-child(3) { height: 19px; }
 .brand-name { font-weight: 650; font-size: 16px; letter-spacing: -.015em; }

@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
 import { ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
+import { initAppName } from '../lib/appName';
 
 const GeneralSettings: Component = () => {
   const { isFullAccess } = useAuth();
@@ -16,6 +17,33 @@ const GeneralSettings: Component = () => {
 
   const getValue = (key: string) => {
     return formData()[key] ?? settings()?.[key] ?? '';
+  };
+
+  const handleLogoUpload = async (event: Event & { currentTarget: HTMLInputElement }) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      notify({ tone: 'error', title: 'Unsupported logo', message: 'Choose a PNG, JPEG, or WebP image smaller than 10 MiB.' });
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(320 / bitmap.width, 96 / bitmap.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Image processing is not available in this browser.');
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const logo = canvas.toDataURL('image/webp', 0.85);
+      const size = Math.ceil((logo.length - logo.indexOf(',') - 1) * 0.75);
+      if (size > 128 * 1024) throw new Error('The resized logo exceeds the 128 KiB limit. Choose a simpler or smaller image.');
+      setFormData(previous => ({ ...previous, app_logo: logo }));
+    } catch (error) {
+      notify({ tone: 'error', title: 'Logo could not be processed', message: (error as Error).message });
+    }
   };
 
   const handleSave = async () => {
@@ -32,7 +60,8 @@ const GeneralSettings: Component = () => {
     const showPoints = getValue('chart_show_points') !== 'false' ? 'true' : 'false';
     setSaving(true);
     try {
-      await api.updateSettings({ default_page_size: String(pageSize), chart_show_points: showPoints, app_name: appName });
+      await api.updateSettings({ default_page_size: String(pageSize), chart_show_points: showPoints, app_name: appName, app_logo: getValue('app_logo') });
+      initAppName();
       notify({ tone: 'success', title: 'Settings saved', message: 'General settings have been updated.' });
       refetch();
       setFormData({});
@@ -63,6 +92,33 @@ const GeneralSettings: Component = () => {
         <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-10 w-full" /> : undefined}>
           <div class="space-y-4">
             <div>
+              <label for="app-name" class="block text-xs text-muted mb-1.5">Application name</label>
+              <input
+                id="app-name"
+                type="text"
+                value={getValue('app_name') || 'ACS'}
+                onInput={(e) => setFormData((prev) => ({ ...prev, app_name: e.currentTarget.value }))}
+                placeholder="ACS"
+                maxlength={64}
+                class="input w-48"
+                disabled={!isFullAccess()}
+              />
+              <p class="text-[11px] text-muted mt-1">Brand name shown in the header, footer, login page, and browser tab.</p>
+            </div>
+            <div>
+              <label for="app-logo" class="block text-xs text-muted mb-1.5">Application logo</label>
+              <div class="flex flex-wrap items-center gap-3">
+                <Show when={getValue('app_logo')} fallback={<span class="text-xs text-muted">Using the default logo.</span>}>
+                  <img src={getValue('app_logo')} alt="Application logo preview" class="max-h-12 max-w-40 object-contain" />
+                </Show>
+                <input id="app-logo" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} class="input max-w-xs text-xs" disabled={!isFullAccess()} />
+                <Show when={getValue('app_logo')}>
+                  <button type="button" class="btn btn-secondary text-xs" onClick={() => setFormData(previous => ({ ...previous, app_logo: '' }))} disabled={!isFullAccess()}>Remove logo</button>
+                </Show>
+              </div>
+              <p class="text-[11px] text-muted mt-1">PNG, JPEG, or WebP. The logo is resized to at most 320 × 96 px and 128 KiB for the navigation menu.</p>
+            </div>
+            <div>
               <label for="default-page-size" class="block text-xs text-muted mb-1.5">Default pagination (rows per page)</label>
               <input
                 id="default-page-size"
@@ -76,20 +132,6 @@ const GeneralSettings: Component = () => {
                 disabled={!isFullAccess()}
               />
               <p class="text-[11px] text-muted mt-1">Applies to device lists, fault tables, provisioning rules, and other paginated views.</p>
-            </div>
-            <div>
-              <label for="app-name" class="block text-xs text-muted mb-1.5">Application name</label>
-              <input
-                id="app-name"
-                type="text"
-                value={getValue('app_name') || 'ACS'}
-                onInput={(e) => setFormData((prev) => ({ ...prev, app_name: e.currentTarget.value }))}
-                placeholder="ACS"
-                maxlength={64}
-                class="input w-48"
-                disabled={!isFullAccess()}
-              />
-              <p class="text-[11px] text-muted mt-1">Brand name shown in the header, footer, login page, and browser tab.</p>
             </div>
             <div class="flex items-center justify-between pt-4 border-t border-subtle">
               <div>
