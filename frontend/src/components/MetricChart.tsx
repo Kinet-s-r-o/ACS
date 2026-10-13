@@ -96,6 +96,7 @@ const GRID_COLOR = 'rgba(71,85,105,0.15)';
 
 const MetricChart: Component<MetricChartProps> = (props) => {
   const [bucket, setBucket] = createSignal(getStoredBucket(props.serial));
+  const [selectedMetricId, setSelectedMetricId] = createSignal<number | null>(null);
   const [chartEl, setChartEl] = createSignal<HTMLElement>();
   let chart: echarts.ECharts | null = null;
   let resizeObserver: ResizeObserver | null = null;
@@ -243,8 +244,10 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     }
 
     const series: any[] = [];
+    const seriesMetricIndices: number[] = [];
     for (let i = 0; i < metrics.length; i++) {
       const m = metrics[i];
+      if (selectedMetricId() !== null && selectedMetricId() !== m.id) continue;
       const color = m.color || DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
       const unit = effectiveUnit(m.unit, m.unit_scale, s.suffixes[i]);
       const label = m.name + (unit ? ` (${unit})` : '');
@@ -286,6 +289,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
       }
 
       series.push(base);
+      seriesMetricIndices.push(i);
     }
 
     return {
@@ -316,8 +320,9 @@ const MetricChart: Component<MetricChartProps> = (props) => {
             if (p.value == null || p.value[1] == null) continue;
             hasVal = true;
             const idx = p.seriesIndex;
-            const m = metrics[idx];
-            const effUnit = effectiveUnit(m.unit, m.unit_scale, s.suffixes[idx]);
+            const metricIndex = seriesMetricIndices[idx];
+            const m = metrics[metricIndex];
+            const effUnit = effectiveUnit(m.unit, m.unit_scale, s.suffixes[metricIndex]);
             const unit = effUnit ? ` ${effUnit}` : '';
             html += `<div style="display:flex;align-items:center;gap:4px;margin-top:2px"><span style="width:8px;height:8px;border-radius:2px;background:${p.color};display:inline-block"></span><span>${p.seriesName}: ${typeof p.value[1] === 'number' ? p.value[1].toFixed(2) : p.value[1]}${unit}</span></div>`;
           }
@@ -405,8 +410,8 @@ const MetricChart: Component<MetricChartProps> = (props) => {
         <Show when={legendStats()}>
           <div class="flex flex-col gap-0.5 pt-1">
             <For each={legendStats()!}>
-              {(s) => (
-                <div class="flex items-center justify-between">
+              {(s, index) => (
+                <button type="button" class={`flex w-full items-center justify-between rounded px-1 text-left transition-opacity ${selectedMetricId() !== null && selectedMetricId() !== props.metrics[index()].id ? 'opacity-40' : 'hover:bg-elevated/50'}`} aria-pressed={selectedMetricId() === props.metrics[index()].id} onClick={() => setSelectedMetricId(current => current === props.metrics[index()].id ? null : props.metrics[index()].id)}>
                   <div class="flex items-center gap-1.5">
                     <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: s.color }} />
                     <span class="text-xs text-secondary">{s.name}</span>
@@ -414,7 +419,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
                   <span class="text-[10px] text-muted font-mono">
                     min {fmtVal(s.min)} · avg {fmtVal(s.avg)} · max {fmtVal(s.max)}{s.unit ? ` ${s.unit}` : ''}
                   </span>
-                </div>
+                </button>
               )}
             </For>
           </div>

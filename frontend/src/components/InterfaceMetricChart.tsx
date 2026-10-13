@@ -24,6 +24,7 @@ const matches = (pattern: string, name: string) => {
 
 const InterfaceMetricChart: Component<Props> = (props) => {
   const [element, setElement] = createSignal<HTMLDivElement>();
+  const [selectedSeriesKey, setSelectedSeriesKey] = createSignal<string | null>(null);
   let chart: echarts.ECharts | undefined;
   let observer: ResizeObserver | undefined;
   const requests = createMemo(() => props.definitions.flatMap(def =>
@@ -35,17 +36,19 @@ const InterfaceMetricChart: Component<Props> = (props) => {
   );
   const chartData = createMemo(() => {
     const values = results();
-    if (!values) return { series: [], summaries: [] as { name: string; color: string; unit: string; min: number; avg: number; max: number }[] };
-    const summaries: { name: string; color: string; unit: string; min: number; avg: number; max: number }[] = [];
+    if (!values) return { series: [], summaries: [] as { key: string; name: string; color: string; unit: string; min: number; avg: number; max: number }[] };
+    const summaries: { key: string; name: string; color: string; unit: string; min: number; avg: number; max: number }[] = [];
     const series = values.flatMap((result, index) => {
       const request = requests()[index];
       if (!result.samples?.length) return [];
+      const key = `${request.def.id}:${request.parameterName}`;
       const max = Math.max(...result.samples.map(sample => Math.abs(sample.value)));
       const scale = computeUnitScale(max, request.def.unit_scale);
       const unit = effectiveUnit(request.def.unit, request.def.unit_scale, scale.suffix);
       const displayUnit = request.def.transform === 'rate' && request.def.unit_scale !== 'pps' && unit && !unit.endsWith('/s') ? `${unit}/s` : unit;
       const scaledValues = result.samples.map(sample => sample.value / scale.divisor);
       summaries.push({
+        key,
         name: request.def.name,
         color: request.def.color || '#38bdf8',
         unit: displayUnit,
@@ -54,6 +57,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
         max: Math.max(...scaledValues),
       });
       return [{
+        id: key,
         name: request.def.name,
         type: request.def.chart_type || 'line',
         showSymbol: false,
@@ -65,11 +69,17 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     return { series, summaries };
   });
   const formatValue = (value: number) => Number(value).toFixed(2);
-  const unitLabel = createMemo(() => [...new Set(chartData().summaries.map(item => item.unit).filter(Boolean))].join(' / '));
+  const visibleChartData = createMemo(() => {
+    const { series, summaries } = chartData();
+    const selected = selectedSeriesKey();
+    if (!selected) return { series, summaries };
+    return { series: series.filter(item => item.id === selected), summaries: summaries.filter(item => item.key === selected) };
+  });
+  const unitLabel = createMemo(() => [...new Set(visibleChartData().summaries.map(item => item.unit).filter(Boolean))].join(' / '));
 
   createEffect(() => {
     const el = element();
-    const { series: data, summaries } = chartData();
+    const { series: data, summaries } = visibleChartData();
     if (!el || data.length === 0) return;
     if (!chart) {
       chart = echarts.init(el);
@@ -78,7 +88,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     }
     chart.setOption({
       animation: false,
-      color: props.definitions.map(def => def.color || '#38bdf8'),
+      color: data.map(item => item.itemStyle.color),
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
@@ -108,11 +118,11 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     <Show when={!results.loading && !results.error && chartData().series.length > 0}>
       <div ref={setElement} class="h-64 w-full" />
       <div class="space-y-1 px-2 text-xs text-muted">
-        <For each={chartData().summaries}>{item => <div class="flex items-center gap-2">
+        <For each={chartData().summaries}>{item => <button type="button" class={`flex w-full items-center gap-2 rounded text-left transition-opacity ${selectedSeriesKey() !== null && selectedSeriesKey() !== item.key ? 'opacity-40' : 'hover:bg-elevated/50'}`} aria-pressed={selectedSeriesKey() === item.key} onClick={() => setSelectedSeriesKey(current => current === item.key ? null : item.key)}>
           <span class="inline-block h-2 w-2 shrink-0 rounded-full" style={{ 'background-color': item.color }} />
           <span class="min-w-0 flex-1 truncate font-medium text-foreground">{item.name}</span>
           <span class="shrink-0 text-right">Min {formatValue(item.min)}{item.unit ? ` ${item.unit}` : ''} · Avg {formatValue(item.avg)}{item.unit ? ` ${item.unit}` : ''} · Max {formatValue(item.max)}{item.unit ? ` ${item.unit}` : ''}</span>
-        </div>}</For>
+        </button>}</For>
       </div>
     </Show>
   </div>;
