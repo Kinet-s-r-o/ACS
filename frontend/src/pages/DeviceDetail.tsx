@@ -2923,7 +2923,7 @@ const DeviceDetail: Component = () => {
             </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
-                <h2 class="text-sm font-medium text-secondary">Task History ({tasks()?.length || 0})</h2>
+                <h2 class="text-sm font-medium text-secondary">CWMP tasks ({tasks()?.length || 0})</h2>
                 <div class="relative">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                   <input type="text" value={taskSearch()} onInput={(e) => setTaskSearch(e.currentTarget.value)} placeholder="Search tasks…" class="input pl-9! w-48 text-sm" />
