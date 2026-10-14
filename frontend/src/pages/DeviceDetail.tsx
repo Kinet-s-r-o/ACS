@@ -172,7 +172,6 @@ const DeviceDetail: Component = () => {
     }
     return [...columns].sort();
   };
-  const featureObjectValue = (path: string, instance: string, column: string) => (parameters() || []).find(parameter => parameter.name === `${path}${instance}.${column}`)?.value || '—';
   createEffect(() => {
     const taskID = featureRefreshTaskID();
     if (taskID === null) return;
@@ -427,6 +426,20 @@ const DeviceDetail: Component = () => {
     setFeatureAction(actionKey);
     try {
       const tasks = await api.setTemplateFeatureStringControl(serial(), featureID, key, value);
+      setFeatureRefreshTaskID(tasks.refresh_task.id);
+      notify({ tone: 'success', title: `${label} change queued`, detail: `CWMP task #${tasks.task.id} will apply at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not change ${label}`, detail: (error as Error).message, persistent: true });
+    } finally { setFeatureAction(null); }
+  };
+
+  const setTemplateFeatureObjectParameter = async (featureID: string, key: string, instance: string, parameter: string, label: string, previousValue: string, value: string) => {
+    if (!isFullAccess() || featureAction() || value === previousValue) return;
+    const actionKey = `${featureID}:${key}:${instance}:${parameter}`;
+    setFeatureAction(actionKey);
+    try {
+      const tasks = await api.setTemplateFeatureObjectParameter(serial(), featureID, key, instance, parameter, value);
       setFeatureRefreshTaskID(tasks.refresh_task.id);
       notify({ tone: 'success', title: `${label} change queued`, detail: `CWMP task #${tasks.task.id} will apply at the next device session.` });
       await refetchTasks();
@@ -2213,7 +2226,12 @@ const DeviceDetail: Component = () => {
                             <div class="rounded border border-subtle p-4 lg:col-span-2">
                               <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
                               <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
-                                <div class="overflow-x-auto"><table class="data-table w-full text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => <td class="max-w-64 truncate font-mono" title={featureObjectValue(control.parameter, instance, column)}>{featureObjectValue(control.parameter, instance, column)}</td>}</For></tr>}</For></tbody></table></div>
+                                <div class="overflow-x-auto"><table class="data-table w-full min-w-max text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => {
+                                  const path = `${control.parameter}${instance}.${column}`;
+                                  const parameter = () => (parameters() || []).find(item => item.name === path);
+                                  const value = () => parameter()?.value || '';
+                                  return <td class="min-w-40 max-w-64 font-mono" title={path}>{parameter()?.writable === true ? <input class="input w-full min-w-32 px-2 py-1 font-mono text-xs" aria-label={`${control.label} ${instance} ${column}`} value={value()} disabled={!isFullAccess() || featureAction() !== null} onBlur={event => void setTemplateFeatureObjectParameter(feature.id, control.key, instance, column, column.split('.').at(-1) || column, value(), event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /> : value() || '—'}</td>;
+                                }}</For></tr>}</For></tbody></table></div>
                               </Show>
                             </div>
                           </Show>

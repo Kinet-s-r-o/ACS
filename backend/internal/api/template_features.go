@@ -599,3 +599,77 @@ func (r *Router) handleAddFeatureObject(w http.ResponseWriter, req *http.Request
 	}
 	respondJSON(w, http.StatusCreated, task)
 }
+
+func (r *Router) handleSetFeatureObjectParameter(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	control, err := r.featureControlForDevice(req, device)
+	if err != nil || control.Type != "object" {
+		respondError(w, http.StatusNotFound, "Feature object not found")
+		return
+	}
+	instance := req.PathValue("instance")
+	if number, err := strconv.ParseUint(instance, 10, 32); err != nil || number == 0 {
+		respondError(w, http.StatusBadRequest, "Invalid object instance")
+		return
+	}
+	var body struct {
+		Parameter string `json:"parameter"`
+		Value     string `json:"value"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || strings.TrimSpace(body.Parameter) == "" || len(body.Parameter) > 512 || len(body.Value) > 4096 {
+		respondError(w, http.StatusBadRequest, "Invalid parameter value")
+		return
+	}
+	parameterName := control.Parameter + instance + "." + body.Parameter
+	if !strings.HasPrefix(parameterName, control.Parameter+instance+".") || strings.HasSuffix(body.Parameter, ".") || strings.Contains(body.Parameter, "..") {
+		respondError(w, http.StatusBadRequest, "Invalid object parameter path")
+		return
+	}
+	params, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load device parameters")
+		return
+	}
+	writable := false
+	for _, parameter := range params {
+		if parameter.Name == parameterName && parameter.Writable != nil && *parameter.Writable {
+			writable = true
+			break
+		}
+	}
+	if !writable {
+		respondError(w, http.StatusConflict, "Device does not report this parameter as writable")
+		return
+	}
+	setTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeSetParameterValues, map[string]string{parameterName: body.Value})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		setTask.CreatedBy = claims.Username
+	}
+	if err := r.taskRepo.Create(req.Context(), setTask); err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	refreshTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeGetParameterValues, []string{parameterName})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create verification task")
+		return
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		refreshTask.CreatedBy = claims.Username
+	}
+	if err := r.taskRepo.Create(req.Context(), refreshTask); err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create verification task")
+		return
+	}
+	respondJSON(w, http.StatusCreated, map[string]interface{}{"task": setTask, "refresh_task": refreshTask})
+}
