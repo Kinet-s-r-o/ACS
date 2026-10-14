@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
+import { createPersistedSignal } from '../lib/storage';
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -31,7 +32,7 @@ const formatDate = (value?: string | null) => value ? new Date(value).toLocaleSt
 const Tasks: Component = () => {
   const { isFullAccess } = useAuth();
   const { confirm, notify } = useFeedback();
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.tasks');
   const [selectedTask, setSelectedTask] = createSignal<GlobalTask | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});

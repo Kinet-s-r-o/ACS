@@ -15,7 +15,7 @@ import { metricsForTemplate } from '../lib/metricViews';
 import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
-import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 
 interface ProvColumnConfig {
   id: string;
@@ -118,7 +118,7 @@ const Provisioning: Component = () => {
   })());
   const [provDraggedRow, setProvDraggedRow] = createSignal<number | null>(null);
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.provisioning.rules');
 
   const getFilterValue = (rule: ProvisioningRule, colId: string): string => {
     switch (colId) {

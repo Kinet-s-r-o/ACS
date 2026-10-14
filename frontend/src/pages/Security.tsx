@@ -11,6 +11,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
+import { createPersistedSignal } from '../lib/storage';
 
 const Security: Component = () => {
   const { confirm, notify } = useFeedback();
@@ -23,7 +24,7 @@ const Security: Component = () => {
   const [pendingUnblock, setPendingUnblock] = createSignal<string | null>(null);
   const [message, setMessage] = createSignal<{ type: 'success' | 'error'; text: string } | null>(null);
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
-  const [auditSearch, setAuditSearch] = createSignal('');
+  const [auditSearch, setAuditSearch] = createPersistedSignal('acs.search.security.audit');
   const [auditSort, setAuditSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const handleAuditSort = (column: string) => setAuditSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const { columns, isVisible, toggle } = useColumnVisibility('security', [

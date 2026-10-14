@@ -8,6 +8,7 @@ import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { statusBadgeClass } from '../lib/lanFields';
+import { createPersistedSignal } from '../lib/storage';
 
 const cpeWebUiUrl = (address: string): string | null => {
   const value = address.trim();
@@ -21,7 +22,7 @@ const cpeWebUiUrl = (address: string): string | null => {
 };
 
 const WANInterfaces: Component = () => {
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const [interfaces, { refetch }] = createResource(api.getWANInterfaces);

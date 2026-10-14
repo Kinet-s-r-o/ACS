@@ -1,3 +1,16 @@
+import { createSignal } from 'solid-js';
+
+export const createPersistedSignal = (key: string, initialValue = '') => {
+  let savedValue = initialValue;
+  try { savedValue = localStorage.getItem(key) ?? initialValue; } catch { /* Storage can be unavailable in private browsing. */ }
+  const [value, setValue] = createSignal(savedValue);
+  const setPersistedValue = (nextValue: string) => {
+    setValue(nextValue);
+    try { localStorage.setItem(key, nextValue); } catch { /* Storage can be unavailable in private browsing. */ }
+  };
+  return [value, setPersistedValue] as const;
+};
+
 export const readMigratedStorageValue = (storage: Storage, key: string, legacyKey: string): string | null => {
   try {
     const current = storage.getItem(key);

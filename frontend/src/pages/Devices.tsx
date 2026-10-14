@@ -13,7 +13,7 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
-import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 
 interface ColumnConfig {
   id: string;
@@ -61,7 +61,7 @@ const TagChips: Component<{ tags: string[] }> = (props) => {
 
 const Devices: Component = () => {
   const [page, setPage] = createSignal(0);
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.devices');
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [summoningAll, setSummoningAll] = createSignal(false);
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);

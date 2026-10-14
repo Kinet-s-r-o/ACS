@@ -26,7 +26,7 @@ import LanSettingsModal from '../components/LanSettingsModal';
 import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
 import DeviceTagPicker from '../components/DeviceTagPicker';
-import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 
@@ -210,9 +210,9 @@ const DeviceDetail: Component = () => {
   const [taskSort, setTaskSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const toggleSort = (setSort: typeof setTaskSort) => (column: string) => setSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
-  const [taskSearch, setTaskSearch] = createSignal('');
-  const [faultSearch, setFaultSearch] = createSignal('');
-  const [hostSearch, setHostSearch] = createSignal('');
+  const [taskSearch, setTaskSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.tasks`);
+  const [faultSearch, setFaultSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.faults`);
+  const [hostSearch, setHostSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.hosts`);
   const filteredTasks = createMemo(() => {
     let all = tasks() || [];
     const query = taskSearch().toLowerCase().trim();
@@ -549,7 +549,7 @@ const DeviceDetail: Component = () => {
   let lanContextMenu: HTMLDivElement | undefined;
   const [expandedWanPaths, setExpandedWanPaths] = createSignal<Set<string>>(new Set());
   const [message, setMessage] = createSignal<{ type: 'success' | 'error'; text: string; detail?: string } | null>(null);
-  const [paramFilter, setParamFilter] = createSignal('');
+  const [paramFilter, setParamFilter] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.parameters`);
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
   const [lanModalIndex, setLanModalIndex] = createSignal<number | null>(null);
   const [showLanNetworkModal, setShowLanNetworkModal] = createSignal(false);

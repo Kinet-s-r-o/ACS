@@ -14,6 +14,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import RolesTab from './RolesTab';
+import { createPersistedSignal } from '../lib/storage';
 
 const UsersPage: Component = () => {
   const { hasPermission } = useAuth();
@@ -30,7 +31,7 @@ const UsersPage: Component = () => {
   const [editingUser, setEditingUser] = createSignal<User | null>(null);
   const [userForm, setUserForm] = createSignal({ username: '', password: '', role: 'read' as 'full' | 'read' });
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.users');
   const { columns, isVisible, toggle } = useColumnVisibility('users', [
     { id: 'username', label: 'Username', visible: true },
     { id: 'role', label: 'Role', visible: true },
