@@ -27,6 +27,8 @@ import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
 import DeviceTagPicker from '../components/DeviceTagPicker';
 import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import SortableHeader from '../components/SortableHeader';
+import { sortRows, type SortDirection } from '../lib/sorting';
 
 interface HostColumnConfig {
   id: string;
@@ -198,6 +200,9 @@ const DeviceDetail: Component = () => {
   const handleTaskPageSizeChange = (size: number) => { changeTaskPageSize(size); setTaskPage(0); };
   const [taskColumnFilters, setTaskColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const [deviceFaultColumnFilters, setDeviceFaultColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [taskSort, setTaskSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const toggleSort = (setSort: typeof setTaskSort) => (column: string) => setSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const [taskSearch, setTaskSearch] = createSignal('');
   const [faultSearch, setFaultSearch] = createSignal('');
   const [hostSearch, setHostSearch] = createSignal('');
@@ -212,7 +217,7 @@ const DeviceDetail: Component = () => {
         t.error_message?.toLowerCase().includes(query)
       );
     }
-    return applyColumnFilters(all, taskColumnFilters(), (t, colId) => {
+    const filtered = applyColumnFilters(all, taskColumnFilters(), (t, colId) => {
       switch (colId) {
         case 'type': return t.type || '';
         case 'status': return t.status || '';
@@ -223,6 +228,7 @@ const DeviceDetail: Component = () => {
         default: return '';
       }
     });
+    return sortRows(filtered, taskSort().column, taskSort().direction, (t, key) => key === 'type' ? t.type : key === 'status' ? t.status : key === 'created_at' ? t.created_at : key === 'completed_at' ? t.completed_at || '' : key === 'created_by' ? t.created_by || '' : key === 'error' ? t.error_message || '' : t.deleted_by || '');
   });
   const pagedTasks = createMemo(() => {
     const all = filteredTasks();
@@ -243,7 +249,7 @@ const DeviceDetail: Component = () => {
         f.parameter_name?.toLowerCase().includes(query)
       );
     }
-    return applyColumnFilters(all, deviceFaultColumnFilters(), (f, colId) => {
+    const filtered = applyColumnFilters(all, deviceFaultColumnFilters(), (f, colId) => {
       switch (colId) {
         case 'code': return f.fault_code || '';
         case 'message': return f.fault_string || '';
@@ -253,6 +259,7 @@ const DeviceDetail: Component = () => {
         default: return '';
       }
     });
+    return sortRows(filtered, faultSort().column, faultSort().direction, (f, key) => key === 'code' ? f.fault_code : key === 'message' ? f.fault_string : key === 'parameter' ? f.parameter_name : key === 'time' ? f.created_at : key === 'status' ? (f.resolved ? 'Resolved' : 'Active') : '');
   });
   const pagedDeviceFaults = createMemo(() => {
     const all = filteredDeviceFaults();
@@ -2924,33 +2931,33 @@ const DeviceDetail: Component = () => {
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">Type
+                          <div class="flex items-center gap-1.5"><SortableHeader column="type" label="Type" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="type" label="Type" active={taskColumnFilters()['type'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['type'] = s; else delete n['type']; return n; }); }} />
                           </div>
                         </th>
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">Status
+                          <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="status" label="Status" active={taskColumnFilters()['status'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} />
                           </div>
                         </th>
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">Created
+                          <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Created" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="created_at" label="Created" active={taskColumnFilters()['created_at'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} />
                           </div>
                         </th>
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">Completed
+                          <div class="flex items-center gap-1.5"><SortableHeader column="completed_at" label="Completed" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="completed_at" label="Completed" active={taskColumnFilters()['completed_at'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['completed_at'] = s; else delete n['completed_at']; return n; }); }} />
                           </div>
                         </th>
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">User
+                          <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="User" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="created_by" label="User" active={taskColumnFilters()['created_by'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_by'] = s; else delete n['created_by']; return n; }); }} />
                           </div>
                         </th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">Deleted by</th>
+                        <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} /></th>
                         <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">Error
+                          <div class="flex items-center gap-1.5"><SortableHeader column="error" label="Error" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="error" label="Error" active={taskColumnFilters()['error'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['error'] = s; else delete n['error']; return n; }); }} />
                           </div>
                         </th>
@@ -3091,27 +3098,27 @@ const DeviceDetail: Component = () => {
                             </th>
                           </Show>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5">Code
+                            <div class="flex items-center gap-1.5"><SortableHeader column="code" label="Code" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
                               <ColumnFilter columnId="code" label="Code" active={deviceFaultColumnFilters()['code'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['code'] = s; else delete n['code']; return n; }); }} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5">Message
+                            <div class="flex items-center gap-1.5"><SortableHeader column="message" label="Message" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
                               <ColumnFilter columnId="message" label="Message" active={deviceFaultColumnFilters()['message'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['message'] = s; else delete n['message']; return n; }); }} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5">Parameter
+                            <div class="flex items-center gap-1.5"><SortableHeader column="parameter" label="Parameter" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
                               <ColumnFilter columnId="parameter" label="Parameter" active={deviceFaultColumnFilters()['parameter'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['parameter'] = s; else delete n['parameter']; return n; }); }} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5">Time
+                            <div class="flex items-center gap-1.5"><SortableHeader column="time" label="Time" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
                               <ColumnFilter columnId="time" label="Time" active={deviceFaultColumnFilters()['time'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['time'] = s; else delete n['time']; return n; }); }} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5">Status
+                            <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
                               <ColumnFilter columnId="status" label="Status" active={deviceFaultColumnFilters()['status'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} />
                             </div>
                           </th>

@@ -13,6 +13,8 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
+import SortableHeader from '../components/SortableHeader';
+import { sortRows, type SortDirection } from '../lib/sorting';
 
 const Faults: Component = () => {
   const { isFullAccess } = useAuth();
@@ -28,6 +30,8 @@ const Faults: Component = () => {
 
   const [stats, { refetch: refetchStats }] = createResource(() => api.getFaultStats());
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const { columns, isVisible, toggle } = useColumnVisibility('faults', [
     { id: 'serial_number', label: 'Device', visible: true },
     { id: 'fault_code', label: 'Code', visible: true },
@@ -54,7 +58,7 @@ const Faults: Component = () => {
 
   const filteredFaults = createMemo(() => {
     const all = faults()?.faults || [];
-    return applyColumnFilters(all, columnFilters(), getFilterValue);
+    return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), sortState().column, sortState().direction, getFilterValue);
   });
   const pagedFaults = createMemo(() => {
     const all = filteredFaults();
@@ -218,42 +222,42 @@ const Faults: Component = () => {
                     </Show>
                     <Show when={isVisible('serial_number')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted">
-                        <div class="flex items-center gap-1.5">Device
+                        <div class="flex items-center gap-1.5"><SortableHeader column="serial_number" label="Device" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="serial_number" label="Device" active={columnFilters()['serial_number'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['serial_number'] = s; else delete n['serial_number']; return n; }); }} />
                         </div>
                       </th>
                     </Show>
                     <Show when={isVisible('fault_code')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted">
-                        <div class="flex items-center gap-1.5">Code
+                        <div class="flex items-center gap-1.5"><SortableHeader column="fault_code" label="Code" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="fault_code" label="Code" active={columnFilters()['fault_code'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['fault_code'] = s; else delete n['fault_code']; return n; }); }} />
                         </div>
                       </th>
                     </Show>
                     <Show when={isVisible('fault_string')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted">
-                        <div class="flex items-center gap-1.5">Message
+                        <div class="flex items-center gap-1.5"><SortableHeader column="fault_string" label="Message" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="fault_string" label="Message" active={columnFilters()['fault_string'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['fault_string'] = s; else delete n['fault_string']; return n; }); }} />
                         </div>
                       </th>
                     </Show>
                     <Show when={isVisible('parameter_name')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted hidden lg:table-cell">
-                        <div class="flex items-center gap-1.5">Parameter
+                        <div class="flex items-center gap-1.5"><SortableHeader column="parameter_name" label="Parameter" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="parameter_name" label="Parameter" active={columnFilters()['parameter_name'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['parameter_name'] = s; else delete n['parameter_name']; return n; }); }} />
                         </div>
                       </th>
                     </Show>
                     <Show when={isVisible('created_at')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted hidden md:table-cell">
-                        <div class="flex items-center gap-1.5">Time
+                        <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Time" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="created_at" label="Time" active={columnFilters()['created_at'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} />
                         </div>
                       </th>
                     </Show>
                     <Show when={isVisible('resolved')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted">
-                        <div class="flex items-center gap-1.5">Status
+                        <div class="flex items-center gap-1.5"><SortableHeader column="resolved" label="Status" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="resolved" label="Status" active={columnFilters()['resolved'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['resolved'] = s; else delete n['resolved']; return n; }); }} />
                         </div>
                       </th>

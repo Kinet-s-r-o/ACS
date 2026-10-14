@@ -12,6 +12,8 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
+import SortableHeader from '../components/SortableHeader';
+import { sortRows, type SortDirection } from '../lib/sorting';
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -33,6 +35,8 @@ const Tasks: Component = () => {
   const [selectedTask, setSelectedTask] = createSignal<GlobalTask | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const [taskPage, setTaskPage] = createSignal(0);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('global_tasks', 20);
   const [tasks, { refetch }] = createResource(api.getTasks);
@@ -53,7 +57,20 @@ const Tasks: Component = () => {
       all = all.filter(task => [task.serial_number, task.type, task.status, task.created_by || '', task.deleted_by || '', task.error_message || '']
         .some(value => value.toLowerCase().includes(query)));
     }
-    return applyColumnFilters(all, columnFilters(), (task, column) => {
+    const filtered = applyColumnFilters(all, columnFilters(), (task, column) => {
+      switch (column) {
+        case 'serial_number': return task.serial_number;
+        case 'type': return task.type;
+        case 'status': return task.status;
+        case 'created_at': return task.created_at;
+        case 'completed_at': return task.completed_at || '';
+        case 'created_by': return task.created_by || '';
+        case 'deleted_by': return task.deleted_by || '';
+        case 'error': return task.error_message || '';
+        default: return '';
+      }
+    });
+    return sortRows(filtered, sortState().column, sortState().direction, (task, column) => {
       switch (column) {
         case 'serial_number': return task.serial_number;
         case 'type': return task.type;
@@ -143,14 +160,14 @@ const Tasks: Component = () => {
                 <table class="data-table w-full text-sm min-w-[1240px]">
                   <thead class="bg-base sticky top-0 z-10">
                     <tr class="bg-base">
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Serial number{renderFilter('serial_number', 'Serial number')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Type{renderFilter('type', 'Type')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Status{renderFilter('status', 'Status')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Created{renderFilter('created_at', 'Created')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Completed{renderFilter('completed_at', 'Completed')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">User{renderFilter('created_by', 'User')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Deleted by{renderFilter('deleted_by', 'Deleted by')}</div></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Error{renderFilter('error', 'Error')}</div></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="serial_number" label="Serial number" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('serial_number', 'Serial number')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('type', 'Type')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="status" label="Status" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('status', 'Status')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_at" label="Created" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_at', 'Created')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="completed_at" label="Completed" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('completed_at', 'Completed')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_by" label="User" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_by', 'User')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('deleted_by', 'Deleted by')}</SortableHeader></th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="error" label="Error" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('error', 'Error')}</SortableHeader></th>
                       <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
                     </tr>
                   </thead>
