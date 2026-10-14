@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
-import { api, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type SnapshotParameter, type Task } from '../lib/api';
+import { api, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -1774,6 +1774,17 @@ const DeviceDetail: Component = () => {
     }
   };
 
+  const featureControlGroups = (controls: ProvisioningFeature['controls']) => {
+    const grouped = new Map<string, typeof controls>();
+    for (const control of controls) {
+      const name = control.group?.trim() || 'Fields';
+      const current = grouped.get(name) || [];
+      current.push(control);
+      grouped.set(name, current);
+    }
+    return [...grouped.entries()].map(([name, groupControls]) => ({ name, controls: groupControls }));
+  };
+
   return (
     <div class="space-y-5">
       {/* Header - More prominent serial/status */}
@@ -2253,8 +2264,10 @@ const DeviceDetail: Component = () => {
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Device feature sections"><For each={matchingProvisioningTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeDeviceFeature()?.id === feature.id} onClick={() => setActiveDeviceFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeDeviceFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For></div>
                 <Show when={activeDeviceFeature()} keyed>{feature => <section class="card p-5 space-y-4">
                   <div><h2 class="text-sm font-medium text-secondary">{feature.name}</h2><p class="mt-1 text-xs text-muted">Template feature for {matchingProvisioningTemplate()?.name}. Changes are sent to the device as CWMP tasks.</p></div>
-                  <div class="grid gap-3 lg:grid-cols-2">
-                    <For each={feature.controls}>{control => {
+                  <For each={featureControlGroups(feature.controls)}>{group => <details class="rounded border border-subtle overflow-hidden group/feature-box">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 bg-elevated/40 px-4 py-3 text-sm font-medium text-secondary"><span>{group.name}</span><ChevronDown size={15} class="shrink-0 transition-transform group-open/feature-box:rotate-180" /></summary>
+                    <div class="grid gap-3 p-3 lg:grid-cols-2">
+                    <For each={group.controls}>{control => {
                       const parameter = () => (parameters() || []).find(item => item.name === control.parameter);
                       return <Show when={control.type === 'boolean'} fallback={
                         <Show when={control.type === 'string' || control.type === 'int' || control.type === 'unsignedInt'} fallback={
@@ -2295,7 +2308,8 @@ const DeviceDetail: Component = () => {
                         </Show>
                       </Show>;
                     }}</For>
-                  </div>
+                    </div>
+                  </details>}</For>
                   <Show when={parameters.loading}><p class="text-xs text-muted">Refreshing device parameters…</p></Show>
                 </section>}</Show>
               </div>
