@@ -232,6 +232,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /device/{serial}/features/{featureID}/controls/{key}", auth.RequirePermission(models.PermDevicesWrite)(r.handleSetFeatureControl))
 	apiMux.HandleFunc("POST /device/{serial}/features/{featureID}/objects/{key}", auth.RequirePermission(models.PermDevicesWrite)(r.handleAddFeatureObject))
 	apiMux.HandleFunc("POST /device/{serial}/features/{featureID}/objects/{key}/instances/{instance}/parameters", auth.RequirePermission(models.PermDevicesWrite)(r.handleSetFeatureObjectParameter))
+	apiMux.HandleFunc("DELETE /device/{serial}/features/{featureID}/objects/{key}/instances/{instance}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteFeatureObject))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleListInterfaceMetrics))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}/interface-metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))

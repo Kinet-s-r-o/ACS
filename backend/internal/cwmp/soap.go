@@ -124,6 +124,8 @@ func GenerateSOAPEnvelopeWithContext(body interface{}, namespace, id string) ([]
 		envelope.Body.TransferCompleteResp = v
 	case *AddObject:
 		envelope.Body.AddObject = v
+	case *DeleteObject:
+		envelope.Body.DeleteObject = v
 	case *SOAPFault:
 		v.Detail.Namespace = namespace
 		envelope.Body.Fault = v
@@ -178,6 +180,9 @@ func DetectMessageType(body *SOAPBody) string {
 	}
 	if body.AddObjectResponse != nil {
 		return "AddObjectResponse"
+	}
+	if body.DeleteObjectResponse != nil {
+		return "DeleteObjectResponse"
 	}
 	if body.Fault != nil {
 		return "Fault"
@@ -255,6 +260,10 @@ func (body SOAPBody) MarshalXML(encoder *xml.Encoder, start xml.StartElement) er
 		value, method = body.AddObject, "AddObject"
 	case body.AddObjectResponse != nil:
 		value, method = body.AddObjectResponse, "AddObjectResponse"
+	case body.DeleteObject != nil:
+		value, method = body.DeleteObject, "DeleteObject"
+	case body.DeleteObjectResponse != nil:
+		value, method = body.DeleteObjectResponse, "DeleteObjectResponse"
 	case body.Fault != nil:
 		value, method = body.Fault, "Fault"
 	}

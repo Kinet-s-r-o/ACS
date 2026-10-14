@@ -36,6 +36,8 @@ type SOAPBody struct {
 	TransferCompleteResp   *TransferCompleteResponse `xml:"TransferCompleteResponse,omitempty"`
 	AddObject              *AddObject                `xml:"AddObject,omitempty"`
 	AddObjectResponse      *AddObjectResponse        `xml:"AddObjectResponse,omitempty"`
+	DeleteObject           *DeleteObject             `xml:"DeleteObject,omitempty"`
+	DeleteObjectResponse   *DeleteObjectResponse     `xml:"DeleteObjectResponse,omitempty"`
 	Fault                  *SOAPFault                `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault,omitempty"`
 }
 
@@ -71,9 +73,9 @@ type ParameterList struct {
 }
 
 type ParameterValueStruct struct {
-	Name     string `xml:"Name"`
-	Value    string `xml:"Value"`
-	Type     string `xml:"-"`
+	Name      string `xml:"Name"`
+	Value     string `xml:"Value"`
+	Type      string `xml:"-"`
 	ValueType string `xml:"-"`
 }
 
@@ -128,6 +130,15 @@ type AddObject struct {
 type AddObjectResponse struct {
 	InstanceNumber string `xml:"InstanceNumber"`
 	Status         int    `xml:"Status"`
+}
+
+type DeleteObject struct {
+	ObjectName   string `xml:"ObjectName"`
+	ParameterKey string `xml:"ParameterKey"`
+}
+
+type DeleteObjectResponse struct {
+	Status int `xml:"Status"`
 }
 
 // SOAP Fault untuk error handling

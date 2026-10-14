@@ -215,6 +215,9 @@ func (h *Handler) routeMessage(ctx context.Context, envelope *SOAPEnvelope, remo
 	case "AddObjectResponse":
 		return h.handleAddObjectResponse(ctx, envelope.Body.AddObjectResponse, remoteAddr)
 
+	case "DeleteObjectResponse":
+		return h.handleDeleteObjectResponse(ctx, envelope.Body.DeleteObjectResponse, remoteAddr)
+
 	case "Fault":
 		return h.handleFault(ctx, envelope.Body.Fault, remoteAddr)
 
@@ -886,6 +889,32 @@ func (h *Handler) handleAddObjectResponse(ctx context.Context, resp *AddObjectRe
 	return h.getNextTask(ctx, session)
 }
 
+func (h *Handler) handleDeleteObjectResponse(ctx context.Context, resp *DeleteObjectResponse, remoteAddr string) (interface{}, error) {
+	if resp == nil {
+		return nil, errors.New("missing DeleteObjectResponse")
+	}
+	log.Printf("DeleteObject status: %d from %s", resp.Status, remoteAddr)
+	session := h.sessions.Get(remoteAddr)
+	if session == nil {
+		return nil, nil
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LastSentContext = ""
+	if session.State != StateProcessingTasks || session.CurrentTaskID == 0 {
+		return nil, nil
+	}
+	status, message := models.TaskStatusCompleted, ""
+	if resp.Status != 0 {
+		status, message = models.TaskStatusFailed, fmt.Sprintf("CPE returned DeleteObject status %d", resp.Status)
+	}
+	if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, status, map[string]int{"status": resp.Status}, message); err != nil {
+		return nil, fmt.Errorf("complete delete-object task: %w", err)
+	}
+	session.CurrentTaskID = 0
+	return h.getNextTask(ctx, session)
+}
+
 func takeProvisioning(session *Session) *SetParameterValues {
 	request := session.Provisioning
 	session.Provisioning = nil
@@ -1221,6 +1250,17 @@ func (h *Handler) buildTaskRequest(task *models.Task) (interface{}, error) {
 		}
 		if payload.ObjectName != "" {
 			return addObjectForPath(payload.ObjectName), nil
+		}
+
+	case models.TaskTypeDeleteObject:
+		var payload struct {
+			ObjectName string `json:"object_name"`
+		}
+		if err := json.Unmarshal(task.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("decode delete-object payload: %w", err)
+		}
+		if payload.ObjectName != "" {
+			return &DeleteObject{ObjectName: payload.ObjectName, ParameterKey: task.CommandKey}, nil
 		}
 
 	case models.TaskTypeGetParameterValues:

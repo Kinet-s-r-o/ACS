@@ -25,6 +25,7 @@ const (
 	TaskTypeFactoryReset       TaskType = "factory_reset"
 	TaskTypeDownload           TaskType = "download"
 	TaskTypeAddObject          TaskType = "add_object"
+	TaskTypeDeleteObject       TaskType = "delete_object"
 )
 
 type JSON json.RawMessage

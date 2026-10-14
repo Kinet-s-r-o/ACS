@@ -66,6 +66,7 @@ interface IperfForm {
 }
 
 interface IperfRunResult { mode: 'UPLOAD' | 'DOWNLOAD'; values: Record<string, string> }
+interface FeatureObjectEditor { featureID: string; key: string; label: string; instance: string; fields: { name: string; label: string; value: string; writable: boolean }[] }
 
 interface SnapshotTreeRow {
   path: string;
@@ -132,6 +133,8 @@ const DeviceDetail: Component = () => {
   const [metricDefs] = createResource(api.getMetricDefinitions);
   const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
   const [featureAction, setFeatureAction] = createSignal<string | null>(null);
+  const [featureObjectEditor, setFeatureObjectEditor] = createSignal<FeatureObjectEditor | null>(null);
+  const [featureObjectDraft, setFeatureObjectDraft] = createSignal<Record<string, string>>({});
   const [activeDeviceFeatureID, setActiveDeviceFeatureID] = createSignal('');
   const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
   const matchingProvisioningTemplate = createMemo(() => {
@@ -434,17 +437,46 @@ const DeviceDetail: Component = () => {
     } finally { setFeatureAction(null); }
   };
 
-  const setTemplateFeatureObjectParameter = async (featureID: string, key: string, instance: string, parameter: string, label: string, previousValue: string, value: string) => {
-    if (!isFullAccess() || featureAction() || value === previousValue) return;
-    const actionKey = `${featureID}:${key}:${instance}:${parameter}`;
+  const openFeatureObjectEditor = (featureID: string, key: string, label: string, path: string, instance: string) => {
+    const prefix = `${path}${instance}.`;
+    const fields = (parameters() || []).filter(parameter => parameter.name.startsWith(prefix) && !parameter.name.endsWith('.')).map(parameter => {
+      const name = parameter.name.slice(prefix.length);
+      return { name, label: name.split('.').at(-1) || name, value: parameter.value, writable: parameter.writable === true };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    setFeatureObjectDraft(Object.fromEntries(fields.map(field => [field.name, field.value])));
+    setFeatureObjectEditor({ featureID, key, label, instance, fields });
+  };
+
+  const saveFeatureObjectParameters = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const editor = featureObjectEditor();
+    if (!editor || !isFullAccess() || featureAction()) return;
+    const values = Object.fromEntries(editor.fields.filter(field => field.writable && featureObjectDraft()[field.name] !== field.value).map(field => [field.name, featureObjectDraft()[field.name] || '']));
+    if (Object.keys(values).length === 0) { setFeatureObjectEditor(null); return; }
+    const actionKey = `${editor.featureID}:${editor.key}:${editor.instance}`;
     setFeatureAction(actionKey);
     try {
-      const tasks = await api.setTemplateFeatureObjectParameter(serial(), featureID, key, instance, parameter, value);
+      const tasks = await api.setTemplateFeatureObjectParameters(serial(), editor.featureID, editor.key, editor.instance, values);
       setFeatureRefreshTaskID(tasks.refresh_task.id);
-      notify({ tone: 'success', title: `${label} change queued`, detail: `CWMP task #${tasks.task.id} will apply at the next device session.` });
+      setFeatureObjectEditor(null);
+      notify({ tone: 'success', title: `${editor.label} updated`, detail: `CWMP task #${tasks.task.id} will apply at the next device session.` });
       await refetchTasks();
     } catch (error) {
-      notify({ tone: 'error', title: `Could not change ${label}`, detail: (error as Error).message, persistent: true });
+      notify({ tone: 'error', title: `Could not update ${editor.label}`, detail: (error as Error).message, persistent: true });
+    } finally { setFeatureAction(null); }
+  };
+
+  const deleteFeatureObject = async (featureID: string, key: string, label: string, instance: string) => {
+    if (!isFullAccess() || featureAction() || !await confirm({ title: `Delete ${label} ${instance}?`, description: 'This removes the object and all of its settings from the device.', confirmLabel: 'Delete object', tone: 'danger' })) return;
+    const actionKey = `${featureID}:${key}:${instance}`;
+    setFeatureAction(actionKey);
+    try {
+      const task = await api.deleteTemplateFeatureObject(serial(), featureID, key, instance);
+      setFeatureRefreshTaskID(task.id);
+      notify({ tone: 'success', title: `${label} ${instance} deletion queued`, detail: `CWMP task #${task.id} will run at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not delete ${label} ${instance}`, detail: (error as Error).message, persistent: true });
     } finally { setFeatureAction(null); }
   };
 
@@ -2226,12 +2258,11 @@ const DeviceDetail: Component = () => {
                             <div class="rounded border border-subtle p-4 lg:col-span-2">
                               <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
                               <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
-                                <div class="overflow-x-auto"><table class="data-table w-full min-w-max text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => {
+                                <div class="overflow-x-auto"><table class="data-table w-full min-w-max text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left font-mono">{column}</th>}</For><th class="text-right">Actions</th></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => {
                                   const path = `${control.parameter}${instance}.${column}`;
-                                  const parameter = () => (parameters() || []).find(item => item.name === path);
-                                  const value = () => parameter()?.value || '';
-                                  return <td class="min-w-40 max-w-64 font-mono" title={path}>{parameter()?.writable === true ? <input class="input w-full min-w-32 px-2 py-1 font-mono text-xs" aria-label={`${control.label} ${instance} ${column}`} value={value()} disabled={!isFullAccess() || featureAction() !== null} onBlur={event => void setTemplateFeatureObjectParameter(feature.id, control.key, instance, column, column.split('.').at(-1) || column, value(), event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /> : value() || '—'}</td>;
-                                }}</For></tr>}</For></tbody></table></div>
+                                  const value = () => (parameters() || []).find(item => item.name === path)?.value || '—';
+                                  return <td class="max-w-64 truncate font-mono" title={path}>{value()}</td>;
+                                }}</For><td class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance)}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td></tr>}</For></tbody></table></div>
                               </Show>
                             </div>
                           </Show>
@@ -3312,6 +3343,15 @@ const DeviceDetail: Component = () => {
           </>
         )}
       </Show>
+
+		  <Show when={featureObjectEditor()}>
+			<Dialog title={`Edit ${featureObjectEditor()?.label} ${featureObjectEditor()?.instance}`} description="Update writable parameters for this object instance." size="large" onClose={() => setFeatureObjectEditor(null)} actions={<><button type="button" class="btn btn-secondary" onClick={() => setFeatureObjectEditor(null)} disabled={featureAction() !== null}>Cancel</button><button type="submit" form="feature-object-editor-form" class="btn btn-primary" disabled={featureAction() !== null}>{featureAction() ? 'Saving…' : 'Save changes'}</button></>}>
+			  <form id="feature-object-editor-form" class="space-y-3" onSubmit={saveFeatureObjectParameters}>
+				<For each={featureObjectEditor()?.fields || []}>{field => <label class="block text-xs text-muted"><span class="mb-1 block">{field.label} <Show when={!field.writable}><span class="text-muted">(read only)</span></Show></span><span class="mb-1 block truncate font-mono text-[10px]" title={field.name}>{field.name}</span><input class="input w-full font-mono text-xs" value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onInput={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))} /></label>}</For>
+				<Show when={(featureObjectEditor()?.fields.length || 0) === 0}><p class="text-sm text-muted">No parameters were discovered for this object. Refresh device parameters and try again.</p></Show>
+			  </form>
+			</Dialog>
+		  </Show>
 
 		  {/* Factory reset step-up confirmation */}
 		  <Show when={showFactoryResetModal()}>

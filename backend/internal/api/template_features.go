@@ -617,18 +617,12 @@ func (r *Router) handleSetFeatureObjectParameter(w http.ResponseWriter, req *htt
 		return
 	}
 	var body struct {
-		Parameter string `json:"parameter"`
-		Value     string `json:"value"`
+		Values map[string]string `json:"values"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil || strings.TrimSpace(body.Parameter) == "" || len(body.Parameter) > 512 || len(body.Value) > 4096 {
+	if err := decoder.Decode(&body); err != nil || len(body.Values) == 0 || len(body.Values) > 100 {
 		respondError(w, http.StatusBadRequest, "Invalid parameter value")
-		return
-	}
-	parameterName := control.Parameter + instance + "." + body.Parameter
-	if !strings.HasPrefix(parameterName, control.Parameter+instance+".") || strings.HasSuffix(body.Parameter, ".") || strings.Contains(body.Parameter, "..") {
-		respondError(w, http.StatusBadRequest, "Invalid object parameter path")
 		return
 	}
 	params, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
@@ -636,18 +630,30 @@ func (r *Router) handleSetFeatureObjectParameter(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusInternalServerError, "Failed to load device parameters")
 		return
 	}
-	writable := false
-	for _, parameter := range params {
-		if parameter.Name == parameterName && parameter.Writable != nil && *parameter.Writable {
-			writable = true
-			break
+	parameterPrefix := control.Parameter + instance + "."
+	parameterValues := make(map[string]string, len(body.Values))
+	parameterNames := make([]string, 0, len(body.Values))
+	for name, value := range body.Values {
+		if name == "" || len(name) > 512 || strings.HasSuffix(name, ".") || strings.Contains(name, "..") || len(value) > 4096 {
+			respondError(w, http.StatusBadRequest, "Invalid object parameter path or value")
+			return
 		}
+		fullName := parameterPrefix + name
+		writable := false
+		for _, parameter := range params {
+			if parameter.Name == fullName && parameter.Writable != nil && *parameter.Writable {
+				writable = true
+				break
+			}
+		}
+		if !writable {
+			respondError(w, http.StatusConflict, "Device does not report an object parameter as writable")
+			return
+		}
+		parameterValues[fullName] = value
+		parameterNames = append(parameterNames, fullName)
 	}
-	if !writable {
-		respondError(w, http.StatusConflict, "Device does not report this parameter as writable")
-		return
-	}
-	setTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeSetParameterValues, map[string]string{parameterName: body.Value})
+	setTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeSetParameterValues, parameterValues)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Could not create task")
 		return
@@ -659,7 +665,7 @@ func (r *Router) handleSetFeatureObjectParameter(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusInternalServerError, "Could not create task")
 		return
 	}
-	refreshTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeGetParameterValues, []string{parameterName})
+	refreshTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeGetParameterValues, parameterNames)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Could not create verification task")
 		return
@@ -672,4 +678,54 @@ func (r *Router) handleSetFeatureObjectParameter(w http.ResponseWriter, req *htt
 		return
 	}
 	respondJSON(w, http.StatusCreated, map[string]interface{}{"task": setTask, "refresh_task": refreshTask})
+}
+
+func (r *Router) handleDeleteFeatureObject(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	control, err := r.featureControlForDevice(req, device)
+	if err != nil || control.Type != "object" {
+		respondError(w, http.StatusNotFound, "Feature object not found")
+		return
+	}
+	instance := req.PathValue("instance")
+	if number, err := strconv.ParseUint(instance, 10, 32); err != nil || number == 0 {
+		respondError(w, http.StatusBadRequest, "Invalid object instance")
+		return
+	}
+	params, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load device parameters")
+		return
+	}
+	instancePath := control.Parameter + instance + "."
+	writable, exists := false, false
+	for _, parameter := range params {
+		if strings.HasPrefix(parameter.Name, instancePath) {
+			exists = true
+		}
+		if parameter.Name == control.Parameter {
+			writable = parameter.Writable != nil && *parameter.Writable
+		}
+	}
+	if !exists || !writable {
+		respondError(w, http.StatusConflict, "Device does not report this object as writable")
+		return
+	}
+	task, err := models.NewTaskWithPayload(device.ID, models.TaskTypeDeleteObject, map[string]string{"object_name": instancePath})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		task.CreatedBy = claims.Username
+	}
+	if err := r.taskRepo.Create(req.Context(), task); err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	respondJSON(w, http.StatusCreated, task)
 }
