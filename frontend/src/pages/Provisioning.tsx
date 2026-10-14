@@ -89,9 +89,19 @@ const Provisioning: Component = () => {
   const [provColumns, setProvColumns] = createSignal<ProvColumnConfig[]>((() => {
     try {
       const stored = readMigratedStorageValue(localStorage, PROV_STORAGE_KEY, LEGACY_PROV_STORAGE_KEY);
-      if (stored) return JSON.parse(stored) as ProvColumnConfig[];
+      if (stored) {
+        const saved = JSON.parse(stored) as Array<Partial<ProvColumnConfig>>;
+        if (Array.isArray(saved)) {
+          return defaultProvColumns.map(column => ({
+            ...column,
+            visible: typeof saved.find(item => item?.id === column.id)?.visible === 'boolean'
+              ? saved.find(item => item?.id === column.id)!.visible!
+              : column.visible,
+          }));
+        }
+      }
     } catch { /* ignore */ }
-    return defaultProvColumns;
+    return [...defaultProvColumns];
   })());
   const [provDraggedRow, setProvDraggedRow] = createSignal<number | null>(null);
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
