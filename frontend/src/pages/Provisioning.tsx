@@ -37,6 +37,22 @@ const PROV_STORAGE_KEY = 'acs-prov-columns';
 const LEGACY_PROV_STORAGE_KEY = 'skyacs-prov-columns';
 type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options' | 'object_fields'> & { optionsText: string; objectFieldsText: string };
 const featureSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
+const parseObjectFieldOptions = (text: string): { options: string[]; option_labels?: Record<string, string> } => {
+  const trimmed = text.trim();
+  const equalsIndex = trimmed.indexOf('=');
+  const isSingleCommaValue = equalsIndex > 0 && equalsIndex === trimmed.lastIndexOf('=') && trimmed.slice(0, equalsIndex).includes(',');
+  const entries = isSingleCommaValue ? [trimmed] : trimmed.split(',').map(value => value.trim()).filter(Boolean);
+  const optionLabels: Record<string, string> = {};
+  const options = entries.map(option => {
+    const separator = option.indexOf('=');
+    if (separator < 0) return option;
+    const value = option.slice(0, separator).trim();
+    const label = option.slice(separator + 1).trim();
+    if (value && label) optionLabels[value] = label;
+    return value;
+  }).filter(Boolean);
+  return { options, option_labels: Object.keys(optionLabels).length ? optionLabels : undefined };
+};
 
 const Provisioning: Component = () => {
   const { isFullAccess } = useAuth();
@@ -564,16 +580,8 @@ const Provisioning: Component = () => {
     if (draft.type === 'object') {
       object_fields = draft.objectFieldsText.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
         const [name = '', fieldLabel = '', fieldType = 'string', input = 'input', optionText = '', help = ''] = line.split('|');
-        const optionLabels: Record<string, string> = {};
-        const options = optionText.split(',').map(value => value.trim()).filter(Boolean).map(option => {
-          const separator = option.indexOf('=');
-          if (separator < 0) return option;
-          const value = option.slice(0, separator).trim();
-          const label = option.slice(separator + 1).trim();
-          if (value && label) optionLabels[value] = label;
-          return value;
-        }).filter(Boolean);
-        return { name: name.trim(), label: fieldLabel.trim(), type: fieldType.trim() as ProvisioningObjectField['type'], input: input.trim() as ProvisioningObjectField['input'], help: help.trim() || undefined, options, option_labels: Object.keys(optionLabels).length ? optionLabels : undefined };
+        const parsedOptions = parseObjectFieldOptions(optionText);
+        return { name: name.trim(), label: fieldLabel.trim(), type: fieldType.trim() as ProvisioningObjectField['type'], input: input.trim() as ProvisioningObjectField['input'], help: help.trim() || undefined, ...parsedOptions };
       });
     }
     const next: ProvisioningFeatureControl = {
