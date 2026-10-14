@@ -2847,13 +2847,13 @@ const DeviceDetail: Component = () => {
 
             {/* Row 3: Wi-Fi information */}
             <div class="card p-5">
-              <h2 class="text-xs font-medium text-muted mb-4 flex items-center gap-2">
-                <Radio size={14} />
-                Wi-Fi configuration
-              </h2>
-              <Show when={!parameters.loading || (parameters()?.length ?? 0) > 0} fallback={<div class="space-y-2" aria-label="Loading Wi-Fi configuration"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-3/4" /></div>}>
+              <h2 class="text-xs font-medium text-muted mb-4 flex items-center justify-between gap-3 flex-wrap">
+                <span class="flex items-center gap-2">
+                  <Radio size={14} />
+                  Wi-Fi configuration
+                </span>
                 <Show when={getWifiRadios().length > 0}>
-                  <div class="flex flex-wrap items-center gap-2 mb-4" aria-label="Wi-Fi radio states">
+                  <div class="flex flex-wrap items-center justify-end gap-2" aria-label="Wi-Fi radio states">
                     <For each={getWifiRadios()}>
                       {(radio) => (
                         <div class="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5">
@@ -2875,6 +2875,8 @@ const DeviceDetail: Component = () => {
                     </For>
                   </div>
                 </Show>
+              </h2>
+              <Show when={!parameters.loading || (parameters()?.length ?? 0) > 0} fallback={<div class="space-y-2" aria-label="Loading Wi-Fi configuration"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-3/4" /></div>}>
                 <Show when={getWlanConfigs().length > 0} fallback={
                   <EmptyState compact title="No Wi-Fi configuration is stored" description="This CPE has not reported WLAN parameters. Send a connection request with Summon, then refresh the record." />
                 }>
@@ -2884,8 +2886,8 @@ const DeviceDetail: Component = () => {
                       <tr class="border-b border-subtle bg-base">
                         <th class="text-left px-2 py-2 font-medium text-secondary">Index</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Status</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">SSID Name</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Adm. status</th>
+                        <th class="text-left px-2 py-2 font-medium text-secondary">SSID Name</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Security</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Band</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Ch</th>
@@ -2903,9 +2905,6 @@ const DeviceDetail: Component = () => {
                               <span class={`badge ${statusBadgeClass(wlan.status)}`}>{wlan.status}</span>
                             </td>
                             <td class="px-3 py-2">
-                              <span class="text-primary font-medium">{wlan.ssid}</span>
-                            </td>
-                            <td class="px-3 py-2">
                               <Show when={isFullAccess()} fallback={<span class={`badge ${wlan.enabled ? 'badge-success' : 'badge-error'}`}>{wlan.enabled ? 'Yes' : 'No'}</span>}><button
                                 onClick={() => handleSetWifiEnabled(wlan.index, !wlan.enabled)}
                                 disabled={actionLoading() !== null}
@@ -2914,6 +2913,9 @@ const DeviceDetail: Component = () => {
                               >
                                 {wlan.enabled ? 'Yes' : 'No'}
                               </button></Show>
+                            </td>
+                            <td class="px-3 py-2">
+                              <span class="text-primary font-medium">{wlan.ssid}</span>
                             </td>
                             <td class="px-3 py-2 text-secondary">{wlan.security}</td>
                             <td class="px-3 py-2 text-secondary">{wlan.frequency}</td>
