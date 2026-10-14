@@ -2847,13 +2847,13 @@ const DeviceDetail: Component = () => {
 
             {/* Row 3: Wi-Fi information */}
             <div class="card p-5">
-              <h2 class="text-xs font-medium text-muted mb-4 flex items-center justify-between gap-3 flex-wrap">
+              <h2 class="text-xs font-medium text-muted mb-4 flex items-center justify-start gap-4 flex-wrap">
                 <span class="flex items-center gap-2">
                   <Radio size={14} />
                   Wi-Fi configuration
                 </span>
                 <Show when={getWifiRadios().length > 0}>
-                  <div class="flex flex-wrap items-center justify-end gap-2" aria-label="Wi-Fi radio states">
+                  <div class="flex flex-wrap items-center justify-start gap-2" aria-label="Wi-Fi radio states">
                     <For each={getWifiRadios()}>
                       {(radio) => (
                         <div class="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5">
