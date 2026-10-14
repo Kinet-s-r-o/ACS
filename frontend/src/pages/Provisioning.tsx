@@ -581,7 +581,9 @@ const Provisioning: Component = () => {
     let object_fields: ProvisioningObjectField[] | undefined;
     if (draft.type === 'object') {
       object_fields = draft.objectFieldsText.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
-        const [name = '', fieldLabel = '', fieldType = 'string', input = 'input', optionText = '', help = ''] = line.split('|');
+        const parts = line.split('|');
+        const [name = '', fieldLabel = '', fieldType = 'string', input = 'input', optionText = ''] = parts;
+        const help = parts.slice(5).join('|');
         const parsedOptions = parseObjectFieldOptions(optionText);
         return { name: name.trim(), label: fieldLabel.trim(), type: fieldType.trim() as ProvisioningObjectField['type'], input: input.trim() as ProvisioningObjectField['input'], help: help.trim() || undefined, ...parsedOptions };
       });
@@ -1271,7 +1273,7 @@ const Provisioning: Component = () => {
                 </Show>
                 <Show when={controlDraft().type === 'object'}>
                   <label class="block text-xs text-muted">Object form fields (one per line: <code>name|label|type|input|options|help</code>)<textarea class="input mt-1 min-h-32 w-full font-mono text-xs" value={controlDraft().objectFieldsText} onInput={event => setControlDraft(current => ({ ...current, objectFieldsText: event.currentTarget.value }))} placeholder={'Enable|Enable|boolean|boolean||Enable or disable this rule\nMode|Mode|string|select|auto=Automatic;pppoe=PPPoE|Select the access mode\nVLAN ID|VLAN ID|unsignedInt|input||Numeric VLAN identifier'} /></label>
-                  <p class="text-[10px] text-muted">Input can be input, select, or boolean. Select options use semicolons as separators: <code>value=label</code>. For example: <code>ICMP=ICMP;ICMPV6=ICMPV6;TCP=TCP;UDP=UDP;ICMP,ICMPV6,TCP,UDP=All</code>. The comma-separated value is sent to the CPE.</p>
+                  <p class="text-[10px] text-muted">Input can be input, select, or boolean. Select options use semicolons as separators: <code>value=label</code>. For example: <code>value1,value2,value3=ALL;value1=label1;value2=label2;value3=label3</code>. The value on the left is sent to the CPE.</p>
                 </Show>
                 <label class="block text-xs text-muted">Description (optional)<input class="input mt-1 w-full" maxlength={512} value={controlDraft().description || ''} onInput={event => setControlDraft(current => ({ ...current, description: event.currentTarget.value }))} /></label>
                 <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => { setFeatureEditorPage('section'); setEditingControlKey(null); }}>Back to section</button><button type="submit" class="btn btn-primary flex-1">Save field</button></div>
