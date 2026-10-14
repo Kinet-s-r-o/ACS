@@ -188,6 +188,7 @@ func validateProvisioningObjectFields(control *models.ProvisioningFeatureControl
 		}
 		if field.Input != "select" {
 			field.Options = nil
+			field.OptionLabels = nil
 		}
 		if field.Input == "boolean" {
 			if field.EnabledValue == "" {
@@ -203,11 +204,19 @@ func validateProvisioningObjectFields(control *models.ProvisioningFeatureControl
 			field.EnabledValue, field.DisabledValue = "", ""
 		}
 		optionValues := make(map[string]bool, len(field.Options))
+		if field.OptionLabels == nil {
+			field.OptionLabels = make(map[string]string)
+		}
 		for optionIndex, option := range field.Options {
 			option = strings.TrimSpace(option)
 			field.Options[optionIndex] = option
 			if option == "" || len(option) > 256 || optionValues[option] {
 				return fmt.Errorf("object field %q has an empty, duplicate, or oversized option", field.Label)
+			}
+			if optionLabel := strings.TrimSpace(field.OptionLabels[option]); len(optionLabel) > 256 {
+				return fmt.Errorf("label for object field option %q is too long", field.Label)
+			} else if optionLabel != "" {
+				field.OptionLabels[option] = optionLabel
 			}
 			if field.Type == "int" {
 				if _, err := strconv.ParseInt(option, 10, 32); err != nil {

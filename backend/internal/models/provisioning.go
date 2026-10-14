@@ -38,13 +38,14 @@ type ProvisioningFeatureControl struct {
 }
 
 type ProvisioningObjectField struct {
-	Name          string   `json:"name"`
-	Label         string   `json:"label"`
-	Type          string   `json:"type"`
-	Input         string   `json:"input"`
-	Options       []string `json:"options,omitempty"`
-	EnabledValue  string   `json:"enabled_value,omitempty"`
-	DisabledValue string   `json:"disabled_value,omitempty"`
+	Name          string            `json:"name"`
+	Label         string            `json:"label"`
+	Type          string            `json:"type"`
+	Input         string            `json:"input"`
+	Options       []string          `json:"options,omitempty"`
+	OptionLabels  map[string]string `json:"option_labels,omitempty"`
+	EnabledValue  string            `json:"enabled_value,omitempty"`
+	DisabledValue string            `json:"disabled_value,omitempty"`
 }
 
 type ProvisioningVariable struct {
