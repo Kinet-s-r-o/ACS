@@ -188,6 +188,7 @@ export const api = {
   },
   deleteProvisioningTemplateImage: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}/image`, { method: 'DELETE' }),
   importTemplateFeature: (templateId: number, name: string, csv: string) => request<ProvisioningFeature>(`/provisioning/templates/${templateId}/features/import`, { method: 'POST', body: JSON.stringify({ name, csv }) }),
+  saveTemplateFeatures: (templateId: number, features: ProvisioningFeature[]) => request<{ features: ProvisioningFeature[] }>(`/provisioning/templates/${templateId}/features`, { method: 'PUT', body: JSON.stringify({ features }) }),
   deleteTemplateFeature: (templateId: number, featureId: string) => request<{ status: string }>(`/provisioning/templates/${templateId}/features/${encodeURIComponent(featureId)}`, { method: 'DELETE' }),
   setTemplateFeatureControl: (serial: string, featureId: string, key: string, enabled: boolean) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ enabled }) }),
   setTemplateFeatureStringControl: (serial: string, featureId: string, key: string, value: string) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ value }) }),

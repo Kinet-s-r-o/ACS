@@ -17,6 +17,136 @@ import (
 var featureKeyPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 var featureIDPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
+func (r *Router) handleSaveTemplateFeatures(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil || claims.Role != models.RoleFull {
+		respondError(w, http.StatusForbidden, "Full access required")
+		return
+	}
+	templateID, err := parsePositivePathID(req, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid template ID")
+		return
+	}
+	var body struct {
+		Features []models.ProvisioningFeature `json:"features"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || body.Features == nil || len(body.Features) > 50 {
+		respondError(w, http.StatusBadRequest, "Invalid feature definitions")
+		return
+	}
+	if err := validateProvisioningFeatures(body.Features); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := r.provisioningRepo.GetTemplate(req.Context(), templateID); err != nil {
+		respondError(w, http.StatusNotFound, "Template not found")
+		return
+	}
+	if err := r.provisioningRepo.UpdateTemplateFeatures(req.Context(), templateID, body.Features); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to save feature definitions")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"features": body.Features})
+}
+
+func validateProvisioningFeatures(features []models.ProvisioningFeature) error {
+	featureIDs := make(map[string]bool, len(features))
+	for featureIndex := range features {
+		feature := &features[featureIndex]
+		feature.ID = strings.TrimSpace(feature.ID)
+		feature.Name = strings.TrimSpace(feature.Name)
+		feature.Description = strings.TrimSpace(feature.Description)
+		if !featureIDPattern.MatchString(feature.ID) || feature.Name == "" || len(feature.Name) > 128 || len(feature.Description) > 512 {
+			return fmt.Errorf("section %d has an invalid ID, name, or description", featureIndex+1)
+		}
+		if featureIDs[feature.ID] {
+			return fmt.Errorf("section IDs must be unique")
+		}
+		featureIDs[feature.ID] = true
+		if len(feature.Controls) > 100 {
+			return fmt.Errorf("section %q may contain at most 100 fields", feature.Name)
+		}
+		keys, parameters := make(map[string]bool, len(feature.Controls)), make(map[string]bool, len(feature.Controls))
+		for controlIndex := range feature.Controls {
+			control := &feature.Controls[controlIndex]
+			control.Key = strings.ToLower(strings.TrimSpace(control.Key))
+			control.Label = strings.TrimSpace(control.Label)
+			control.Type = strings.TrimSpace(control.Type)
+			control.Parameter = strings.TrimSpace(control.Parameter)
+			control.Description = strings.TrimSpace(control.Description)
+			control.Group = strings.TrimSpace(control.Group)
+			if control.Type == "unsignedint" {
+				control.Type = "unsignedInt"
+			}
+			if !featureKeyPattern.MatchString(control.Key) || control.Label == "" || len(control.Label) > 128 {
+				return fmt.Errorf("field %d in %q has an invalid key or label", controlIndex+1, feature.Name)
+			}
+			if keys[control.Key] || parameters[control.Parameter] {
+				return fmt.Errorf("field keys and CWMP paths must be unique in %q", feature.Name)
+			}
+			if err := validateParameterNames([]string{control.Parameter}); err != nil {
+				return fmt.Errorf("field %q: %w", control.Label, err)
+			}
+			if control.Type != "boolean" && control.Type != "object" && control.Type != "string" && control.Type != "int" && control.Type != "unsignedInt" {
+				return fmt.Errorf("field %q has an unsupported type", control.Label)
+			}
+			if len(control.Description) > 512 || len(control.Group) > 128 || len(control.Options) > 100 {
+				return fmt.Errorf("field %q has a value that is too long", control.Label)
+			}
+			if control.Type == "object" {
+				if !strings.HasSuffix(control.Parameter, ".") {
+					return fmt.Errorf("object field %q must use an object path ending in a dot", control.Label)
+				}
+				control.Options = nil
+				control.EnabledValue, control.DisabledValue = "", ""
+			} else {
+				if strings.HasSuffix(control.Parameter, ".") {
+					return fmt.Errorf("scalar field %q cannot use an object path", control.Label)
+				}
+				if control.Type == "boolean" {
+					if len(control.Options) > 0 {
+						return fmt.Errorf("boolean field %q cannot use select options", control.Label)
+					}
+					if control.EnabledValue == "" {
+						control.EnabledValue = "1"
+					}
+					if control.DisabledValue == "" {
+						control.DisabledValue = "0"
+					}
+					if control.EnabledValue == control.DisabledValue || len(control.EnabledValue) > 64 || len(control.DisabledValue) > 64 {
+						return fmt.Errorf("boolean field %q needs distinct enabled and disabled values", control.Label)
+					}
+				} else {
+					control.EnabledValue, control.DisabledValue = "", ""
+				}
+			}
+			optionValues := make(map[string]bool, len(control.Options))
+			for optionIndex, option := range control.Options {
+				option = strings.TrimSpace(option)
+				control.Options[optionIndex] = option
+				if option == "" || len(option) > 256 || optionValues[option] {
+					return fmt.Errorf("field %q has an empty, duplicate, or oversized option", control.Label)
+				}
+				if control.Type == "int" {
+					if _, err := strconv.ParseInt(option, 10, 32); err != nil {
+						return fmt.Errorf("options for %q must be signed 32-bit integers", control.Label)
+					}
+				} else if control.Type == "unsignedInt" {
+					if _, err := strconv.ParseUint(option, 10, 32); err != nil {
+						return fmt.Errorf("options for %q must be unsigned 32-bit integers", control.Label)
+					}
+				}
+				optionValues[option] = true
+			}
+			keys[control.Key], parameters[control.Parameter] = true, true
+		}
+	}
+	return nil
+}
+
 func (r *Router) handleImportTemplateFeature(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
 	if claims == nil || claims.Role != models.RoleFull {
@@ -375,7 +505,7 @@ func (r *Router) handleSetFeatureControl(w http.ResponseWriter, req *http.Reques
 		}
 	} else {
 		value = *body.Value
-		if control.Type == "string" && len(control.Options) > 0 {
+		if len(control.Options) > 0 {
 			allowed := false
 			for _, option := range control.Options {
 				if value == option {

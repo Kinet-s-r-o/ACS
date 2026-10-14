@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
+import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -35,6 +35,8 @@ const defaultProvColumns: ProvColumnConfig[] = [
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
 const LEGACY_PROV_STORAGE_KEY = 'skyacs-prov-columns';
+type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options'> & { optionsText: string };
+const featureSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
 const Provisioning: Component = () => {
   const { isFullAccess } = useAuth();
@@ -67,9 +69,19 @@ const Provisioning: Component = () => {
   const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features'>('rules');
   const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
   const [variablesSaving, setVariablesSaving] = createSignal(false);
-  const [featureName, setFeatureName] = createSignal('');
-  const [featureCSV, setFeatureCSV] = createSignal('key,label,type,parameter,enabled_value,disabled_value,group,description\nftp_lan,FTP LAN,boolean,InternetGatewayDevice.X_HW_Security.AclServices.FTPLanEnable,1,0,LAN,Allow FTP from LAN\naccess_control_list,Access control list,object,InternetGatewayDevice.X_HW_Security.AclServices.AccessControl.List.,,,,');
-  const [featureSaving, setFeatureSaving] = createSignal(false);
+  const [activeFeatureID, setActiveFeatureID] = createSignal('');
+  const [featureEditorOpen, setFeatureEditorOpen] = createSignal(false);
+  const [featureEditorPage, setFeatureEditorPage] = createSignal<'section' | 'control'>('section');
+  const [editingFeatureID, setEditingFeatureID] = createSignal<string | null>(null);
+  const [featureDraft, setFeatureDraft] = createSignal<ProvisioningFeature>({ id: '', name: '', description: '', controls: [] });
+  const [controlDraft, setControlDraft] = createSignal<FeatureControlDraft>({ key: '', label: '', type: 'string', parameter: '', optionsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
+  const [editingControlKey, setEditingControlKey] = createSignal<string | null>(null);
+  const [featuresSaving, setFeaturesSaving] = createSignal(false);
+  createEffect(() => {
+    const features = selectedTemplate()?.features || [];
+    if (!features.some(feature => feature.id === activeFeatureID())) setActiveFeatureID(features[0]?.id || '');
+  });
+  const activeFeature = () => selectedTemplate()?.features?.find(feature => feature.id === activeFeatureID()) || selectedTemplate()?.features?.[0] || null;
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -504,29 +516,98 @@ const Provisioning: Component = () => {
     } finally { setVariablesSaving(false); }
   };
 
-  const importTemplateFeature = async () => {
+  const saveTemplateFeatures = async (features: ProvisioningFeature[]) => {
     const template = selectedTemplate();
-    if (!template || !featureName().trim() || featureSaving()) return;
-    setFeatureSaving(true);
+    if (!template || featuresSaving()) return false;
+    setFeaturesSaving(true);
     try {
-      const feature = await api.importTemplateFeature(template.id, featureName().trim(), featureCSV());
-      setSelectedTemplate({ ...template, features: [...(template.features || []), feature] });
-      setFeatureName('');
-      await loadProvTemplates();
-      notify({ tone: 'success', title: 'Feature added', message: `${feature.name} is available to devices matching ${template.name}.` });
+      const result = await api.saveTemplateFeatures(template.id, features);
+      setSelectedTemplate(current => current?.id === template.id ? { ...current, features: result.features } : current);
+      setProvTemplates(current => current?.map(item => item.id === template.id ? { ...item, features: result.features } : item) || null);
+      return true;
     } catch (error) {
-      notify({ tone: 'error', title: 'Could not import feature CSV', detail: (error as Error).message, persistent: true });
-    } finally { setFeatureSaving(false); }
+      notify({ tone: 'error', title: 'Could not save Features', detail: (error as Error).message, persistent: true });
+      return false;
+    } finally { setFeaturesSaving(false); }
   };
 
-  const downloadFeatureCSVTemplate = () => {
-    const blob = new Blob(['key,label,type,parameter,options,enabled_value,disabled_value,group,description\n'], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'feature-template.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+  const openFeatureEditor = (feature?: ProvisioningFeature, control?: ProvisioningFeatureControl, page: 'section' | 'control' = 'section') => {
+    const next = feature ? { ...feature, controls: feature.controls.map(item => ({ ...item, options: [...(item.options || [])] })) } : { id: '', name: '', description: '', controls: [] };
+    setEditingFeatureID(feature?.id || null);
+    setFeatureDraft(next);
+    setFeatureEditorPage(control || page === 'control' ? 'control' : 'section');
+    setEditingControlKey(control?.key || null);
+    setControlDraft(control ? { ...control, optionsText: (control.options || []).join('\n') } : { key: '', label: '', type: 'string', parameter: '', optionsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
+    setFeatureEditorOpen(true);
+  };
+
+  const saveFeatureControlDraft = () => {
+    const draft = controlDraft();
+    const label = draft.label.trim();
+    const parameter = draft.parameter.trim();
+    if (!label || !parameter) {
+      notify({ tone: 'error', title: 'Field name and CWMP parameter are required' });
+      return;
+    }
+    const controls = featureDraft().controls;
+    let key = editingControlKey() || featureSlug(label);
+    if (!key) {
+      notify({ tone: 'error', title: 'Field name must contain an English letter or number' });
+      return;
+    }
+    const existingKeys = new Set(controls.filter(item => item.key !== editingControlKey()).map(item => item.key));
+    const baseKey = key;
+    for (let suffix = 2; existingKeys.has(key); suffix++) key = `${baseKey.slice(0, 60)}-${suffix}`;
+    const options = draft.type === 'boolean' || draft.type === 'object' ? [] : draft.optionsText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+    const next: ProvisioningFeatureControl = {
+      key,
+      label,
+      type: draft.type,
+      parameter,
+      options,
+      enabled_value: draft.type === 'boolean' ? ((draft.enabled_value || '').trim() || '1') : '',
+      disabled_value: draft.type === 'boolean' ? ((draft.disabled_value || '').trim() || '0') : '',
+      group: (draft.group || '').trim(),
+      description: (draft.description || '').trim(),
+    };
+    setFeatureDraft(current => ({ ...current, controls: editingControlKey() ? current.controls.map(item => item.key === editingControlKey() ? next : item) : [...current.controls, next] }));
+    setFeatureEditorPage('section');
+    setEditingControlKey(null);
+  };
+
+  const saveFeatureDraft = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (featureEditorPage() === 'control') {
+      saveFeatureControlDraft();
+      return;
+    }
+    const template = selectedTemplate();
+    const draft = featureDraft();
+    const name = draft.name.trim();
+    const id = editingFeatureID() || featureSlug(name);
+    if (!template || !name || !id) {
+      notify({ tone: 'error', title: 'Enter a section name using English letters or numbers' });
+      return;
+    }
+    if (!editingFeatureID() && (template.features || []).some(feature => feature.id === id)) {
+      notify({ tone: 'error', title: 'A section with this name already exists' });
+      return;
+    }
+    const feature = { ...draft, id, name, description: draft.description?.trim() || '' };
+    const features = editingFeatureID()
+      ? (template.features || []).map(item => item.id === editingFeatureID() ? feature : item)
+      : [...(template.features || []), feature];
+    if (await saveTemplateFeatures(features)) {
+      setActiveFeatureID(id);
+      setFeatureEditorOpen(false);
+      notify({ tone: 'success', title: editingFeatureID() ? 'Feature section updated' : 'Feature section added' });
+    }
+  };
+
+  const deleteFeatureControl = async (feature: ProvisioningFeature, key: string) => {
+    if (await saveTemplateFeatures((selectedTemplate()?.features || []).map(item => item.id === feature.id ? { ...item, controls: item.controls.filter(control => control.key !== key) } : item))) {
+      notify({ tone: 'success', title: 'Feature field deleted' });
+    }
   };
 
   const deleteTemplateFeature = async (featureID: string) => {
@@ -534,10 +615,10 @@ const Provisioning: Component = () => {
     const feature = template?.features?.find(item => item.id === featureID);
     if (!template || !feature || !await confirm({ title: `Delete ${feature.name}?`, description: 'Devices matching this template will no longer show this feature.', confirmLabel: 'Delete feature', tone: 'danger' })) return;
     try {
-      await api.deleteTemplateFeature(template.id, featureID);
-      setSelectedTemplate({ ...template, features: template.features!.filter(item => item.id !== featureID) });
-      await loadProvTemplates();
-      notify({ tone: 'success', title: 'Feature deleted' });
+      if (await saveTemplateFeatures(template.features!.filter(item => item.id !== featureID))) {
+        setActiveFeatureID(template.features!.find(item => item.id !== featureID)?.id || '');
+        notify({ tone: 'success', title: 'Feature section deleted' });
+      }
     } catch (error) {
       notify({ tone: 'error', title: 'Could not delete feature', detail: (error as Error).message, persistent: true });
     }
@@ -735,6 +816,7 @@ const Provisioning: Component = () => {
                     Add WAN/LAN metric
                   </button>
                 </Show>
+                <Show when={templateTab() === 'features'}><button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button></Show>
                 <Show when={templateTab() === 'variables'}>
                   <button onClick={addTemplateVariable} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add variable</button>
                   <button onClick={() => void saveTemplateVariables()} class="btn btn-primary text-xs py-1.5" disabled={variablesSaving()}><Save size={12} />{variablesSaving() ? 'Saving…' : 'Save variables'}</button>
@@ -753,33 +835,22 @@ const Provisioning: Component = () => {
 
           <Show when={templateTab() === 'features'}>
             <div class="space-y-4">
-              <div class="rounded border border-subtle bg-elevated/30 p-3 text-xs text-secondary">
-                Define model-specific controls with CSV. Supported types are <code>boolean</code>, <code>string</code>, <code>int</code>, <code>unsignedInt</code>, and <code>object</code>; string controls may use pipe-separated values in <code>options</code>, and object paths must end in a dot.
-                Required columns: <code>key,label,type,parameter</code>. Optional columns: <code>options,enabled_value,disabled_value,group,description</code>.
-              </div>
-              <div class="grid gap-3 lg:grid-cols-2">
-                <label class="block text-xs text-muted">Feature name
-                  <input class="input mt-1 w-full" maxlength="128" value={featureName()} onInput={event => setFeatureName(event.currentTarget.value)} placeholder="Services" />
-                </label>
-                <div class="flex items-end text-xs text-muted">This feature is scoped to <strong class="ml-1 text-secondary">{selectedTemplate()!.name}</strong>.</div>
-              </div>
-              <div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
-                <label class="block text-xs text-muted">Load CSV file
-                  <input class="input mt-1 w-full" type="file" accept=".csv,text/csv" onChange={async event => { const file = event.currentTarget.files?.[0]; if (file) setFeatureCSV(await file.text()); }} />
-                </label>
-                <button type="button" class="btn btn-secondary text-xs" onClick={downloadFeatureCSVTemplate}><Download size={13} />Download CSV template</button>
-              </div>
-              <label class="block text-xs text-muted">CSV definition
-                <textarea class="input mt-1 min-h-40 w-full font-mono text-xs" spellcheck={false} value={featureCSV()} onInput={event => setFeatureCSV(event.currentTarget.value)} />
-              </label>
-              <div class="flex justify-end"><button type="button" class="btn btn-primary text-xs" disabled={!featureName().trim() || featureSaving()} onClick={() => void importTemplateFeature()}><Upload size={13} />{featureSaving() ? 'Importing…' : 'Import feature'}</button></div>
-              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No template features yet" description="Imported feature definitions will appear on matching devices." />}>
-                <div class="space-y-3">
-                  <For each={selectedTemplate()?.features || []}>{feature => <section class="card p-4 space-y-3">
-                    <div class="flex items-center justify-between"><div><h3 class="text-sm font-medium text-primary">{feature.name}</h3><p class="text-xs text-muted">{feature.controls.length} controls</p></div><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature.id)}><Trash2 size={13} />Delete</button></div>
-                    <div class="overflow-x-auto"><table class="data-table w-full text-xs"><thead><tr><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">CWMP path</th><th class="text-left">Group</th></tr></thead><tbody><For each={feature.controls}>{control => <tr><td>{control.label}</td><td>{control.type}</td><td class="font-mono">{control.parameter}</td><td>{control.group || '—'}</td></tr>}</For></tbody></table></div>
-                  </section>}</For>
+              <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
+              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No feature sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." action={<button type="button" class="btn btn-primary" onClick={() => openFeatureEditor()}><Plus size={13} />Add section</button>} />}>
+                <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Feature sections">
+                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For>
                 </div>
+                <Show when={activeFeature()}>{feature => <section class="card p-4 space-y-4">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div><h3 class="text-sm font-medium text-primary">{feature().name}</h3><p class="mt-1 text-xs text-muted">{feature().description || `${feature().controls.length} fields`}</p></div>
+                    <div class="flex gap-2"><button type="button" class="btn btn-secondary text-xs" onClick={() => openFeatureEditor(feature())}><Edit2 size={13} />Edit section</button><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature().id)}><Trash2 size={13} />Delete</button></div>
+                  </div>
+                  <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
+                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[680px] text-xs"><thead><tr><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">CWMP parameter</th><th class="text-left">Input</th><th class="text-right">Actions</th></tr></thead><tbody>
+                      <For each={feature().controls}>{control => <tr class="border-t border-subtle/50"><td class="py-2 pr-3"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td><td class="py-2 pr-3">{control.type}</td><td class="py-2 pr-3 font-mono text-muted">{control.parameter}</td><td class="py-2 pr-3">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td><td class="py-2 text-right"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td></tr>}</For>
+                    </tbody></table></div>
+                  </Show>
+                </section>}</Show>
               </Show>
             </div>
           </Show>
@@ -1152,6 +1223,40 @@ const Provisioning: Component = () => {
                 {pendingAction() ? 'Saving rule…' : editingProv() ? 'Update rule' : 'Add rule'}
               </button>
             </div>
+          </form>
+        </Dialog>
+      </Show>
+      <Show when={featureEditorOpen()}>
+        <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit feature field' : 'Add feature field') : (editingFeatureID() ? 'Edit feature section' : 'Add feature section')} size="large" onClose={() => setFeatureEditorOpen(false)}>
+          <form class="space-y-4" onSubmit={saveFeatureDraft}>
+            <Show when={featureEditorPage() === 'section'} fallback={
+              <div class="space-y-4">
+                <p class="text-xs text-muted">Define one device control and the CWMP parameter it writes.</p>
+                <label class="block text-xs text-muted">Field label<input class="input mt-1 w-full" maxlength={128} required value={controlDraft().label} onInput={event => setControlDraft(current => ({ ...current, label: event.currentTarget.value }))} placeholder="Wi-Fi radio" /></label>
+                <label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono text-xs" required value={controlDraft().parameter} onInput={event => setControlDraft(current => ({ ...current, parameter: event.currentTarget.value }))} placeholder="InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable" /></label>
+                <label class="block text-xs text-muted">Value type<select class="input mt-1 w-full" value={controlDraft().type} onChange={event => setControlDraft(current => ({ ...current, type: event.currentTarget.value as ProvisioningFeatureControl['type'] }))}><option value="boolean">Boolean (toggle)</option><option value="string">String</option><option value="int">Integer</option><option value="unsignedInt">Unsigned integer</option><option value="object">Object (add instance)</option></select></label>
+                <Show when={controlDraft().type === 'boolean'}>
+                  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs text-muted">Enabled value<input class="input mt-1 w-full" value={controlDraft().enabled_value || ''} onInput={event => setControlDraft(current => ({ ...current, enabled_value: event.currentTarget.value }))} /></label><label class="block text-xs text-muted">Disabled value<input class="input mt-1 w-full" value={controlDraft().disabled_value || ''} onInput={event => setControlDraft(current => ({ ...current, disabled_value: event.currentTarget.value }))} /></label></div>
+                </Show>
+                <Show when={controlDraft().type === 'string' || controlDraft().type === 'int' || controlDraft().type === 'unsignedInt'}>
+                  <label class="block text-xs text-muted">Select options (optional, one value per line)<textarea class="input mt-1 min-h-24 w-full font-mono text-xs" value={controlDraft().optionsText} onInput={event => setControlDraft(current => ({ ...current, optionsText: event.currentTarget.value }))} placeholder={controlDraft().type === 'int' || controlDraft().type === 'unsignedInt' ? '0\n1\n2' : 'Auto\nPPPoE\nIP_Routed'} /></label>
+                </Show>
+                <label class="block text-xs text-muted">Description (optional)<input class="input mt-1 w-full" maxlength={512} value={controlDraft().description || ''} onInput={event => setControlDraft(current => ({ ...current, description: event.currentTarget.value }))} /></label>
+                <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => { setFeatureEditorPage('section'); setEditingControlKey(null); }}>Back to section</button><button type="submit" class="btn btn-primary flex-1">Save field</button></div>
+              </div>
+            }>
+              <div class="space-y-4">
+                <label class="block text-xs text-muted">Section name<input class="input mt-1 w-full" maxlength={128} required value={featureDraft().name} onInput={event => setFeatureDraft(current => ({ ...current, name: event.currentTarget.value }))} placeholder="Internet settings" /></label>
+                <label class="block text-xs text-muted">Description (optional)<textarea class="input mt-1 w-full" rows={2} maxlength={512} value={featureDraft().description || ''} onInput={event => setFeatureDraft(current => ({ ...current, description: event.currentTarget.value }))} /></label>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between"><h3 class="text-xs font-medium text-secondary">Fields ({featureDraft().controls.length})</h3><button type="button" class="btn btn-secondary text-xs" onClick={() => { setControlDraft({ key: '', label: '', type: 'string', parameter: '', optionsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' }); setEditingControlKey(null); setFeatureEditorPage('control'); }}><Plus size={13} />Add field</button></div>
+                  <Show when={featureDraft().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-4 text-center text-xs text-muted">Fields added here will be available to supported devices.</p>}>
+                    <div class="max-h-64 space-y-2 overflow-y-auto"> <For each={featureDraft().controls}>{control => <div class="flex items-center justify-between gap-3 rounded border border-subtle p-3"><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show></div><div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div></div>}</For></div>
+                  </Show>
+                </div>
+                <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => setFeatureEditorOpen(false)} disabled={featuresSaving()}>Cancel</button><button type="submit" class="btn btn-primary flex-1" disabled={featuresSaving()}><Save size={13} />{featuresSaving() ? 'Saving…' : editingFeatureID() ? 'Save section' : 'Create section'}</button></div>
+              </div>
+            </Show>
           </form>
         </Dialog>
       </Show>

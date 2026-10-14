@@ -226,6 +226,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningRead)(r.handleGetProvisioningTemplateImage))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningWrite)(r.handleUploadProvisioningTemplateImage))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplateImage))
+	apiMux.HandleFunc("PUT /provisioning/templates/{id}/features", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveTemplateFeatures))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/features/import", auth.RequirePermission(models.PermProvisioningWrite)(r.handleImportTemplateFeature))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/features/{featureID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteTemplateFeature))
 	apiMux.HandleFunc("POST /device/{serial}/features/{featureID}/controls/{key}", auth.RequirePermission(models.PermDevicesWrite)(r.handleSetFeatureControl))

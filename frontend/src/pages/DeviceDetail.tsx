@@ -132,6 +132,7 @@ const DeviceDetail: Component = () => {
   const [metricDefs] = createResource(api.getMetricDefinitions);
   const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
   const [featureAction, setFeatureAction] = createSignal<string | null>(null);
+  const [activeDeviceFeatureID, setActiveDeviceFeatureID] = createSignal('');
   const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
   const matchingProvisioningTemplate = createMemo(() => {
     const current = device();
@@ -145,6 +146,10 @@ const DeviceDetail: Component = () => {
         return score(b) - score(a) || a.id - b.id;
       })[0] || null;
   });
+  const activeDeviceFeature = () => {
+    const features = matchingProvisioningTemplate()?.features || [];
+    return features.find(feature => feature.id === activeDeviceFeatureID()) || features[0] || null;
+  };
   const featureObjectInstances = (path: string) => {
     const ids = new Set<string>();
     for (const parameter of parameters() || []) {
@@ -2196,7 +2201,8 @@ const DeviceDetail: Component = () => {
             <Show when={activeTab() === 'features' && (matchingProvisioningTemplate()?.features?.length || 0) > 0}>
               <div class="space-y-4">
                 <div class="flex justify-end"><button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchParams()} disabled={parameters.loading}><RefreshCw size={13} class={parameters.loading ? 'animate-spin' : ''} />Refresh device parameters</button></div>
-                <For each={matchingProvisioningTemplate()?.features || []}>{feature => <section class="card p-5 space-y-4">
+                <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Device feature sections"><For each={matchingProvisioningTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeDeviceFeature()?.id === feature.id} onClick={() => setActiveDeviceFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeDeviceFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For></div>
+                <Show when={activeDeviceFeature()} keyed>{feature => <section class="card p-5 space-y-4">
                   <div><h2 class="text-sm font-medium text-secondary">{feature.name}</h2><p class="mt-1 text-xs text-muted">Template feature for {matchingProvisioningTemplate()?.name}. Changes are sent to the device as CWMP tasks.</p></div>
                   <div class="grid gap-3 lg:grid-cols-2">
                     <For each={feature.controls}>{control => {
@@ -2216,7 +2222,7 @@ const DeviceDetail: Component = () => {
                             <label class="block rounded border border-subtle p-4">
                               <span class="mb-2 block text-sm font-medium text-primary">{control.label}</span>
                               <span class="mb-2 block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span>
-                              <Show when={control.type === 'string' && (control.options?.length || 0) > 0} fallback={
+                              <Show when={(control.options?.length || 0) > 0} fallback={
                                 <input class="input w-full" type={control.type === 'string' ? 'text' : 'number'} step={control.type === 'string' ? undefined : '1'} min={control.type === 'unsignedInt' ? '0' : undefined} value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)} />
                               }>
                                 <select class="input w-full" value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)}>
@@ -2238,7 +2244,7 @@ const DeviceDetail: Component = () => {
                     }}</For>
                   </div>
                   <Show when={parameters.loading}><p class="text-xs text-muted">Refreshing device parameters…</p></Show>
-                </section>}</For>
+                </section>}</Show>
               </div>
             </Show>
 
