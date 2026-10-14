@@ -223,7 +223,7 @@ const Provisioning: Component = () => {
 
   const handleTemplateImageSelected = async (event: Event) => {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
-    const template = selectedTemplate();
+    const template = editingTemplate() || selectedTemplate();
     if (!file || !template) return;
     if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
       notify({ tone: 'error', title: 'Invalid device image', message: 'Use a JPEG, PNG, GIF, or WebP image up to 5 MB.' });
@@ -233,7 +233,8 @@ const Provisioning: Component = () => {
     setTemplateImageUploading(true);
     try {
       const updated = await api.uploadProvisioningTemplateImage(template.id, file);
-      setSelectedTemplate(updated);
+      setEditingTemplate(current => current?.id === updated.id ? updated : current);
+      setSelectedTemplate(current => current?.id === updated.id ? updated : current);
       await loadTemplateImage(updated);
       await loadProvTemplates();
       notify({ tone: 'success', title: 'Device image uploaded' });
@@ -246,12 +247,13 @@ const Provisioning: Component = () => {
   };
 
   const handleDeleteTemplateImage = async () => {
-    const template = selectedTemplate();
+    const template = editingTemplate() || selectedTemplate();
     if (!template || !template.image_url || !await confirm({ title: 'Remove device image?', description: 'The image will be removed from this provisioning template.', confirmLabel: 'Remove image', tone: 'danger' })) return;
     setTemplateImageUploading(true);
     try {
       await api.deleteProvisioningTemplateImage(template.id);
-      setSelectedTemplate({ ...template, image_url: undefined });
+      setEditingTemplate(current => current?.id === template.id ? { ...current, image_url: undefined } : current);
+      setSelectedTemplate(current => current?.id === template.id ? { ...current, image_url: undefined } : current);
       clearTemplateImagePreview();
       await loadProvTemplates();
       notify({ tone: 'success', title: 'Device image removed' });
@@ -422,12 +424,14 @@ const Provisioning: Component = () => {
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setTemplateForm({ name: '', manufacturer: '', product_class: '', description: '' });
+    clearTemplateImagePreview();
     setShowTemplateModal(true);
   };
 
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setEditingTemplate(t);
     setTemplateForm({ name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '' });
+    void loadTemplateImage(t);
     setShowTemplateModal(true);
   };
 
@@ -708,14 +712,6 @@ const Provisioning: Component = () => {
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <input id="template-device-image" ref={(element) => { templateImageInput = element; }} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="sr-only" onChange={(event) => void handleTemplateImageSelected(event)} disabled={templateImageUploading()} />
-                <label for="template-device-image" class="btn btn-secondary text-xs py-1.5 cursor-pointer" aria-disabled={templateImageUploading()}>
-                  <Upload size={12} />
-                  {templateImageUploading() ? 'Uploading…' : 'Device photo'}
-                </label>
-                <Show when={selectedTemplate()!.image_url}>
-                  <button type="button" class="btn btn-ghost text-xs" onClick={() => void handleDeleteTemplateImage()} disabled={templateImageUploading()}>Remove photo</button>
-                </Show>
                 <Show when={templateTab() === 'rules'}>
                   <div class="relative">
                     <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
@@ -1181,6 +1177,29 @@ const Provisioning: Component = () => {
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
               <input id="template-description" type="text" value={templateForm().description} onInput={(e) => setTemplateForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="e.g. Rules for SkyDash AC1000 devices" />
             </div>
+            <Show when={editingTemplate()}>
+              <div class="space-y-2">
+                <span class="block text-xs text-muted">Device photo (optional)</span>
+                <div class="flex items-center gap-3">
+                  <div class="h-16 w-20 shrink-0 overflow-hidden rounded border border-subtle bg-elevated grid place-items-center">
+                    <Show when={templateImageUrl()} fallback={<ImageIcon size={18} class="text-muted" />}>
+                      <img src={templateImageUrl()!} alt={`Device photo for ${editingTemplate()!.name}`} class="h-full w-full object-cover" />
+                    </Show>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <input id="template-device-image" ref={(element) => { templateImageInput = element; }} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="sr-only" onChange={(event) => void handleTemplateImageSelected(event)} disabled={templateImageUploading()} />
+                    <label for="template-device-image" class="btn btn-secondary text-xs cursor-pointer" aria-disabled={templateImageUploading()}>
+                      <Upload size={12} />
+                      {templateImageUploading() ? 'Uploading…' : editingTemplate()!.image_url ? 'Change photo' : 'Add photo'}
+                    </label>
+                    <Show when={editingTemplate()!.image_url}>
+                      <button type="button" class="btn btn-ghost text-xs" onClick={() => void handleDeleteTemplateImage()} disabled={templateImageUploading()}>Remove photo</button>
+                    </Show>
+                  </div>
+                </div>
+                <p class="text-xs text-muted">JPEG, PNG, GIF or WebP, up to 5 MB.</p>
+              </div>
+            </Show>
             <p class="text-xs text-muted">Specificity: both fields set = most specific (score 2), one field = partial (score 1), neither = global fallback (score 0). The most specific matching template wins.</p>
             <div class="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowTemplateModal(false)} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
