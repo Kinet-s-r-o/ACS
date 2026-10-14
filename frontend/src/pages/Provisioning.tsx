@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
 import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -35,7 +35,7 @@ const defaultProvColumns: ProvColumnConfig[] = [
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
 const LEGACY_PROV_STORAGE_KEY = 'skyacs-prov-columns';
-type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options'> & { optionsText: string };
+type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options' | 'object_fields'> & { optionsText: string; objectFieldsText: string };
 const featureSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
 const Provisioning: Component = () => {
@@ -74,7 +74,8 @@ const Provisioning: Component = () => {
   const [featureEditorPage, setFeatureEditorPage] = createSignal<'section' | 'control'>('section');
   const [editingFeatureID, setEditingFeatureID] = createSignal<string | null>(null);
   const [featureDraft, setFeatureDraft] = createSignal<ProvisioningFeature>({ id: '', name: '', description: '', controls: [] });
-  const [controlDraft, setControlDraft] = createSignal<FeatureControlDraft>({ key: '', label: '', type: 'string', parameter: '', optionsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
+  const emptyControlDraft = (): FeatureControlDraft => ({ key: '', label: '', type: 'string', parameter: '', optionsText: '', objectFieldsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
+  const [controlDraft, setControlDraft] = createSignal<FeatureControlDraft>(emptyControlDraft());
   const [editingControlKey, setEditingControlKey] = createSignal<string | null>(null);
   const [featuresSaving, setFeaturesSaving] = createSignal(false);
   createEffect(() => {
@@ -537,7 +538,7 @@ const Provisioning: Component = () => {
     setFeatureDraft(next);
     setFeatureEditorPage(control || page === 'control' ? 'control' : 'section');
     setEditingControlKey(control?.key || null);
-    setControlDraft(control ? { ...control, optionsText: (control.options || []).join('\n') } : { key: '', label: '', type: 'string', parameter: '', optionsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
+    setControlDraft(control ? { ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).join(',')].join('|')).join('\n') } : emptyControlDraft());
     setFeatureEditorOpen(true);
   };
 
@@ -559,6 +560,13 @@ const Provisioning: Component = () => {
     const baseKey = key;
     for (let suffix = 2; existingKeys.has(key); suffix++) key = `${baseKey.slice(0, 60)}-${suffix}`;
     const options = draft.type === 'boolean' || draft.type === 'object' ? [] : draft.optionsText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+    let object_fields: ProvisioningObjectField[] | undefined;
+    if (draft.type === 'object') {
+      object_fields = draft.objectFieldsText.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+        const [name = '', fieldLabel = '', fieldType = 'string', input = 'input', optionText = ''] = line.split('|');
+        return { name: name.trim(), label: fieldLabel.trim(), type: fieldType.trim() as ProvisioningObjectField['type'], input: input.trim() as ProvisioningObjectField['input'], options: optionText.split(',').map(value => value.trim()).filter(Boolean) };
+      });
+    }
     const next: ProvisioningFeatureControl = {
       key,
       label,
@@ -569,6 +577,7 @@ const Provisioning: Component = () => {
       disabled_value: draft.type === 'boolean' ? ((draft.disabled_value || '').trim() || '0') : '',
       group: (draft.group || '').trim(),
       description: (draft.description || '').trim(),
+      object_fields,
     };
     setFeatureDraft(current => ({ ...current, controls: editingControlKey() ? current.controls.map(item => item.key === editingControlKey() ? next : item) : [...current.controls, next] }));
     setFeatureEditorPage('section');
@@ -1241,6 +1250,10 @@ const Provisioning: Component = () => {
                 <Show when={controlDraft().type === 'string' || controlDraft().type === 'int' || controlDraft().type === 'unsignedInt'}>
                   <label class="block text-xs text-muted">Select options (optional, one value per line)<textarea class="input mt-1 min-h-24 w-full font-mono text-xs" value={controlDraft().optionsText} onInput={event => setControlDraft(current => ({ ...current, optionsText: event.currentTarget.value }))} placeholder={controlDraft().type === 'int' || controlDraft().type === 'unsignedInt' ? '0\n1\n2' : 'Auto\nPPPoE\nIP_Routed'} /></label>
                 </Show>
+                <Show when={controlDraft().type === 'object'}>
+                  <label class="block text-xs text-muted">Object form fields (one per line: <code>name|label|type|input|options</code>)<textarea class="input mt-1 min-h-32 w-full font-mono text-xs" value={controlDraft().objectFieldsText} onInput={event => setControlDraft(current => ({ ...current, objectFieldsText: event.currentTarget.value }))} placeholder={'Enable|Enable|boolean|boolean|\nMode|Mode|string|select|Auto,PPPoE\nVLAN ID|VLAN ID|unsignedInt|input|'} /></label>
+                  <p class="text-[10px] text-muted">Input can be input, select, or boolean. Options are comma-separated; leave them empty for input/boolean.</p>
+                </Show>
                 <label class="block text-xs text-muted">Description (optional)<input class="input mt-1 w-full" maxlength={512} value={controlDraft().description || ''} onInput={event => setControlDraft(current => ({ ...current, description: event.currentTarget.value }))} /></label>
                 <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => { setFeatureEditorPage('section'); setEditingControlKey(null); }}>Back to section</button><button type="submit" class="btn btn-primary flex-1">Save field</button></div>
               </div>
@@ -1249,9 +1262,9 @@ const Provisioning: Component = () => {
                 <label class="block text-xs text-muted">Section name<input class="input mt-1 w-full" maxlength={128} required value={featureDraft().name} onInput={event => setFeatureDraft(current => ({ ...current, name: event.currentTarget.value }))} placeholder="Internet settings" /></label>
                 <label class="block text-xs text-muted">Description (optional)<textarea class="input mt-1 w-full" rows={2} maxlength={512} value={featureDraft().description || ''} onInput={event => setFeatureDraft(current => ({ ...current, description: event.currentTarget.value }))} /></label>
                 <div class="space-y-2">
-                  <div class="flex items-center justify-between"><h3 class="text-xs font-medium text-secondary">Fields ({featureDraft().controls.length})</h3><button type="button" class="btn btn-secondary text-xs" onClick={() => { setControlDraft({ key: '', label: '', type: 'string', parameter: '', optionsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' }); setEditingControlKey(null); setFeatureEditorPage('control'); }}><Plus size={13} />Add field</button></div>
+                  <div class="flex items-center justify-between"><h3 class="text-xs font-medium text-secondary">Fields ({featureDraft().controls.length})</h3><button type="button" class="btn btn-secondary text-xs" onClick={() => { setControlDraft(emptyControlDraft()); setEditingControlKey(null); setFeatureEditorPage('control'); }}><Plus size={13} />Add field</button></div>
                   <Show when={featureDraft().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-4 text-center text-xs text-muted">Fields added here will be available to supported devices.</p>}>
-                    <div class="max-h-64 space-y-2 overflow-y-auto"> <For each={featureDraft().controls}>{control => <div class="flex items-center justify-between gap-3 rounded border border-subtle p-3"><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show></div><div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div></div>}</For></div>
+                    <div class="max-h-64 space-y-2 overflow-y-auto"> <For each={featureDraft().controls}>{control => <div class="flex items-center justify-between gap-3 rounded border border-subtle p-3"><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show><Show when={control.object_fields?.length}><p class="mt-1 text-[10px] text-muted">Object form: {control.object_fields!.length} fields</p></Show></div><div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).join(',')].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div></div>}</For></div>
                   </Show>
                 </div>
                 <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => setFeatureEditorOpen(false)} disabled={featuresSaving()}>Cancel</button><button type="submit" class="btn btn-primary flex-1" disabled={featuresSaving()}><Save size={13} />{featuresSaving() ? 'Saving…' : editingFeatureID() ? 'Save section' : 'Create section'}</button></div>

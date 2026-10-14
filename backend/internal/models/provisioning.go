@@ -25,15 +25,26 @@ type ProvisioningFeature struct {
 }
 
 type ProvisioningFeatureControl struct {
-	Key           string   `json:"key"`
+	Key           string                    `json:"key"`
+	Label         string                    `json:"label"`
+	Type          string                    `json:"type"`
+	Parameter     string                    `json:"parameter"`
+	Options       []string                  `json:"options,omitempty"`
+	EnabledValue  string                    `json:"enabled_value,omitempty"`
+	DisabledValue string                    `json:"disabled_value,omitempty"`
+	Group         string                    `json:"group,omitempty"`
+	Description   string                    `json:"description,omitempty"`
+	ObjectFields  []ProvisioningObjectField `json:"object_fields,omitempty"`
+}
+
+type ProvisioningObjectField struct {
+	Name          string   `json:"name"`
 	Label         string   `json:"label"`
 	Type          string   `json:"type"`
-	Parameter     string   `json:"parameter"`
+	Input         string   `json:"input"`
 	Options       []string `json:"options,omitempty"`
 	EnabledValue  string   `json:"enabled_value,omitempty"`
 	DisabledValue string   `json:"disabled_value,omitempty"`
-	Group         string   `json:"group,omitempty"`
-	Description   string   `json:"description,omitempty"`
 }
 
 type ProvisioningVariable struct {

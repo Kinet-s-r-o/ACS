@@ -102,6 +102,9 @@ func validateProvisioningFeatures(features []models.ProvisioningFeature) error {
 				}
 				control.Options = nil
 				control.EnabledValue, control.DisabledValue = "", ""
+				if err := validateProvisioningObjectFields(control); err != nil {
+					return fmt.Errorf("field %q: %w", control.Label, err)
+				}
 			} else {
 				if strings.HasSuffix(control.Parameter, ".") {
 					return fmt.Errorf("scalar field %q cannot use an object path", control.Label)
@@ -121,6 +124,7 @@ func validateProvisioningFeatures(features []models.ProvisioningFeature) error {
 					}
 				} else {
 					control.EnabledValue, control.DisabledValue = "", ""
+					control.ObjectFields = nil
 				}
 			}
 			optionValues := make(map[string]bool, len(control.Options))
@@ -143,6 +147,81 @@ func validateProvisioningFeatures(features []models.ProvisioningFeature) error {
 			}
 			keys[control.Key], parameters[control.Parameter] = true, true
 		}
+	}
+	return nil
+}
+
+func validateProvisioningObjectFields(control *models.ProvisioningFeatureControl) error {
+	if len(control.ObjectFields) > 100 {
+		return fmt.Errorf("object may contain at most 100 fields")
+	}
+	names := make(map[string]bool, len(control.ObjectFields))
+	for index := range control.ObjectFields {
+		field := &control.ObjectFields[index]
+		field.Name = strings.TrimSpace(field.Name)
+		field.Label = strings.TrimSpace(field.Label)
+		field.Type = strings.TrimSpace(field.Type)
+		field.Input = strings.TrimSpace(field.Input)
+		if field.Name == "" || len(field.Name) > 512 || strings.HasSuffix(field.Name, ".") || strings.Contains(field.Name, "..") || strings.HasPrefix(field.Name, ".") {
+			return fmt.Errorf("object field %d has an invalid name", index+1)
+		}
+		if err := validateParameterNames([]string{"Device." + field.Name}); err != nil {
+			return fmt.Errorf("object field %q has an invalid name", field.Label)
+		}
+		if field.Label == "" || len(field.Label) > 128 || names[field.Name] {
+			return fmt.Errorf("object field %q has an invalid or duplicate name/label", field.Label)
+		}
+		if field.Type != "boolean" && field.Type != "string" && field.Type != "int" && field.Type != "unsignedInt" {
+			return fmt.Errorf("object field %q has an unsupported type", field.Label)
+		}
+		if field.Input != "input" && field.Input != "select" && field.Input != "boolean" {
+			return fmt.Errorf("object field %q has an unsupported input type", field.Label)
+		}
+		if field.Type == "boolean" && field.Input != "boolean" {
+			return fmt.Errorf("boolean object field %q must use boolean input", field.Label)
+		}
+		if field.Input == "boolean" && field.Type != "boolean" {
+			return fmt.Errorf("boolean input %q must use boolean type", field.Label)
+		}
+		if field.Input == "select" && len(field.Options) == 0 {
+			return fmt.Errorf("select object field %q needs options", field.Label)
+		}
+		if field.Input != "select" {
+			field.Options = nil
+		}
+		if field.Input == "boolean" {
+			if field.EnabledValue == "" {
+				field.EnabledValue = "1"
+			}
+			if field.DisabledValue == "" {
+				field.DisabledValue = "0"
+			}
+			if field.EnabledValue == field.DisabledValue || len(field.EnabledValue) > 64 || len(field.DisabledValue) > 64 {
+				return fmt.Errorf("boolean object field %q needs distinct enabled and disabled values", field.Label)
+			}
+		} else {
+			field.EnabledValue, field.DisabledValue = "", ""
+		}
+		optionValues := make(map[string]bool, len(field.Options))
+		for optionIndex, option := range field.Options {
+			option = strings.TrimSpace(option)
+			field.Options[optionIndex] = option
+			if option == "" || len(option) > 256 || optionValues[option] {
+				return fmt.Errorf("object field %q has an empty, duplicate, or oversized option", field.Label)
+			}
+			if field.Type == "int" {
+				if _, err := strconv.ParseInt(option, 10, 32); err != nil {
+					return fmt.Errorf("options for %q must be signed 32-bit integers", field.Label)
+				}
+			}
+			if field.Type == "unsignedInt" {
+				if _, err := strconv.ParseUint(option, 10, 32); err != nil {
+					return fmt.Errorf("options for %q must be unsigned 32-bit integers", field.Label)
+				}
+			}
+			optionValues[option] = true
+		}
+		names[field.Name] = true
 	}
 	return nil
 }

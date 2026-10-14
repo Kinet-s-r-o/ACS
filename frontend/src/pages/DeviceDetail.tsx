@@ -66,7 +66,7 @@ interface IperfForm {
 }
 
 interface IperfRunResult { mode: 'UPLOAD' | 'DOWNLOAD'; values: Record<string, string> }
-interface FeatureObjectEditor { featureID: string; key: string; label: string; instance: string; fields: { name: string; label: string; value: string; writable: boolean }[] }
+interface FeatureObjectEditor { featureID: string; key: string; label: string; instance: string; fields: { name: string; label: string; value: string; writable: boolean; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; options?: string[]; enabled_value?: string; disabled_value?: string }[] }
 
 interface SnapshotTreeRow {
   path: string;
@@ -437,11 +437,15 @@ const DeviceDetail: Component = () => {
     } finally { setFeatureAction(null); }
   };
 
-  const openFeatureObjectEditor = (featureID: string, key: string, label: string, path: string, instance: string) => {
+  const openFeatureObjectEditor = (featureID: string, key: string, label: string, path: string, instance: string, configuredFields?: FeatureObjectEditor['fields']) => {
     const prefix = `${path}${instance}.`;
-    const fields = (parameters() || []).filter(parameter => parameter.name.startsWith(prefix) && !parameter.name.endsWith('.')).map(parameter => {
+    const discovered = (parameters() || []).filter(parameter => parameter.name.startsWith(prefix) && !parameter.name.endsWith('.'));
+    const fields = configuredFields?.length ? configuredFields.map(field => {
+      const parameter = discovered.find(item => item.name === `${prefix}${field.name}`);
+      return { ...field, value: parameter?.value || '', writable: parameter?.writable === true };
+    }).filter(field => discovered.some(parameter => parameter.name === `${prefix}${field.name}`)) : discovered.map(parameter => {
       const name = parameter.name.slice(prefix.length);
-      return { name, label: name.split('.').at(-1) || name, value: parameter.value, writable: parameter.writable === true };
+      return { name, label: name.split('.').at(-1) || name, value: parameter.value, writable: parameter.writable === true, type: 'string' as const, input: 'input' as const };
     }).sort((a, b) => a.name.localeCompare(b.name));
     setFeatureObjectDraft(Object.fromEntries(fields.map(field => [field.name, field.value])));
     setFeatureObjectEditor({ featureID, key, label, instance, fields });
@@ -2262,7 +2266,7 @@ const DeviceDetail: Component = () => {
                                   const path = `${control.parameter}${instance}.${column}`;
                                   const value = () => (parameters() || []).find(item => item.name === path)?.value || '—';
                                   return <td class="max-w-64 truncate font-mono" title={path}>{value()}</td>;
-                                }}</For><td class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance)}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td></tr>}</For></tbody></table></div>
+                                }}</For><td class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td></tr>}</For></tbody></table></div>
                               </Show>
                             </div>
                           </Show>
@@ -3347,7 +3351,7 @@ const DeviceDetail: Component = () => {
 		  <Show when={featureObjectEditor()}>
 			<Dialog title={`Edit ${featureObjectEditor()?.label} ${featureObjectEditor()?.instance}`} description="Update writable parameters for this object instance." size="large" onClose={() => setFeatureObjectEditor(null)} actions={<><button type="button" class="btn btn-secondary" onClick={() => setFeatureObjectEditor(null)} disabled={featureAction() !== null}>Cancel</button><button type="submit" form="feature-object-editor-form" class="btn btn-primary" disabled={featureAction() !== null}>{featureAction() ? 'Saving…' : 'Save changes'}</button></>}>
 			  <form id="feature-object-editor-form" class="space-y-3" onSubmit={saveFeatureObjectParameters}>
-				<For each={featureObjectEditor()?.fields || []}>{field => <label class="block text-xs text-muted"><span class="mb-1 block">{field.label} <Show when={!field.writable}><span class="text-muted">(read only)</span></Show></span><span class="mb-1 block truncate font-mono text-[10px]" title={field.name}>{field.name}</span><input class="input w-full font-mono text-xs" value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onInput={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))} /></label>}</For>
+				<For each={featureObjectEditor()?.fields || []}>{field => <label class="block text-xs text-muted"><span class="mb-1 block">{field.label} <Show when={!field.writable}><span class="text-muted">(read only)</span></Show></span><span class="mb-1 block truncate font-mono text-[10px]" title={field.name}>{field.name}</span><Show when={field.input === 'boolean'} fallback={<Show when={field.input === 'select'} fallback={<input class="input w-full font-mono text-xs" type={field.type === 'string' ? 'text' : 'number'} min={field.type === 'unsignedInt' ? '0' : undefined} value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onInput={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))} />}><select class="input w-full" value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onChange={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))}><Show when={!field.options?.includes(featureObjectDraft()[field.name] || '')}><option value={featureObjectDraft()[field.name] || ''}>{featureObjectDraft()[field.name] || 'Select a value'}</option></Show><For each={field.options || []}>{option => <option value={option}>{option}</option>}</For></select></Show>}><input type="checkbox" class="h-4 w-4 accent-sky-500" checked={(featureObjectDraft()[field.name] || '').toLowerCase() === (field.enabled_value || '1').toLowerCase()} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onChange={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.checked ? (field.enabled_value || '1') : (field.disabled_value || '0') }))} /></Show></label>}</For>
 				<Show when={(featureObjectEditor()?.fields.length || 0) === 0}><p class="text-sm text-muted">No parameters were discovered for this object. Refresh device parameters and try again.</p></Show>
 			  </form>
 			</Dialog>
