@@ -162,6 +162,7 @@ func validateProvisioningObjectFields(control *models.ProvisioningFeatureControl
 		field.Label = strings.TrimSpace(field.Label)
 		field.Type = strings.TrimSpace(field.Type)
 		field.Input = strings.TrimSpace(field.Input)
+		field.Help = strings.TrimSpace(field.Help)
 		if field.Name == "" || len(field.Name) > 512 || strings.HasSuffix(field.Name, ".") || strings.Contains(field.Name, "..") || strings.HasPrefix(field.Name, ".") {
 			return fmt.Errorf("object field %d has an invalid name", index+1)
 		}
@@ -170,6 +171,9 @@ func validateProvisioningObjectFields(control *models.ProvisioningFeatureControl
 		}
 		if field.Label == "" || len(field.Label) > 128 || names[field.Name] {
 			return fmt.Errorf("object field %q has an invalid or duplicate name/label", field.Label)
+		}
+		if len(field.Help) > 512 {
+			return fmt.Errorf("help text for object field %q is too long", field.Label)
 		}
 		if field.Type != "boolean" && field.Type != "string" && field.Type != "int" && field.Type != "unsignedInt" {
 			return fmt.Errorf("object field %q has an unsupported type", field.Label)

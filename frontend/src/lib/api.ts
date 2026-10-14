@@ -41,7 +41,7 @@ export interface TagDefinition { id: string; name: string; color: string; create
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string> }
 export interface ProvisioningVariable { name: string; source: string; value?: string; steps: ProvisioningTransform[] }
-export interface ProvisioningObjectField { name: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; options?: string[]; option_labels?: Record<string, string>; enabled_value?: string; disabled_value?: string }
+export interface ProvisioningObjectField { name: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; help?: string; options?: string[]; option_labels?: Record<string, string>; enabled_value?: string; disabled_value?: string }
 export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt' | 'object'; parameter: string; options?: string[]; enabled_value?: string; disabled_value?: string; group?: string; description?: string; object_fields?: ProvisioningObjectField[] }
 export interface ProvisioningFeature { id: string; name: string; description?: string; controls: ProvisioningFeatureControl[] }
 export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }

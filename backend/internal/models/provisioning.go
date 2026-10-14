@@ -42,6 +42,7 @@ type ProvisioningObjectField struct {
 	Label         string            `json:"label"`
 	Type          string            `json:"type"`
 	Input         string            `json:"input"`
+	Help          string            `json:"help,omitempty"`
 	Options       []string          `json:"options,omitempty"`
 	OptionLabels  map[string]string `json:"option_labels,omitempty"`
 	EnabledValue  string            `json:"enabled_value,omitempty"`
