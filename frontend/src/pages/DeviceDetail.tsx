@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
-import { api, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
+import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -1180,6 +1180,21 @@ const DeviceDetail: Component = () => {
     setActionLoading(null);
   };
 
+  const handleSetWifiRadioEnabled = async (radio: WifiRadio, enabled: boolean) => {
+    const label = `Radio ${radio.index}`;
+    if (!await confirm({ title: `${enabled ? 'Enable' : 'Disable'} ${label}?`, description: `${enabled ? 'Wireless service may become available when the task completes.' : 'Wireless service on this radio will be disabled when the task completes.'}`, confirmLabel: `${enabled ? 'Enable' : 'Disable'} ${label}`, tone: enabled ? 'primary' : 'danger' })) return;
+
+    setActionLoading(`wifi-radio-enable-${radio.index}`);
+    try {
+      await api.setParameterValues(serial(), { [radio.enablePath]: enabled ? '1' : '0' });
+      showMessage('success', `${label} ${enabled ? 'enabled' : 'disabled'} task created.`);
+      refetchTasks();
+    } catch (err) {
+      showMessage('error', `${label} state was not changed. Check the CPE session and retry.`, (err as Error).message);
+    }
+    setActionLoading(null);
+  };
+
   const toggleParam = async (paramPath: string, value: string, successMsg: string) => {
     const key = `toggle-${paramPath}`;
     setActionLoading(key);
@@ -1595,6 +1610,36 @@ const DeviceDetail: Component = () => {
       }
     }
     return wlans;
+  };
+
+  type WifiRadio = {
+    index: number;
+    enabled: boolean;
+    frequency: string;
+    enablePath: string;
+  };
+
+  const getWifiRadios = (): WifiRadio[] => {
+    const radios = new Map<number, { enable?: DeviceParameter; frequency?: DeviceParameter }>();
+    for (const parameter of parameters() || []) {
+      const match = parameter.name.match(/^InternetGatewayDevice\.LANDevice\.1\.WiFi\.Radio\.(\d+)\.(Enable|OperatingFrequencyBand)$/);
+      if (!match) continue;
+      const index = Number(match[1]);
+      const radio = radios.get(index) || {};
+      if (match[2] === 'Enable') radio.enable = parameter;
+      else radio.frequency = parameter;
+      radios.set(index, radio);
+    }
+
+    return [...radios.entries()]
+      .sort(([left], [right]) => left - right)
+      .filter(([, radio]) => radio.enable)
+      .map(([index, radio]) => ({
+        index,
+        enabled: radio.enable!.value === '1' || radio.enable!.value === 'true',
+        frequency: radio.frequency?.value || '—',
+        enablePath: radio.enable!.name,
+      }));
   };
 
   const getHosts = () => {
@@ -2526,7 +2571,7 @@ const DeviceDetail: Component = () => {
                       <tr class="border-b-2 border-subtle bg-base">
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Enable</th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Adm. status</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Type</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">VLAN</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">IP Address</th>
@@ -2729,7 +2774,7 @@ const DeviceDetail: Component = () => {
                       <tr class="border-b-2 border-subtle bg-base">
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">Enable</th>
+                        <th class="text-center px-2 py-2.5 font-semibold text-primary">Adm. status</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">MAC Address</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Duplex</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Speed</th>
@@ -2807,17 +2852,40 @@ const DeviceDetail: Component = () => {
                 Wi-Fi configuration
               </h2>
               <Show when={!parameters.loading || (parameters()?.length ?? 0) > 0} fallback={<div class="space-y-2" aria-label="Loading Wi-Fi configuration"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-3/4" /></div>}>
+                <Show when={getWifiRadios().length > 0}>
+                  <div class="flex flex-wrap items-center gap-2 mb-4" aria-label="Wi-Fi radio states">
+                    <For each={getWifiRadios()}>
+                      {(radio) => (
+                        <div class="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5">
+                          <Show when={isFullAccess()} fallback={<span class={`badge ${radio.enabled ? 'badge-success' : 'badge-error'}`}>{radio.enabled ? 'Enabled' : 'Disabled'}</span>}>
+                            <button
+                              type="button"
+                              onClick={() => handleSetWifiRadioEnabled(radio, !radio.enabled)}
+                              disabled={actionLoading() !== null}
+                              class={`badge cursor-pointer ${radio.enabled ? 'badge-success' : 'badge-error'}`}
+                              aria-label={`${radio.enabled ? 'Disable' : 'Enable'} radio ${radio.index}`}
+                              aria-pressed={radio.enabled}
+                            >
+                              {radio.enabled ? 'Enabled' : 'Disabled'}
+                            </button>
+                          </Show>
+                          <span class="text-xs text-secondary">Radio {radio.index} · {radio.frequency}</span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </Show>
                 <Show when={getWlanConfigs().length > 0} fallback={
                   <EmptyState compact title="No Wi-Fi configuration is stored" description="This CPE has not reported WLAN parameters. Send a connection request with Summon, then refresh the record." />
                 }>
-                <div class="overflow-x-auto">
+                  <div class="overflow-x-auto">
                   <table class="data-table w-full text-xs min-w-[860px]">
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b border-subtle bg-base">
                         <th class="text-left px-2 py-2 font-medium text-secondary">Index</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">On</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Status</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">SSID Name</th>
+                        <th class="text-left px-2 py-2 font-medium text-secondary">Adm. status</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Security</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Band</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Ch</th>
@@ -2832,6 +2900,12 @@ const DeviceDetail: Component = () => {
                           <tr class={`border-t border-subtle/30 hover:bg-elevated/50 transition-colors ${i() % 2 === 1 ? 'bg-elevated/20' : ''}`}>
                             <td class="px-3 py-2 text-secondary">SSID{wlan.index}</td>
                             <td class="px-3 py-2">
+                              <span class={`badge ${statusBadgeClass(wlan.status)}`}>{wlan.status}</span>
+                            </td>
+                            <td class="px-3 py-2">
+                              <span class="text-primary font-medium">{wlan.ssid}</span>
+                            </td>
+                            <td class="px-3 py-2">
                               <Show when={isFullAccess()} fallback={<span class={`badge ${wlan.enabled ? 'badge-success' : 'badge-error'}`}>{wlan.enabled ? 'Yes' : 'No'}</span>}><button
                                 onClick={() => handleSetWifiEnabled(wlan.index, !wlan.enabled)}
                                 disabled={actionLoading() !== null}
@@ -2840,12 +2914,6 @@ const DeviceDetail: Component = () => {
                               >
                                 {wlan.enabled ? 'Yes' : 'No'}
                               </button></Show>
-                            </td>
-                            <td class="px-3 py-2">
-                              <span class={`badge ${statusBadgeClass(wlan.status)}`}>{wlan.status}</span>
-                            </td>
-                            <td class="px-3 py-2">
-                              <span class="text-primary font-medium">{wlan.ssid}</span>
                             </td>
                             <td class="px-3 py-2 text-secondary">{wlan.security}</td>
                             <td class="px-3 py-2 text-secondary">{wlan.frequency}</td>
@@ -2870,7 +2938,7 @@ const DeviceDetail: Component = () => {
                       </For>
                     </tbody>
                   </table>
-                </div>
+                  </div>
                 </Show>
               </Show>
             </div>
