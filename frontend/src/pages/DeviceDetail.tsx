@@ -1551,6 +1551,11 @@ const DeviceDetail: Component = () => {
       const match = p.name.match(/Host\.(\d+)\./);
       return match ? parseInt(match[1]) : 0;
     }))].filter(i => i > 0);
+
+    const getInterfaceName = (path: string) => {
+      const prefix = path.replace(/\.+$/, '');
+      return params.find(parameter => parameter.name === `${prefix}.Name`)?.value?.trim() || '';
+    };
     
     const getWifiBand = (ssidIdx: number): string => {
       const wlanPrefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}.`;
@@ -1586,12 +1591,15 @@ const DeviceDetail: Component = () => {
       const intfType = getVal('InterfaceType');
       
       if (layer2 && layer2 !== '-') {
+        const interfaceName = getInterfaceName(layer2);
         const wlanMatch = layer2.match(/WLANConfiguration\.(\d+)/);
         if (wlanMatch) {
           const ssidIdx = parseInt(wlanMatch[1]);
-          interfaceType = `WiFi ${getWifiBand(ssidIdx)}`;
+          interfaceType = `WiFi ${getWifiBand(ssidIdx)}${interfaceName ? ` · ${interfaceName}` : ''}`;
         } else if (layer2.includes('Ethernet') || layer2.includes('LANEthernet')) {
-          interfaceType = 'Ethernet';
+          interfaceType = `Ethernet${interfaceName ? ` · ${interfaceName}` : ''}`;
+        } else if (interfaceName) {
+          interfaceType = interfaceName;
         }
       } else if (intfType && intfType !== '-') {
         if (intfType === 'Ethernet' || intfType === 'LAN') {
@@ -1637,7 +1645,7 @@ const DeviceDetail: Component = () => {
               ipv6: '-',
               mac: mac,
               negRate: '-',
-              interface: `WiFi ${getWifiBand(ssidIdx)}`,
+              interface: `WiFi ${getWifiBand(ssidIdx)}${getInterfaceName(`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}`) ? ` · ${getInterfaceName(`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}`)}` : ''}`,
               rssi: getVal('X_HW_RSSI'),
               uptime: getVal('X_HW_Uptime'),
             });
