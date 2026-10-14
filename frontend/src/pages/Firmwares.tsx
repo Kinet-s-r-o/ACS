@@ -12,6 +12,8 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
+import SortableHeader from '../components/SortableHeader';
+import { sortRows, type SortDirection } from '../lib/sorting';
 
 const Firmwares: Component = () => {
   const { isFullAccess } = useAuth();
@@ -21,6 +23,8 @@ const Firmwares: Component = () => {
   const [validation, setValidation] = createSignal<{ file?: string; version?: string }>({});
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const { columns, isVisible, toggle } = useColumnVisibility('firmwares', [
     { id: 'filename', label: 'Filename', visible: true },
     { id: 'version', label: 'Version', visible: true },
@@ -55,7 +59,7 @@ const Firmwares: Component = () => {
         fw.description?.toLowerCase().includes(query)
       );
     }
-    return applyColumnFilters(all, columnFilters(), getFilterValue);
+    return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), sortState().column, sortState().direction, (fw, column) => column === 'file_size' ? fw.file_size : getFilterValue(fw, column));
   });
   const pagedFirmwares = createMemo(() => {
     const all = filteredFirmwares();
@@ -227,35 +231,35 @@ const Firmwares: Component = () => {
               <tr class="border-b border-subtle">
                 <Show when={isVisible('filename')}>
                   <th class="px-4 py-3 text-left text-xs font-medium text-muted">
-                    <div class="flex items-center gap-1.5">Filename
+                    <div class="flex items-center gap-1.5"><SortableHeader column="filename" label="Filename" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="filename" label="Filename" active={columnFilters()['filename'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['filename'] = s; else delete n['filename']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('version')}>
                   <th class="px-4 py-3 text-left text-xs font-medium text-muted">
-                    <div class="flex items-center gap-1.5">Version
+                    <div class="flex items-center gap-1.5"><SortableHeader column="version" label="Version" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="version" label="Version" active={columnFilters()['version'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['version'] = s; else delete n['version']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('manufacturer')}>
                   <th class="px-4 py-3 text-left text-xs font-medium text-muted">
-                    <div class="flex items-center gap-1.5">Manufacturer
+                    <div class="flex items-center gap-1.5"><SortableHeader column="manufacturer" label="Manufacturer" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="manufacturer" label="Manufacturer" active={columnFilters()['manufacturer'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['manufacturer'] = s; else delete n['manufacturer']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('file_size')}>
                   <th class="px-4 py-3 text-left text-xs font-medium text-muted">
-                    <div class="flex items-center gap-1.5">Size
+                    <div class="flex items-center gap-1.5"><SortableHeader column="file_size" label="Size" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="file_size" label="Size" active={columnFilters()['file_size'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['file_size'] = s; else delete n['file_size']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('created_at')}>
                   <th class="px-4 py-3 text-left text-xs font-medium text-muted">
-                    <div class="flex items-center gap-1.5">Uploaded
+                    <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Uploaded" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="created_at" label="Uploaded" active={columnFilters()['created_at'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} />
                     </div>
                   </th>
