@@ -991,6 +991,7 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"default_page_size": true, "chart_show_points": true, "app_name": true,
 		"app_logo":               true,
 		"overview_poll_interval": true, "full_tree_poll_interval": true,
+		"auto_refresh_interval":  true,
 	}
 	for key, value := range settings {
 		if !allowed[key] {
@@ -1030,6 +1031,13 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	if value, ok := settings["chart_show_points"]; ok && value != "true" && value != "false" {
 		respondError(w, http.StatusBadRequest, "chart_show_points must be true or false")
 		return
+	}
+	if value, ok := settings["auto_refresh_interval"]; ok {
+		interval, err := strconv.Atoi(value)
+		if err != nil || (interval != 0 && (interval < 15 || interval > 3600)) {
+			respondError(w, http.StatusBadRequest, "auto_refresh_interval must be 0 or an integer between 15 and 3600 seconds")
+			return
+		}
 	}
 	for _, interval := range []struct {
 		key string

@@ -14,6 +14,7 @@ interface Props {
   definitions: InterfaceMetricDefinition[];
   interfacePath: string;
   parameterNames: string[];
+  refreshKey?: number;
 }
 
 const matches = (pattern: string, name: string) => {
@@ -31,7 +32,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     props.parameterNames.filter(name => name.startsWith(props.interfacePath) && matches(def.parameter_pattern, name))
       .map(parameterName => ({ def, parameterName }))));
   const [results] = createResource(
-    () => ({ serial: props.serial, requests: requests().map(item => `${item.def.id}:${item.parameterName}`).join('|') }),
+    () => ({ serial: props.serial, requests: requests().map(item => `${item.def.id}:${item.parameterName}`).join('|'), refreshKey: props.refreshKey ?? 0 }),
     async () => Promise.all(requests().map(item => api.getDeviceInterfaceMetric(props.serial, item.def.id, item.parameterName, 24))),
   );
   const chartData = createMemo(() => {

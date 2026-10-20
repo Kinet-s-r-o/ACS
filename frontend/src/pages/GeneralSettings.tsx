@@ -57,10 +57,15 @@ const GeneralSettings: Component = () => {
       notify({ tone: 'error', title: 'Invalid value', message: 'Application name must be 1–64 characters.' });
       return;
     }
+    const autoRefreshInterval = parseInt(getValue('auto_refresh_interval') || '30', 10);
+    if (isNaN(autoRefreshInterval) || (autoRefreshInterval !== 0 && (autoRefreshInterval < 15 || autoRefreshInterval > 3600))) {
+      notify({ tone: 'error', title: 'Invalid value', message: 'Automatic refresh must be disabled or between 15 seconds and 60 minutes.' });
+      return;
+    }
     const showPoints = getValue('chart_show_points') !== 'false' ? 'true' : 'false';
     setSaving(true);
     try {
-      await api.updateSettings({ default_page_size: String(pageSize), chart_show_points: showPoints, app_name: appName, app_logo: getValue('app_logo') });
+      await api.updateSettings({ default_page_size: String(pageSize), chart_show_points: showPoints, app_name: appName, app_logo: getValue('app_logo'), auto_refresh_interval: String(autoRefreshInterval) });
       initAppName();
       notify({ tone: 'success', title: 'Settings saved', message: 'General settings have been updated.' });
       refetch();
@@ -132,6 +137,24 @@ const GeneralSettings: Component = () => {
                 disabled={!isFullAccess()}
               />
               <p class="text-[11px] text-muted mt-1">Applies to device lists, fault tables, provisioning rules, and other paginated views.</p>
+            </div>
+            <div>
+              <label for="auto-refresh-interval" class="block text-xs text-muted mb-1.5">Device page automatic refresh</label>
+              <select
+                id="auto-refresh-interval"
+                value={getValue('auto_refresh_interval') || '30'}
+                onChange={(e) => setFormData((prev) => ({ ...prev, auto_refresh_interval: e.currentTarget.value }))}
+                class="input w-48"
+                disabled={!isFullAccess()}
+              >
+                <option value="0">Off</option>
+                <option value="15">Every 15 seconds</option>
+                <option value="30">Every 30 seconds</option>
+                <option value="60">Every minute</option>
+                <option value="120">Every 2 minutes</option>
+                <option value="300">Every 5 minutes</option>
+              </select>
+              <p class="text-[11px] text-muted mt-1">Refreshes the open device page without reloading it, including its CWMP task badge.</p>
             </div>
             <div class="flex items-center justify-between pt-4 border-t border-subtle">
               <div>

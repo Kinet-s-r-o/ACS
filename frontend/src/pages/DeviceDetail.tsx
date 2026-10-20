@@ -114,6 +114,7 @@ const DeviceDetail: Component = () => {
   const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
+  const [systemSettings] = createResource(api.getSettings);
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
   const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
@@ -274,8 +275,10 @@ const DeviceDetail: Component = () => {
     return all.slice(start, start + faultPageSize());
   });
   const deviceFaultTotalPages = createMemo(() => Math.ceil(filteredDeviceFaults().length / faultPageSize()));
-  const unresolvedFaultCount = createMemo(() => (deviceFaults() || []).filter(f => !f.resolved).length);
-  const pendingTaskCount = createMemo(() => (tasks() || []).filter(t => t.status === 'pending' || t.status === 'sent').length);
+  const unresolvedFaultCount = createMemo(() => deviceFaultCounts()?.active || 0);
+  const pendingTaskCount = createMemo(() => (deviceTaskCounts()?.pending || 0) + (deviceTaskCounts()?.sent || 0));
+  const [autoRefreshTick, setAutoRefreshTick] = createSignal(0);
+  const [autoRefreshRunning, setAutoRefreshRunning] = createSignal(false);
   const [deletingTask, setDeletingTask] = createSignal<number | null>(null);
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<DeviceSnapshot | null>(null);
@@ -1308,6 +1311,40 @@ const DeviceDetail: Component = () => {
 
   const refreshAll = () => { refetchDevice(); refetchParams(); refetchTasks(); refetchSnapshots(); };
 
+  createEffect(() => {
+    const interval = Number(systemSettings()?.auto_refresh_interval ?? 30);
+    if (!Number.isFinite(interval) || interval <= 0) return;
+    const timer = window.setInterval(() => {
+      if (autoRefreshRunning() || document.visibilityState !== 'visible') return;
+      setAutoRefreshRunning(true);
+      const requests: Promise<unknown>[] = [Promise.resolve(refetchDevice()), Promise.resolve(refetchDeviceTaskCounts()), Promise.resolve(refetchFaultCounts())];
+      switch (activeTab()) {
+        case 'overview':
+        case 'features':
+        case 'hosts':
+        case 'credentials':
+        case 'diagnostic':
+          requests.push(Promise.resolve(refetchParams()));
+          break;
+        case 'tasks':
+          requests.push(Promise.resolve(refetchTaskRows()));
+          break;
+        case 'faults':
+          requests.push(Promise.resolve(refetchFaultRows()));
+          break;
+        case 'snapshots':
+          requests.push(Promise.resolve(refetchSnapshots()), Promise.resolve(refetchParams()));
+          break;
+        case 'metrics':
+          setAutoRefreshTick(value => value + 1);
+          break;
+      }
+      if (statsInterface()) setAutoRefreshTick(value => value + 1);
+      void Promise.allSettled(requests).finally(() => setAutoRefreshRunning(false));
+    }, interval * 1000);
+    onCleanup(() => window.clearInterval(timer));
+  });
+
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleString('id-ID');
@@ -2235,7 +2272,7 @@ const DeviceDetail: Component = () => {
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <For each={groupedMetrics()}>
                     {(group) => (
-                      <MetricChart serial={serial()} metrics={group} />
+                      <MetricChart serial={serial()} metrics={group} refreshKey={autoRefreshTick()} />
                     )}
                   </For>
                 </div>
@@ -3336,7 +3373,7 @@ const DeviceDetail: Component = () => {
           <div class="space-y-5">
             <For each={interfaceMetricGroups()}>{(group) => <section class="rounded border border-subtle p-3">
               <h3 class="mb-2 text-xs font-medium text-secondary">{group[0].group || group[0].name}</h3>
-              <InterfaceMetricChart serial={serial()} definitions={group} interfacePath={statsInterface()!.path} parameterNames={(parameters() || []).map(parameter => parameter.name)} />
+              <InterfaceMetricChart serial={serial()} definitions={group} interfacePath={statsInterface()!.path} parameterNames={(parameters() || []).map(parameter => parameter.name)} refreshKey={autoRefreshTick()} />
             </section>}</For>
           </div>
         </Dialog>

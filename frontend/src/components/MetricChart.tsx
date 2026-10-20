@@ -19,6 +19,7 @@ interface MetricChartProps {
   serial: string;
   metrics: MetricDefinition[];
   hours?: number;
+  refreshKey?: number;
 }
 
 const DEFAULT_PALETTE = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb923c'];
@@ -106,7 +107,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
   const chartShowPoints = createMemo(() => settings()?.['chart_show_points'] !== 'false');
 
   const [data] = createResource(
-    () => ({ serial: props.serial, ids: props.metrics.map((m) => m.id), bucket: bucket().value, hours: bucket().hours }),
+    () => ({ serial: props.serial, ids: props.metrics.map((m) => m.id), bucket: bucket().value, hours: bucket().hours, refreshKey: props.refreshKey ?? 0 }),
     async (q) => {
       const results = await Promise.all(
         q.ids.map((id) => api.getDeviceMetrics(q.serial, id, q.bucket, q.hours)),
