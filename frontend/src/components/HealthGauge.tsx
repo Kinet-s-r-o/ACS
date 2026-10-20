@@ -5,6 +5,7 @@ import { GaugeChart } from 'echarts/charts';
 import { CanvasRenderer } from 'echarts/renderers';
 import { gaugeZones } from '../lib/health';
 import type { Threshold } from '../lib/api';
+import type { GaugeStyle } from '../lib/api';
 
 echarts.use([GaugeChart, CanvasRenderer]);
 
@@ -23,7 +24,7 @@ interface HealthGaugeProps {
   arc?: string;
   pointer?: boolean;
   values?: { value: number | null; label: string; centerText: string }[];
-  gaugeStyle?: 'basic' | 'progress' | 'ring' | 'speed' | 'temperature';
+  gaugeStyle?: GaugeStyle;
 }
 
 const HealthGauge: Component<HealthGaugeProps> = (props) => {
@@ -48,6 +49,16 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
         zones.push([Number(((warn - min) / range).toFixed(4)), '#f59e0b']);
       }
       zones.push([1, '#10b981']);
+    } else if (gaugeStyle === 'speed') {
+      zones = [[0.65, '#22c55e'], [0.85, '#f59e0b'], [1, '#f43f5e']];
+    } else if (gaugeStyle === 'stage') {
+      zones = [[0.78, '#41d3e8'], [0.9, '#41d3e8'], [1, '#f43f5e']];
+    } else if (gaugeStyle === 'grade') {
+      zones = [[0.2, '#fb7185'], [0.4, '#fbbf24'], [0.6, '#fde047'], [0.8, '#38bdf8'], [1, '#4ade80']];
+    } else if (gaugeStyle === 'barometer') {
+      zones = [[0.25, '#38bdf8'], [0.5, '#34d399'], [0.75, '#fbbf24'], [1, '#fb7185']];
+    } else if (gaugeStyle === 'temperature') {
+      zones = [[0.55, '#38bdf8'], [0.8, '#f59e0b'], [1, '#f97316']];
     } else {
       zones = [];
       if (warn != null && warn < max) {
@@ -63,9 +74,14 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
     let startAngle = 200;
     let endAngle = -20;
     if (arc === '180') { startAngle = 180; endAngle = 0; }
+    else if (arc === '220') { startAngle = 200; endAngle = -20; }
     else if (arc === '360') { startAngle = 90; endAngle = -270; }
-    const gaugeWidth = gaugeStyle === 'ring' ? 18 : gaugeStyle === 'temperature' ? 16 : gaugeStyle === 'progress' ? 14 : 12;
-    const progressColor = gaugeStyle === 'temperature' ? '#f97316' : gaugeStyle === 'progress' ? '#38bdf8' : '#6366f1';
+    const gaugeWidth = gaugeStyle === 'ring' ? 18 : gaugeStyle === 'temperature' ? 22 : gaugeStyle === 'progress' ? 18 : 12;
+    const progressColor = gaugeStyle === 'temperature' ? '#ffab91' : gaugeStyle === 'stage' ? '#41d3e8' : gaugeStyle === 'speed' ? '#58d9f9' : '#38bdf8';
+    const showScale = ['speed', 'temperature', 'stage', 'grade', 'barometer'].includes(gaugeStyle || '');
+    const showPointer = pointer !== false && ['basic', 'simple', 'speed', 'barometer'].includes(gaugeStyle || '');
+    const labelOffset = gaugeStyle === 'ring' || gaugeStyle === 'multi' ? '0%' : gaugeStyle === 'progress' ? '68%' : gaugeStyle === 'temperature' ? '-15%' : '35%';
+    const showProgress = ['simple', 'speed', 'progress', 'stage', 'temperature', 'ring'].includes(gaugeStyle || '');
 
     return {
       animation: animated,
@@ -78,46 +94,60 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
           max,
           startAngle,
           endAngle,
-          radius: '90%',
+          radius: gaugeStyle === 'ring' ? '82%' : '90%',
+          splitNumber: gaugeStyle === 'speed' ? 12 : gaugeStyle === 'grade' ? 4 : 10,
           progress: {
-            show: gaugeStyle === 'progress' || gaugeStyle === 'ring' || gaugeStyle === 'temperature',
+            show: showProgress,
             width: gaugeWidth,
-            roundCap: gaugeStyle === 'ring',
+            overlap: gaugeStyle === 'ring' || gaugeStyle === 'multi' ? false : undefined,
+            roundCap: ['ring', 'speed', 'simple'].includes(gaugeStyle || ''),
             itemStyle: { color: progressColor },
           },
           axisLine: {
+            roundCap: ['ring', 'speed', 'simple'].includes(gaugeStyle || ''),
             lineStyle: {
               width: gaugeWidth,
-              color: gaugeStyle === 'progress' || gaugeStyle === 'ring' || gaugeStyle === 'temperature'
+              color: gaugeStyle === 'progress' || gaugeStyle === 'ring' || gaugeStyle === 'multi'
                 ? [[1, '#263244']]
                 : zones,
             },
           },
           pointer: {
-            show: pointer !== false && gaugeStyle !== 'ring' && gaugeStyle !== 'temperature',
+            show: showPointer,
             length: '60%',
             width: 4,
             itemStyle: { color: 'auto' },
           },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { show: false },
+          axisTick: { show: showScale, splitNumber: gaugeStyle === 'temperature' ? 5 : 2, distance: gaugeStyle === 'temperature' ? -gaugeWidth - 8 : -gaugeWidth - 2, length: gaugeStyle === 'barometer' ? 5 : 4, lineStyle: { color: gaugeStyle === 'grade' ? 'auto' : '#94a3b8', width: 1 } },
+          splitLine: { show: showScale, distance: gaugeStyle === 'temperature' ? -gaugeWidth - 14 : -gaugeWidth - 4, length: gaugeStyle === 'barometer' ? 12 : 8, lineStyle: { color: gaugeStyle === 'grade' ? 'auto' : '#cbd5e1', width: 2 } },
+          axisLabel: { show: showScale, distance: gaugeStyle === 'temperature' ? -gaugeWidth + 2 : 12, color: gaugeStyle === 'grade' ? 'auto' : '#94a3b8', fontSize: gaugeStyle === 'barometer' ? 9 : 8 },
           detail: {
             valueAnimation: true,
             formatter: (value: number) => props.values?.length ? props.values.find(item => item.value === value)?.centerText ?? String(value) : centerText,
-            color: 'inherit',
-            fontSize: 14,
+            color: gaugeStyle === 'temperature' ? '#ffab91' : 'inherit',
+            backgroundColor: gaugeStyle === 'speed' ? '#fff' : undefined,
+            borderColor: gaugeStyle === 'speed' ? '#999' : undefined,
+            borderWidth: gaugeStyle === 'speed' ? 1 : 0,
+            borderRadius: gaugeStyle === 'speed' ? 4 : 0,
+            fontSize: gaugeStyle === 'ring' || gaugeStyle === 'progress' ? 18 : gaugeStyle === 'temperature' ? 16 : 14,
             fontWeight: 'bold',
-            offsetCenter: [0, '70%'],
+            offsetCenter: [0, labelOffset],
           },
           title: {
-            show: true,
+            show: gaugeStyle !== 'ring' && gaugeStyle !== 'progress',
             fontSize: 10,
             color: '#71717a',
-            offsetCenter: [0, '95%'],
+            offsetCenter: [0, gaugeStyle === 'temperature' ? '88%' : '95%'],
           },
           data: props.values?.length
-            ? props.values.filter(item => item.value !== null).map(item => ({ value: item.value!, name: item.label }))
+            ? props.values.filter(item => item.value !== null).map((item, index, items) => ({
+              value: item.value!,
+              name: item.label,
+              ...(gaugeStyle === 'multi' ? {
+                title: { offsetCenter: [0, `${-24 + index * (48 / Math.max(1, items.length - 1))}%`] },
+                detail: { offsetCenter: [0, `${-12 + index * (48 / Math.max(1, items.length - 1))}%`], formatter: () => item.centerText },
+              } : {}),
+            }))
             : [{ value: safeVal, name: props.label }],
         },
       ],
@@ -147,7 +177,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
   return (
     <div>
       <Show when={props.value !== null}>
-        <div ref={chartRef!} style={{ width: '100%', height: '80px' }} />
+        <div ref={chartRef!} style={{ width: '100%', height: props.gaugeStyle === 'ring' ? '108px' : '96px' }} />
       </Show>
       <Show when={props.value === null}>
         <div class="flex items-center justify-center h-20 text-muted text-lg font-mono">-</div>

@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createSignal, createResource, createEffect, Show, For } from 'solid-js';
 import { Plus, X } from 'lucide-solid';
-import { api, type MetricDefinition } from '../lib/api';
+import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import Dialog from './Dialog';
 import ColorSwatch from './ColorSwatch';
 import { useFeedback } from './Feedback';
@@ -318,8 +318,8 @@ const MetricModal: Component<MetricModalProps> = (props) => {
               <Show when={metricForm().display_format === 'gauge'}>
                 <div>
                   <label for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
-                  <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as 'basic' | 'progress' | 'ring' | 'speed' | 'temperature'; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'speed' || style === 'temperature' ? '180' : '270' })); }} class="input w-full">
-                    <option value="basic">Basic</option><option value="progress">Progress</option><option value="ring">Ring</option><option value="speed">Speedometer</option><option value="temperature">Temperature</option>
+                  <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as GaugeStyle; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'temperature' ? '220' : ['speed', 'stage', 'grade', 'barometer'].includes(style) ? '180' : '270' })); }} class="input w-full">
+                    <option value="basic">Gauge Basic</option><option value="simple">Simple Gauge</option><option value="speed">Speed Gauge</option><option value="progress">Progress Gauge</option><option value="stage">Stage Speed Gauge</option><option value="grade">Grade Gauge</option><option value="multi">Multi Title Gauge</option><option value="temperature">Temperature Gauge</option><option value="ring">Ring Gauge</option><option value="barometer">Gauge Barometer</option>
                   </select>
                 </div>
                 <div>
@@ -332,8 +332,9 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </div>
                 <div>
                   <label for="metric-gauge-arc" class="block text-xs text-muted mb-1.5">Gauge arc</label>
-                  <select id="metric-gauge-arc" value={metricForm().gauge_arc} onChange={(e) => setMetricForm(f => ({ ...f, gauge_arc: e.currentTarget.value as '180' | '270' | '360' }))} class="input w-full">
+                  <select id="metric-gauge-arc" value={metricForm().gauge_arc} onChange={(e) => setMetricForm(f => ({ ...f, gauge_arc: e.currentTarget.value as '180' | '220' | '270' | '360' }))} class="input w-full">
                     <option value="180">180° (half circle)</option>
+                    <option value="220">220° (temperature gauge)</option>
                     <option value="270">270° (3/4 circle)</option>
                     <option value="360">360° (full circle)</option>
                   </select>

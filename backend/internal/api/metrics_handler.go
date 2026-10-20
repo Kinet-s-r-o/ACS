@@ -340,12 +340,12 @@ func validateMetricDefinition(def *models.MetricDefinition) error {
 		return errors.New("chart_type is not a valid ECharts type")
 	}
 	switch def.GaugeArc {
-	case "", "180", "270", "360":
+	case "", "180", "220", "270", "360":
 	default:
-		return errors.New("gauge_arc must be '180', '270', or '360'")
+		return errors.New("gauge_arc must be '180', '220', '270', or '360'")
 	}
 	switch def.GaugeStyle {
-	case "", "basic", "progress", "ring", "speed", "temperature":
+	case "", "basic", "simple", "speed", "progress", "stage", "grade", "multi", "temperature", "ring", "barometer":
 	default:
 		return errors.New("gauge_style is not supported")
 	}

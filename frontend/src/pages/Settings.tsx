@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createSignal, createResource, createMemo, Show, For } from 'solid-js';
 import { Key, LogOut, Plus, Edit, Trash2, Save, Activity } from 'lucide-solid';
-import { api, type MetricDefinition } from '../lib/api';
+import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import ColorSwatch from '../components/ColorSwatch';
@@ -529,8 +529,8 @@ const Settings: Component = () => {
                 </div>
                 <div>
                   <label class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
-                  <select value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as 'basic' | 'progress' | 'ring' | 'speed' | 'temperature'; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'speed' || style === 'temperature' ? '180' : '270' })); }} class="input w-full">
-                    <option value="basic">Basic</option><option value="progress">Progress</option><option value="ring">Ring</option><option value="speed">Speedometer</option><option value="temperature">Temperature</option>
+                  <select value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as GaugeStyle; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'temperature' ? '220' : ['speed', 'stage', 'grade', 'barometer'].includes(style) ? '180' : '270' })); }} class="input w-full">
+                    <option value="basic">Gauge Basic</option><option value="simple">Simple Gauge</option><option value="speed">Speed Gauge</option><option value="progress">Progress Gauge</option><option value="stage">Stage Speed Gauge</option><option value="grade">Grade Gauge</option><option value="multi">Multi Title Gauge</option><option value="temperature">Temperature Gauge</option><option value="ring">Ring Gauge</option><option value="barometer">Gauge Barometer</option>
                   </select>
                 </div>
               </div>

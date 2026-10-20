@@ -1,4 +1,4 @@
-import type { MetricDefinition, Threshold } from './api';
+import type { GaugeStyle, MetricDefinition, Threshold } from './api';
 
 export interface HealthTile {
   label: string;
@@ -12,7 +12,7 @@ export interface HealthTile {
   thresholds?: Threshold[];
   arc?: string;
   pointer?: boolean;
-  gaugeStyle?: 'basic' | 'progress' | 'ring' | 'speed' | 'temperature';
+  gaugeStyle?: GaugeStyle;
   size?: 'small' | 'medium' | 'large';
 }
 
