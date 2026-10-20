@@ -22,6 +22,8 @@ interface HealthGaugeProps {
   direction?: 'higher_is_worse' | 'lower_is_worse';
   arc?: string;
   pointer?: boolean;
+  values?: { value: number | null; label: string; centerText: string }[];
+  gaugeStyle?: 'basic' | 'progress' | 'ring' | 'speed' | 'temperature';
 }
 
 const HealthGauge: Component<HealthGaugeProps> = (props) => {
@@ -29,7 +31,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
   let chart: echarts.ECharts | null = null;
 
   const buildOption = () => {
-    const { value, min, max, centerText, animated, warn, critical, direction, thresholds, arc, pointer } = props;
+    const { value, min, max, centerText, animated, warn, critical, direction, thresholds, arc, pointer, gaugeStyle } = props;
     const safeVal = value ?? min;
     const range = max - min || 1;
 
@@ -60,8 +62,10 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
     // Arc angles based on gauge_arc setting
     let startAngle = 200;
     let endAngle = -20;
-    if (arc === '180') { startAngle = 180; endAngle = 0; }
-    else if (arc === '360') { startAngle = 90; endAngle = -270; }
+    if (arc === '180' || gaugeStyle === 'speed' || gaugeStyle === 'temperature') { startAngle = 180; endAngle = 0; }
+    else if (arc === '360' || gaugeStyle === 'ring') { startAngle = 90; endAngle = -270; }
+    if (gaugeStyle === 'progress') zones = [[1, '#38bdf8']];
+    const gaugeWidth = gaugeStyle === 'ring' ? 18 : gaugeStyle === 'temperature' ? 16 : 12;
 
     return {
       animation: animated,
@@ -77,7 +81,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
           radius: '90%',
           axisLine: {
             lineStyle: {
-              width: 12,
+              width: gaugeWidth,
               color: zones,
             },
           },
@@ -92,7 +96,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
           axisLabel: { show: false },
           detail: {
             valueAnimation: true,
-            formatter: () => centerText,
+            formatter: (value: number) => props.values?.length ? props.values.find(item => item.value === value)?.centerText ?? String(value) : centerText,
             color: 'inherit',
             fontSize: 14,
             fontWeight: 'bold',
@@ -104,12 +108,9 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
             color: '#71717a',
             offsetCenter: [0, '95%'],
           },
-          data: [
-            {
-              value: safeVal,
-              name: props.label,
-            },
-          ],
+          data: props.values?.length
+            ? props.values.filter(item => item.value !== null).map(item => ({ value: item.value!, name: item.label }))
+            : [{ value: safeVal, name: props.label }],
         },
       ],
     };

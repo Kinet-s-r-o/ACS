@@ -53,6 +53,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   gauge_max: null,
   gauge_arc: '270',
   gauge_pointer: true,
+  gauge_style: 'basic',
   thresholds: [],
   chart_type: 'line',
 };
@@ -179,6 +180,7 @@ const MetricsSettings: Component = () => {
       gauge_max: def.gauge_max ?? null,
       gauge_arc: def.gauge_arc || '270',
       gauge_pointer: def.gauge_pointer ?? true,
+      gauge_style: def.gauge_style || 'basic',
       thresholds: def.thresholds || [],
       chart_type: def.chart_type || 'line',
     });
@@ -215,6 +217,7 @@ const MetricsSettings: Component = () => {
       gauge_max: def.gauge_max ?? null,
       gauge_arc: def.gauge_arc || '270',
       gauge_pointer: def.gauge_pointer ?? true,
+      gauge_style: def.gauge_style || 'basic',
       thresholds: def.thresholds || [],
       chart_type: def.chart_type || 'line',
     });
@@ -589,6 +592,12 @@ const MetricsSettings: Component = () => {
                   </select>
                 </div>
                 <Show when={metricForm().display_format === 'gauge'}>
+                <div>
+                  <label for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
+                  <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => setMetricForm(f => ({ ...f, gauge_style: e.currentTarget.value as typeof f.gauge_style }))} class="input w-full">
+                    <option value="basic">Basic</option><option value="progress">Progress</option><option value="ring">Ring</option><option value="speed">Speedometer</option><option value="temperature">Temperature</option>
+                  </select>
+                </div>
                   <div>
                     <label for="metric-gauge-min" class="block text-xs text-muted mb-1.5">Gauge min</label>
                     <input id="metric-gauge-min" type="number" step="any" value={metricForm().gauge_min ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, gauge_min: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="auto" class="input w-full" />

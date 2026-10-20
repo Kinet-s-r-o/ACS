@@ -39,6 +39,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   gauge_max: null,
   gauge_arc: '270',
   gauge_pointer: true,
+  gauge_style: 'basic',
   thresholds: [],
   chart_type: 'line',
 };
@@ -123,6 +124,7 @@ const Settings: Component = () => {
       gauge_max: def.gauge_max ?? null,
       gauge_arc: def.gauge_arc || '270',
       gauge_pointer: def.gauge_pointer ?? true,
+      gauge_style: def.gauge_style || 'basic',
       thresholds: def.thresholds || [],
       chart_type: def.chart_type || 'line',
     });
@@ -523,6 +525,12 @@ const Settings: Component = () => {
                   <select id="metric-gauge-animated" value={metricForm().gauge_animated ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, gauge_animated: e.currentTarget.value === 'true' }))} class="input w-full">
                     <option value="true">Yes — animate on load</option>
                     <option value="false">No — static</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
+                  <select value={metricForm().gauge_style} onChange={(e) => setMetricForm(f => ({ ...f, gauge_style: e.currentTarget.value as typeof f.gauge_style }))} class="input w-full">
+                    <option value="basic">Basic</option><option value="progress">Progress</option><option value="ring">Ring</option><option value="speed">Speedometer</option><option value="temperature">Temperature</option>
                   </select>
                 </div>
               </div>

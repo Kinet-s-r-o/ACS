@@ -12,6 +12,7 @@ export interface HealthTile {
   thresholds?: Threshold[];
   arc?: string;
   pointer?: boolean;
+  gaugeStyle?: 'basic' | 'progress' | 'ring' | 'speed' | 'temperature';
   size?: 'small' | 'medium' | 'large';
 }
 

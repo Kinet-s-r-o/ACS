@@ -1510,6 +1510,7 @@ const DeviceDetail: Component = () => {
           thresholds: def.thresholds,
           arc: def.gauge_arc,
           pointer: def.gauge_pointer,
+          gaugeStyle: def.gauge_style || 'basic',
           size: def.health_size || 'small',
         };
       });
@@ -2024,7 +2025,7 @@ const DeviceDetail: Component = () => {
                         <Show when={group.label}>
                           <div class="text-[10px] font-medium text-muted uppercase tracking-wide mb-1">{group.label}</div>
                         </Show>
-                        <div class={group.tiles.length > 1 ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : ''}>
+                        <Show when={group.tiles.length > 1 && group.tiles.every(tile => tile.format === 'gauge')} fallback={<div class={group.tiles.length > 1 ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : ''}>
                           <For each={group.tiles}>
                             {(tile) => (
                               <div>
@@ -2040,6 +2041,7 @@ const DeviceDetail: Component = () => {
                                     thresholds={tile.thresholds}
                                     arc={tile.arc}
                                     pointer={tile.pointer}
+                                    gaugeStyle={tile.gaugeStyle}
                                   />
                                 </Show>
                                 <Show when={tile.format !== 'gauge'}>
@@ -2054,7 +2056,22 @@ const DeviceDetail: Component = () => {
                               </div>
                             )}
                           </For>
-                        </div>
+                        </div>}>
+                          <HealthGauge
+                            value={group.tiles[0].raw ?? null}
+                            min={group.tiles[0].min ?? 0}
+                            max={group.tiles[0].max ?? 100}
+                            color={group.tiles[0].color}
+                            label={group.tiles[0].label}
+                            centerText={group.tiles[0].value}
+                            animated={group.tiles[0].animated ?? true}
+                            thresholds={group.tiles[0].thresholds}
+                            arc={group.tiles[0].arc}
+                            pointer={group.tiles[0].pointer}
+                            gaugeStyle={group.tiles[0].gaugeStyle}
+                            values={group.tiles.map(tile => ({ value: tile.raw ?? null, label: tile.label, centerText: tile.value }))}
+                          />
+                        </Show>
                       </div>
                     )}
                   </For>

@@ -344,5 +344,10 @@ func validateMetricDefinition(def *models.MetricDefinition) error {
 	default:
 		return errors.New("gauge_arc must be '180', '270', or '360'")
 	}
+	switch def.GaugeStyle {
+	case "", "basic", "progress", "ring", "speed", "temperature":
+	default:
+		return errors.New("gauge_style is not supported")
+	}
 	return nil
 }

@@ -44,6 +44,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   gauge_max: null,
   gauge_arc: '270',
   gauge_pointer: true,
+  gauge_style: 'basic' as const,
   thresholds: [],
   chart_type: 'line',
 };
@@ -91,6 +92,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
         gauge_max: m.gauge_max ?? null,
         gauge_arc: m.gauge_arc || '270',
         gauge_pointer: m.gauge_pointer ?? true,
+        gauge_style: m.gauge_style || 'basic',
         thresholds: m.thresholds || [],
         chart_type: m.chart_type || 'line',
       });
@@ -314,6 +316,12 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </select>
               </div>
               <Show when={metricForm().display_format === 'gauge'}>
+                <div>
+                  <label for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
+                  <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => setMetricForm(f => ({ ...f, gauge_style: e.currentTarget.value as typeof f.gauge_style }))} class="input w-full">
+                    <option value="basic">Basic</option><option value="progress">Progress</option><option value="ring">Ring</option><option value="speed">Speedometer</option><option value="temperature">Temperature</option>
+                  </select>
+                </div>
                 <div>
                   <label for="metric-gauge-min" class="block text-xs text-muted mb-1.5">Gauge min</label>
                   <input id="metric-gauge-min" type="number" step="any" value={metricForm().gauge_min ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, gauge_min: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="auto" class="input w-full" />

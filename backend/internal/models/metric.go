@@ -49,6 +49,7 @@ type MetricDefinition struct {
 	GaugeMax           *float64    `json:"gauge_max"`
 	GaugeArc           string      `json:"gauge_arc" gorm:"not null;default:'270'"`
 	GaugePointer       bool        `json:"gauge_pointer" gorm:"default:true"`
+	GaugeStyle         string      `json:"gauge_style" gorm:"not null;default:'basic'"`
 	Thresholds         []Threshold `json:"thresholds" gorm:"type:jsonb;serializer:json"`
 	ChartType          string      `json:"chart_type" gorm:"not null;default:'line'"`
 	CreatedAt          time.Time   `json:"created_at" gorm:"autoCreateTime"`
