@@ -79,6 +79,7 @@ const Provisioning: Component = () => {
   const [copyingProv, setCopyingProv] = createSignal(false);
   const [showTemplateModal, setShowTemplateModal] = createSignal(false);
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
+  const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '' });
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
@@ -455,15 +456,25 @@ const Provisioning: Component = () => {
 
   const openCreateTemplate = () => {
     setEditingTemplate(null);
+    setCloningTemplate(null);
     setTemplateForm({ name: '', manufacturer: '', product_class: '', description: '' });
     clearTemplateImagePreview();
     setShowTemplateModal(true);
   };
 
   const openEditTemplate = (t: ProvisioningTemplate) => {
+    setCloningTemplate(null);
     setEditingTemplate(t);
     setTemplateForm({ name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '' });
     void loadTemplateImage(t);
+    setShowTemplateModal(true);
+  };
+
+  const openCloneTemplate = (template: ProvisioningTemplate) => {
+    setEditingTemplate(null);
+    setCloningTemplate(template);
+    setTemplateForm({ name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '' });
+    clearTemplateImagePreview();
     setShowTemplateModal(true);
   };
 
@@ -479,6 +490,25 @@ const Provisioning: Component = () => {
       await loadProvTemplates();
     } catch (error) { notify({ tone: 'error', title: 'Could not create template', message: 'No template was added.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
+  };
+
+  const handleCloneTemplate = async () => {
+    const source = cloningTemplate();
+    const form = templateForm();
+    if (!source || pendingAction()) return;
+    if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
+    setPendingAction('clone-template');
+    try {
+      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim() });
+      notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, features, variables, and device photo.` });
+      setShowTemplateModal(false);
+      setCloningTemplate(null);
+      await loadProvTemplates();
+      await refetchMetrics();
+      selectTemplate(cloned);
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not duplicate template', message: 'The source template was not changed.', detail: (error as Error).message, persistent: true });
+    } finally { setPendingAction(null); }
   };
 
   const handleUpdateTemplate = async () => {
@@ -796,6 +826,9 @@ const Provisioning: Component = () => {
                           </Show>
                         </div>
                         <div class="flex items-center gap-1 shrink-0 ml-2">
+                          <button onClick={(e) => { e.stopPropagation(); openCloneTemplate(t); }} class="icon-button" aria-label={`Duplicate template ${t.name}`} title="Duplicate template">
+                            <Copy size={13} />
+                          </button>
                           <button onClick={(e) => { e.stopPropagation(); openEditTemplate(t); }} class="icon-button" aria-label={`Edit template ${t.name}`}>
                             <Edit2 size={13} />
                           </button>
@@ -1313,10 +1346,10 @@ const Provisioning: Component = () => {
       </Show>
       <Show when={showTemplateModal()}>
         <Dialog
-          title={editingTemplate() ? 'Edit template' : 'Add template'}
-          onClose={() => setShowTemplateModal(false)}
+          title={editingTemplate() ? 'Edit template' : cloningTemplate() ? 'Duplicate template' : 'Add template'}
+          onClose={() => { setShowTemplateModal(false); setCloningTemplate(null); }}
         >
-          <form onSubmit={(e) => { e.preventDefault(); editingTemplate() ? handleUpdateTemplate() : handleCreateTemplate(); }} class="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); editingTemplate() ? handleUpdateTemplate() : cloningTemplate() ? handleCloneTemplate() : handleCreateTemplate(); }} class="space-y-4">
             <div>
               <label for="template-name" class="block text-xs text-muted mb-1.5">Name</label>
               <input id="template-name" type="text" value={templateForm().name} onInput={(e) => setTemplateForm(f => ({ ...f, name: e.currentTarget.value }))} class="input w-full" placeholder="e.g. SkyDash AC1000" required />
@@ -1333,6 +1366,7 @@ const Provisioning: Component = () => {
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
               <input id="template-description" type="text" value={templateForm().description} onInput={(e) => setTemplateForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="e.g. Rules for SkyDash AC1000 devices" />
             </div>
+            <Show when={cloningTemplate()}><p class="text-xs text-muted">All rules, matching metrics, interface metrics, variables, features, and the device photo will be copied. Set the identity for the new device type.</p></Show>
             <Show when={editingTemplate()}>
               <div class="space-y-2">
                 <span class="block text-xs text-muted">Device photo (optional)</span>
@@ -1360,7 +1394,7 @@ const Provisioning: Component = () => {
             <div class="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowTemplateModal(false)} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
               <button type="submit" class="btn btn-primary flex-1" disabled={pendingAction() !== null}>
-                {pendingAction() ? 'Saving…' : editingTemplate() ? 'Update template' : 'Add template'}
+                {pendingAction() ? 'Saving…' : editingTemplate() ? 'Update template' : cloningTemplate() ? 'Duplicate template' : 'Add template'}
               </button>
             </div>
           </form>

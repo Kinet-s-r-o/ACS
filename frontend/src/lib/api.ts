@@ -180,6 +180,7 @@ export const api = {
   reorderProvisioningRules: (templateId: number, ids: number[]) => request<{ status: string }>('/provisioning/reorder', { method: 'POST', body: JSON.stringify({ template_id: templateId, ids }) }),
   getProvisioningTemplates: () => request<ProvisioningTemplate[]>('/provisioning/templates'),
   createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
+  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
   updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
   getProvisioningTemplateImage: (id: number) => requestBlob(`/provisioning/templates/${id}/image`),

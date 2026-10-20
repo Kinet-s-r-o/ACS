@@ -221,6 +221,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /provisioning/reorder", auth.RequirePermission(models.PermProvisioningWrite)(r.handleReorderProvisioningRules))
 	apiMux.HandleFunc("GET /provisioning/templates", auth.RequirePermission(models.PermProvisioningRead)(r.handleListProvisioningTemplates))
 	apiMux.HandleFunc("POST /provisioning/templates", auth.RequirePermission(models.PermProvisioningWrite)(r.handleCreateProvisioningTemplate))
+	apiMux.HandleFunc("POST /provisioning/templates/{id}/clone", auth.RequirePermission(models.PermProvisioningWrite)(r.handleCloneProvisioningTemplate))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleUpdateProvisioningTemplate))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplate))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningRead)(r.handleGetProvisioningTemplateImage))
@@ -991,7 +992,7 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"default_page_size": true, "chart_show_points": true, "app_name": true,
 		"app_logo":               true,
 		"overview_poll_interval": true, "full_tree_poll_interval": true,
-		"auto_refresh_interval":  true,
+		"auto_refresh_interval": true,
 	}
 	for key, value := range settings {
 		if !allowed[key] {
