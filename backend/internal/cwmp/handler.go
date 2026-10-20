@@ -636,7 +636,8 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 				ValueType: p.ValueType,
 			})
 		}
-		fullTree := session.AutoFetchPhase == 1 && session.CurrentTaskID == 0 && len(params) > 0
+		fullTree := len(params) > 0 && ((session.AutoFetchPhase == 1 && session.CurrentTaskID == 0) || session.CurrentFullTreeFetch)
+		session.CurrentFullTreeFetch = false
 		var saveErr error
 		if fullTree {
 			saveErr = h.parameterRepo.SaveFullTreeParameters(ctx, session.DeviceID, params)
@@ -1147,7 +1148,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 	defer session.mu.Unlock()
 
 	if session.State == StateProcessingTasks {
-		if h.faultRepo != nil && session.DeviceID > 0 && session.AutoFetchPhase == 0 {
+		if h.faultRepo != nil && session.DeviceID > 0 && session.AutoFetchPhase == 0 && !(faultCode == "9005" && session.CurrentDeleteObjectPath != "") {
 			deviceFault := &models.Fault{
 				DeviceID:      session.DeviceID,
 				FaultCode:     faultCode,
@@ -1179,6 +1180,20 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 		}
 
 		if session.CurrentTaskID > 0 && h.taskRepo != nil {
+			if faultCode == "9005" && session.CurrentDeleteObjectPath != "" {
+				if h.parameterRepo != nil {
+					if err := h.parameterRepo.DeleteObjectParameters(ctx, session.DeviceID, session.CurrentDeleteObjectPath); err != nil {
+						return nil, fmt.Errorf("remove cached parameters for absent object: %w", err)
+					}
+				}
+				if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusCompleted, map[string]interface{}{"already_absent": true, "fault_code": faultCode}, ""); err != nil {
+					return nil, fmt.Errorf("complete delete-object task for absent object: %w", err)
+				}
+				session.CurrentTaskID = 0
+				session.CurrentDeleteObjectPath = ""
+				session.FeatureObjectPath, session.FeatureObjectInstance, session.FeatureObjectStage, session.FeatureObjectNames = "", "", 0, nil
+				return h.getNextTask(ctx, session)
+			}
 			if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusFailed, nil, faultMessage); err != nil {
 				return nil, fmt.Errorf("fail task after CWMP fault: %w", err)
 			}
@@ -1222,11 +1237,16 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 
 		session.CurrentTaskID = task.ID
 		session.CurrentDeleteObjectPath = ""
+		session.CurrentFullTreeFetch = false
 		session.State = StateProcessingTasks
 		request, err := h.buildTaskRequest(task)
 		if err == nil {
+			if values, ok := request.(*GetParameterValues); ok && len(values.ParameterNames) == 1 && values.ParameterNames[0] == session.DataModelRoot {
+				session.CurrentFullTreeFetch = true
+			}
 			if object, ok := request.(*DeleteObject); ok {
 				session.CurrentDeleteObjectPath = object.ObjectName
+				session.LastSentContext = object.ObjectName
 			}
 			if object, ok := request.(*AddObject); ok {
 				session.FeatureObjectPath = object.ObjectName

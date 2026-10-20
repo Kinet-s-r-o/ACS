@@ -25,6 +25,7 @@ type Session struct {
 	DeviceID                int64
 	CurrentTaskID           int64
 	CurrentDeleteObjectPath string
+	CurrentFullTreeFetch    bool
 	FeatureObjectPath       string
 	FeatureObjectInstance   string
 	FeatureObjectStage      int
