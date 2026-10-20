@@ -59,13 +59,13 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
       zones.push([1, '#f43f5e']);
     }
 
-    // Arc angles based on gauge_arc setting
+    // Arc angle is set by the selected style and remains user-adjustable.
     let startAngle = 200;
     let endAngle = -20;
-    if (arc === '180' || gaugeStyle === 'speed' || gaugeStyle === 'temperature') { startAngle = 180; endAngle = 0; }
-    else if (arc === '360' || gaugeStyle === 'ring') { startAngle = 90; endAngle = -270; }
-    if (gaugeStyle === 'progress') zones = [[1, '#38bdf8']];
-    const gaugeWidth = gaugeStyle === 'ring' ? 18 : gaugeStyle === 'temperature' ? 16 : 12;
+    if (arc === '180') { startAngle = 180; endAngle = 0; }
+    else if (arc === '360') { startAngle = 90; endAngle = -270; }
+    const gaugeWidth = gaugeStyle === 'ring' ? 18 : gaugeStyle === 'temperature' ? 16 : gaugeStyle === 'progress' ? 14 : 12;
+    const progressColor = gaugeStyle === 'temperature' ? '#f97316' : gaugeStyle === 'progress' ? '#38bdf8' : '#6366f1';
 
     return {
       animation: animated,
@@ -79,14 +79,22 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
           startAngle,
           endAngle,
           radius: '90%',
+          progress: {
+            show: gaugeStyle === 'progress' || gaugeStyle === 'ring' || gaugeStyle === 'temperature',
+            width: gaugeWidth,
+            roundCap: gaugeStyle === 'ring',
+            itemStyle: { color: progressColor },
+          },
           axisLine: {
             lineStyle: {
               width: gaugeWidth,
-              color: zones,
+              color: gaugeStyle === 'progress' || gaugeStyle === 'ring' || gaugeStyle === 'temperature'
+                ? [[1, '#263244']]
+                : zones,
             },
           },
           pointer: {
-            show: pointer !== false,
+            show: pointer !== false && gaugeStyle !== 'ring' && gaugeStyle !== 'temperature',
             length: '60%',
             width: 4,
             itemStyle: { color: 'auto' },

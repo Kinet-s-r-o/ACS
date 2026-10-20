@@ -594,7 +594,7 @@ const MetricsSettings: Component = () => {
                 <Show when={metricForm().display_format === 'gauge'}>
                 <div>
                   <label for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
-                  <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => setMetricForm(f => ({ ...f, gauge_style: e.currentTarget.value as typeof f.gauge_style }))} class="input w-full">
+                  <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as 'basic' | 'progress' | 'ring' | 'speed' | 'temperature'; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'speed' || style === 'temperature' ? '180' : '270' })); }} class="input w-full">
                     <option value="basic">Basic</option><option value="progress">Progress</option><option value="ring">Ring</option><option value="speed">Speedometer</option><option value="temperature">Temperature</option>
                   </select>
                 </div>
