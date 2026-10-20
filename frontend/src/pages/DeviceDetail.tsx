@@ -2018,7 +2018,7 @@ const DeviceDetail: Component = () => {
                   <HeartPulse size={14} />
                   Device Health
                 </h2>
-                <div class="grid grid-cols-6 gap-3 text-center">
+                <div class="grid grid-cols-6 gap-x-3 gap-y-10 text-center">
                   <For each={healthTileGroups()}>
                     {(group) => (
                       <div class={group.size === 'large' ? 'col-span-6' : group.size === 'medium' ? 'col-span-6 sm:col-span-3' : 'col-span-6 sm:col-span-2'}>
