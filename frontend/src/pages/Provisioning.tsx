@@ -92,6 +92,7 @@ const Provisioning: Component = () => {
   const [featureEditorPage, setFeatureEditorPage] = createSignal<'section' | 'control'>('section');
   const [editingFeatureID, setEditingFeatureID] = createSignal<string | null>(null);
   const [featureDraft, setFeatureDraft] = createSignal<ProvisioningFeature>({ id: '', name: '', description: '', controls: [] });
+  const [featureDraggedControl, setFeatureDraggedControl] = createSignal<string | null>(null);
   const emptyControlDraft = (): FeatureControlDraft => ({ key: '', label: '', type: 'string', parameter: '', optionsText: '', objectFieldsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
   const [controlDraft, setControlDraft] = createSignal<FeatureControlDraft>(emptyControlDraft());
   const [editingControlKey, setEditingControlKey] = createSignal<string | null>(null);
@@ -550,6 +551,21 @@ const Provisioning: Component = () => {
     } finally { setFeaturesSaving(false); }
   };
 
+  const reorderFeatureControl = async (feature: ProvisioningFeature, targetKey: string) => {
+    const sourceKey = featureDraggedControl();
+    setFeatureDraggedControl(null);
+    if (!sourceKey || sourceKey === targetKey) return;
+    const controls = [...feature.controls];
+    const sourceIndex = controls.findIndex(control => control.key === sourceKey);
+    const targetIndex = controls.findIndex(control => control.key === targetKey);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const [moved] = controls.splice(sourceIndex, 1);
+    controls.splice(targetIndex, 0, moved);
+    if (await saveTemplateFeatures((selectedTemplate()?.features || []).map(item => item.id === feature.id ? { ...item, controls } : item))) {
+      notify({ tone: 'success', title: 'Fields reordered' });
+    }
+  };
+
   const openFeatureEditor = (feature?: ProvisioningFeature, control?: ProvisioningFeatureControl, page: 'section' | 'control' = 'section') => {
     const next = feature ? { ...feature, controls: feature.controls.map(item => ({ ...item, options: [...(item.options || [])] })) } : { id: '', name: '', description: '', controls: [] };
     setEditingFeatureID(feature?.id || null);
@@ -876,8 +892,8 @@ const Provisioning: Component = () => {
                     <div class="flex gap-2"><button type="button" class="btn btn-secondary text-xs" onClick={() => openFeatureEditor(feature())}><Edit2 size={13} />Edit section</button><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature().id)}><Trash2 size={13} />Delete</button></div>
                   </div>
                   <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
-                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[780px] text-xs"><thead><tr><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">CWMP parameter</th><th class="text-left">Input</th><th class="text-left">Collapsible box</th><th class="text-right">Actions</th></tr></thead><tbody>
-                      <For each={feature().controls}>{control => <tr class="border-t border-subtle/50"><td class="py-2 pr-3"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td><td class="py-2 pr-3">{control.type}</td><td class="py-2 pr-3 font-mono text-muted">{control.parameter}</td><td class="py-2 pr-3">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td><td class="py-2 pr-3">{control.group || '—'}</td><td class="py-2 text-right"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td></tr>}</For>
+                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[780px] text-xs"><thead><tr><th class="w-8"></th><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">CWMP parameter</th><th class="text-left">Input</th><th class="text-left">Collapsible box</th><th class="text-right">Actions</th></tr></thead><tbody>
+                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={!featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><td class="py-2 pr-3"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td><td class="py-2 pr-3">{control.type}</td><td class="py-2 pr-3 font-mono text-muted">{control.parameter}</td><td class="py-2 pr-3">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td><td class="py-2 pr-3">{control.group || '—'}</td><td class="py-2 text-right"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td></tr>}</For>
                     </tbody></table></div>
                   </Show>
                 </section>}</Show>
