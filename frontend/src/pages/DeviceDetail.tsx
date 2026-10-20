@@ -1889,7 +1889,7 @@ const DeviceDetail: Component = () => {
       <Show when={!device.error && (parameters.error || tasks.error)}>
         <div class="card"><ResourceError title="CPE detail is incomplete" description="The device record loaded, but parameters or task history are unavailable. Retry before issuing a configuration action." onRetry={refreshAll} /></div>
       </Show>
-      <Show when={device.loading}>
+      <Show when={device.loading && !device()}>
         <div class="card p-6">
           <div class="skeleton h-6 w-48 mb-4" />
           <div class="grid grid-cols-2 gap-4">
@@ -1898,7 +1898,7 @@ const DeviceDetail: Component = () => {
           </div>
         </div>
       </Show>
-      <Show when={!device.loading && !device.error && device()}>
+      <Show when={!device.error && device()}>
         {(d) => (
           <>
             <Show when={activeTab() === 'overview'}>
