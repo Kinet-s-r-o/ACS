@@ -1756,11 +1756,12 @@ const DeviceDetail: Component = () => {
 
   const renderFeatureControls = (feature: ProvisioningFeature, controls: ProvisioningFeature['controls']) => <For each={controls}>{control => {
     const parameter = () => (parameters() || []).find(item => item.name === control.parameter);
+    const description = () => control.description?.trim();
     return <Show when={control.type === 'boolean'} fallback={
       <Show when={control.type === 'string' || control.type === 'int' || control.type === 'unsignedInt'} fallback={
         <Show when={parameter()?.writable === true}>
           <div class="rounded border border-subtle p-4 lg:col-span-2">
-            <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
+            <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><p class="font-mono text-[10px] text-muted">{control.parameter}</p><Show when={description()}><p class="mt-1 text-xs text-secondary">{description()}</p></Show></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
             <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
               <div class="overflow-x-auto"><table class="data-table w-full min-w-max text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left">{control.object_fields?.find(field => field.name === column)?.label || column}</th>}</For><th class="text-right">Actions</th></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => {
                 const path = `${control.parameter}${instance}.${column}`;
@@ -1775,6 +1776,7 @@ const DeviceDetail: Component = () => {
           <label class="block rounded border border-subtle p-4">
             <span class="mb-2 block text-sm font-medium text-primary">{control.label}</span>
             <span class="mb-2 block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span>
+            <Show when={description()}><p class="mb-2 text-xs text-secondary">{description()}</p></Show>
             <Show when={(control.options?.length || 0) > 0} fallback={<input class="input w-full" type={control.type === 'string' ? 'text' : 'number'} step={control.type === 'string' ? undefined : '1'} min={control.type === 'unsignedInt' ? '0' : undefined} value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)} />}>
               <select class="input w-full" value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)}><Show when={!control.options?.includes(parameter()?.value || '')}><option value={parameter()?.value || ''}>{parameter()?.value || 'Select a value'}</option></Show><For each={control.options || []}>{option => <option value={option}>{option}</option>}</For></select>
             </Show>
@@ -1784,7 +1786,7 @@ const DeviceDetail: Component = () => {
     }>
       <Show when={parameter()?.writable === true}>
         <label class="flex items-center justify-between gap-3 rounded border border-subtle p-4">
-          <span class="min-w-0"><span class="block text-sm font-medium text-primary">{control.label}</span><span class="block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span></span>
+          <span class="min-w-0"><span class="block text-sm font-medium text-primary">{control.label}</span><span class="block truncate font-mono text-[10px] text-muted" title={control.parameter}>{control.parameter}</span><Show when={description()}><span class="mt-1 block text-xs text-secondary">{description()}</span></Show></span>
           <input type="checkbox" class="h-4 w-4 accent-sky-500" checked={parameter()?.value.toLowerCase() === (control.enabled_value || '1').toLowerCase()} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void toggleTemplateFeature(feature.id, control.key, control.label, control.group, event.currentTarget.checked)} />
         </label>
       </Show>

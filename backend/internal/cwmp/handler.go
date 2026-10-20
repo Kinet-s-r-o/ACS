@@ -580,9 +580,10 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 			paramNames = append(paramNames, p.Name)
 		}
 		session.LastSentContext = strings.Join(paramNames, ", ")
-		request = takeProvisioning(session)
+		provisioningRequest := takeProvisioning(session)
+		session.PendingSetParameters = append([]ParameterValueStruct(nil), provisioningRequest.ParameterList.Parameters...)
 		session.State = StateProcessingTasks
-		return request, namespace, nil
+		return provisioningRequest, namespace, nil
 	}
 	if session.AutoFetchReady {
 		session.AutoFetchReady = false
@@ -802,6 +803,22 @@ func (h *Handler) handleSetParameterValuesResponse(ctx context.Context, resp *Se
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LastSentContext = ""
+	pendingParameters := session.PendingSetParameters
+	session.PendingSetParameters = nil
+	if resp.Status == 0 && h.parameterRepo != nil && session.DeviceID > 0 && len(pendingParameters) > 0 {
+		params := make([]models.DeviceParameter, 0, len(pendingParameters))
+		for _, parameter := range pendingParameters {
+			params = append(params, models.DeviceParameter{
+				DeviceID:  session.DeviceID,
+				Name:      parameter.Name,
+				Value:     parameter.Value,
+				ValueType: parameter.Type,
+			})
+		}
+		if err := h.parameterRepo.UpsertMany(ctx, session.DeviceID, params); err != nil {
+			return nil, fmt.Errorf("update cached parameters after set-parameter task: %w", err)
+		}
+	}
 
 	if session.State == StateProcessingTasks && session.CurrentTaskID > 0 {
 		if h.taskRepo != nil {
@@ -879,7 +896,9 @@ func (h *Handler) handleAddObjectResponse(ctx context.Context, resp *AddObjectRe
 	session.AddObjectQueue = nil
 	session.AddObjectPhase = 0
 	if session.Provisioning != nil {
-		return takeProvisioning(session), nil
+		request := takeProvisioning(session)
+		session.PendingSetParameters = append([]ParameterValueStruct(nil), request.ParameterList.Parameters...)
+		return request, nil
 	}
 	if h.provisioningRepo != nil && len(session.ProvisioningRules) > 0 {
 		if err := h.provisioningRepo.MarkApplied(ctx, session.DeviceID, session.ProvisioningRules); err != nil {
@@ -1258,6 +1277,7 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 				for _, p := range spv.ParameterList.Parameters {
 					names = append(names, p.Name)
 				}
+				session.PendingSetParameters = append([]ParameterValueStruct(nil), spv.ParameterList.Parameters...)
 				session.LastSentContext = strings.Join(names, ", ")
 			}
 			return request, nil

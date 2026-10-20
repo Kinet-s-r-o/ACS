@@ -40,6 +40,10 @@ type Session struct {
 	Provisioning            *SetParameterValues
 	ProvisioningRules       []models.ProvisioningApplication
 	ProvisioningVariables   map[string]string
+	// PendingSetParameters mirrors the last SetParameterValues request. A
+	// successful response confirms these values on the CPE even when the next
+	// periodic Inform does not include the affected parameters.
+	PendingSetParameters []ParameterValueStruct
 
 	// AddObject queue for creating new objects before SetParameterValues
 	AddObjectQueue     []*AddObject
