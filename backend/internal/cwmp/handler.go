@@ -911,6 +911,12 @@ func (h *Handler) handleDeleteObjectResponse(ctx context.Context, resp *DeleteOb
 	if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, status, map[string]int{"status": resp.Status}, message); err != nil {
 		return nil, fmt.Errorf("complete delete-object task: %w", err)
 	}
+	if resp.Status == 0 && h.parameterRepo != nil && session.CurrentDeleteObjectPath != "" {
+		if err := h.parameterRepo.DeleteObjectParameters(ctx, session.DeviceID, session.CurrentDeleteObjectPath); err != nil {
+			return nil, fmt.Errorf("remove cached parameters for deleted object: %w", err)
+		}
+	}
+	session.CurrentDeleteObjectPath = ""
 	session.CurrentTaskID = 0
 	return h.getNextTask(ctx, session)
 }
@@ -1215,9 +1221,13 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 		}
 
 		session.CurrentTaskID = task.ID
+		session.CurrentDeleteObjectPath = ""
 		session.State = StateProcessingTasks
 		request, err := h.buildTaskRequest(task)
 		if err == nil {
+			if object, ok := request.(*DeleteObject); ok {
+				session.CurrentDeleteObjectPath = object.ObjectName
+			}
 			if object, ok := request.(*AddObject); ok {
 				session.FeatureObjectPath = object.ObjectName
 				session.FeatureObjectStage = 1

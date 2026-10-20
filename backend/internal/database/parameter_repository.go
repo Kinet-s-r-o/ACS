@@ -199,6 +199,16 @@ func (r *ParameterRepository) GetByDeviceID(ctx context.Context, deviceID int64)
 	return params, nil
 }
 
+// DeleteObjectParameters removes cached parameters beneath a successfully deleted CWMP object.
+func (r *ParameterRepository) DeleteObjectParameters(ctx context.Context, deviceID int64, objectPath string) error {
+	if objectPath == "" || !strings.HasSuffix(objectPath, ".") {
+		return errors.New("invalid CWMP object path")
+	}
+	return r.db.WithContext(ctx).
+		Where("device_id = ? AND name LIKE ?", deviceID, objectPath+"%").
+		Delete(&models.DeviceParameter{}).Error
+}
+
 // OverviewNames returns known parameters used by the device overview. New
 // objects are discovered by the less frequent full-tree fetch.
 func (r *ParameterRepository) OverviewNames(ctx context.Context, deviceID int64) ([]string, error) {
