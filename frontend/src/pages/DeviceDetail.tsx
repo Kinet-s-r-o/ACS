@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Key, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
+import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
 import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
@@ -556,9 +556,7 @@ const DeviceDetail: Component = () => {
   const [wanModalPath, setWanModalPath] = createSignal<string | null>(null);
 
   const [selectedParam, setSelectedParam] = createSignal<{ name: string; value: string } | null>(null);
-  const [editingModemCreds, setEditingModemCreds] = createSignal(false);
   const [showSensitive, setShowSensitive] = createSignal(false);
-  const [modemCredsEdits, setModemCredsEdits] = createSignal<Record<string, string>>({});
   const [showFactoryResetModal, setShowFactoryResetModal] = createSignal(false);
   const [factoryResetPassword, setFactoryResetPassword] = createSignal('');
   const [paramColumnFilters, setParamColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
@@ -1260,133 +1258,6 @@ const DeviceDetail: Component = () => {
   const handleLanL3 = async (index: number, enable: boolean) => {
     const prefix = `InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.${index}.`;
     await toggleParam(prefix + 'X_HW_L3Enable', enable ? '1' : '0', `LAN${index} L3 ${enable ? 'enabled' : 'disabled'}`);
-  };
-
-  const getModemCredentials = () => {
-    const params = parameters() || [];
-    const findParam = (patterns: string[]) => {
-      for (const p of params) {
-        for (const pattern of patterns) {
-          if (p.name.includes(pattern)) return p.value;
-        }
-      }
-      return '-';
-    };
-
-    return {
-      adminUser: findParam([
-        'X_HW_WebUserInfo.2.UserName',
-        'X_CMCC_TeleComAccount.Username',
-        'X_CT-COM_TeleComAccount.Username',
-        'X_ZTE_COM_TeleComAccount.Username',
-        'X_FH_WebUserInfo.UserName',
-        'Users.User.1.Username',
-      ]),
-      adminPass: findParam([
-        'X_HW_WebUserInfo.2.Password',
-        'X_CMCC_TeleComAccount.Password',
-        'X_CT-COM_TeleComAccount.Password',
-        'X_ZTE_COM_TeleComAccount.Password',
-        'X_FH_WebUserInfo.Password',
-        'Users.User.1.Password',
-      ]),
-      userUser: findParam([
-        'X_HW_WebUserInfo.1.UserName',
-        'Users.User.2.Username',
-      ]),
-      userPass: findParam([
-        'X_HW_WebUserInfo.1.Password',
-        'Users.User.2.Password',
-      ]),
-    };
-  };
-
-  const handleEditModemCreds = () => {
-    const creds = getModemCredentials();
-    setModemCredsEdits({
-      adminUser: creds.adminUser !== '-' ? creds.adminUser : '',
-      adminPass: '',
-      userUser: creds.userUser !== '-' ? creds.userUser : '',
-      userPass: '',
-    });
-    setEditingModemCreds(true);
-  };
-
-  const handleCancelModemCreds = () => {
-    setEditingModemCreds(false);
-    setModemCredsEdits({});
-  };
-
-  const handleSaveModemCreds = async () => {
-    const edits = modemCredsEdits();
-    setActionLoading('modem-creds');
-    try {
-      const params: Record<string, string> = {};
-
-      let adminUserPath = '', adminPassPath = '', userUserPath = '', userPassPath = '';
-
-      const allParams = parameters() || [];
-      const detectVendor = () => {
-        for (const p of allParams) {
-          if (p.name.includes('X_HW_WebUserInfo')) return 'huawei';
-          if (p.name.includes('X_CMCC_TeleComAccount')) return 'cmcc';
-          if (p.name.includes('X_CT-COM_TeleComAccount')) return 'ctcom';
-          if (p.name.includes('X_ZTE_COM_TeleComAccount')) return 'zte';
-          if (p.name.includes('X_FH_WebUserInfo')) return 'fiberhome';
-          if (p.name.includes('Device.Users.User')) return 'tr181';
-        }
-        return 'huawei';
-      };
-      const vendor = detectVendor();
-      switch (vendor) {
-        case 'huawei':
-          adminUserPath = 'InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.2.UserName';
-          adminPassPath = 'InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.2.Password';
-          userUserPath = 'InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.UserName';
-          userPassPath = 'InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.Password';
-          break;
-        case 'cmcc':
-          adminUserPath = 'InternetGatewayDevice.DeviceInfo.X_CMCC_TeleComAccount.Username';
-          adminPassPath = 'InternetGatewayDevice.DeviceInfo.X_CMCC_TeleComAccount.Password';
-          break;
-        case 'ctcom':
-          adminUserPath = 'InternetGatewayDevice.DeviceInfo.X_CT-COM_TeleComAccount.Username';
-          adminPassPath = 'InternetGatewayDevice.DeviceInfo.X_CT-COM_TeleComAccount.Password';
-          break;
-        case 'zte':
-          adminUserPath = 'InternetGatewayDevice.DeviceInfo.X_ZTE_COM_TeleComAccount.Username';
-          adminPassPath = 'InternetGatewayDevice.DeviceInfo.X_ZTE_COM_TeleComAccount.Password';
-          break;
-        case 'fiberhome':
-          adminUserPath = 'InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.UserName';
-          adminPassPath = 'InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.Password';
-          break;
-        case 'tr181':
-          adminUserPath = 'Device.Users.User.1.Username';
-          adminPassPath = 'Device.Users.User.1.Password';
-          userUserPath = 'Device.Users.User.2.Username';
-          userPassPath = 'Device.Users.User.2.Password';
-          break;
-      }
-
-      if (edits.adminUser && adminUserPath) params[adminUserPath] = edits.adminUser;
-      if (edits.adminPass && adminPassPath) params[adminPassPath] = edits.adminPass;
-      if (edits.userUser && userUserPath) params[userUserPath] = edits.userUser;
-      if (edits.userPass && userPassPath) params[userPassPath] = edits.userPass;
-
-      if (Object.keys(params).length === 0) {
-        handleCancelModemCreds();
-        return;
-      }
-
-      await api.setParameterValues(serial(), params);
-      showMessage('success', 'CPE web-interface credential update task created.');
-      refetchTasks();
-      handleCancelModemCreds();
-    } catch (err) {
-      showMessage('error', 'CPE credential update was not queued. The entered values are preserved; retry after checking the CPE session.', (err as Error).message);
-    }
-    setActionLoading(null);
   };
 
   const handleEditConnCreds = () => {
@@ -2390,111 +2261,7 @@ const DeviceDetail: Component = () => {
             </Show>
 
             <Show when={activeTab() === 'credentials'}>
-            {/* Row 1.5: Modem Credentials */}
-            <div class="card p-5">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
-                  <Key size={14} />
-                  Modem Credentials
-                </h2>
-                <div class="flex items-center gap-1"><Show when={!editingModemCreds() && isFullAccess()}>
-                  <button
-                    onClick={handleEditModemCreds}
-                    disabled={actionLoading() !== null}
-                    class="icon-button"
-                    aria-label="Edit CPE web-interface credentials"
-                  >
-                    <Edit size={14} />
-                  </button>
-                </Show><button onClick={() => setShowSensitive(!showSensitive())} class="icon-button" aria-label={showSensitive() ? 'Hide sensitive values' : 'Reveal sensitive values'} aria-pressed={showSensitive()}>{showSensitive() ? <EyeOff size={13} /> : <Eye size={13} />}</button></div>
-              </div>
-              <Show when={editingModemCreds()} fallback={
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <div class="text-muted text-xs mb-1">Admin Username</div>
-                    <div class="text-primary font-mono">{getModemCredentials().adminUser}</div>
-                  </div>
-                  <div>
-                    <div class="text-muted text-xs mb-1">Admin Password</div>
-                    <div class="text-primary font-mono">{showSensitive() ? getModemCredentials().adminPass : '••••••••'}</div>
-                  </div>
-                  <div>
-                    <div class="text-muted text-xs mb-1">User Username</div>
-                    <div class="text-primary font-mono">{getModemCredentials().userUser}</div>
-                  </div>
-                  <div>
-                    <div class="text-muted text-xs mb-1">User Password</div>
-                    <div class="text-primary font-mono">{showSensitive() ? getModemCredentials().userPass : '••••••••'}</div>
-                  </div>
-                </div>
-              }>
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <label for="cpe-admin-username" class="text-muted text-xs mb-1 block">Administrator username</label>
-                    <input
-                      id="cpe-admin-username"
-                      type="text"
-                      value={modemCredsEdits().adminUser || ''}
-                      onInput={(e) => setModemCredsEdits({ ...modemCredsEdits(), adminUser: e.currentTarget.value })}
-                      class="input w-full py-1.5 text-sm font-mono"
-                      placeholder="admin"
-                    />
-                  </div>
-                  <div>
-                    <label for="cpe-admin-password" class="text-muted text-xs mb-1 block">Administrator password</label>
-                    <input
-                      id="cpe-admin-password"
-                      type="password"
-                      value={modemCredsEdits().adminPass || ''}
-                      onInput={(e) => setModemCredsEdits({ ...modemCredsEdits(), adminPass: e.currentTarget.value })}
-                      class="input w-full py-1.5 text-sm font-mono"
-                      placeholder="New password"
-                    />
-                  </div>
-                  <div>
-                    <label for="cpe-user-username" class="text-muted text-xs mb-1 block">User username</label>
-                    <input
-                      id="cpe-user-username"
-                      type="text"
-                      value={modemCredsEdits().userUser || ''}
-                      onInput={(e) => setModemCredsEdits({ ...modemCredsEdits(), userUser: e.currentTarget.value })}
-                      class="input w-full py-1.5 text-sm font-mono"
-                      placeholder="user"
-                    />
-                  </div>
-                  <div>
-                    <label for="cpe-user-password" class="text-muted text-xs mb-1 block">User password</label>
-                    <input
-                      id="cpe-user-password"
-                      type="password"
-                      value={modemCredsEdits().userPass || ''}
-                      onInput={(e) => setModemCredsEdits({ ...modemCredsEdits(), userPass: e.currentTarget.value })}
-                      class="input w-full py-1.5 text-sm font-mono"
-                      placeholder="New password"
-                    />
-                  </div>
-                </div>
-                <div class="flex gap-2 mt-4 justify-end">
-                  <button
-                    onClick={handleCancelModemCreds}
-                    disabled={actionLoading() !== null}
-                    class="btn btn-secondary text-sm py-1.5"
-                  >
-                    <X size={14} />
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveModemCreds}
-                    disabled={actionLoading() === 'modem-creds'}
-                    class="btn btn-primary text-sm py-1.5"
-                  >
-                    <Save size={14} />
-                    {actionLoading() === 'modem-creds' ? 'Queuing update…' : 'Queue credential update'}
-                  </button>
-                </div>
-              </Show>
-            </div>
-
+            <div class="flex justify-end"><button type="button" onClick={() => setShowSensitive(!showSensitive())} class="btn btn-secondary text-xs" aria-pressed={showSensitive()}>{showSensitive() ? <EyeOff size={13} /> : <Eye size={13} />}{showSensitive() ? 'Hide sensitive values' : 'Reveal sensitive values'}</button></div>
             {/* Connection Request Credentials */}
             <div class="card p-5">
               <div class="flex items-center justify-between mb-4">
