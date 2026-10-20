@@ -1180,6 +1180,21 @@ const DeviceDetail: Component = () => {
     setActionLoading(null);
   };
 
+  const handleDeleteWifiSSID = async (index: number, ssid: string) => {
+    if (!isFullAccess() || actionLoading() || !await confirm({ title: `Delete SSID${index}?`, description: `This permanently removes the Wi-Fi object "${ssid}" and its settings from the device. Connected clients will lose access.`, confirmLabel: 'Delete SSID', tone: 'danger' })) return;
+    setActionLoading(`wifi-delete-${index}`);
+    try {
+      const task = await api.deleteWifiSSID(serial(), index);
+      setFeatureRefreshTaskID(task.id);
+      notify({ tone: 'success', title: `SSID${index} deletion queued`, detail: `CWMP task #${task.id} will remove the Wi-Fi object at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not delete SSID${index}`, detail: (error as Error).message, persistent: true });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleSetWifiRadioEnabled = async (radio: WifiRadio, enabled: boolean) => {
     const label = `Radio ${radio.index}`;
     if (!await confirm({ title: `${enabled ? 'Enable' : 'Disable'} ${label}?`, description: `${enabled ? 'Wireless service may become available when the task completes.' : 'Wireless service on this radio will be disabled when the task completes.'}`, confirmLabel: `${enabled ? 'Enable' : 'Disable'} ${label}`, tone: enabled ? 'primary' : 'danger' })) return;
@@ -2949,6 +2964,15 @@ const DeviceDetail: Component = () => {
                                   aria-label={`Edit Wi-Fi SSID${wlan.index}`}
                                 >
                                   <Edit size={14} />
+                                </button>
+                                <button
+                                  onClick={() => void handleDeleteWifiSSID(wlan.index, wlan.ssid)}
+                                  disabled={actionLoading() !== null}
+                                  class="icon-button text-rose-400"
+                                  aria-label={`Delete Wi-Fi SSID${wlan.index}`}
+                                  title="Delete SSID object"
+                                >
+                                  <Trash2 size={14} />
                                 </button>
                               </Show>
                             </td>

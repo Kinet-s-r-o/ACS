@@ -821,3 +821,46 @@ func (r *Router) handleDeleteFeatureObject(w http.ResponseWriter, req *http.Requ
 	}
 	respondJSON(w, http.StatusCreated, task)
 }
+
+func (r *Router) handleDeleteWifiSSID(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	instance, err := strconv.ParseUint(req.PathValue("instance"), 10, 32)
+	if err != nil || instance == 0 {
+		respondError(w, http.StatusBadRequest, "Invalid SSID instance")
+		return
+	}
+	params, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load device parameters")
+		return
+	}
+	instancePath := fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.", instance)
+	exists := false
+	for _, parameter := range params {
+		if strings.HasPrefix(parameter.Name, instancePath) {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		respondError(w, http.StatusConflict, "Device does not report this SSID object")
+		return
+	}
+	task, err := models.NewTaskWithPayload(device.ID, models.TaskTypeDeleteObject, map[string]string{"object_name": instancePath})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		task.CreatedBy = claims.Username
+	}
+	if err := r.taskRepo.Create(req.Context(), task); err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	respondJSON(w, http.StatusCreated, task)
+}
