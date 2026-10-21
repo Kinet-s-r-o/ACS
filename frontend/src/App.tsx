@@ -43,7 +43,7 @@ const App: Component = () => {
   return (
     <AuthProvider>
       <FeedbackProvider>
-        <Router>
+        <Router root={(props) => <div>{props.children}</div>}>
           <Route path="/login" component={Login} />
           <Route path="/" component={ProtectedLayout}>
             <Route path="/" component={Dashboard} />
