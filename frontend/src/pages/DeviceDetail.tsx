@@ -3087,6 +3087,7 @@ const DeviceDetail: Component = () => {
                     <table class="data-table w-full text-sm min-w-[680px]">
                       <thead class="bg-base sticky top-0 z-10">
                         <tr class="bg-base">
+                          <th class="px-3 py-2 w-8" aria-label="Fault details" />
                           <Show when={isFullAccess()}>
                             <th class="px-3 py-2 w-8">
                               <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
@@ -3122,8 +3123,15 @@ const DeviceDetail: Component = () => {
                       </thead>
                       <tbody>
                         <For each={pagedDeviceFaults()}>
-                          {(fault) => (
+                          {(fault) => {
+                            const [expanded, setExpanded] = createSignal(false);
+                            return <>
                             <tr class="border-t border-subtle/50 hover:bg-elevated/30">
+                              <td class="px-3 py-2">
+                                <button type="button" class="icon-button" aria-label={`${expanded() ? 'Collapse' : 'Expand'} fault ${fault.id}`} aria-expanded={expanded()} aria-controls={`fault-details-${fault.id}`} onClick={() => setExpanded(value => !value)}>
+                                  <Show when={expanded()} fallback={<ChevronRight size={14} />}><ChevronDown size={14} /></Show>
+                                </button>
+                              </td>
                               <Show when={isFullAccess()}>
                                 <td class="px-3 py-2">
                                   <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
@@ -3171,7 +3179,32 @@ const DeviceDetail: Component = () => {
                                 </div>
                               </td>
                             </tr>
-                          )}
+                            <Show when={expanded()}>
+                              <tr id={`fault-details-${fault.id}`} class="border-t border-subtle/50 bg-elevated/30">
+                                <td colSpan={isFullAccess() ? 8 : 7} class="px-4 py-4">
+                                  <dl class="grid grid-cols-1 gap-3 text-sm">
+                                    <For each={[
+                                      ['ID', String(fault.id)],
+                                      ['Device ID', String(fault.device_id)],
+                                      ['Serial number', fault.serial_number || serial()],
+                                      ['Code', fault.fault_code],
+                                      ['Message', fault.fault_string || '-'],
+                                      ['Parameter', fault.parameter_name || '-'],
+                                      ['Time', formatDate(fault.created_at)],
+                                      ['Status', fault.resolved ? 'Resolved' : 'Active'],
+                                      ['Resolved at', fault.resolved_at ? formatDate(fault.resolved_at) : '-'],
+                                    ]}>
+                                      {([label, value]) => <div class="min-w-0">
+                                        <dt class="text-xs text-muted mb-1">{label}</dt>
+                                        <dd class="text-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
+                                      </div>}
+                                    </For>
+                                  </dl>
+                                </td>
+                              </tr>
+                            </Show>
+                            </>;
+                          }}
                         </For>
                       </tbody>
                     </table>
