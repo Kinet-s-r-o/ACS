@@ -246,6 +246,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .field-error { margin: 5px 0 0; color: rgb(var(--error-text)); font-size: 11px; line-height: 1.4; }
 select.input { appearance: auto; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; }
+table thead th { text-align: center !important; }
+table thead th > div { justify-content: center; }
 thead { background: rgb(var(--bg-elevated) / .45); }
 th { color: rgb(var(--text-muted)); font-size: 10px; font-weight: 600; letter-spacing: .015em; }
 tbody tr { transition: background-color 100ms ease; } tbody tr:hover { background: rgb(var(--bg-elevated) / .42); }
