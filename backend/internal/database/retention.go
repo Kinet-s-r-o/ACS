@@ -74,7 +74,6 @@ func GetRetentionTableStats(ctx context.Context, db *gorm.DB) ([]RetentionTableS
 	stats := make([]RetentionTableStats, 0, len(retentionRules))
 	for _, rule := range retentionRules {
 		var row RetentionTableStats
-		row.Table = rule.table
 		var query string
 		var args []interface{}
 		if rule.chunks {
@@ -101,6 +100,7 @@ func GetRetentionTableStats(ctx context.Context, db *gorm.DB) ([]RetentionTableS
 		if err := db.WithContext(ctx).Raw(query, args...).Scan(&row).Error; err != nil {
 			return nil, fmt.Errorf("read retention stats for %s: %w", rule.table, err)
 		}
+		row.Table = rule.table
 		stats = append(stats, row)
 	}
 	return stats, nil
