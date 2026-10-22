@@ -73,8 +73,18 @@ const Provisioning: Component = () => {
   let settingsMenu: HTMLDivElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
-  const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
+  const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], excluded_tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
   const [provForm, setProvForm] = createSignal({ ...emptyProvisioningRule });
+  const [tagInput, setTagInput] = createSignal('');
+  const [tagMode, setTagMode] = createSignal<'tags' | 'excluded_tags'>('tags');
+  const addRuleTag = () => {
+    const tag = tagInput().trim().toLowerCase();
+    if (!tag) return;
+    const mode = tagMode();
+    const other = mode === 'tags' ? 'excluded_tags' : 'tags';
+    setProvForm(f => ({ ...f, [mode]: [...new Set([...f[mode], tag])], [other]: f[other].filter(value => value !== tag) }));
+    setTagInput('');
+  };
   const [isAddObjectRule, setIsAddObjectRule] = createSignal(false);
   const [copyingProv, setCopyingProv] = createSignal(false);
   const [showTemplateModal, setShowTemplateModal] = createSignal(false);
@@ -145,7 +155,7 @@ const Provisioning: Component = () => {
       case 'parameter': return rule.add_object_path || rule.parameter_name || '';
       case 'value': return rule.add_object_path ? '' : rule.parameter_value || '';
       case 'parameter_type': return rule.parameter_type || '';
-      case 'tags': return (rule.tags || []).join(', ');
+      case 'tags': return [...(rule.tags || []).map(tag => `contain: ${tag}`), ...(rule.excluded_tags || []).map(tag => `not-contain: ${tag}`)].join(', ');
       case 'phase': return rule.phase || '';
       case 'status': return rule.enabled ? 'Active' : 'Disabled';
       default: return '';
@@ -160,7 +170,7 @@ const Provisioning: Component = () => {
         r.parameter_name?.toLowerCase().includes(query) ||
         r.parameter_value?.toLowerCase().includes(query) ||
         r.parameter_type?.toLowerCase().includes(query) ||
-        (r.tags || []).some(t => t.toLowerCase().includes(query)) ||
+        [...(r.tags || []), ...(r.excluded_tags || [])].some(t => t.toLowerCase().includes(query)) ||
         r.phase?.toLowerCase().includes(query) ||
         r.description?.toLowerCase().includes(query) ||
         r.add_object_path?.toLowerCase().includes(query)
@@ -378,6 +388,7 @@ const Provisioning: Component = () => {
   // Provisioning handlers
   const handleCreateProv = async () => {
     if (pendingAction()) return;
+    addRuleTag();
     const form = provForm();
     if (!form.parameter_name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'CWMP path is required.' }); return; }
     if (!isAddObjectRule() && !form.parameter_value.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Parameter value is required for parameter rules.' }); return; }
@@ -398,6 +409,7 @@ const Provisioning: Component = () => {
   const handleUpdateProv = async () => {
     const p = editingProv();
     if (!p || pendingAction()) return;
+    addRuleTag();
     const form = provForm();
     if (!form.parameter_name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'CWMP path is required.' }); return; }
     if (!isAddObjectRule() && !form.parameter_value.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Parameter value is required for parameter rules.' }); return; }
@@ -431,14 +443,18 @@ const Provisioning: Component = () => {
   };
 
   const openEditProv = (p: ProvisioningRule) => {
+    setTagInput('');
+    setTagMode('tags');
     setEditingProv(p);
     setCopyingProv(false);
     setIsAddObjectRule(Boolean(p.add_object_path));
-    setProvForm({ template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], enabled: p.enabled, description: p.description, add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' });
+    setProvForm({ template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], excluded_tags: p.excluded_tags || [], enabled: p.enabled, description: p.description || '', add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' });
     setShowProvModal(true);
   };
 
   const openCreateProv = () => {
+    setTagInput('');
+    setTagMode('tags');
     setEditingProv(null);
     setCopyingProv(false);
     setIsAddObjectRule(false);
@@ -447,10 +463,12 @@ const Provisioning: Component = () => {
   };
 
   const openCopyProv = (p: ProvisioningRule) => {
+    setTagInput('');
+    setTagMode('tags');
     setEditingProv(null);
     setCopyingProv(true);
     setIsAddObjectRule(Boolean(p.add_object_path));
-    setProvForm({ template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], enabled: p.enabled, description: p.description, add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' });
+    setProvForm({ template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], excluded_tags: p.excluded_tags || [], enabled: p.enabled, description: p.description || '', add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' });
     setShowProvModal(true);
   };
 
@@ -996,10 +1014,13 @@ const Provisioning: Component = () => {
                         </Show>
                         <Show when={visibleProvColumns().some(c => c.id === 'tags')}>
                           <td class="py-2 text-secondary text-xs">
-                            {(p.tags && p.tags.length > 0) ? (
+                            {((p.tags?.length || 0) + (p.excluded_tags?.length || 0) > 0) ? (
                               <span class="flex flex-wrap gap-1">
                                 <For each={p.tags}>
-                                  {(tag) => <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">{tag}</span>}
+                                  {(tag) => <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">contain: {tag}</span>}
+                                </For>
+                                <For each={p.excluded_tags}>
+                                  {(tag) => <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400">not-contain: {tag}</span>}
                                 </For>
                               </span>
                             ) : '—'}
@@ -1227,41 +1248,26 @@ const Provisioning: Component = () => {
               <p class="text-xs text-muted mt-1">Lower values execute first. Use drag-and-drop in the table or set explicit order here.</p>
             </div>
             <div>
-              <label class="block text-xs text-muted mb-1.5">Tags (optional)</label>
+              <label for="provisioning-tags" class="block text-xs text-muted mb-1.5">Tags (optional)</label>
               <div class="flex flex-wrap gap-1.5 mb-1.5">
-                <For each={provForm().tags}>
-                  {(tag) => (
+                <For each={['tags', 'excluded_tags'] as const}>{mode =>
+                  <For each={provForm()[mode]}>{tag =>
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 text-xs">
-                      {tag}
-                      <button type="button" class="hover:text-amber-100" onClick={() => setProvForm(f => ({ ...f, tags: f.tags.filter(x => x !== tag) }))} aria-label={`Remove tag ${tag}`}>
-                        <X size={10} />
-                      </button>
+                      {mode === 'tags' ? 'contain' : 'not-contain'}: {tag}
+                      <button type="button" onClick={() => setProvForm(f => ({ ...f, [mode]: f[mode].filter(value => value !== tag) }))} aria-label={`Remove ${mode === 'tags' ? 'contain' : 'not-contain'} tag ${tag}`}><X size={10} /></button>
                     </span>
-                  )}
-                </For>
+                  }</For>
+                }</For>
               </div>
-              <input
-                id="provisioning-tags"
-                type="text"
-                class="input w-full"
-                placeholder="branch-a (press Enter to add)"
-                value={provForm().tags.length > 0 ? '' : ''}
-                onInput={(e) => {
-                  const val = e.currentTarget.value;
-                  setProvForm(f => ({ ...f, _tagInput: val } as any));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const val = (e.currentTarget.value || '').trim().toLowerCase();
-                    if (val && !provForm().tags.includes(val)) {
-                      setProvForm(f => ({ ...f, tags: [...f.tags, val] }));
-                    }
-                    (e.currentTarget as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-              <p class="text-xs text-muted mt-1">Rule applies only to CPEs carrying at least one of these tags. Leave empty to apply to all devices in this template.</p>
+              <div class="flex gap-2">
+                <select aria-label="Tag condition" class="input" value={tagMode()} onChange={e => setTagMode(e.currentTarget.value as 'tags' | 'excluded_tags')}>
+                  <option value="tags">contain</option>
+                  <option value="excluded_tags">not-contain</option>
+                </select>
+                <input id="provisioning-tags" type="text" class="input w-full" placeholder="branch-a (press Enter to add)" value={tagInput()} onInput={e => setTagInput(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRuleTag(); } }} />
+                <button type="button" class="btn btn-secondary" onClick={addRuleTag} disabled={!tagInput().trim()}>Add</button>
+              </div>
+              <p class="text-xs text-muted mt-1">Contain: CPE must have at least one listed tag. Not-contain: CPE must have none of the listed tags. Both conditions apply. Leave empty to apply to all devices in this template.</p>
             </div>
             <Show when={!isAddObjectRule()}>
               <div>

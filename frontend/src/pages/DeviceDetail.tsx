@@ -1853,6 +1853,7 @@ const DeviceDetail: Component = () => {
 
       <nav role="tablist" class="tab-bar" aria-label="Device detail sections">
         <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
+        <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>Connected Hosts</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
         <Show when={(matchingProvisioningTemplate()?.features?.length || 0) > 0}><button role="tab" class={`tab-btn ${activeTab() === 'features' ? 'is-active' : ''}`} aria-selected={activeTab() === 'features'} onClick={() => setSearchParams({ tab: 'features' })}>Features</button></Show>
         <button role="tab" class={`tab-btn ${activeTab() === 'snapshots' ? 'is-active' : ''}`} aria-selected={activeTab() === 'snapshots'} onClick={() => setSearchParams({ tab: 'snapshots' })}>Snapshots</button>
@@ -1869,9 +1870,6 @@ const DeviceDetail: Component = () => {
           </Show>
         </button>
         <button role="tab" class={`tab-btn ${activeTab() === 'credentials' ? 'is-active' : ''}`} aria-selected={activeTab() === 'credentials'} onClick={() => setSearchParams({ tab: 'credentials' })}>Credentials</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>
-          Connected Hosts
-        </button>
         <button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'diagnostic' })}>Maintenance</button>
       </nav>
 

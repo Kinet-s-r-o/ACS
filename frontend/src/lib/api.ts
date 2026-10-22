@@ -47,7 +47,7 @@ export interface ProvisioningFeature { id: string; name: string; description?: s
 export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
-export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
+export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; excluded_tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
 export interface AuditLog { id: number; user_id?: number; username: string; action: string; resource: string; status: number; ip_address: string; user_agent?: string; created_at: string }
 export interface BlockedDevice { id: number; serial_number: string; reason: string; created_by: string; created_at: string }
 export interface Threshold {

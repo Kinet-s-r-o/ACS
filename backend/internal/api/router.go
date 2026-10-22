@@ -2940,7 +2940,7 @@ func (r *Router) handleCreateProvisioningRule(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Template not found")
 		return
 	}
-	if err := validateProvisioningRule(body.ParameterName, body.ParameterValue, body.ParameterType, body.AddObjectPath, body.Phase, body.Tags, body.Description); err != nil {
+	if err := validateProvisioningRule(body.ParameterName, body.ParameterValue, body.ParameterType, body.AddObjectPath, body.Phase, append(append([]string{}, body.Tags...), body.ExcludedTags...), body.Description); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -2982,6 +2982,7 @@ func (r *Router) handleCreateProvisioningRule(w http.ResponseWriter, req *http.R
 		ParameterType:  body.ParameterType,
 		Phase:          body.Phase,
 		Tags:           normalizeTags(body.Tags),
+		ExcludedTags:   normalizeTags(body.ExcludedTags),
 		Enabled:        body.Enabled,
 		Description:    body.Description,
 		AddObjectPath:  strings.TrimSpace(body.AddObjectPath),
@@ -3026,7 +3027,7 @@ func (r *Router) handleUpdateProvisioningRule(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Template not found")
 		return
 	}
-	if err := validateProvisioningRule(body.ParameterName, body.ParameterValue, body.ParameterType, body.AddObjectPath, body.Phase, body.Tags, body.Description); err != nil {
+	if err := validateProvisioningRule(body.ParameterName, body.ParameterValue, body.ParameterType, body.AddObjectPath, body.Phase, append(append([]string{}, body.Tags...), body.ExcludedTags...), body.Description); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -3051,6 +3052,7 @@ func (r *Router) handleUpdateProvisioningRule(w http.ResponseWriter, req *http.R
 	body.ID = id
 	body.Condition = strings.TrimSpace(body.Condition)
 	body.Tags = normalizeTags(body.Tags)
+	body.ExcludedTags = normalizeTags(body.ExcludedTags)
 	if err := r.provisioningRepo.Update(req.Context(), &body); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update rule")
 		return

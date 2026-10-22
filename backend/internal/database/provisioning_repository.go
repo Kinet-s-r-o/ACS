@@ -148,7 +148,10 @@ const tagInclusionSQL = `(r.tags IS NULL OR jsonb_array_length(r.tags) = 0 OR (
 		SELECT 1 FROM jsonb_array_elements_text(r.tags) AS rt(tag)
 		WHERE d.tags @> to_jsonb(rt.tag)
 	)
-))`
+)) AND NOT EXISTS (
+	SELECT 1 FROM jsonb_array_elements_text(r.excluded_tags) AS rt(tag)
+	WHERE COALESCE(d.tags, '[]'::jsonb) @> to_jsonb(rt.tag)
+)`
 
 // ListPendingForDevice returns enabled rules for the device's resolved template
 // that have not yet been applied at the current version.
@@ -219,6 +222,14 @@ func (r *ProvisioningRepository) Update(ctx context.Context, rule *models.Provis
 			return fmt.Errorf("encrypt provisioning value: %w", err)
 		}
 	}
+	var excludedTagsJSON interface{}
+	if rule.ExcludedTags != nil {
+		b, err := json.Marshal(rule.ExcludedTags)
+		if err != nil {
+			return fmt.Errorf("marshal excluded tags: %w", err)
+		}
+		excludedTagsJSON = string(b)
+	}
 	var tagsJSON interface{}
 	if rule.Tags != nil {
 		b, err := json.Marshal(rule.Tags)
@@ -230,7 +241,7 @@ func (r *ProvisioningRepository) Update(ctx context.Context, rule *models.Provis
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return tx.Model(&models.ProvisioningRule{}).Where("id = ?", rule.ID).Updates(map[string]interface{}{
 			"template_id": rule.TemplateID, "parameter_name": rule.ParameterName, "parameter_value": value, "parameter_type": rule.ParameterType,
-			"phase": rule.Phase, "tags": tagsJSON, "enabled": rule.Enabled, "description": rule.Description,
+			"phase": rule.Phase, "tags": tagsJSON, "excluded_tags": excludedTagsJSON, "enabled": rule.Enabled, "description": rule.Description,
 			"add_object_path": rule.AddObjectPath, "order": rule.Order, "condition": rule.Condition,
 			"version": gorm.Expr("version + 1"),
 		}).Error

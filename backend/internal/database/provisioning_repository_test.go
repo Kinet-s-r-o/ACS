@@ -109,8 +109,65 @@ func TestListPendingForDeviceTagFilter(t *testing.T) {
 	})
 }
 
-// TestUpdateTags verifies that the Update method correctly serializes
-// the Tags []string field to jsonb when using a map-based GORM update.
+func TestExcludedTags(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	repo := NewProvisioningRepository(db)
+	name := fmt.Sprintf("excluded-tags-%d", time.Now().UnixNano())
+	template := &models.ProvisioningTemplate{Name: name, Manufacturer: name}
+	if err := db.Create(template).Error; err != nil {
+		t.Fatal(err)
+	}
+	device := &models.Device{SerialNumber: name, OUI: "000000"}
+	if err := db.Create(device).Error; err != nil {
+		t.Fatal(err)
+	}
+	rule := &models.ProvisioningRule{TemplateID: template.ID, ParameterName: "Device.Test", ParameterType: "string", Phase: "bootstrap", Enabled: true}
+	if err := repo.Create(ctx, rule); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Delete(rule)
+		db.Delete(device)
+		db.Delete(template)
+	})
+	for _, tc := range []struct {
+		name                       string
+		tags, excluded, deviceTags []string
+		want                       int
+	}{
+		{"legacy unscoped", nil, nil, nil, 1},
+		{"excluded present", nil, []string{"blocked"}, []string{"blocked"}, 0},
+		{"excluded absent", nil, []string{"blocked"}, []string{"branch-a"}, 1},
+		{"untagged allowed", nil, []string{"blocked"}, nil, 1},
+		{"both conditions match", []string{"branch-a", "branch-b"}, []string{"blocked"}, []string{"branch-b"}, 1},
+		{"exclusion wins", []string{"branch-a"}, []string{"blocked"}, []string{"branch-a", "blocked"}, 0},
+		{"inclusion required", []string{"branch-a"}, []string{"blocked"}, nil, 0},
+		{"clear exclusions", nil, nil, []string{"blocked"}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rule.Tags, rule.ExcludedTags = tc.tags, tc.excluded
+			if err := repo.Update(ctx, rule); err != nil {
+				t.Fatal(err)
+			}
+			device.Tags = tc.deviceTags
+			if err := db.Save(device).Error; err != nil {
+				t.Fatal(err)
+			}
+			for _, list := range []func(context.Context, int64, string, string, string) ([]*models.ProvisioningRule, error){repo.ListForDevice, repo.ListPendingForDevice} {
+				rules, err := list(ctx, device.ID, name, "", "bootstrap")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(rules) != tc.want {
+					t.Fatalf("got %d rules, want %d", len(rules), tc.want)
+				}
+			}
+		})
+	}
+}
+
+// TestUpdateTags verifies JSON serialization in map-based updates.
 func TestUpdateTags(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

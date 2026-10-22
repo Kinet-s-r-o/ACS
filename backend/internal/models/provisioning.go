@@ -86,6 +86,7 @@ type ProvisioningRule struct {
 	ParameterType  string    `json:"parameter_type" gorm:"default:'string'"`
 	Phase          string    `json:"phase" gorm:"size:16;default:'bootstrap'"`
 	Tags           []string  `json:"tags,omitempty" gorm:"type:jsonb;serializer:json"`
+	ExcludedTags   []string  `json:"excluded_tags,omitempty" gorm:"type:jsonb;serializer:json"`
 	Enabled        bool      `json:"enabled" gorm:"default:true"`
 	Version        uint64    `json:"version" gorm:"not null;default:1"`
 	Description    string    `json:"description,omitempty"`
@@ -107,6 +108,7 @@ type CreateProvisioningRuleRequest struct {
 	ParameterType  string   `json:"parameter_type"`
 	Phase          string   `json:"phase"`
 	Tags           []string `json:"tags"`
+	ExcludedTags   []string `json:"excluded_tags"`
 	Enabled        bool     `json:"enabled"`
 	Description    string   `json:"description"`
 	AddObjectPath  string   `json:"add_object_path"`
