@@ -29,10 +29,23 @@ const groups = [
   ] },
 ];
 
+const retentionTables = [
+  { table: 'audit_logs', label: 'Audit logs' },
+  { table: 'faults', label: 'CWMP faults' },
+  { table: 'tasks', label: 'CWMP tasks' },
+  { table: 'device_snapshots', label: 'Configuration snapshots' },
+  { table: 'metric_samples', label: 'Raw metric samples' },
+  { table: 'interface_metric_samples', label: 'Interface metric samples' },
+  { table: 'metric_samples_5min', label: '5-minute aggregates' },
+  { table: 'metric_samples_1h', label: 'Hourly aggregates' },
+  { table: 'metric_samples_1d', label: 'Daily aggregates' },
+];
+
 const RetentionSettings: Component = () => {
   const { isFullAccess } = useAuth();
   const { notify } = useFeedback();
   const [settings, { refetch }] = createResource(api.getSettings);
+  const [tableStats, { refetch: refetchTableStats }] = createResource(api.getRetentionStats);
   const [draft, setDraft] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
   const value = (key: string) => draft()[key] ?? settings()?.[key] ?? '';
@@ -53,6 +66,7 @@ const RetentionSettings: Component = () => {
     try {
       await api.updateSettings(values);
       await refetch();
+      void refetchTableStats();
       setDraft({});
       notify({ tone: 'success', title: 'DB retention saved', message: 'Housekeeping will apply the settings within one minute.' });
     } catch (error) {
@@ -75,6 +89,31 @@ const RetentionSettings: Component = () => {
           <p class="text-xs text-muted">Set a retention period to 0 to keep that history indefinitely. Shorter periods permanently remove older records on the next cleanup. Disabling housekeeping stops future cleanup runs.</p>
           <p class="text-xs text-muted">Metrics are removed in whole TimescaleDB chunks, so actual retention can exceed the configured period. Cleanup runs have a five-minute time limit.</p>
         </div>
+        <section class="card p-5" aria-busy={tableStats.loading}>
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-sm font-medium text-secondary">Current database usage</h2>
+              <p class="text-xs text-muted mt-1">Live row counts and on-disk table sizes, including indexes.</p>
+            </div>
+            <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchTableStats()} disabled={tableStats.loading}>Refresh</button>
+          </div>
+          <Show when={!tableStats.error} fallback={<ResourceError title="Database usage is unavailable" description="Retry to load current table sizes." onRetry={() => void refetchTableStats()} />}>
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px rounded border border-subtle bg-subtle overflow-hidden">
+              <For each={retentionTables}>{item => {
+                const stats = () => tableStats()?.find(table => table.table === item.table);
+                return <div class="bg-surface p-4 min-w-0">
+                  <h3 class="text-xs text-muted truncate" title={item.label}>{item.label}</h3>
+                  <Show when={stats()} fallback={<div class="skeleton h-7 w-28 mt-2" />}>
+                    {current => <>
+                      <div class="text-xl font-semibold font-mono text-primary mt-2 tabular-nums">{current().records.toLocaleString()}</div>
+                      <div class="text-xs text-muted mt-1">{(current().size_bytes / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB</div>
+                    </>}
+                  </Show>
+                </div>;
+              }}</For>
+            </div>
+          </Show>
+        </section>
         <For each={groups}>{group => <section class="card p-5">
           <h2 class="text-sm font-medium text-secondary mb-4">{group.title}</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-5">

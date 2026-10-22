@@ -203,6 +203,7 @@ func (r *Router) Handler() http.Handler {
 
 	// Settings endpoints
 	apiMux.HandleFunc("GET /settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetSettings))
+	apiMux.HandleFunc("GET /settings/retention/stats", auth.RequirePermission(models.PermSettingsRead)(r.handleRetentionStats))
 	apiMux.HandleFunc("PUT /settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleUpdateSettings))
 
 	// Faults endpoints
@@ -975,6 +976,18 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, result)
+}
+
+func (r *Router) handleRetentionStats(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
+	defer cancel()
+	stats, err := database.GetRetentionTableStats(ctx, r.db)
+	if err != nil {
+		log.Printf("Error getting retention table stats: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get database retention stats")
+		return
+	}
+	respondJSON(w, http.StatusOK, stats)
 }
 
 func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) {

@@ -162,6 +162,7 @@ export const api = {
 
   getMeta: () => request<{ app_name: string; app_logo?: string }>('/meta'),
   getSettings: () => request<Record<string, string>>('/settings'),
+  getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getUsers: () => request<User[]>('/users'),
   createUser: (body: { username: string; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),

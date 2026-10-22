@@ -61,6 +61,33 @@ type retentionRule struct {
 	chunks                bool
 }
 
+type RetentionTableStats struct {
+	Table     string `json:"table"`
+	Records   int64  `json:"records"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+// GetRetentionTableStats returns exact row counts and on-disk table sizes for
+// each relation controlled by a retention setting. Timescale sizes include
+// chunks, indexes, and TOAST data; regular PostgreSQL sizes include indexes.
+func GetRetentionTableStats(ctx context.Context, db *gorm.DB) ([]RetentionTableStats, error) {
+	stats := make([]RetentionTableStats, 0, len(retentionRules))
+	for _, rule := range retentionRules {
+		var row RetentionTableStats
+		row.Table = rule.table
+		sizeExpression := "pg_total_relation_size(?::regclass)"
+		if rule.chunks {
+			sizeExpression = "hypertable_size(?::regclass)"
+		}
+		query := fmt.Sprintf("SELECT COUNT(*) AS records, COALESCE(%s, 0) AS size_bytes FROM %s", sizeExpression, rule.table)
+		if err := db.WithContext(ctx).Raw(query, rule.table).Scan(&row).Error; err != nil {
+			return nil, fmt.Errorf("read retention stats for %s: %w", rule.table, err)
+		}
+		stats = append(stats, row)
+	}
+	return stats, nil
+}
+
 var retentionRules = []retentionRule{
 	{"retention_audit_days", "audit_logs", "created_at < ?", 24 * time.Hour, false},
 	{"retention_resolved_fault_days", "faults", "resolved = true AND resolved_at < ?", 24 * time.Hour, false},
