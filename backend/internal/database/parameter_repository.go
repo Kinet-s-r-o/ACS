@@ -45,6 +45,12 @@ func IsSensitiveParameterName(name string) bool {
 	return strings.HasSuffix(name, ".username")
 }
 
+// EncryptProvisioningValue exposes the same encryption primitive used by
+// provisioning rule writes to import/export handlers in other packages.
+func EncryptProvisioningValue(value string) (string, error) {
+	return encryptParameterValue(value)
+}
+
 func encryptParameterValue(value string) (string, error) {
 	if value == "" || strings.HasPrefix(value, encryptedParameterPrefix) {
 		return value, nil

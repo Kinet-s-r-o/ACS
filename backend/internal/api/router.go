@@ -221,6 +221,8 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /provisioning/{id}/toggle", auth.RequirePermission(models.PermProvisioningWrite)(r.handleToggleProvisioningRule))
 	apiMux.HandleFunc("POST /provisioning/reorder", auth.RequirePermission(models.PermProvisioningWrite)(r.handleReorderProvisioningRules))
 	apiMux.HandleFunc("GET /provisioning/templates", auth.RequirePermission(models.PermProvisioningRead)(r.handleListProvisioningTemplates))
+	apiMux.HandleFunc("GET /provisioning/export", auth.RequirePermission(models.PermProvisioningRead)(r.handleExportProvisioning))
+	apiMux.HandleFunc("POST /provisioning/import", auth.RequirePermission(models.PermProvisioningWrite)(r.handleImportProvisioning))
 	apiMux.HandleFunc("POST /provisioning/templates", auth.RequirePermission(models.PermProvisioningWrite)(r.handleCreateProvisioningTemplate))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/clone", auth.RequirePermission(models.PermProvisioningWrite)(r.handleCloneProvisioningTemplate))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleUpdateProvisioningTemplate))

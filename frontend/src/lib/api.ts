@@ -174,6 +174,8 @@ export const api = {
   deleteRole: (id: number) => request<{ status: string }>(`/roles/${id}`, { method: 'DELETE' }),
   changePassword: (currentPassword: string, newPassword: string) => request<{ status: string }>('/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
   getProvisioningRules: (templateId?: number) => request<ProvisioningRule[]>(`/provisioning${templateId ? `?template_id=${templateId}` : ''}`),
+  exportProvisioning: () => requestBlob('/provisioning/export'),
+  importProvisioning: (backup: unknown, mode: 'append' | 'replace' = 'append') => request<{ status: string; mode: string; templates: number }>('/provisioning/import', { method: 'POST', body: JSON.stringify({ ...(backup as Record<string, unknown>), mode }) }),
   createProvisioningRule: (body: Omit<ProvisioningRule, 'id'>) => request<ProvisioningRule>('/provisioning', { method: 'POST', body: JSON.stringify(body) }),
   updateProvisioningRule: (id: number, body: Omit<ProvisioningRule, 'id'>) => request<ProvisioningRule>(`/provisioning/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningRule: (id: number) => request<{ status: string }>(`/provisioning/${id}`, { method: 'DELETE' }),

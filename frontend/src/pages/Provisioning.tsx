@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, Copy, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
+import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -103,6 +103,7 @@ const Provisioning: Component = () => {
   const [settingsSaving, setSettingsSaving] = createSignal(false);
   const [refreshSettings, setRefreshSettings] = createSignal({ overview: '15m', full: '6h' });
   let settingsMenu: HTMLDivElement | undefined;
+  let provisioningImportInput: HTMLInputElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
   const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], excluded_tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
@@ -165,6 +166,41 @@ const Provisioning: Component = () => {
   const [editingInterfaceMetric, setEditingInterfaceMetric] = createSignal<InterfaceMetricDefinition | null>(null);
   const [showInterfaceMetricModal, setShowInterfaceMetricModal] = createSignal(false);
   const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true });
+
+  const exportProvisioningBackup = async () => {
+    try {
+      const blob = await api.exportProvisioning();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'acs-backup.json';
+      link.click();
+      URL.revokeObjectURL(url);
+      notify({ tone: 'success', title: 'JSON backup exported' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not export JSON backup', detail: (error as Error).message, persistent: true });
+    }
+  };
+
+  const importProvisioningBackup = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text()) as Record<string, unknown>;
+      const templates = Array.isArray(backup.templates) ? backup.templates.length : 0;
+      if (!await confirm({ title: 'Import ACS JSON backup?', description: `The backup contains ${templates} template(s). Existing data will remain and imported templates will be added.`, confirmLabel: 'Import backup', tone: 'primary' })) return;
+      setPendingAction('import-provisioning');
+      const result = await api.importProvisioning(backup, 'append');
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'JSON backup imported', detail: `${result.templates} template(s) imported.` });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not import JSON backup', detail: (error as Error).message, persistent: true });
+    } finally {
+      setPendingAction(null);
+    }
+  };
 
   const provisioningPayload = (form: typeof emptyProvisioningRule) => {
     const base = isAddObjectRule()
@@ -934,10 +970,18 @@ const Provisioning: Component = () => {
                 </h2>
                 <p class="text-muted text-xs mt-1">Select a template to view and manage its rules. The most specific template matching a device wins.</p>
               </div>
-              <button onClick={openCreateTemplate} class="btn btn-primary text-xs py-1.5">
-                <Plus size={12} />
-                Add template
-              </button>
+              <div class="flex flex-wrap gap-2">
+                <input ref={(element) => { provisioningImportInput = element; }} type="file" accept="application/json,.json" class="sr-only" onChange={(event) => void importProvisioningBackup(event)} />
+                <button type="button" onClick={() => provisioningImportInput?.click()} class="btn btn-secondary text-xs py-1.5" disabled={pendingAction() === 'import-provisioning'}>
+                  <Upload size={12} />Import JSON
+                </button>
+                <button type="button" onClick={() => void exportProvisioningBackup()} class="btn btn-secondary text-xs py-1.5">
+                  <Download size={12} />Export JSON
+                </button>
+                <button onClick={openCreateTemplate} class="btn btn-primary text-xs py-1.5">
+                  <Plus size={12} />Add template
+                </button>
+              </div>
             </div>
             <Show when={provError()}>
               <ResourceError title="Templates are unavailable" description="The provisioning templates could not be loaded." onRetry={loadProvTemplates} />
