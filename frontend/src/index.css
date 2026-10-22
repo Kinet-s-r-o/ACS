@@ -289,7 +289,7 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .filter-btn-apply:hover { background: rgb(var(--action-primary-hover)); }
 
 /* Column visibility */
-.column-toggle { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
+.column-toggle { display: grid; place-items: center; width: 24px; height: 24px; margin-left: auto; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
 .column-toggle:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
 .column-dropdown { z-index: 50; width: 220px; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
 .column-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
