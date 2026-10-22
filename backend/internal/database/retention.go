@@ -67,20 +67,38 @@ type RetentionTableStats struct {
 	SizeBytes int64  `json:"size_bytes"`
 }
 
-// GetRetentionTableStats returns exact row counts and on-disk table sizes for
-// each relation controlled by a retention setting. Timescale sizes include
-// chunks, indexes, and TOAST data; regular PostgreSQL sizes include indexes.
+// GetRetentionTableStats uses PostgreSQL's catalog estimates so inspecting a
+// large table does not require a full table scan. Timescale counts include
+// estimates for every data chunk. Sizes include indexes and TOAST data.
 func GetRetentionTableStats(ctx context.Context, db *gorm.DB) ([]RetentionTableStats, error) {
 	stats := make([]RetentionTableStats, 0, len(retentionRules))
 	for _, rule := range retentionRules {
 		var row RetentionTableStats
 		row.Table = rule.table
-		sizeExpression := "pg_total_relation_size(?::regclass)"
+		var query string
+		var args []interface{}
 		if rule.chunks {
-			sizeExpression = "hypertable_size(?::regclass)"
+			query = `WITH target_hypertables AS (
+				SELECT hypertable_name FROM timescaledb_information.hypertables WHERE hypertable_name = ?
+				UNION ALL
+				SELECT materialization_hypertable_name AS hypertable_name
+				FROM timescaledb_information.continuous_aggregates WHERE view_name = ?
+			)
+			SELECT COALESCE(SUM(GREATEST(stats.n_live_tup, 0)), 0)::bigint AS records,
+			       COALESCE(hypertable_size(?::regclass), 0)::bigint AS size_bytes
+			FROM timescaledb_information.chunks chunks
+			JOIN target_hypertables target USING (hypertable_name)
+			JOIN pg_class relation ON relation.oid = to_regclass(format('%I.%I', chunks.chunk_schema, chunks.chunk_name))
+			LEFT JOIN pg_stat_user_tables stats ON stats.relid = relation.oid`
+			args = []interface{}{rule.table, rule.table, rule.table}
+		} else {
+			query = `SELECT COALESCE(SUM(stats.n_live_tup), 0)::bigint AS records,
+			        COALESCE(pg_total_relation_size(?::regclass), 0)::bigint AS size_bytes
+			FROM pg_stat_user_tables stats
+			WHERE stats.relid = to_regclass(?::text)`
+			args = []interface{}{rule.table, rule.table}
 		}
-		query := fmt.Sprintf("SELECT COUNT(*) AS records, COALESCE(%s, 0) AS size_bytes FROM %s", sizeExpression, rule.table)
-		if err := db.WithContext(ctx).Raw(query, rule.table).Scan(&row).Error; err != nil {
+		if err := db.WithContext(ctx).Raw(query, args...).Scan(&row).Error; err != nil {
 			return nil, fmt.Errorf("read retention stats for %s: %w", rule.table, err)
 		}
 		stats = append(stats, row)

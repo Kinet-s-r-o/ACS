@@ -93,7 +93,7 @@ const RetentionSettings: Component = () => {
           <div class="flex items-center justify-between gap-3 mb-4">
             <div>
               <h2 class="text-sm font-medium text-secondary">Current database usage</h2>
-              <p class="text-xs text-muted mt-1">Live row counts and on-disk table sizes, including indexes.</p>
+              <p class="text-xs text-muted mt-1">Estimated row counts and on-disk table sizes, including indexes.</p>
             </div>
             <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchTableStats()} disabled={tableStats.loading}>Refresh</button>
           </div>
@@ -103,7 +103,7 @@ const RetentionSettings: Component = () => {
                 const stats = () => tableStats()?.find(table => table.table === item.table);
                 return <div class="bg-surface p-4 min-w-0">
                   <h3 class="text-xs text-muted truncate" title={item.label}>{item.label}</h3>
-                  <Show when={stats()} fallback={<div class="skeleton h-7 w-28 mt-2" />}>
+                  <Show when={stats()} fallback={<div class="text-xs text-muted mt-3">{tableStats.loading ? 'Loading…' : tableStats.error ? 'Unavailable' : 'No statistics available'}</div>}>
                     {current => <>
                       <div class="text-xl font-semibold font-mono text-primary mt-2 tabular-nums">{current().records.toLocaleString()}</div>
                       <div class="text-xs text-muted mt-1">{(current().size_bytes / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB</div>
