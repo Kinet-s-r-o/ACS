@@ -65,7 +65,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id int64, passwordH
 		}).Error
 }
 
-func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username string, role models.UserRole, passwordHash string) error {
+func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username string, role models.UserRole, roleID *int64, passwordHash string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
 			return err
@@ -86,6 +86,7 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username s
 		updates := map[string]interface{}{
 			"username":      username,
 			"role":          role,
+			"role_id":       roleID,
 			"token_version": gorm.Expr("token_version + 1"),
 		}
 		if passwordHash != "" {

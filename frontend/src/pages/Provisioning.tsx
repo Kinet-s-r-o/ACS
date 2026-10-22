@@ -889,36 +889,6 @@ const Provisioning: Component = () => {
                   </p>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <Show when={templateTab() === 'rules'}>
-                  <div class="relative">
-                    <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                    <input type="text" value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} placeholder="Search rules…" class="input pl-9! w-56 text-sm" />
-                    <Show when={searchQuery()}>
-                      <button onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear search"><X size={12} /></button>
-                    </Show>
-                  </div>
-                  <button onClick={openCreateProv} class="btn btn-primary text-xs py-1.5">
-                    <Plus size={12} />
-                    Add rule
-                  </button>
-                </Show>
-                <Show when={templateTab() === 'metrics'}>
-                  <button onClick={openCreateMetric} class="btn btn-primary text-xs py-1.5">
-                    <Plus size={12} />
-                    Add metric
-                  </button>
-                  <button onClick={() => openInterfaceMetric()} class="btn btn-secondary text-xs py-1.5">
-                    <Plus size={12} />
-                    Add WAN/LAN metric
-                  </button>
-                </Show>
-                <Show when={templateTab() === 'features'}><button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button></Show>
-                <Show when={templateTab() === 'variables'}>
-                  <button onClick={addTemplateVariable} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add variable</button>
-                  <button onClick={() => void saveTemplateVariables()} class="btn btn-primary text-xs py-1.5" disabled={variablesSaving()}><Save size={12} />{variablesSaving() ? 'Saving…' : 'Save variables'}</button>
-                </Show>
-              </div>
             </div>
 
             <div class="flex gap-1 border-b border-subtle mb-4">
@@ -930,10 +900,35 @@ const Provisioning: Component = () => {
               <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Features</span></button>
             </div>
 
+            <Show when={templateTab() === 'rules'}>
+              <div class="mb-4 flex flex-wrap items-center justify-end gap-2">
+                <div class="relative">
+                  <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  <input type="text" value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} placeholder="Search rules…" class="input pl-9! w-56 text-sm" />
+                  <Show when={searchQuery()}><button onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show>
+                </div>
+                <button onClick={openCreateProv} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add rule</button>
+              </div>
+            </Show>
+            <Show when={templateTab() === 'metrics'}>
+              <div class="mb-4 flex flex-wrap justify-end gap-2">
+                <button onClick={openCreateMetric} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add metric</button>
+              </div>
+            </Show>
+            <Show when={templateTab() === 'variables'}>
+              <div class="mb-4 flex justify-end gap-2">
+                <button onClick={addTemplateVariable} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add variable</button>
+                <button onClick={() => void saveTemplateVariables()} class="btn btn-primary text-xs py-1.5" disabled={variablesSaving()}><Save size={12} />{variablesSaving() ? 'Saving…' : 'Save variables'}</button>
+              </div>
+            </Show>
+
           <Show when={templateTab() === 'features'}>
             <div class="space-y-4">
+              <div class="flex justify-end">
+                <button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
+              </div>
               <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
-              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No feature sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." action={<button type="button" class="btn btn-primary" onClick={() => openFeatureEditor()}><Plus size={13} />Add section</button>} />}>
+              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No feature sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." />}>
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Feature sections">
                   <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For>
                 </div>
@@ -1069,7 +1064,7 @@ const Provisioning: Component = () => {
           </Show>
 
           <Show when={!provError() && provRules() !== null && (provRules()?.length ?? 0) === 0}>
-            <EmptyState compact title="No provisioning rules exist" description="Add a rule to this template to start provisioning." action={<button type="button" class="btn btn-primary" onClick={openCreateProv}>Add rule</button>} />
+            <EmptyState compact title="No provisioning rules exist" description="Add a rule to this template to start provisioning." />
           </Show>
           </Show>
 
@@ -1183,7 +1178,10 @@ const Provisioning: Component = () => {
               </Show>
             </Show>
             <section class="mt-6 border-t border-subtle pt-4">
-              <h3 class="text-sm font-semibold text-primary mb-3">Per-interface WAN/LAN metrics</h3>
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-sm font-semibold text-primary">Per-interface WAN/LAN metrics</h3>
+                <button onClick={() => openInterfaceMetric()} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
+              </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
                 <div class="overflow-x-auto table-scroll"><table class="w-full text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Source</th><th class="py-2 pr-3">Parameter pattern</th><th class="py-2 pr-3">Color</th><th class="py-2 pr-3">Chart</th><th class="py-2 pr-3">Group</th><th class="py-2 pr-3">Transform</th><th class="py-2 pr-3">Multiplier</th><th class="py-2 pr-3">Unit scale</th><th class="py-2 text-right">Actions</th></tr></thead>
                   <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3"><span class="inline-block h-3 w-6 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /></td><td class="py-2 pr-3">{def.chart_type || 'line'}</td><td class="py-2 pr-3">{def.group || '—'}</td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 pr-3">{def.unit_scale || 'none'}</td><td class="py-2 text-right"><button class="btn btn-ghost text-xs" onClick={() => openInterfaceMetric(def)}><Edit size={12} /></button><button class="btn btn-ghost text-xs text-red-400" onClick={() => void deleteInterfaceMetric(def)}><Trash2 size={12} /></button></td></tr>}</For></tbody></table></div>

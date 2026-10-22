@@ -2577,8 +2577,10 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if body.Role != models.RoleFull && body.Role != models.RoleRead {
-		body.Role = models.RoleRead
+	roleID, legacyRole, err := r.resolveAssignedRole(req.Context(), body.RoleID, body.Role)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid role")
+		return
 	}
 
 	hash, err := auth.HashPassword(body.Password)
@@ -2590,7 +2592,8 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 	user := &models.User{
 		Username:     body.Username,
 		PasswordHash: hash,
-		Role:         body.Role,
+		Role:         legacyRole,
+		RoleID:       roleID,
 	}
 
 	if err := r.userRepo.Create(req.Context(), user); err != nil {
@@ -2651,22 +2654,17 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		}
 		user.Username = body.Username
 	}
-	if body.Role != "" {
-		if body.Role != models.RoleFull && body.Role != models.RoleRead {
+	if body.RoleID != nil || body.Role != "" {
+		roleID, legacyRole, resolveErr := r.resolveAssignedRole(req.Context(), body.RoleID, body.Role)
+		if resolveErr != nil {
 			respondError(w, http.StatusBadRequest, "Invalid role")
 			return
 		}
-		if user.Role == models.RoleFull && body.Role != models.RoleFull {
-			fullAdmins, countErr := r.userRepo.CountByRole(req.Context(), models.RoleFull)
-			if countErr != nil || fullAdmins <= 1 {
-				respondError(w, http.StatusBadRequest, "Cannot remove the last full-access administrator")
-				return
-			}
-		}
-		user.Role = body.Role
+		user.RoleID = roleID
+		user.Role = legacyRole
 	}
 
-	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.Role, passwordHash); err != nil {
+	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.Role, user.RoleID, passwordHash); err != nil {
 		if errors.Is(err, database.ErrLastFullAdmin) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -2680,6 +2678,31 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, user)
+}
+
+func (r *Router) resolveAssignedRole(ctx context.Context, roleID *int64, fallback models.UserRole) (*int64, models.UserRole, error) {
+	var role *models.Role
+	var err error
+	if roleID != nil {
+		role, err = r.roleRepo.GetByID(ctx, *roleID)
+	} else {
+		if fallback != models.RoleFull && fallback != models.RoleRead {
+			fallback = models.RoleRead
+		}
+		name := "viewer"
+		if fallback == models.RoleFull {
+			name = "admin"
+		}
+		role, err = r.roleRepo.GetByName(ctx, name)
+	}
+	if err != nil || role == nil {
+		return nil, "", errors.New("role not found")
+	}
+	legacyRole := models.RoleRead
+	if role.IsSystem && role.Name == "admin" {
+		legacyRole = models.RoleFull
+	}
+	return &role.ID, legacyRole, nil
 }
 
 func (r *Router) handleDeleteUser(w http.ResponseWriter, req *http.Request) {

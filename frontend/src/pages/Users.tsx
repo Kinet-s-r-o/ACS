@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
-import { Users, Trash2, Edit2, Plus, Search, X } from 'lucide-solid';
+import { Users, ShieldCheck, Trash2, Edit2, Plus, Search, X } from 'lucide-solid';
 import { api, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
@@ -17,7 +17,7 @@ import RolesTab from './RolesTab';
 import { createPersistedSignal } from '../lib/storage';
 
 const UsersPage: Component = () => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, isFullAccess } = useAuth();
   const { confirm, notify } = useFeedback();
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<'users' | 'roles'>('users');
@@ -26,10 +26,14 @@ const UsersPage: Component = () => {
     if (!hasPermission('users.read')) return [];
     return api.getUsers();
   });
+  const [roles, { refetch: refetchRoles }] = createResource(async () => {
+    if (!hasPermission('roles.read')) return [];
+    return api.getRoles();
+  });
 
   const [showUserModal, setShowUserModal] = createSignal(false);
   const [editingUser, setEditingUser] = createSignal<User | null>(null);
-  const [userForm, setUserForm] = createSignal({ username: '', password: '', role: 'read' as 'full' | 'read' });
+  const [userForm, setUserForm] = createSignal({ username: '', password: '', role: 'read' as 'full' | 'read', roleId: '' });
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.users');
   const { columns, isVisible, toggle } = useColumnVisibility('users', [
@@ -44,7 +48,7 @@ const UsersPage: Component = () => {
   const getFilterValue = (user: User, colId: string): string => {
     switch (colId) {
       case 'username': return user.username || '';
-      case 'role': return user.role || '';
+      case 'role': return roleName(user);
       case 'last_login': return user.last_login || '';
       default: return '';
     }
@@ -56,7 +60,7 @@ const UsersPage: Component = () => {
     if (query) {
       all = all.filter(u =>
         u.username?.toLowerCase().includes(query) ||
-        u.role?.toLowerCase().includes(query)
+        roleName(u).toLowerCase().includes(query)
       );
     }
     return applyColumnFilters(all, columnFilters(), getFilterValue);
@@ -67,15 +71,19 @@ const UsersPage: Component = () => {
     return all.slice(start, start + pageSize());
   });
   const userTotalPages = createMemo(() => Math.ceil(filteredUsers().length / pageSize()));
+  const roleName = (user: User) => roles()?.find(role => role.id === user.role_id)?.name ?? (user.role === 'full' ? 'admin' : 'viewer');
+  const systemRoleId = (role: 'full' | 'read') => roles()?.find(item => item.name === (role === 'full' ? 'admin' : 'viewer'))?.id.toString() ?? '';
+  const selectedRole = () => roles()?.find(role => role.id === Number(userForm().roleId));
 
   const handleCreateUser = async () => {
     if (pendingAction()) return;
     setPendingAction('create-user');
     try {
-      await api.createUser(userForm());
+      const selected = selectedRole();
+      await api.createUser({ username: userForm().username, password: userForm().password, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) });
       notify({ tone: 'success', title: 'Operator account created', message: userForm().username });
       setShowUserModal(false);
-      setUserForm({ username: '', password: '', role: 'read' });
+      setUserForm({ username: '', password: '', role: 'read', roleId: '' });
       refetchUsers();
     } catch (error) { notify({ tone: 'error', title: 'Could not create operator', message: 'The operator account was not created. The entered values are preserved.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
@@ -85,14 +93,15 @@ const UsersPage: Component = () => {
     const u = editingUser();
     if (!u || pendingAction()) return;
     setPendingAction('update-user');
-    const body: Partial<{ username: string; password: string; role: 'full' | 'read' }> = { username: userForm().username, role: userForm().role };
+    const selected = selectedRole();
+    const body: Partial<{ username: string; password: string; role: 'full' | 'read'; role_id: number }> = { username: userForm().username, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) };
     if (userForm().password) body.password = userForm().password;
     try {
       await api.updateUser(u.id, body);
       notify({ tone: 'success', title: 'Operator account updated', message: userForm().username });
       setShowUserModal(false);
       setEditingUser(null);
-      setUserForm({ username: '', password: '', role: 'read' });
+      setUserForm({ username: '', password: '', role: 'read', roleId: '' });
       refetchUsers();
     } catch (error) { notify({ tone: 'error', title: 'Could not update operator', message: 'The existing account remains unchanged. The entered values are preserved.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
@@ -109,13 +118,13 @@ const UsersPage: Component = () => {
 
   const openEditUser = (u: User) => {
     setEditingUser(u);
-    setUserForm({ username: u.username, password: '', role: u.role });
+    setUserForm({ username: u.username, password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
     setShowUserModal(true);
   };
 
   const openCreateUser = () => {
     setEditingUser(null);
-    setUserForm({ username: '', password: '', role: 'read' });
+    setUserForm({ username: '', password: '', role: 'read', roleId: systemRoleId('read') });
     setShowUserModal(true);
   };
 
@@ -123,9 +132,9 @@ const UsersPage: Component = () => {
     <div class="space-y-5">
       <PageHeader title="Users and Roles" description="Manage operator accounts and their access levels." />
 
-      <div class="flex gap-1 border-b border-border">
-        <button type="button" class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'users' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-foreground'}`} onClick={() => setActiveTab('users')}>Users</button>
-        <button type="button" class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'roles' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-foreground'}`} onClick={() => setActiveTab('roles')}>Roles</button>
+      <div class="border-b border-subtle flex gap-1" role="tablist" aria-label="Users and roles">
+        <button type="button" role="tab" aria-selected={activeTab() === 'users'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'users' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => { setActiveTab('users'); void refetchRoles(); void refetchUsers(); }}><Users size={13} />Users</button>
+        <button type="button" role="tab" aria-selected={activeTab() === 'roles'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'roles' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setActiveTab('roles')}><ShieldCheck size={13} />Roles</button>
       </div>
 
       <Show when={activeTab() === 'users'}>
@@ -188,8 +197,8 @@ const UsersPage: Component = () => {
                     <Show when={isVisible('username')}><td class="py-2 text-primary">{u.username}</td></Show>
                     <Show when={isVisible('role')}>
                       <td class="py-2">
-                        <span class={`badge ${u.role === 'full' ? 'badge-success' : 'badge-warning'}`}>
-                          {u.role}
+                        <span class={`badge ${u.role_id?.toString() === systemRoleId('full') || (!u.role_id && u.role === 'full') ? 'badge-success' : 'badge-warning'}`}>
+                          {roleName(u)}
                         </span>
                       </td>
                     </Show>
@@ -223,7 +232,7 @@ const UsersPage: Component = () => {
       </Show>
 
       <Show when={activeTab() === 'roles'}>
-        <RolesTab />
+        <div class="card p-5"><RolesTab /></div>
       </Show>
 
       {/* User Modal */}
@@ -262,12 +271,14 @@ const UsersPage: Component = () => {
               <label for="operator-role" class="block text-xs text-muted mb-1.5">Role</label>
               <select
                 id="operator-role"
-                value={userForm().role}
-                onChange={(e) => setUserForm(f => ({ ...f, role: e.currentTarget.value as 'full' | 'read' }))}
+                value={userForm().roleId}
+                onChange={(e) => { const selected = roles()?.find(role => role.id === Number(e.currentTarget.value)); setUserForm(f => ({ ...f, roleId: e.currentTarget.value, role: selected?.name === 'admin' ? 'full' : 'read' })); }}
                 class="input w-full"
+                disabled={roles.loading || !!roles.error || !isFullAccess()}
+                required
               >
-                <option value="read">Read Only</option>
-                <option value="full">Full Access</option>
+                <option value="" disabled>Select a role</option>
+                <For each={roles()}>{role => <option value={role.id}>{role.name}{role.is_system ? ' (System)' : ''}</option>}</For>
               </select>
             </div>
             <div class="flex gap-2 pt-2">

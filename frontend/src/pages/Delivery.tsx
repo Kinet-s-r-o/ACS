@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For } from 'solid-js';
-import { Save, Settings as SettingsIcon, Info } from 'lucide-solid';
+import { Save, Settings as SettingsIcon, Info, RefreshCw } from 'lucide-solid';
 import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
@@ -45,6 +45,25 @@ const Delivery: Component = () => {
 
   const getValue = (key: string) => {
     return formData()[key] ?? settings()?.[key] ?? '';
+  };
+
+  const generatePassword = () => {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const limit = Math.floor(256 / alphabet.length) * alphabet.length;
+    const password: string[] = [];
+    const bytes = new Uint8Array(32);
+    try {
+      while (password.length < 24) {
+        window.crypto.getRandomValues(bytes);
+        for (const byte of bytes) {
+          if (byte < limit) password.push(alphabet[byte % alphabet.length]);
+          if (password.length === 24) break;
+        }
+      }
+      handleChange('connection_request_password', password.join(''));
+    } catch {
+      notify({ tone: 'error', title: 'Password generation failed', message: 'Secure password generation is unavailable in this browser.' });
+    }
   };
 
   return (
@@ -124,7 +143,12 @@ const Delivery: Component = () => {
                     />
                   </div>
                   <div>
-                    <label for="connection-request-password" class="block text-xs text-muted mb-1.5">Connection-request password</label>
+                    <div class="flex items-center justify-between gap-3 mb-1.5">
+                      <label for="connection-request-password" class="block text-xs text-muted">Connection-request password</label>
+                      <button type="button" class="btn btn-secondary text-xs" onClick={generatePassword} disabled={!isFullAccess()}>
+                        <RefreshCw size={13} /> Generate password
+                      </button>
+                    </div>
                     <input
                       id="connection-request-password"
                       type="password"
