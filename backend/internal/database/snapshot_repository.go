@@ -21,7 +21,7 @@ func (r *SnapshotRepository) Create(ctx context.Context, snapshot *models.Device
 
 func (r *SnapshotRepository) ListByDeviceID(ctx context.Context, deviceID int64) ([]models.DeviceSnapshot, error) {
 	var snapshots []models.DeviceSnapshot
-	err := r.db.WithContext(ctx).Where("device_id = ?", deviceID).
+	err := r.db.WithContext(ctx).Omit("parameters").Where("device_id = ?", deviceID).
 		Order("created_at DESC").Find(&snapshots).Error
 	return snapshots, err
 }

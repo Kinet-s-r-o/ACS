@@ -114,30 +114,31 @@ const DeviceDetail: Component = () => {
   const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
+  const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
+  const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
+  const taskSource = () => activeTab() === 'tasks' || featureRefreshTaskID() !== null ? serial() : false;
+  const initialOverviewLoading = () => activeTab() === 'overview' && parameters.loading && !parameters();
   const [systemSettings] = createResource(api.getSettings);
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
-  const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
-  const [tasks, { refetch: refetchTaskRows }] = createResource(serial, api.getDeviceTasks);
+  const [tasks, { refetch: refetchTaskRows }] = createResource(taskSource, api.getDeviceTasks);
   const [deviceTaskCounts, { refetch: refetchDeviceTaskCounts }] = createResource(serial, api.getDeviceTaskCounts);
   const refetchTasks = async () => {
     const [taskRows] = await Promise.all([refetchTaskRows(), refetchDeviceTaskCounts()]);
     return taskRows;
   };
-  const [snapshots, { refetch: refetchSnapshots }] = createResource(serial, api.getDeviceSnapshots);
-  const [deviceFaults, { refetch: refetchFaultRows }] = createResource(serial, api.getDeviceFaults);
+  const [snapshots, { refetch: refetchSnapshots }] = createResource(() => activeTab() === 'snapshots' ? serial() : false, api.getDeviceSnapshots);
+  const [deviceFaults, { refetch: refetchFaultRows }] = createResource(() => activeTab() === 'faults' ? serial() : false, api.getDeviceFaults);
   const [deviceFaultCounts, { refetch: refetchFaultCounts }] = createResource(serial, api.getDeviceFaultCounts);
   const refetchDeviceFaults = async () => {
     const [faultRows] = await Promise.all([refetchFaultRows(), refetchFaultCounts()]);
     return faultRows;
   };
   const [metricDefs] = createResource(api.getMetricDefinitions);
-  const [interfaceMetricDefs] = createResource(serial, api.getDeviceInterfaceMetricDefinitions);
   const [featureAction, setFeatureAction] = createSignal<string | null>(null);
   const [featureObjectEditor, setFeatureObjectEditor] = createSignal<FeatureObjectEditor | null>(null);
   const [featureObjectDraft, setFeatureObjectDraft] = createSignal<Record<string, string>>({});
   const [activeDeviceFeatureID, setActiveDeviceFeatureID] = createSignal('');
-  const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
   const matchingProvisioningTemplate = createMemo(() => {
     const current = device();
     if (!current) return null;
@@ -201,6 +202,7 @@ const DeviceDetail: Component = () => {
     if (templateImageObjectUrl) URL.revokeObjectURL(templateImageObjectUrl);
   });
   const [statsInterface, setStatsInterface] = createSignal<{ type: 'wan' | 'lan'; name: string; path: string } | null>(null);
+  const [interfaceMetricDefs] = createResource(() => statsInterface() ? serial() : false, api.getDeviceInterfaceMetricDefinitions);
   const [taskPage, setTaskPage] = createSignal(0);
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
@@ -1891,8 +1893,8 @@ const DeviceDetail: Component = () => {
       <Show when={!device.error && (parameters.error || tasks.error)}>
         <div class="card"><ResourceError title="CPE detail is incomplete" description="The device record loaded, but parameters or task history are unavailable. Retry before issuing a configuration action." onRetry={refreshAll} /></div>
       </Show>
-      <Show when={device.loading && !device()}>
-        <div class="card p-6">
+      <Show when={(device.loading && !device()) || initialOverviewLoading()}>
+        <div class="card p-6" role="status" aria-label="Loading device details" aria-busy="true">
           <div class="skeleton h-6 w-48 mb-4" />
           <div class="grid grid-cols-2 gap-4">
             <div class="skeleton h-4 w-32" />
@@ -1900,7 +1902,7 @@ const DeviceDetail: Component = () => {
           </div>
         </div>
       </Show>
-      <Show when={!device.error && device()}>
+      <Show when={!device.error && !initialOverviewLoading() && device()}>
         {(d) => (
           <>
             <Show when={activeTab() === 'overview'}>
@@ -2190,7 +2192,7 @@ const DeviceDetail: Component = () => {
                       </button>
                     </div>
                   </Show>
-                  <Show when={(snapshots() || []).length > 0} fallback={<EmptyState title="No snapshots" description="Create a snapshot to preserve the current cached CPE configuration." />}>
+                  <Show when={(snapshots() || []).length > 0} fallback={<Show when={!snapshots.loading} fallback={<div class="skeleton h-24 w-full" aria-label="Loading snapshots" />}><EmptyState title="No snapshots" description="Create a snapshot to preserve the current cached CPE configuration." /></Show>}>
                     <div class="space-y-2">
                       <For each={snapshots()}>
                         {(snapshot) => (
