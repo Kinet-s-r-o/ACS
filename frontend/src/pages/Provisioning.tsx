@@ -389,7 +389,7 @@ const Provisioning: Component = () => {
   const interfaceMetricCell = (def: InterfaceMetricDefinition, id: string) => {
     switch (id) {
       case 'name': return <td class="py-2 pr-3 text-primary">{def.name}</td>;
-      case 'parameter': return <td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td>;
+      case 'parameter': return <td class="w-[45%] py-2 pr-3 font-mono break-words [overflow-wrap:anywhere]">{def.parameter_pattern}</td>;
       case 'type': return <td class="py-2 pr-3 uppercase">{def.interface_type}</td>;
       case 'source': return <td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
       case 'unit_scale': return <td class="py-2 pr-3">{def.unit_scale || 'none'}</td>;
@@ -1219,7 +1219,7 @@ const Provisioning: Component = () => {
                 <table class="data-table w-full min-w-[95rem] table-fixed text-left">
                   <thead>
                     <tr class="border-b border-subtle">
-                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">{column.label}</th></Show>}</For>
+                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class={`py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide ${column.id === 'parameter' ? 'w-[45%]' : ''}`}>{column.label}</th></Show>}</For>
                       <th class="py-2 text-right text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
                       <th class="py-2 pr-2"><ColumnVisibility columns={metricColumns.columns} onToggle={metricColumns.toggle} /></th>
                     </tr>
@@ -1234,7 +1234,7 @@ const Provisioning: Component = () => {
                               <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                             </Show>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('parameter')}><td class="px-3 py-2.5 text-secondary font-mono text-xs break-all">{def.parameter_name}</td></Show>
+                          <Show when={metricColumns.isVisible('parameter')}><td class="w-[45%] px-3 py-2.5 text-secondary font-mono text-xs break-words [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
                           <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
                           <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
@@ -1278,7 +1278,7 @@ const Provisioning: Component = () => {
                 <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[95rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class="py-2 pr-3">{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[95rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[45%]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section>
           </Show>
