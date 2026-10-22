@@ -1034,7 +1034,7 @@ const Provisioning: Component = () => {
                 </button>
                 <div class="h-12 w-16 shrink-0 overflow-hidden rounded border border-subtle bg-elevated grid place-items-center">
                   <Show when={templateImageUrl()} fallback={<ImageIcon size={18} class="text-muted" />}>
-                    <img src={templateImageUrl()!} alt={`Device image for ${selectedTemplate()!.name}`} class="h-full w-full object-contain" />
+                    <img src={templateImageUrl()!} alt={`Device image for ${selectedTemplate()!.name}`} class="h-auto w-auto max-h-full max-w-full object-contain" />
                   </Show>
                 </div>
                 <div>
@@ -1540,7 +1540,7 @@ const Provisioning: Component = () => {
                 <div class="flex items-center gap-3">
                   <div class="h-16 w-20 shrink-0 overflow-hidden rounded border border-subtle bg-elevated grid place-items-center">
                     <Show when={templateImageUrl()} fallback={<ImageIcon size={18} class="text-muted" />}>
-                      <img src={templateImageUrl()!} alt={`Device photo for ${editingTemplate()!.name}`} class="h-full w-full object-contain" />
+                      <img src={templateImageUrl()!} alt={`Device photo for ${editingTemplate()!.name}`} class="h-auto w-auto max-h-full max-w-full object-contain" />
                     </Show>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
