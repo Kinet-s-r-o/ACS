@@ -1098,8 +1098,8 @@ const Provisioning: Component = () => {
                     <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-secondary text-xs" onClick={() => openFeatureEditor(feature())}><Edit2 size={13} />Edit section</button><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature().id)}><Trash2 size={13} />Delete</button></div>
                   </div>
                   <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
-                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[820px] text-xs"><thead><tr><th class="w-8"><input type="checkbox" aria-label="Select all fields" checked={feature().controls.length > 0 && feature().controls.every(control => selectedFeatureControlKeys().includes(control.key))} onChange={event => selectAllFeatureControls(feature(), event.currentTarget.checked)} /></th><th class="w-8"></th><For each={featureTableColumns}>{column => <Show when={featureColumns.isVisible(column.id)}><th class="text-left">{column.label}</th></Show>}</For><th class="text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={featureColumns.columns} onToggle={featureColumns.toggle} /></th></tr></thead><tbody>
-                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={!featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 text-center"><input type="checkbox" aria-label={`Select ${control.label}`} checked={selectedFeatureControlKeys().includes(control.key)} onChange={() => toggleFeatureControlSelection(control.key)} /></td><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><Show when={featureColumns.isVisible('label')}><td class="py-2 pr-3"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td></Show><Show when={featureColumns.isVisible('type')}><td class="py-2 pr-3">{control.type}</td></Show><Show when={featureColumns.isVisible('parameter')}><td class="py-2 pr-3 font-mono text-muted">{control.parameter}</td></Show><Show when={featureColumns.isVisible('input')}><td class="py-2 pr-3">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td></Show><Show when={featureColumns.isVisible('group')}><td class="py-2 pr-3">{control.group || '—'}</td></Show><td class="py-2 text-right"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" disabled={featuresSaving()} onClick={() => void copyFeatureControl(feature(), control)}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td><td class="px-2 py-2"></td></tr>}</For>
+                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[820px] text-xs"><thead><tr><th class="w-8 whitespace-nowrap"><input type="checkbox" aria-label="Select all fields" checked={feature().controls.length > 0 && feature().controls.every(control => selectedFeatureControlKeys().includes(control.key))} onChange={event => selectAllFeatureControls(feature(), event.currentTarget.checked)} /></th><th class="w-8 whitespace-nowrap"></th><For each={featureTableColumns}>{column => <Show when={featureColumns.isVisible(column.id)}><th class="text-left whitespace-nowrap">{column.label}</th></Show>}</For><th class="text-right whitespace-nowrap">Actions</th><th class="py-2 pr-2 whitespace-nowrap"><ColumnVisibility columns={featureColumns.columns} onToggle={featureColumns.toggle} /></th></tr></thead><tbody>
+                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={!featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 text-center whitespace-nowrap"><input type="checkbox" aria-label={`Select ${control.label}`} checked={selectedFeatureControlKeys().includes(control.key)} onChange={() => toggleFeatureControlSelection(control.key)} /></td><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted whitespace-nowrap" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><Show when={featureColumns.isVisible('label')}><td class="py-2 pr-3 whitespace-nowrap"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td></Show><Show when={featureColumns.isVisible('type')}><td class="py-2 pr-3 whitespace-nowrap">{control.type}</td></Show><Show when={featureColumns.isVisible('parameter')}><td class="py-2 pr-3 font-mono text-muted break-words [overflow-wrap:anywhere]">{control.parameter}</td></Show><Show when={featureColumns.isVisible('input')}><td class="py-2 pr-3 whitespace-nowrap">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td></Show><Show when={featureColumns.isVisible('group')}><td class="py-2 pr-3 whitespace-nowrap">{control.group || '—'}</td></Show><td class="py-2 text-right whitespace-nowrap"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" disabled={featuresSaving()} onClick={() => void copyFeatureControl(feature(), control)}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td><td class="px-2 py-2 whitespace-nowrap"></td></tr>}</For>
                     </tbody></table></div>
                   </Show>
                 </section>}</Show>
@@ -1148,7 +1148,7 @@ const Provisioning: Component = () => {
                           </span>
                         </td>
                         <Show when={visibleProvColumns().some(c => c.id === 'parameter')}>
-                          <td class="py-2 pr-4">
+                          <td class="py-2 pr-4 break-words [overflow-wrap:anywhere]">
                             <span class="text-secondary text-xs font-mono">{p.add_object_path || p.parameter_name}</span>
                             <Show when={p.add_object_path}>
                               <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 ml-1.5">AddObject</span>
@@ -1162,15 +1162,15 @@ const Provisioning: Component = () => {
                           </td>
                         </Show>
                         <Show when={visibleProvColumns().some(c => c.id === 'value')}>
-                          <td class="py-2 text-secondary text-xs font-mono max-w-xs truncate">{p.add_object_path ? '—' : p.parameter_value}</td>
+                          <td class="py-2 text-secondary text-xs font-mono max-w-xs truncate whitespace-nowrap">{p.add_object_path ? '—' : p.parameter_value}</td>
                         </Show>
                         <Show when={visibleProvColumns().some(c => c.id === 'parameter_type')}>
-                          <td class="py-2 text-secondary text-xs">{p.add_object_path ? '—' : (p.parameter_type || '—')}</td>
+                          <td class="py-2 text-secondary text-xs whitespace-nowrap">{p.add_object_path ? '—' : (p.parameter_type || '—')}</td>
                         </Show>
                         <Show when={visibleProvColumns().some(c => c.id === 'tags')}>
-                          <td class="py-2 text-secondary text-xs">
+                          <td class="py-2 text-secondary text-xs whitespace-nowrap">
                             {((p.tags?.length || 0) + (p.excluded_tags?.length || 0) > 0) ? (
-                              <span class="flex flex-wrap gap-1">
+                              <span class="flex flex-nowrap gap-1">
                                 <For each={p.tags}>
                                   {(tag) => <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">contain: {tag}</span>}
                                 </For>
@@ -1182,12 +1182,12 @@ const Provisioning: Component = () => {
                           </td>
                         </Show>
                         <Show when={visibleProvColumns().some(c => c.id === 'phase')}>
-                          <td class="py-2">
+                          <td class="py-2 whitespace-nowrap">
                             <span class={`text-xs px-1.5 py-0.5 rounded ${p.phase === 'default' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{p.phase || 'bootstrap'}</span>
                           </td>
                         </Show>
                         <Show when={visibleProvColumns().some(c => c.id === 'status')}>
-                          <td class="py-2">
+                          <td class="py-2 whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => handleToggleProv(p.id, !p.enabled)}
@@ -1294,28 +1294,28 @@ const Provisioning: Component = () => {
                     <For each={templateMetrics()}>
                       {(def) => (
                         <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                          <Show when={metricColumns.isVisible('name')}><td class="px-3 py-2.5 text-primary font-medium">
+                          <Show when={metricColumns.isVisible('name')}><td class="px-3 py-2.5 text-primary font-medium whitespace-nowrap">
                             {def.name}
                             <Show when={def.description}>
                               <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                             </Show>
                           </td></Show>
                           <Show when={metricColumns.isVisible('parameter')}><td class="w-[45%] px-3 py-2.5 text-secondary font-mono text-xs break-words [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
-                          <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
-                          <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5">
+                          <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs whitespace-nowrap">{def.device_type_match}</td></Show>
+                          <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5 whitespace-nowrap">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary">{def.unit || '—'}</td></Show>
-                          <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary">
-                            <div class="flex items-center gap-1.5">
+                          <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">{def.unit || '—'}</td></Show>
+                          <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">
+                            <div class="flex items-center gap-1.5 whitespace-nowrap">
                               <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: def.color || '#475569' }} />
                               <span class="text-xs">{def.group || '—'}</span>
                             </div>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('active')}><td class="px-3 py-2.5 text-center">
+                          <Show when={metricColumns.isVisible('active')}><td class="px-3 py-2.5 text-center whitespace-nowrap">
                             <span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span>
                           </td></Show>
-                          <td class="px-3 py-2.5 text-right">
+                          <td class="px-3 py-2.5 text-right whitespace-nowrap">
                             <div class="flex justify-end gap-1">
                               <button type="button" onClick={() => openEditMetric(def)} class="icon-button" title="Edit metric" aria-label={`Edit ${def.name}`}>
                                 <Edit size={14} />
