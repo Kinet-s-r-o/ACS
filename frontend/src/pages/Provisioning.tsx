@@ -104,6 +104,7 @@ const Provisioning: Component = () => {
   const [editingFeatureID, setEditingFeatureID] = createSignal<string | null>(null);
   const [featureDraft, setFeatureDraft] = createSignal<ProvisioningFeature>({ id: '', name: '', description: '', controls: [] });
   const [featureDraggedControl, setFeatureDraggedControl] = createSignal<string | null>(null);
+  const [featureEditorDraggedControl, setFeatureEditorDraggedControl] = createSignal<string | null>(null);
   const emptyControlDraft = (): FeatureControlDraft => ({ key: '', label: '', type: 'string', parameter: '', optionsText: '', objectFieldsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
   const [controlDraft, setControlDraft] = createSignal<FeatureControlDraft>(emptyControlDraft());
   const [editingControlKey, setEditingControlKey] = createSignal<string | null>(null);
@@ -614,6 +615,21 @@ const Provisioning: Component = () => {
     }
   };
 
+  const reorderFeatureDraftControl = (targetKey: string) => {
+    const sourceKey = featureEditorDraggedControl();
+    setFeatureEditorDraggedControl(null);
+    if (!sourceKey || sourceKey === targetKey) return;
+    setFeatureDraft(current => {
+      const controls = [...current.controls];
+      const sourceIndex = controls.findIndex(control => control.key === sourceKey);
+      const targetIndex = controls.findIndex(control => control.key === targetKey);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const [moved] = controls.splice(sourceIndex, 1);
+      controls.splice(targetIndex, 0, moved);
+      return { ...current, controls };
+    });
+  };
+
   const openFeatureEditor = (feature?: ProvisioningFeature, control?: ProvisioningFeatureControl, page: 'section' | 'control' = 'section') => {
     const next = feature ? { ...feature, controls: feature.controls.map(item => ({ ...item, options: [...(item.options || [])] })) } : { id: '', name: '', description: '', controls: [] };
     setEditingFeatureID(feature?.id || null);
@@ -924,10 +940,10 @@ const Provisioning: Component = () => {
 
           <Show when={templateTab() === 'features'}>
             <div class="space-y-4">
-              <div class="flex justify-end">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
                 <button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
               </div>
-              <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
               <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No feature sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." />}>
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Feature sections">
                   <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For>
@@ -1159,11 +1175,11 @@ const Provisioning: Component = () => {
                           </td>
                           <td class="px-3 py-2.5 text-right">
                             <div class="flex justify-end gap-1">
-                              <button onClick={() => openEditMetric(def)} class="btn btn-ghost text-xs" title="Edit">
-                                <Edit size={12} />
+                              <button type="button" onClick={() => openEditMetric(def)} class="icon-button" title="Edit metric" aria-label={`Edit ${def.name}`}>
+                                <Edit size={14} />
                               </button>
-                              <button onClick={() => handleDeleteMetric(def)} class="btn btn-ghost text-xs text-red-400" title="Delete">
-                                <Trash2 size={12} />
+                              <button type="button" onClick={() => handleDeleteMetric(def)} class="icon-button text-red-400" title="Delete metric" aria-label={`Delete ${def.name}`}>
+                                <Trash2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -1184,7 +1200,7 @@ const Provisioning: Component = () => {
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
                 <div class="overflow-x-auto table-scroll"><table class="w-full text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Source</th><th class="py-2 pr-3">Parameter pattern</th><th class="py-2 pr-3">Color</th><th class="py-2 pr-3">Chart</th><th class="py-2 pr-3">Group</th><th class="py-2 pr-3">Transform</th><th class="py-2 pr-3">Multiplier</th><th class="py-2 pr-3">Unit scale</th><th class="py-2 text-right">Actions</th></tr></thead>
-                  <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3"><span class="inline-block h-3 w-6 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /></td><td class="py-2 pr-3">{def.chart_type || 'line'}</td><td class="py-2 pr-3">{def.group || '—'}</td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 pr-3">{def.unit_scale || 'none'}</td><td class="py-2 text-right"><button class="btn btn-ghost text-xs" onClick={() => openInterfaceMetric(def)}><Edit size={12} /></button><button class="btn btn-ghost text-xs text-red-400" onClick={() => void deleteInterfaceMetric(def)}><Trash2 size={12} /></button></td></tr>}</For></tbody></table></div>
+                  <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3"><span class="inline-block h-3 w-6 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /></td><td class="py-2 pr-3">{def.chart_type || 'line'}</td><td class="py-2 pr-3">{def.group || '—'}</td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 pr-3">{def.unit_scale || 'none'}</td><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td></tr>}</For></tbody></table></div>
               </Show>
             </section>
           </Show>
@@ -1339,7 +1355,10 @@ const Provisioning: Component = () => {
                 <div class="space-y-2">
                   <div class="flex items-center justify-between"><h3 class="text-xs font-medium text-secondary">Fields ({featureDraft().controls.length})</h3><button type="button" class="btn btn-secondary text-xs" onClick={() => { setControlDraft(emptyControlDraft()); setEditingControlKey(null); setFeatureEditorPage('control'); }}><Plus size={13} />Add field</button></div>
                   <Show when={featureDraft().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-4 text-center text-xs text-muted">Fields added here will be available to supported devices.</p>}>
-                    <div class="max-h-64 space-y-2 overflow-y-auto"> <For each={featureDraft().controls}>{control => <div class="flex items-center justify-between gap-3 rounded border border-subtle p-3"><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show><Show when={control.object_fields?.length}><p class="mt-1 text-[10px] text-muted">Object form: {control.object_fields!.length} fields</p></Show></div><div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div></div>}</For></div>
+                    <div class="max-h-64 space-y-2 overflow-y-auto"><For each={featureDraft().controls}>{control => <div draggable onDragStart={event => { setFeatureEditorDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderFeatureDraftControl(control.key); }} onDragEnd={() => setFeatureEditorDraggedControl(null)} class={`flex items-center justify-between gap-3 rounded border border-subtle p-3 cursor-grab active:cursor-grabbing ${featureEditorDraggedControl() === control.key ? 'opacity-50' : ''}`}>
+                      <div class="flex min-w-0 items-center gap-2"><GripVertical size={14} class="shrink-0 text-muted" /><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show><Show when={control.object_fields?.length}><p class="mt-1 text-[10px] text-muted">Object form: {control.object_fields!.length} fields</p></Show></div></div>
+                      <div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" onClick={() => { setEditingControlKey(null); setControlDraft({ ...control, key: '', label: `${control.label} copy`, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div>
+                    </div>}</For></div>
                   </Show>
                 </div>
                 <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => setFeatureEditorOpen(false)} disabled={featuresSaving()}>Cancel</button><button type="submit" class="btn btn-primary flex-1" disabled={featuresSaving()}><Save size={13} />{featuresSaving() ? 'Saving…' : editingFeatureID() ? 'Save section' : 'Create section'}</button></div>
