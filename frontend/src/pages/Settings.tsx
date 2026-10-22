@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createSignal, createResource, createMemo, Show, For } from 'solid-js';
-import { Key, LogOut, Plus, Edit, Trash2, Save, Activity } from 'lucide-solid';
+import { Key, LogOut, Edit, Trash2, Save, Activity } from 'lucide-solid';
 import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
@@ -87,13 +87,6 @@ const Settings: Component = () => {
     const all = metrics() || [];
     return applyColumnFilters(all, columnFilters(), getFilterValue);
   });
-
-  const openCreateMetric = () => {
-    setEditingMetric(null);
-    setMetricForm(EMPTY_METRIC);
-    setMetricTab('metric');
-    setShowMetricModal(true);
-  };
 
   const openEditMetric = (def: MetricDefinition) => {
     setEditingMetric(def);
@@ -235,18 +228,13 @@ const Settings: Component = () => {
             <Activity size={14} />
             Metric Definitions
           </h2>
-          <Show when={isFullAccess()}>
-            <button onClick={openCreateMetric} class="btn btn-primary text-xs">
-              <Plus size={12} />
-              Add metric
-            </button>
-          </Show>
+          <a href="/settings/provisioning" class="btn btn-primary text-xs">Manage metrics by template</a>
         </div>
         <Show when={metrics.loading}>
           <div class="skeleton h-16 w-full" />
         </Show>
         <Show when={!metrics.loading && (metrics() || []).length === 0}>
-          <p class="text-sm text-muted">No metric definitions. Add a metric to start collecting time-series data from CPEs.</p>
+          <p class="text-sm text-muted">Metrics are configured separately for each provisioning template.</p>
         </Show>
         <Show when={!metrics.loading && (metrics() || []).length > 0}>
           <div class="overflow-x-auto">

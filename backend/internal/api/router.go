@@ -237,11 +237,16 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /device/{serial}/features/{featureID}/objects/{key}/instances/{instance}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteFeatureObject))
 	apiMux.HandleFunc("DELETE /device/{serial}/wifi/ssids/{instance}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteWifiSSID))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleListInterfaceMetrics))
+	apiMux.HandleFunc("GET /provisioning/templates/{id}/metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleTemplateMetricDefinitions))
+	apiMux.HandleFunc("POST /provisioning/templates/{id}/metrics", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveTemplateMetric))
+	apiMux.HandleFunc("PUT /provisioning/templates/{id}/metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveTemplateMetric))
+	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteTemplateMetric))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}/interface-metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleSaveInterfaceMetric))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/interface-metrics/{metricID}", auth.RequirePermission(models.PermProvisioningWrite)(r.handleDeleteInterfaceMetric))
 	apiMux.HandleFunc("GET /device/{serial}/interface-metrics", auth.RequirePermission(models.PermMetricsRead)(r.handleGetDeviceInterfaceMetric))
 	apiMux.HandleFunc("GET /device/{serial}/interface-metric-definitions", auth.RequirePermission(models.PermMetricsRead)(r.handleListDeviceInterfaceMetricDefinitions))
+	apiMux.HandleFunc("GET /device/{serial}/metric-definitions", auth.RequirePermission(models.PermMetricsRead)(r.handleDeviceMetricDefinitions))
 
 	// Metric endpoints
 	apiMux.HandleFunc("GET /metrics/definitions", auth.RequirePermission(models.PermMetricsRead)(r.handleListMetricDefinitions))
@@ -3352,6 +3357,10 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 	}
 	if err := r.provisioningRepo.UpdateTemplate(req.Context(), template); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update template")
+		return
+	}
+	if err := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("template_id = ?", id).Update("device_type_match", template.Manufacturer+"/"+template.ProductClass).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Template was updated but metric scopes could not be refreshed")
 		return
 	}
 	updated, err := r.provisioningRepo.GetTemplate(req.Context(), id)

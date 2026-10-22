@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal, createResource, createEffect, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import { Plus, X } from 'lucide-solid';
 import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import Dialog from './Dialog';
@@ -50,6 +50,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
 };
 
 interface MetricModalProps {
+  templateId?: number;
   open: boolean;
   editingMetric: MetricDefinition | null;
   copyingMetric?: MetricDefinition | null;
@@ -62,7 +63,6 @@ const MetricModal: Component<MetricModalProps> = (props) => {
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
-  const [deviceTypes] = createResource(api.getDeviceTypes);
 
   const initForm = (m: MetricDefinition | null) => {
     if (m) {
@@ -124,11 +124,13 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     }
     setPendingAction('save-metric');
     try {
+      const templateId = props.templateId;
+      if (templateId === undefined) throw new Error('Select a provisioning template first.');
       if (props.editingMetric) {
-        await api.updateMetricDefinition(props.editingMetric.id, form);
+        await api.updateTemplateMetric(templateId, props.editingMetric.id, form);
         notify({ tone: 'success', title: 'Metric updated', message: `"${form.name}" has been updated.` });
       } else {
-        await api.createMetricDefinition(form);
+        await api.createTemplateMetric(templateId, form);
         notify({ tone: 'success', title: 'Metric created', message: `"${form.name}" is now active.` });
       }
       props.onSaved();
@@ -164,25 +166,6 @@ const MetricModal: Component<MetricModalProps> = (props) => {
           <div>
             <label for="metric-parameter" class="block text-xs text-muted mb-1.5">CWMP Parameter Path</label>
             <input id="metric-parameter" type="text" value={metricForm().parameter_name} onInput={(e) => setMetricForm(f => ({ ...f, parameter_name: e.currentTarget.value }))} placeholder="e.g. Device.DeviceInfo.UpTime" class="input w-full font-mono text-xs" />
-          </div>
-          <div>
-            <label for="metric-device-match" class="block text-xs text-muted mb-1.5">Device Type Match (glob)</label>
-            <input id="metric-device-match" type="text" value={metricForm().device_type_match} onInput={(e) => setMetricForm(f => ({ ...f, device_type_match: e.currentTarget.value }))} placeholder="* (all) or Zyxel/VMG3625" class="input w-full font-mono text-xs" />
-            <Show when={deviceTypes() && deviceTypes()!.length > 0}>
-              <div class="flex flex-wrap gap-1 mt-1.5">
-                <For each={deviceTypes()!}>
-                  {(dt) => (
-                    <button
-                      type="button"
-                      onClick={() => setMetricForm(f => ({ ...f, device_type_match: dt }))}
-                      class={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${metricForm().device_type_match === dt ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'}`}
-                    >
-                      {dt}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Show>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>

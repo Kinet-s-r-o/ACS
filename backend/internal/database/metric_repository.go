@@ -61,6 +61,116 @@ func MigrateInterfaceMetricDefinitions(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+// MigrateGlobalMetricDefinitions scopes legacy standard metrics to every template
+// matching their former device-type glob.
+func MigrateGlobalMetricDefinitions(ctx context.Context, db *gorm.DB) error {
+	var templates []models.ProvisioningTemplate
+	if err := db.WithContext(ctx).Order("id ASC").Find(&templates).Error; err != nil {
+		return err
+	}
+	var defs []models.MetricDefinition
+	if err := db.WithContext(ctx).Where("template_id IS NULL AND parameter_pattern = ''").Order("id ASC").Find(&defs).Error; err != nil {
+		return err
+	}
+	var devices []models.Device
+	if err := db.WithContext(ctx).Find(&devices).Error; err != nil {
+		return err
+	}
+	deviceIDsByTemplate := make(map[int64][]int64)
+	for _, device := range devices {
+		manufacturer, productClass := "", ""
+		if device.Manufacturer != nil {
+			manufacturer = *device.Manufacturer
+		}
+		if device.ProductClass != nil {
+			productClass = *device.ProductClass
+		}
+		if template := bestMatchingTemplate(templates, manufacturer, productClass); template != nil {
+			deviceIDsByTemplate[template.ID] = append(deviceIDsByTemplate[template.ID], device.ID)
+		}
+	}
+	winners := make(map[int64][]models.ProvisioningTemplate)
+	for _, template := range templates {
+		deviceType := template.Manufacturer + "/" + template.ProductClass
+		bestByName := make(map[string]models.MetricDefinition)
+		for _, def := range defs {
+			if !deviceTypeMatches(deviceType, def.DeviceTypeMatch) {
+				continue
+			}
+			score := metricMatchSpecificity(def.DeviceTypeMatch)
+			current, exists := bestByName[def.Name]
+			if !exists || score > metricMatchSpecificity(current.DeviceTypeMatch) || score == metricMatchSpecificity(current.DeviceTypeMatch) && def.ID > current.ID {
+				bestByName[def.Name] = def
+			}
+		}
+		for _, winner := range bestByName {
+			winners[winner.ID] = append(winners[winner.ID], template)
+		}
+	}
+	for _, original := range defs {
+		matches := winners[original.ID]
+		if len(matches) == 0 {
+			continue
+		}
+		for i, template := range matches {
+			templateID := template.ID
+			scope := template.Manufacturer + "/" + template.ProductClass
+			if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+				var existing models.MetricDefinition
+				if err := tx.Where("template_id = ? AND parameter_pattern = '' AND name = ?", templateID, original.Name).First(&existing).Error; err == nil {
+					return nil
+				} else if err != gorm.ErrRecordNotFound {
+					return err
+				}
+				if i == 0 {
+					return tx.Model(&models.MetricDefinition{}).Where("id = ?", original.ID).Updates(map[string]any{"template_id": templateID, "device_type_match": scope}).Error
+				}
+				clone := original
+				clone.ID = 0
+				clone.TemplateID = &templateID
+				clone.DeviceTypeMatch = scope
+				if err := tx.Create(&clone).Error; err != nil {
+					return err
+				}
+				deviceIDs := deviceIDsByTemplate[templateID]
+				if len(deviceIDs) == 0 {
+					return nil
+				}
+				return tx.Exec(`INSERT INTO metric_samples (device_id, metric_id, value, timestamp)
+					SELECT device_id, ?, value, timestamp FROM metric_samples WHERE metric_id = ? AND device_id IN ?
+					ON CONFLICT (device_id, metric_id, timestamp) DO NOTHING`, clone.ID, original.ID, deviceIDs).Error
+			}); err != nil {
+				return fmt.Errorf("scope metric %d to template %d: %w", original.ID, templateID, err)
+			}
+		}
+	}
+	return nil
+}
+
+func metricMatchSpecificity(pattern string) int {
+	score := 0
+	for _, char := range pattern {
+		if char != '*' && char != '?' && char != '[' {
+			score++
+		}
+	}
+	return score
+}
+
+func bestMatchingTemplate(templates []models.ProvisioningTemplate, manufacturer, productClass string) *models.ProvisioningTemplate {
+	var best *models.ProvisioningTemplate
+	for i := range templates {
+		template := &templates[i]
+		if template.Manufacturer != "" && !strings.EqualFold(template.Manufacturer, manufacturer) || template.ProductClass != "" && !strings.EqualFold(template.ProductClass, productClass) {
+			continue
+		}
+		if best == nil || template.SpecificityScore() > best.SpecificityScore() {
+			best = template
+		}
+	}
+	return best
+}
+
 func copyLegacyInterfaceSamples(tx *gorm.DB, oldID, newID int64) error {
 	return tx.Exec(`INSERT INTO interface_metric_samples (device_id, metric_id, parameter_name, value, timestamp)
 		SELECT device_id, ?, parameter_name, value, timestamp FROM interface_metric_samples WHERE metric_id = ?
@@ -79,6 +189,41 @@ func (r *MetricRepository) ListAll(ctx context.Context) ([]models.MetricDefiniti
 	var defs []models.MetricDefinition
 	err := r.db.WithContext(ctx).Where("template_id IS NULL").Order("name ASC").Find(&defs).Error
 	return defs, err
+}
+
+func (r *MetricRepository) ListTemplateMetrics(ctx context.Context, templateID int64) ([]models.MetricDefinition, error) {
+	var defs []models.MetricDefinition
+	err := r.db.WithContext(ctx).Where("template_id = ? AND parameter_pattern = ''", templateID).Order("name ASC").Find(&defs).Error
+	return defs, err
+}
+
+func (r *MetricRepository) TemplateMetricsForDevice(ctx context.Context, deviceType string, activeOnly bool) ([]models.MetricDefinition, error) {
+	template, err := r.templateForDeviceType(ctx, deviceType)
+	if err != nil {
+		return nil, err
+	}
+	query := r.db.WithContext(ctx).Where("template_id = ? AND parameter_pattern = ''", template.ID)
+	if activeOnly {
+		query = query.Where("active = ?", true)
+	}
+	var defs []models.MetricDefinition
+	err = query.Order("id ASC").Find(&defs).Error
+	return defs, err
+}
+
+func (r *MetricRepository) templateForDeviceType(ctx context.Context, deviceType string) (*models.ProvisioningTemplate, error) {
+	parts := strings.SplitN(deviceType, "/", 2)
+	manufacturer, productClass := "", ""
+	if len(parts) > 0 {
+		manufacturer = parts[0]
+	}
+	if len(parts) > 1 {
+		productClass = parts[1]
+	}
+	var template models.ProvisioningTemplate
+	err := r.db.WithContext(ctx).Where("(manufacturer = '' OR LOWER(manufacturer) = LOWER(?)) AND (product_class = '' OR LOWER(product_class) = LOWER(?))", manufacturer, productClass).
+		Order("(CASE WHEN manufacturer <> '' THEN 1 ELSE 0 END + CASE WHEN product_class <> '' THEN 1 ELSE 0 END) DESC, id ASC").First(&template).Error
+	return &template, err
 }
 
 // Create inserts a new metric definition.
@@ -170,17 +315,7 @@ func (r *MetricRepository) QueryInterfaceMetric(ctx context.Context, deviceID, m
 }
 
 func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, deviceType string, activeOnly bool) ([]models.MetricDefinition, error) {
-	parts := strings.SplitN(deviceType, "/", 2)
-	manufacturer, productClass := "", ""
-	if len(parts) > 0 {
-		manufacturer = parts[0]
-	}
-	if len(parts) > 1 {
-		productClass = parts[1]
-	}
-	var template models.ProvisioningTemplate
-	err := r.db.WithContext(ctx).Where("(manufacturer = '' OR LOWER(manufacturer) = LOWER(?)) AND (product_class = '' OR LOWER(product_class) = LOWER(?))", manufacturer, productClass).
-		Order("(CASE WHEN manufacturer <> '' THEN 1 ELSE 0 END + CASE WHEN product_class <> '' THEN 1 ELSE 0 END) DESC").First(&template).Error
+	template, err := r.templateForDeviceType(ctx, deviceType)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +428,7 @@ func (r *MetricRepository) ExtractAndStore(ctx context.Context, deviceID int64, 
 }
 
 func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
-	defs, err := r.ListActive(ctx)
+	defs, err := r.TemplateMetricsForDevice(ctx, deviceType, true)
 	if err != nil || len(defs) == 0 {
 		return err
 	}
@@ -304,9 +439,6 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 	missed := 0
 
 	for _, def := range defs {
-		if !deviceTypeMatches(deviceType, def.DeviceTypeMatch) {
-			continue
-		}
 		matched++
 		value, ok := paramMap[def.ParameterName]
 		if !ok || value == "" {
@@ -349,7 +481,7 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 // ActiveParamNames returns the parameter names needed for active metric collection
 // for a given device type.
 func (r *MetricRepository) ActiveParamNames(ctx context.Context, deviceType string) ([]string, error) {
-	defs, err := r.ListActive(ctx)
+	defs, err := r.TemplateMetricsForDevice(ctx, deviceType, true)
 	if err != nil {
 		return nil, err
 	}
@@ -357,9 +489,6 @@ func (r *MetricRepository) ActiveParamNames(ctx context.Context, deviceType stri
 	var names []string
 	for _, def := range defs {
 		if def.Source != "active" && def.Source != "universal" {
-			continue
-		}
-		if !deviceTypeMatches(deviceType, def.DeviceTypeMatch) {
 			continue
 		}
 		if !seen[def.ParameterName] {
@@ -373,7 +502,7 @@ func (r *MetricRepository) ActiveParamNames(ctx context.Context, deviceType stri
 // PassiveParamNames returns the parameter names collected passively (from Inform)
 // for a given device type.
 func (r *MetricRepository) PassiveParamNames(ctx context.Context, deviceType string) ([]string, error) {
-	defs, err := r.ListActive(ctx)
+	defs, err := r.TemplateMetricsForDevice(ctx, deviceType, true)
 	if err != nil {
 		return nil, err
 	}
@@ -381,9 +510,6 @@ func (r *MetricRepository) PassiveParamNames(ctx context.Context, deviceType str
 	var names []string
 	for _, def := range defs {
 		if def.Source != "passive" && def.Source != "universal" {
-			continue
-		}
-		if !deviceTypeMatches(deviceType, def.DeviceTypeMatch) {
 			continue
 		}
 		if !seen[def.ParameterName] {

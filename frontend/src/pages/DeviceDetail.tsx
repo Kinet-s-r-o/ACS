@@ -134,7 +134,7 @@ const DeviceDetail: Component = () => {
     const [faultRows] = await Promise.all([refetchFaultRows(), refetchFaultCounts()]);
     return faultRows;
   };
-  const [metricDefs] = createResource(api.getMetricDefinitions);
+  const [metricDefs] = createResource(serial, api.getDeviceMetricDefinitions);
   const [featureAction, setFeatureAction] = createSignal<string | null>(null);
   const [featureObjectEditor, setFeatureObjectEditor] = createSignal<FeatureObjectEditor | null>(null);
   const [featureObjectDraft, setFeatureObjectDraft] = createSignal<Record<string, string>>({});
@@ -733,20 +733,7 @@ const DeviceDetail: Component = () => {
   };
 
 
-  const matchingMetrics = createMemo(() => {
-    const defs = metricDefs() || [];
-    const d = device();
-    if (!d) return [];
-    const deviceType = `${d.manufacturer || ''}/${d.product_class || ''}`;
-    return defs.filter((def) => {
-      if (!def.active) return false;
-      if (def.device_type_match === '' || def.device_type_match === '*') return true;
-      // Simple glob: support * wildcard (case-insensitive, to stay consistent
-      // with the backend's case-insensitive metric matching).
-      const pattern = def.device_type_match.replace(/\*/g, '.*');
-      return new RegExp(`^${pattern}$`, 'i').test(deviceType);
-    });
-  });
+  const matchingMetrics = createMemo(() => (metricDefs() || []).filter(def => def.active));
 
   const rateMetricValues = createResource(
     () => {
@@ -2274,7 +2261,7 @@ const DeviceDetail: Component = () => {
 
             {/* Row 1.2: Metrics */}
             <Show when={activeTab() === 'metrics'}>
-              <Show when={matchingMetrics().length > 0} fallback={<EmptyState title="No metrics available" description="No active metric definitions match this device type. Configure metric definitions in the admin panel to enable monitoring." />}>
+              <Show when={matchingMetrics().length > 0} fallback={<EmptyState title="No metrics available" description="Configure metrics in the matching provisioning template to enable monitoring." />}>
               <div class="card p-5">
                 <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
                   <Activity size={14} />

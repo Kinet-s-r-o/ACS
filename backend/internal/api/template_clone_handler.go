@@ -83,17 +83,14 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		}
 
 		var metrics []models.MetricDefinition
-		if err := tx.Where("template_id IS NULL").Find(&metrics).Error; err != nil {
+		if err := tx.Where("template_id = ? AND parameter_pattern = ''", sourceID).Find(&metrics).Error; err != nil {
 			return err
 		}
 		clonedMetrics := make([]models.MetricDefinition, 0, len(metrics))
 		for _, metric := range metrics {
-			if !metricAppliesToTemplate(metric.DeviceTypeMatch, source.Manufacturer, source.ProductClass) {
-				continue
-			}
 			metric.ID = 0
 			metric.DeviceTypeMatch = targetMetricScope
-			metric.TemplateID = nil
+			metric.TemplateID = &clone.ID
 			metric.LegacyInterfaceID = nil
 			metric.CreatedAt = time.Time{}
 			metric.UpdatedAt = time.Time{}

@@ -217,6 +217,11 @@ export const api = {
   unblockDevice: (serialNumber: string) => request<{ status: string }>(`/blocked-devices/${encodeURIComponent(serialNumber)}`, { method: 'DELETE' }),
 
   getMetricDefinitions: () => request<MetricDefinition[]>('/metrics/definitions'),
+  getTemplateMetrics: (templateId: number) => request<MetricDefinition[]>(`/provisioning/templates/${templateId}/metrics`),
+  createTemplateMetric: (templateId: number, body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>(`/provisioning/templates/${templateId}/metrics`, { method: 'POST', body: JSON.stringify(body) }),
+  updateTemplateMetric: (templateId: number, id: number, body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>(`/provisioning/templates/${templateId}/metrics/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteTemplateMetric: (templateId: number, id: number) => request<{ status: string }>(`/provisioning/templates/${templateId}/metrics/${id}`, { method: 'DELETE' }),
+  getDeviceMetricDefinitions: (serial: string) => request<MetricDefinition[]>(`/device/${encodeURIComponent(serial)}/metric-definitions`),
   createMetricDefinition: (body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>('/metrics/definitions', { method: 'POST', body: JSON.stringify(body) }),
   updateMetricDefinition: (id: number, body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>(`/metrics/definitions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteMetricDefinition: (id: number) => request<{ status: string }>(`/metrics/definitions/${id}`, { method: 'DELETE' }),

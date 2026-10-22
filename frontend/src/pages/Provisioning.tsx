@@ -11,7 +11,6 @@ import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
-import { metricsForTemplate } from '../lib/metricViews';
 import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
@@ -147,7 +146,7 @@ const Provisioning: Component = () => {
     if (!features.some(feature => feature.id === activeFeatureID())) setActiveFeatureID(features[0]?.id || '');
   });
   const activeFeature = () => selectedTemplate()?.features?.find(feature => feature.id === activeFeatureID()) || selectedTemplate()?.features?.[0] || null;
-  const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
+  const [metrics, { refetch: refetchMetrics }] = createResource(() => selectedTemplate()?.id, (id) => api.getTemplateMetrics(id!));
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [copyingMetric, setCopyingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -770,26 +769,23 @@ const Provisioning: Component = () => {
     }
   };
 
-  const copyFeatureControl = async (feature: ProvisioningFeature, control: ProvisioningFeatureControl) => {
-    const controls = feature.controls;
-    const existingLabels = new Set(controls.map(item => item.label.toLowerCase()));
+  const copyFeatureControl = (feature: ProvisioningFeature, control: ProvisioningFeatureControl) => {
+    const existingLabels = new Set(feature.controls.map(item => item.label.toLowerCase()));
     const baseLabel = `${control.label.slice(0, 118)} copy`;
     let label = baseLabel;
     for (let suffix = 2; existingLabels.has(label.toLowerCase()); suffix++) label = `${control.label.slice(0, 114)} copy ${suffix}`;
-    const existingKeys = new Set(controls.map(item => item.key));
-    const baseKey = featureSlug(label);
-    let key = baseKey;
-    for (let suffix = 2; existingKeys.has(key); suffix++) key = `${baseKey.slice(0, 60)}-${suffix}`;
-    const copy: ProvisioningFeatureControl = {
+    openFeatureEditor(feature);
+    setEditingControlKey(null);
+    setControlDraft({
       ...control,
-      key,
+      key: '',
       label,
-      options: [...(control.options || [])],
-      object_fields: control.object_fields?.map(field => ({ ...field, options: [...(field.options || [])], option_labels: { ...field.option_labels } })),
-    };
-    if (await saveTemplateFeatures((selectedTemplate()?.features || []).map(item => item.id === feature.id ? { ...item, controls: [...item.controls, copy] } : item))) {
-      notify({ tone: 'success', title: 'Feature field copied', message: label });
-    }
+      parameter: '',
+      optionsText: (control.options || []).join('\n'),
+      objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n'),
+    });
+    setFeatureEditorPage('control');
+    notify({ tone: 'info', title: 'Field copied', message: 'Enter a unique CWMP parameter path before saving.' });
   };
 
   const deleteTemplateFeature = async (featureID: string) => {
@@ -815,13 +811,7 @@ const Provisioning: Component = () => {
     finally { setPendingAction(null); }
   };
 
-  // Metrics tab: show every metric that applies to the selected template's
-  // device scope (global / manufacturer / product class / concrete).
-  const templateMetrics = createMemo(() => {
-    const t = selectedTemplate();
-    if (!t) return [];
-    return metricsForTemplate(metrics() || [], t.manufacturer, t.product_class);
-  });
+  const templateMetrics = createMemo(() => metrics() || []);
 
   const openCreateMetric = () => {
     setEditingMetric(null);
@@ -881,7 +871,9 @@ const Provisioning: Component = () => {
     if (pendingAction()) return;
     setPendingAction(`delete-metric-${def.id}`);
     try {
-      await api.deleteMetricDefinition(def.id);
+      const template = selectedTemplate();
+      if (!template) return;
+      await api.deleteTemplateMetric(template.id, def.id);
       notify({ tone: 'success', title: 'Metric deleted', message: `"${def.name}" has been removed.` });
       refetchMetrics();
     } catch (error) {
@@ -1443,7 +1435,7 @@ const Provisioning: Component = () => {
                   <Show when={featureDraft().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-4 text-center text-xs text-muted">Fields added here will be available to supported devices.</p>}>
                     <div class="max-h-64 space-y-2 overflow-y-auto"><For each={featureDraft().controls}>{control => <div draggable onDragStart={event => { setFeatureEditorDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderFeatureDraftControl(control.key); }} onDragEnd={() => setFeatureEditorDraggedControl(null)} class={`flex items-center justify-between gap-3 rounded border border-subtle p-3 cursor-grab active:cursor-grabbing ${featureEditorDraggedControl() === control.key ? 'opacity-50' : ''}`}>
                       <div class="flex min-w-0 items-center gap-2"><GripVertical size={14} class="shrink-0 text-muted" /><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show><Show when={control.object_fields?.length}><p class="mt-1 text-[10px] text-muted">Object form: {control.object_fields!.length} fields</p></Show></div></div>
-                      <div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" onClick={() => { setEditingControlKey(null); setControlDraft({ ...control, key: '', label: `${control.label} copy`, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div>
+                      <div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" onClick={() => { setEditingControlKey(null); setControlDraft({ ...control, key: '', label: `${control.label} copy`, parameter: '', optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div>
                     </div>}</For></div>
                   </Show>
                 </div>
@@ -1528,6 +1520,7 @@ const Provisioning: Component = () => {
         </Dialog>
       </Show>
       <MetricModal
+        templateId={selectedTemplate()?.id}
         open={showMetricModal()}
         editingMetric={editingMetric()}
         copyingMetric={copyingMetric()}

@@ -23,12 +23,150 @@ func (r *Router) handleListMetricDefinitions(w http.ResponseWriter, req *http.Re
 	respondJSON(w, http.StatusOK, defs)
 }
 
+func (r *Router) handleTemplateMetricDefinitions(w http.ResponseWriter, req *http.Request) {
+	templateID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid template ID")
+		return
+	}
+	defs, err := r.metricRepo.ListTemplateMetrics(req.Context(), templateID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to list template metrics")
+		return
+	}
+	respondJSON(w, http.StatusOK, defs)
+}
+
+func (r *Router) handleSaveTemplateMetric(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil || claims.Role != models.RoleFull {
+		respondError(w, http.StatusForbidden, "Full access required")
+		return
+	}
+	templateID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid template ID")
+		return
+	}
+	var template models.ProvisioningTemplate
+	if err := r.db.WithContext(req.Context()).First(&template, templateID).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Template not found")
+		return
+	}
+	var body models.MetricDefinition
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	defaultMetricHistory(&body)
+	if body.Source == "" {
+		body.Source = "passive"
+	}
+	if body.ThresholdDirection == "" {
+		body.ThresholdDirection = "higher_is_worse"
+	}
+	if body.DisplayFormat == "" {
+		body.DisplayFormat = "number"
+	}
+	if body.HealthSize == "" {
+		body.HealthSize = "small"
+	}
+	body.DeviceTypeMatch = template.Manufacturer + "/" + template.ProductClass
+	body.TemplateID = &templateID
+	body.InterfaceType = ""
+	body.ParameterPattern = ""
+	if err := validateMetricDefinition(&body); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.Multiplier == 0 {
+		body.Multiplier = 1
+	}
+	if req.Method == http.MethodPost {
+		if err := r.metricRepo.Create(req.Context(), &body); err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to create template metric")
+			return
+		}
+		respondJSON(w, http.StatusCreated, body)
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("metricID"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid metric ID")
+		return
+	}
+	body.ID = id
+	result := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("id = ? AND template_id = ? AND parameter_pattern = ''", id, templateID).Select("name", "description", "device_type_match", "template_id", "parameter_name", "unit", "source", "active", "store_history", "group", "color", "axis", "transform", "multiplier", "unit_scale", "health", "health_order", "health_size", "warn_threshold", "critical_threshold", "threshold_direction", "display_format", "gauge_animated", "gauge_min", "gauge_max", "gauge_arc", "gauge_pointer", "gauge_style", "thresholds", "chart_type").Updates(&body)
+	if result.Error != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to update template metric")
+		return
+	}
+	if result.RowsAffected == 0 {
+		respondError(w, http.StatusNotFound, "Template metric not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, body)
+}
+
+func (r *Router) handleDeleteTemplateMetric(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil || claims.Role != models.RoleFull {
+		respondError(w, http.StatusForbidden, "Full access required")
+		return
+	}
+	templateID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid template ID")
+		return
+	}
+	id, err := strconv.ParseInt(req.PathValue("metricID"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid metric ID")
+		return
+	}
+	result := r.db.WithContext(req.Context()).Where("template_id = ? AND parameter_pattern = ''", templateID).Delete(&models.MetricDefinition{}, id)
+	if result.Error != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to delete template metric")
+		return
+	}
+	if result.RowsAffected == 0 {
+		respondError(w, http.StatusNotFound, "Template metric not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (r *Router) handleDeviceMetricDefinitions(w http.ResponseWriter, req *http.Request) {
+	device, err := r.deviceRepo.GetBySerial(req.Context(), req.PathValue("serial"))
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	manufacturer, productClass := "", ""
+	if device.Manufacturer != nil {
+		manufacturer = *device.Manufacturer
+	}
+	if device.ProductClass != nil {
+		productClass = *device.ProductClass
+	}
+	defs, err := r.metricRepo.TemplateMetricsForDevice(req.Context(), manufacturer+"/"+productClass, false)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load metric definitions")
+		return
+	}
+	respondJSON(w, http.StatusOK, defs)
+}
+
 func (r *Router) handleCreateMetricDefinition(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
 	if claims == nil || claims.Role != models.RoleFull {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
+	respondError(w, http.StatusBadRequest, "Create metrics through a provisioning template")
+	return
 
 	var body models.MetricDefinition
 	decoder := json.NewDecoder(req.Body)
@@ -74,6 +212,8 @@ func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
+	respondError(w, http.StatusBadRequest, "Manage metrics through their provisioning template")
+	return
 
 	idStr := req.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -118,6 +258,8 @@ func (r *Router) handleDeleteMetricDefinition(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
+	respondError(w, http.StatusBadRequest, "Manage metrics through their provisioning template")
+	return
 
 	idStr := req.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

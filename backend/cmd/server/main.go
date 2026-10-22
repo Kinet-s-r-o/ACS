@@ -375,6 +375,9 @@ func runAutoMigrate(db *gorm.DB) error {
 	if err := migrateProvisioningTemplates(db); err != nil {
 		return fmt.Errorf("migrate provisioning templates: %w", err)
 	}
+	if err := database.MigrateGlobalMetricDefinitions(context.Background(), db); err != nil {
+		return fmt.Errorf("scope metric definitions to provisioning templates: %w", err)
+	}
 	// Enforce NOT NULL on template_id (idempotent — no-op if already set).
 	if err := db.Exec("ALTER TABLE provisioning_rules ALTER COLUMN template_id SET NOT NULL").Error; err != nil {
 		return fmt.Errorf("set template_id NOT NULL: %w", err)
