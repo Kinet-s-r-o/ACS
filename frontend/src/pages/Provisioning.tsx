@@ -16,6 +16,7 @@ import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
 import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 interface ProvColumnConfig {
   id: string;
@@ -31,6 +32,35 @@ const defaultProvColumns: ProvColumnConfig[] = [
   { id: 'tags', label: 'Tags', visible: true, order: 3 },
   { id: 'phase', label: 'Phase', visible: true, order: 4 },
   { id: 'status', label: 'Active', visible: true, order: 5 },
+];
+
+const metricTableColumns = [
+  { id: 'name', label: 'Name', visible: true },
+  { id: 'parameter', label: 'Parameter', visible: true },
+  { id: 'device_match', label: 'Device Match', visible: true },
+  { id: 'source', label: 'Source', visible: true },
+  { id: 'unit', label: 'Unit', visible: true },
+  { id: 'group', label: 'Group', visible: true },
+  { id: 'active', label: 'Active', visible: true },
+];
+const interfaceMetricTableColumns = [
+  { id: 'name', label: 'Name', visible: true },
+  { id: 'parameter', label: 'Parameter pattern', visible: true },
+  { id: 'type', label: 'Type', visible: true },
+  { id: 'source', label: 'Source', visible: true },
+  { id: 'unit_scale', label: 'Unit scale', visible: true },
+  { id: 'group', label: 'Group + color', visible: true },
+  { id: 'active', label: 'Active', visible: true },
+  { id: 'chart', label: 'Chart', visible: true },
+  { id: 'transform', label: 'Transform', visible: true },
+  { id: 'multiplier', label: 'Multiplier', visible: true },
+];
+const featureTableColumns = [
+  { id: 'label', label: 'Label', visible: true },
+  { id: 'type', label: 'Type', visible: true },
+  { id: 'parameter', label: 'CWMP parameter', visible: true },
+  { id: 'input', label: 'Input', visible: true },
+  { id: 'group', label: 'Collapsible box', visible: true },
 ];
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
@@ -59,6 +89,9 @@ const parseObjectFieldOptions = (text: string): { options: string[]; option_labe
 const Provisioning: Component = () => {
   const { isFullAccess } = useAuth();
   const { notify, confirm } = useFeedback();
+  const metricColumns = useColumnVisibility('provisioning-metrics', metricTableColumns);
+  const interfaceMetricColumns = useColumnVisibility('provisioning-interface-metrics', interfaceMetricTableColumns);
+  const featureColumns = useColumnVisibility('provisioning-features', featureTableColumns);
 
   const [provRules, setProvRules] = createSignal<Awaited<ReturnType<typeof api.getProvisioningRules>> | null>(null);
   const [provTemplates, setProvTemplates] = createSignal<ProvisioningTemplate[] | null>(null);
@@ -354,6 +387,22 @@ const Provisioning: Component = () => {
     setProvColumns(cols => cols.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
   };
 
+  const interfaceMetricCell = (def: InterfaceMetricDefinition, id: string) => {
+    switch (id) {
+      case 'name': return <td class="py-2 pr-3 text-primary">{def.name}</td>;
+      case 'parameter': return <td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td>;
+      case 'type': return <td class="py-2 pr-3 uppercase">{def.interface_type}</td>;
+      case 'source': return <td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
+      case 'unit_scale': return <td class="py-2 pr-3">{def.unit_scale || 'none'}</td>;
+      case 'group': return <td class="py-2 pr-3"><div class="flex items-center gap-1.5"><span class="inline-block h-3 w-6 shrink-0 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /><span>{def.group || '—'}</span></div></td>;
+      case 'active': return <td class="py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
+      case 'chart': return <td class="py-2 pr-3">{def.chart_type || 'line'}</td>;
+      case 'transform': return <td class="py-2 pr-3">{def.transform || 'raw'}</td>;
+      case 'multiplier': return <td class="py-2 pr-3">{def.multiplier}</td>;
+      default: return null;
+    }
+  };
+
   const handleRowDragStart = (e: DragEvent, id: number) => {
     setProvDraggedRow(id);
     e.dataTransfer?.setData('text/plain', String(id));
@@ -641,31 +690,6 @@ const Provisioning: Component = () => {
     setFeatureEditorOpen(true);
   };
 
-  const openCopyFeatureEditor = (feature: ProvisioningFeature) => {
-    const template = selectedTemplate();
-    const existingIDs = new Set((template?.features || []).map(item => item.id));
-    const baseName = `${feature.name.slice(0, 112)} copy`;
-    let name = baseName;
-    for (let suffix = 2; existingIDs.has(featureSlug(name)); suffix++) {
-      name = `${feature.name.slice(0, 108)} copy ${suffix}`;
-    }
-    setEditingFeatureID(null);
-    setFeatureDraft({
-      ...feature,
-      id: '',
-      name,
-      controls: feature.controls.map(control => ({
-        ...control,
-        options: [...(control.options || [])],
-        object_fields: control.object_fields?.map(field => ({ ...field, options: [...(field.options || [])], option_labels: { ...field.option_labels } })),
-      })),
-    });
-    setFeatureEditorPage('section');
-    setEditingControlKey(null);
-    setControlDraft(emptyControlDraft());
-    setFeatureEditorOpen(true);
-  };
-
   const saveFeatureControlDraft = () => {
     const draft = controlDraft();
     const label = draft.label.trim();
@@ -743,6 +767,28 @@ const Provisioning: Component = () => {
   const deleteFeatureControl = async (feature: ProvisioningFeature, key: string) => {
     if (await saveTemplateFeatures((selectedTemplate()?.features || []).map(item => item.id === feature.id ? { ...item, controls: item.controls.filter(control => control.key !== key) } : item))) {
       notify({ tone: 'success', title: 'Feature field deleted' });
+    }
+  };
+
+  const copyFeatureControl = async (feature: ProvisioningFeature, control: ProvisioningFeatureControl) => {
+    const controls = feature.controls;
+    const existingLabels = new Set(controls.map(item => item.label.toLowerCase()));
+    const baseLabel = `${control.label.slice(0, 118)} copy`;
+    let label = baseLabel;
+    for (let suffix = 2; existingLabels.has(label.toLowerCase()); suffix++) label = `${control.label.slice(0, 114)} copy ${suffix}`;
+    const existingKeys = new Set(controls.map(item => item.key));
+    const baseKey = featureSlug(label);
+    let key = baseKey;
+    for (let suffix = 2; existingKeys.has(key); suffix++) key = `${baseKey.slice(0, 60)}-${suffix}`;
+    const copy: ProvisioningFeatureControl = {
+      ...control,
+      key,
+      label,
+      options: [...(control.options || [])],
+      object_fields: control.object_fields?.map(field => ({ ...field, options: [...(field.options || [])], option_labels: { ...field.option_labels } })),
+    };
+    if (await saveTemplateFeatures((selectedTemplate()?.features || []).map(item => item.id === feature.id ? { ...item, controls: [...item.controls, copy] } : item))) {
+      notify({ tone: 'success', title: 'Feature field copied', message: label });
     }
   };
 
@@ -991,11 +1037,11 @@ const Provisioning: Component = () => {
                 <Show when={activeFeature()}>{feature => <section class="card p-4 space-y-4">
                   <div class="flex flex-wrap items-start justify-between gap-3">
                     <div><h3 class="text-sm font-medium text-primary">{feature().name}</h3><p class="mt-1 text-xs text-muted">{feature().description || `${feature().controls.length} fields`}</p></div>
-                    <div class="flex gap-2"><button type="button" class="btn btn-secondary text-xs" onClick={() => openFeatureEditor(feature())}><Edit2 size={13} />Edit section</button><button type="button" class="icon-button" onClick={() => openCopyFeatureEditor(feature())} title="Copy section" aria-label={`Copy ${feature().name}`}><Copy size={14} /></button><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature().id)}><Trash2 size={13} />Delete</button></div>
+                    <div class="flex gap-2"><button type="button" class="btn btn-secondary text-xs" onClick={() => openFeatureEditor(feature())}><Edit2 size={13} />Edit section</button><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature().id)}><Trash2 size={13} />Delete</button></div>
                   </div>
                   <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
-                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[780px] text-xs"><thead><tr><th class="w-8"></th><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">CWMP parameter</th><th class="text-left">Input</th><th class="text-left">Collapsible box</th><th class="text-right">Actions</th></tr></thead><tbody>
-                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={!featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><td class="py-2 pr-3"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td><td class="py-2 pr-3">{control.type}</td><td class="py-2 pr-3 font-mono text-muted">{control.parameter}</td><td class="py-2 pr-3">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td><td class="py-2 pr-3">{control.group || '—'}</td><td class="py-2 text-right"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td></tr>}</For>
+                    <div class="overflow-x-auto"><table class="data-table w-full min-w-[780px] text-xs"><thead><tr><th class="w-8"></th><For each={featureTableColumns}>{column => <Show when={featureColumns.isVisible(column.id)}><th class="text-left">{column.label}</th></Show>}</For><th class="text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={featureColumns.columns} onToggle={featureColumns.toggle} /></th></tr></thead><tbody>
+                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={!featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><Show when={featureColumns.isVisible('label')}><td class="py-2 pr-3"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td></Show><Show when={featureColumns.isVisible('type')}><td class="py-2 pr-3">{control.type}</td></Show><Show when={featureColumns.isVisible('parameter')}><td class="py-2 pr-3 font-mono text-muted">{control.parameter}</td></Show><Show when={featureColumns.isVisible('input')}><td class="py-2 pr-3">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td></Show><Show when={featureColumns.isVisible('group')}><td class="py-2 pr-3">{control.group || '—'}</td></Show><td class="py-2 text-right"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" disabled={featuresSaving()} onClick={() => void copyFeatureControl(feature(), control)}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td><td class="px-2 py-2"></td></tr>}</For>
                     </tbody></table></div>
                   </Show>
                 </section>}</Show>
@@ -1179,44 +1225,38 @@ const Provisioning: Component = () => {
             <Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
                 <table class="data-table w-full min-w-[95rem] table-fixed text-left">
-                  <colgroup><col style={{ width: '11rem' }} /><col style={{ width: '28rem' }} /><col style={{ width: '20rem' }} /><col style={{ width: '6rem' }} /><col style={{ width: '5rem' }} /><col style={{ width: '12rem' }} /><col style={{ width: '6rem' }} /><col style={{ width: '7rem' }} /></colgroup>
                   <thead>
                     <tr class="border-b border-subtle">
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Name</th>
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Parameter</th>
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Device Match</th>
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Source</th>
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Unit</th>
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Group</th>
-                      <th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">Active</th>
+                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class="py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide">{column.label}</th></Show>}</For>
                       <th class="py-2 text-right text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
+                      <th class="py-2 pr-2"><ColumnVisibility columns={metricColumns.columns} onToggle={metricColumns.toggle} /></th>
                     </tr>
                   </thead>
                   <tbody>
                     <For each={templateMetrics()}>
                       {(def) => (
                         <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                          <td class="px-3 py-2.5 text-primary font-medium">
+                          <Show when={metricColumns.isVisible('name')}><td class="px-3 py-2.5 text-primary font-medium">
                             {def.name}
                             <Show when={def.description}>
                               <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                             </Show>
-                          </td>
-                          <td class="px-3 py-2.5 text-secondary font-mono text-xs break-all">{def.parameter_name}</td>
-                          <td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td>
-                          <td class="px-3 py-2.5">
+                          </td></Show>
+                          <Show when={metricColumns.isVisible('parameter')}><td class="px-3 py-2.5 text-secondary font-mono text-xs break-all">{def.parameter_name}</td></Show>
+                          <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
+                          <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
-                          </td>
-                          <td class="px-3 py-2.5 text-secondary">{def.unit || '—'}</td>
-                          <td class="px-3 py-2.5 text-secondary">
+                          </td></Show>
+                          <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary">{def.unit || '—'}</td></Show>
+                          <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary">
                             <div class="flex items-center gap-1.5">
                               <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: def.color || '#475569' }} />
                               <span class="text-xs">{def.group || '—'}</span>
                             </div>
-                          </td>
-                          <td class="px-3 py-2.5 text-center">
+                          </td></Show>
+                          <Show when={metricColumns.isVisible('active')}><td class="px-3 py-2.5 text-center">
                             <span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span>
-                          </td>
+                          </td></Show>
                           <td class="px-3 py-2.5 text-right">
                             <div class="flex justify-end gap-1">
                               <button type="button" onClick={() => openEditMetric(def)} class="icon-button" title="Edit metric" aria-label={`Edit ${def.name}`}>
@@ -1229,7 +1269,7 @@ const Provisioning: Component = () => {
                                 <Trash2 size={14} />
                               </button>
                             </div>
-                          </td>
+                          </td><td class="px-2 py-2"></td>
                         </tr>
                       )}
                     </For>
@@ -1246,8 +1286,7 @@ const Provisioning: Component = () => {
                 <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="w-full min-w-[115rem] table-fixed text-left"><colgroup><col style={{ width: '11rem' }} /><col style={{ width: '28rem' }} /><col style={{ width: '20rem' }} /><col style={{ width: '6rem' }} /><col style={{ width: '5rem' }} /><col style={{ width: '16rem' }} /><col style={{ width: '6rem' }} /><col style={{ width: '5rem' }} /><col style={{ width: '6rem' }} /><col style={{ width: '5rem' }} /><col style={{ width: '7rem' }} /></colgroup><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Parameter pattern</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Source</th><th class="py-2 pr-3">Unit scale</th><th class="py-2 pr-3">Group</th><th class="py-2 pr-3">Active</th><th class="py-2 pr-3">Chart</th><th class="py-2 pr-3">Transform</th><th class="py-2 pr-3">Multiplier</th><th class="py-2 text-right">Actions</th></tr></thead>
-                  <tbody><For each={interfaceMetrics() || []}>{(def) => <tr class="border-b border-subtle/50 text-xs"><td class="py-2 pr-3 text-primary">{def.name}</td><td class="py-2 pr-3 font-mono break-all">{def.parameter_pattern}</td><td class="py-2 pr-3 uppercase">{def.interface_type}</td><td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td><td class="py-2 pr-3">{def.unit_scale || 'none'}</td><td class="py-2 pr-3"><div class="flex items-center gap-1.5"><span class="inline-block h-3 w-6 shrink-0 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /><span>{def.group || '—'}</span></div></td><td class="py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td><td class="py-2 pr-3">{def.chart_type || 'line'}</td><td class="py-2 pr-3">{def.transform || 'raw'}</td><td class="py-2 pr-3">{def.multiplier}</td><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[95rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class="py-2 pr-3">{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section>
           </Show>
