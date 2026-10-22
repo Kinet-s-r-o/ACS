@@ -249,6 +249,12 @@ table { width: 100%; border-collapse: separate; border-spacing: 0; }
 thead { background: rgb(var(--bg-elevated) / .45); }
 th { color: rgb(var(--text-muted)); font-size: 10px; font-weight: 600; letter-spacing: .015em; }
 tbody tr { transition: background-color 100ms ease; } tbody tr:hover { background: rgb(var(--bg-elevated) / .42); }
+.data-table { font-size: 13px; }
+.data-table th { color: rgb(var(--text-muted)); font-size: 11px; font-weight: 600; }
+.data-table td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
+.data-table tbody td { line-height: 1.45; }
+.table-scroll table:not(.data-table) { font-size: 13px; }
+.table-scroll table:not(.data-table) td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
 
 /* Column filter */
 .filter-toggle { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
