@@ -965,7 +965,7 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result := make(map[string]string)
+	result := database.RetentionDefaults()
 	for _, s := range settings {
 		if isSecretSetting(s.Key) && s.Value != "" {
 			result[s.Key] = "••••••••"
@@ -993,6 +993,13 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"app_logo":               true,
 		"overview_poll_interval": true, "full_tree_poll_interval": true,
 		"auto_refresh_interval": true,
+	}
+	for key := range database.RetentionDefaults() {
+		allowed[key] = true
+	}
+	if err := database.ValidateRetentionSettings(settings); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	for key, value := range settings {
 		if !allowed[key] {

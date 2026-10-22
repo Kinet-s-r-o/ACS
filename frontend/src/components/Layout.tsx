@@ -26,6 +26,7 @@ const navigation = [
     { href: '/security', label: 'Access controls', icon: ShieldCheck, fullOnly: true },
     { href: '/settings', label: 'System settings', icon: Settings, children: [
       { href: '/settings/general', label: 'General' },
+      { href: '/settings/retention', label: 'DB retention' },
       { href: '/settings/dictionaries', label: 'Dictionaries' },
       { href: '/settings/users', label: 'Users and Roles' },
       { href: '/settings/delivery', label: 'Delivery & Connection' },
@@ -44,6 +45,7 @@ const pageNames: Record<string, string> = {
   '/security': 'Security center',
   '/settings': 'System settings',
   '/settings/general': 'General',
+  '/settings/retention': 'DB retention',
   '/settings/dictionaries': 'Dictionaries',
   '/settings/users': 'Users and Roles',
   '/settings/delivery': 'Delivery & Connection Request',

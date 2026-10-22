@@ -20,6 +20,7 @@ const Users = lazy(() => import('./pages/Users'));
 const Delivery = lazy(() => import('./pages/Delivery'));
 const Provisioning = lazy(() => import('./pages/Provisioning'));
 const GeneralSettings = lazy(() => import('./pages/GeneralSettings'));
+const RetentionSettings = lazy(() => import('./pages/RetentionSettings'));
 const Dictionaries = lazy(() => import('./pages/Dictionaries'));
 
 // Initialize theme on app load
@@ -59,6 +60,7 @@ const App: Component = () => {
             <Route path="/settings/delivery" component={Delivery} />
             <Route path="/settings/provisioning" component={Provisioning} />
             <Route path="/settings/general" component={GeneralSettings} />
+            <Route path="/settings/retention" component={RetentionSettings} />
             <Route path="/settings/dictionaries" component={Dictionaries} />
           </Route>
         </Router>

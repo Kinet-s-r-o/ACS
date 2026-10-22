@@ -482,10 +482,12 @@ func SetupTimescaleDB(db *gorm.DB) error {
 			COUNT(*)    AS sample_count
 		 FROM metric_samples
 		 GROUP BY time_bucket, device_id, metric_id`,
-		`SELECT add_retention_policy('metric_samples', INTERVAL '6 hours', if_not_exists => TRUE)`,
-		`SELECT add_retention_policy('metric_samples_5min', INTERVAL '7 days', if_not_exists => TRUE)`,
-		`SELECT add_retention_policy('metric_samples_1h', INTERVAL '30 days', if_not_exists => TRUE)`,
-		`SELECT add_retention_policy('metric_samples_1d', INTERVAL '365 days', if_not_exists => TRUE)`,
+		// The settings-driven housekeeping worker owns retention for these tables.
+		`SELECT remove_retention_policy('metric_samples', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('interface_metric_samples', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('metric_samples_5min', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('metric_samples_1h', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('metric_samples_1d', if_exists => TRUE)`,
 		`ALTER TABLE metric_samples SET (
 			timescaledb.compress = TRUE,
 			timescaledb.compress_segmentby = 'device_id, metric_id',

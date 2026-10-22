@@ -78,7 +78,7 @@ func main() {
 		log.Printf("Protected %d legacy task records containing sensitive values", count)
 	}
 	go runTaskRecovery(ctx, database.NewTaskRepository(db))
-	go runRetentionMaintenance(ctx, db)
+	go database.RunRetentionMaintenance(ctx, db)
 
 	cwmpPort := os.Getenv("PORT")
 	if cwmpPort == "" {
@@ -522,36 +522,6 @@ func runTaskRecovery(ctx context.Context, repo *database.TaskRepository) {
 	}
 	cleanup()
 	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			cleanup()
-		}
-	}
-}
-
-func runRetentionMaintenance(ctx context.Context, db *gorm.DB) {
-	cleanup := func() {
-		cutoffs := []struct {
-			model interface{}
-			query string
-			args  []interface{}
-		}{
-			{&models.AuditLog{}, "created_at < ?", []interface{}{time.Now().Add(-180 * 24 * time.Hour)}},
-			{&models.Fault{}, "resolved = ? AND resolved_at < ?", []interface{}{true, time.Now().Add(-90 * 24 * time.Hour)}},
-			{&models.Task{}, "status IN ? AND completed_at < ?", []interface{}{[]models.TaskStatus{models.TaskStatusCompleted, models.TaskStatusFailed}, time.Now().Add(-90 * 24 * time.Hour)}},
-		}
-		for _, item := range cutoffs {
-			if err := db.WithContext(ctx).Where(item.query, item.args...).Delete(item.model).Error; err != nil {
-				log.Printf("Retention cleanup failed for %T: %v", item.model, err)
-			}
-		}
-	}
-	cleanup()
-	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for {
 		select {
