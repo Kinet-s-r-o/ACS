@@ -280,12 +280,14 @@ const DeviceDetail: Component = () => {
   const unresolvedFaultCount = createMemo(() => deviceFaultCounts()?.active || 0);
   const pendingTaskCount = createMemo(() => (deviceTaskCounts()?.pending || 0) + (deviceTaskCounts()?.sent || 0));
   const [autoRefreshTick, setAutoRefreshTick] = createSignal(0);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = createPersistedSignal('acs.device.autoRefresh', 'true');
   const [autoRefreshRunning, setAutoRefreshRunning] = createSignal(false);
   const [deletingTask, setDeletingTask] = createSignal<number | null>(null);
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<DeviceSnapshot | null>(null);
   const [snapshotSelection, setSnapshotSelection] = createSignal<string[]>([]);
   const [snapshotName, setSnapshotName] = createSignal('');
+  const [snapshotSearch, setSnapshotSearch] = createSignal('');
   const [snapshotLoading, setSnapshotLoading] = createSignal<string | null>(null);
   const [collapsedSnapshotPaths, setCollapsedSnapshotPaths] = createSignal<Set<string>>(new Set());
 
@@ -293,7 +295,8 @@ const DeviceDetail: Component = () => {
     const snapshot = selectedSnapshot();
     if (!snapshot?.parameters) return [];
     const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
-    const changed = snapshot.parameters.filter(parameter => current.get(parameter.name) !== parameter.value);
+    const query = snapshotSearch().trim().toLowerCase();
+    const changed = snapshot.parameters.filter(parameter => current.get(parameter.name) !== parameter.value && parameter.name.toLowerCase().includes(query));
     const nodes = new Map<string, { parameter?: SnapshotParameter; descendants: string[] }>();
     for (const parameter of changed) {
       const parts = parameter.name.split('.');
@@ -1314,6 +1317,7 @@ const DeviceDetail: Component = () => {
   const refreshAll = () => { refetchDevice(); refetchParams(); refetchTasks(); refetchSnapshots(); };
 
   createEffect(() => {
+    if (autoRefreshEnabled() !== 'true') return;
     const interval = Number(systemSettings()?.auto_refresh_interval ?? 30);
     if (!Number.isFinite(interval) || interval <= 0) return;
     const timer = window.setInterval(() => {
@@ -1823,17 +1827,18 @@ const DeviceDetail: Component = () => {
             <Zap size={14} />
             <span class="hidden sm:inline">{actionLoading() === 'summon' ? '...' : 'Summon'}</span>
           </button></Show>
-          <button onClick={refreshAll} disabled={device.loading || parameters.loading || tasks.loading || snapshots.loading} class="btn btn-secondary text-xs sm:text-sm">
-            <RefreshCw size={14} />
-            <span class="hidden sm:inline">Refresh</span>
-          </button>
-          <Show when={isFullAccess()}>
             <div class="relative" ref={actionsMenu}>
               <button type="button" class="icon-button" aria-label="Device actions" aria-haspopup="menu" aria-expanded={showActionsMenu()} onClick={() => setShowActionsMenu(value => !value)}>
                 <MoreVertical size={18} />
               </button>
               <Show when={showActionsMenu()}>
                 <div class="absolute right-0 top-full z-50 mt-2 min-w-44 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
+                  <button type="button" role="menuitemcheckbox" aria-checked={autoRefreshEnabled() === 'true'} class="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setAutoRefreshEnabled(autoRefreshEnabled() === 'true' ? 'false' : 'true'); setShowActionsMenu(false); }}>
+                    Auto-refresh
+                    <span class="text-muted">{autoRefreshEnabled() === 'true' ? 'On' : 'Off'}</span>
+                  </button>
+                  <Show when={isFullAccess()}>
+                  <div class="my-1 border-t border-subtle" role="separator"></div>
                   <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); void handleReboot(); }}>
                     Reboot
                   </button>
@@ -1844,10 +1849,10 @@ const DeviceDetail: Component = () => {
                   <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); void handleDelete(); }}>
                     Delete CPE
                   </button>
+                  </Show>
                 </div>
               </Show>
             </div>
-          </Show>
         </div>
       </div>
 
@@ -2226,7 +2231,11 @@ const DeviceDetail: Component = () => {
                             </button>
                           </Show>
                         </div>
-                        <Show when={snapshotRows().length > 0} fallback={<EmptyState title="No differences" description="The selected snapshot matches the cached current parameters." />}>
+                        <div class="relative mb-3">
+                          <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                          <input type="search" class="input pl-9! w-full text-sm" aria-label="Search snapshot parameter names" placeholder="Search parameter names…" value={snapshotSearch()} onInput={(event) => { setSnapshotSearch(event.currentTarget.value); setCollapsedSnapshotPaths(new Set<string>()); }} />
+                        </div>
+                        <Show when={snapshotRows().length > 0} fallback={<EmptyState title={snapshotSearch().trim() ? 'No matching parameters' : 'No differences'} description={snapshotSearch().trim() ? 'No changed parameter names match your search.' : 'The selected snapshot matches the cached current parameters.'} />}>
                           <div class="border border-subtle rounded overflow-auto max-h-[600px]">
                             <div class="min-w-[680px]">
                               <div class="grid grid-cols-[minmax(280px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-3 px-3 py-2 bg-elevated text-[10px] text-muted uppercase tracking-wide">
