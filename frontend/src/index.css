@@ -125,6 +125,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .app-sidebar.is-open { transform: translateX(0); }
 .sidebar-scrim { position: fixed; inset: 0; z-index: 40; border: 0; background: rgb(0 0 0 / .58); }
 .sidebar-brand { min-height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgb(var(--border-subtle)); }
+.sidebar-collapse-toggle { display: none; }
 .brand-lockup { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .brand-mark { width: 34px; height: 34px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; padding: 8px 6px; border: 1px solid rgb(var(--accent) / .7); background: rgb(var(--accent) / .1); border-radius: 3px; }
 .brand-logo { display: block; flex: 0 0 auto; max-width: 120px; max-height: 40px; object-fit: contain; }
@@ -355,8 +356,30 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 @media (min-width: 1024px) {
   .lg\:hidden { display: none !important; }
   .task-register { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .app-sidebar { position: fixed; transform: none; }
+  .app-sidebar { position: fixed; transform: none; transition: width 180ms ease; }
   .app-main { padding-left: 256px; }
+  .sidebar-collapse-toggle { display: inline-grid; }
+  .app-sidebar.is-collapsed { width: 64px; }
+  .app-sidebar.is-collapsed .sidebar-brand { justify-content: center; padding: 10px; }
+  .app-sidebar.is-collapsed .brand-lockup { justify-content: center; }
+  .app-sidebar.is-collapsed .brand-lockup > div { display: none; }
+  .app-sidebar.is-collapsed .brand-logo { width: 34px; height: 34px; object-fit: contain; }
+  .app-sidebar.is-collapsed .sidebar-collapse-toggle { position: absolute; top: 46px; right: -13px; z-index: 2; width: 26px; height: 26px; background: rgb(var(--bg-surface)); }
+  .app-sidebar.is-collapsed .sidebar-nav { padding: 14px 8px; }
+  .app-sidebar.is-collapsed .nav-section,
+  .app-sidebar.is-collapsed .nav-link > span,
+  .app-sidebar.is-collapsed .nav-chevron,
+  .app-sidebar.is-collapsed .nav-chevron-down,
+  .app-sidebar.is-collapsed .nav-submenu,
+  .app-sidebar.is-collapsed .operator-copy,
+  .app-sidebar.is-collapsed .sidebar-meta { display: none; }
+  .app-sidebar.is-collapsed .nav-group + .nav-group { margin-top: 14px; }
+  .app-sidebar.is-collapsed .nav-link { justify-content: center; width: 46px; height: 40px; min-height: 40px; margin: 0 auto; padding: 0; }
+  .app-sidebar.is-collapsed .sidebar-footer { padding: 8px; }
+  .app-sidebar.is-collapsed .operator-card { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 0; border-top: 0; }
+  .app-sidebar.is-collapsed .operator-avatar { width: 34px; height: 34px; }
+  .app-sidebar.is-collapsed .operator-card .icon-button { width: 34px; }
+  .app-shell.is-sidebar-collapsed .app-main { padding-left: 64px; }
   .topbar { padding: 0 24px; }
   .content-area { padding: 24px 24px 48px; }
   .dashboard-health-grid, .inventory-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

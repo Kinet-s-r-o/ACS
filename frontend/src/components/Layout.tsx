@@ -2,7 +2,7 @@ import type { ParentComponent } from 'solid-js';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { A, useLocation } from '@solidjs/router';
 import {
-  Activity, AlertTriangle, ChevronDown, ChevronRight, HardDrive, LayoutDashboard, LogOut,
+  Activity, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, HardDrive, LayoutDashboard, LogOut,
   Menu, Moon, Router, Settings, ShieldCheck, Sun, X,
 } from 'lucide-solid';
 import { api } from '../lib/api';
@@ -67,6 +67,8 @@ const Brand = () => (
 const Layout: ParentComponent = (props) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = createSignal(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(localStorage.getItem('sidebar-collapsed') === 'true');
+  const [desktopViewport, setDesktopViewport] = createSignal(window.matchMedia('(min-width: 1024px)').matches);
   const [apiOnline, setAPIOnline] = createSignal<boolean | null>(null);
   const [settingsExpanded, setSettingsExpanded] = createSignal(false);
   const [inventoryExpanded, setInventoryExpanded] = createSignal(false);
@@ -78,6 +80,9 @@ const Layout: ParentComponent = (props) => {
     try { await api.health(); setAPIOnline(true); } catch { setAPIOnline(false); }
   };
   onMount(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const updateViewport = () => setDesktopViewport(media.matches);
+    media.addEventListener('change', updateViewport);
     checkHealth();
     const timer = window.setInterval(checkHealth, 30_000);
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -87,21 +92,23 @@ const Layout: ParentComponent = (props) => {
       }
     };
     document.addEventListener('keydown', closeOnEscape);
-    onCleanup(() => { window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); });
+    onCleanup(() => { window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); media.removeEventListener('change', updateViewport); });
   });
 
+  const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();
   const isActive = (href: string) => href === '/' ? location.pathname === '/' : location.pathname.startsWith(href);
   const pageTitle = () => location.pathname.startsWith('/device/') ? 'CPE record' : pageNames[location.pathname] || 'Control plane';
 
   return (
-    <div class="app-shell">
+    <div class={`app-shell ${isSidebarCollapsed() ? 'is-sidebar-collapsed' : ''}`}>
       <Show when={sidebarOpen()}>
         <button class="sidebar-scrim lg:hidden" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />
       </Show>
 
-      <aside class={`app-sidebar ${sidebarOpen() ? 'is-open' : ''}`}>
+      <aside class={`app-sidebar ${sidebarOpen() ? 'is-open' : ''} ${isSidebarCollapsed() ? 'is-collapsed' : ''}`}>
         <div class="sidebar-brand">
           <Brand />
+          <button class="icon-button sidebar-collapse-toggle" aria-label={sidebarCollapsed() ? 'Expand navigation' : 'Collapse navigation'} title={sidebarCollapsed() ? 'Expand navigation' : 'Collapse navigation'} onClick={() => { const collapsed = !sidebarCollapsed(); setSidebarCollapsed(collapsed); localStorage.setItem('sidebar-collapsed', String(collapsed)); }}>{sidebarCollapsed() ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
           <button class="icon-button lg:hidden" aria-label="Close navigation" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         </div>
 
@@ -114,7 +121,8 @@ const Layout: ParentComponent = (props) => {
                   {(item) => (
                     <div>
                       <Show when={item.children}>
-                        <button
+                          <Show when={!isSidebarCollapsed()} fallback={<A href={item.href} onClick={() => setSidebarOpen(false)} class={`nav-link nav-icon-link ${isActive(item.href) ? 'is-active' : ''}`} aria-label={item.label} title={item.label} aria-current={isActive(item.href) ? 'page' : undefined}><item.icon size={17} stroke-width={1.7} /></A>}>
+                          <button
                           class={`nav-link nav-toggle ${isActive(item.href) ? 'is-active' : ''}`}
                           onClick={() => item.href === '/devices' ? setInventoryExpanded(!inventoryExpanded()) : setSettingsExpanded(!settingsExpanded())}
                           aria-expanded={item.href === '/devices' ? inventoryExpanded() : settingsExpanded()}
@@ -123,6 +131,7 @@ const Layout: ParentComponent = (props) => {
                           <span>{item.label}</span>
                           <ChevronDown size={13} class={`nav-chevron-down ${(item.href === '/devices' ? inventoryExpanded() : settingsExpanded()) ? 'is-expanded' : ''}`} />
                         </button>
+                        </Show>
                         <Show when={item.href === '/devices' ? inventoryExpanded() : settingsExpanded()}>
                           <div class="nav-submenu">
                             <For each={item.children ?? []}>
@@ -136,7 +145,7 @@ const Layout: ParentComponent = (props) => {
                         </Show>
                       </Show>
                       <Show when={!item.children}>
-                        <A href={item.href} onClick={() => setSidebarOpen(false)} class={`nav-link ${isActive(item.href) ? 'is-active' : ''}`} aria-current={isActive(item.href) ? 'page' : undefined}>
+                        <A href={item.href} onClick={() => setSidebarOpen(false)} class={`nav-link ${isSidebarCollapsed() ? 'nav-icon-link' : ''} ${isActive(item.href) ? 'is-active' : ''}`} aria-label={isSidebarCollapsed() ? item.label : undefined} title={isSidebarCollapsed() ? item.label : undefined} aria-current={isActive(item.href) ? 'page' : undefined}>
                           <item.icon size={17} stroke-width={1.7} />
                           <span>{item.label}</span>
                           <Show when={isActive(item.href)}><ChevronRight size={13} class="nav-chevron" /></Show>
