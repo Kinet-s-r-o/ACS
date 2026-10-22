@@ -294,9 +294,9 @@ const DeviceDetail: Component = () => {
   const snapshotRows = createMemo<SnapshotTreeRow[]>(() => {
     const snapshot = selectedSnapshot();
     if (!snapshot?.parameters) return [];
-    const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
+    const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter]));
     const query = snapshotSearch().trim().toLowerCase();
-    const changed = snapshot.parameters.filter(parameter => current.get(parameter.name) !== parameter.value && parameter.name.toLowerCase().includes(query));
+    const changed = snapshot.parameters.filter(parameter => current.get(parameter.name)?.writable === true && current.get(parameter.name)?.value !== parameter.value && parameter.name.toLowerCase().includes(query));
     const nodes = new Map<string, { parameter?: SnapshotParameter; descendants: string[] }>();
     for (const parameter of changed) {
       const parts = parameter.name.split('.');
@@ -315,7 +315,7 @@ const DeviceDetail: Component = () => {
         label: path.substring(path.lastIndexOf('.') + 1),
         depth: path.split('.').length - 1,
         parameter: node.parameter,
-        currentValue: node.parameter ? current.get(node.parameter.name) : undefined,
+        currentValue: node.parameter ? current.get(node.parameter.name)?.value : undefined,
         descendants: node.descendants,
         hasChildren: [...nodes.keys()].some(candidate => candidate.startsWith(`${path}.`)),
       }));
@@ -347,8 +347,8 @@ const DeviceDetail: Component = () => {
       const detail = await api.getDeviceSnapshot(serial(), snapshot.id);
       setSelectedSnapshot(detail);
       setCollapsedSnapshotPaths(new Set<string>());
-      const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter.value]));
-      setSnapshotSelection((detail.parameters || []).filter(parameter => current.get(parameter.name) !== parameter.value).map(parameter => parameter.name));
+      const current = new Map((parameters() || []).map(parameter => [parameter.name, parameter]));
+      setSnapshotSelection((detail.parameters || []).filter(parameter => current.get(parameter.name)?.writable === true && current.get(parameter.name)?.value !== parameter.value).map(parameter => parameter.name));
     } catch (error) {
       notify({ tone: 'error', title: 'Could not open snapshot', detail: (error as Error).message, persistent: true });
     } finally { setSnapshotLoading(null); }
@@ -2235,7 +2235,7 @@ const DeviceDetail: Component = () => {
                           <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                           <input type="search" class="input pl-9! w-full text-sm" aria-label="Search snapshot parameter names" placeholder="Search parameter names…" value={snapshotSearch()} onInput={(event) => { setSnapshotSearch(event.currentTarget.value); setCollapsedSnapshotPaths(new Set<string>()); }} />
                         </div>
-                        <Show when={snapshotRows().length > 0} fallback={<EmptyState title={snapshotSearch().trim() ? 'No matching parameters' : 'No differences'} description={snapshotSearch().trim() ? 'No changed parameter names match your search.' : 'The selected snapshot matches the cached current parameters.'} />}>
+                        <Show when={snapshotRows().length > 0} fallback={<EmptyState title={snapshotSearch().trim() ? 'No matching parameters' : 'No writable differences'} description={snapshotSearch().trim() ? 'No changed writable parameter names match your search.' : 'No currently writable parameters differ from the selected snapshot.'} />}>
                           <div class="border border-subtle rounded overflow-auto max-h-[600px]">
                             <div class="min-w-[680px]">
                               <div class="grid grid-cols-[minmax(280px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-3 px-3 py-2 bg-elevated text-[10px] text-muted uppercase tracking-wide">
