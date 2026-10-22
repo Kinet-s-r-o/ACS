@@ -98,7 +98,9 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="acs-backup.json"`)
-	if err := json.NewEncoder(w).Encode(backup); err != nil {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(backup); err != nil {
 		return
 	}
 }
