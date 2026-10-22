@@ -52,6 +52,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
 interface MetricModalProps {
   open: boolean;
   editingMetric: MetricDefinition | null;
+  copyingMetric?: MetricDefinition | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -108,7 +109,11 @@ const MetricModal: Component<MetricModalProps> = (props) => {
   createEffect(() => {
     const open = props.open;
     const metric = props.editingMetric;
-    if (open) initForm(metric);
+    const copying = props.copyingMetric;
+    if (open) {
+      initForm(metric || copying || null);
+      if (!metric && copying) setMetricForm(current => ({ ...current, name: `${copying.name} copy` }));
+    }
   });
 
   const handleSave = async () => {
