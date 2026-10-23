@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { readMigratedStorageValue, writeMigratedStorageValue } from './storage';
+import { readMigratedStorageValue, writeMigratedStorageValue } from './storage.ts';
 
 /** Standard page-size choices offered in each table's paginator. */
 export const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100];

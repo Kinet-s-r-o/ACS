@@ -49,7 +49,7 @@ test('changePageSize updates the signal and persists to localStorage', () => {
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   changePageSize(100);
   assert.equal(pageSize(), 100);
-  assert.equal(ls.getItem('skyacs_page_size_devices'), '100');
+  assert.equal(ls.getItem('acs_page_size_devices'), '100');
 });
 
 test('keeps independent sizes per storage key', () => {

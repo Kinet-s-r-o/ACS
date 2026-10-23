@@ -70,7 +70,7 @@ test('toggle flips a column and persists to localStorage', () => {
   assert.equal(isVisible('b'), false);
   toggle('b');
   assert.equal(isVisible('b'), true);
-  const stored = JSON.parse(ls.getItem('skyacs_columns_devices'));
+  const stored = JSON.parse(ls.getItem('acs_columns_devices'));
   assert.equal(stored.find((c) => c.id === 'b').visible, true);
   // Toggling again flips it back.
   toggle('b');

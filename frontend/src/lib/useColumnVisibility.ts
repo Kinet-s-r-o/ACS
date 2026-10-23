@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { readMigratedStorageValue, writeMigratedStorageValue } from './storage';
+import { readMigratedStorageValue, writeMigratedStorageValue } from './storage.ts';
 
 /** A single toggleable table column. */
 export interface ColumnDef {

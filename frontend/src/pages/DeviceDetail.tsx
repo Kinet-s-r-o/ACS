@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, Show, For, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
+import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
 import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
@@ -7,12 +7,12 @@ import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRan
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
 import Dialog from '../components/Dialog';
-import HealthGauge from '../components/HealthGauge';
+const HealthGauge = lazy(() => import('../components/HealthGauge'));
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
-import MetricChart from '../components/MetricChart';
-import InterfaceMetricChart from '../components/InterfaceMetricChart';
-import IperfResult from '../components/IperfResult';
+const MetricChart = lazy(() => import('../components/MetricChart'));
+const InterfaceMetricChart = lazy(() => import('../components/InterfaceMetricChart'));
+const IperfResult = lazy(() => import('../components/IperfResult'));
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
@@ -1947,7 +1947,7 @@ const DeviceDetail: Component = () => {
                             {(tile) => (
                               <div>
                                 <Show when={tile.format === 'gauge'}>
-                                  <HealthGauge
+                                  <Suspense fallback={<div class="skeleton h-24 w-full" />}><HealthGauge
                                     value={tile.raw ?? null}
                                     min={tile.min ?? 0}
                                     max={tile.max ?? 100}
@@ -1959,7 +1959,7 @@ const DeviceDetail: Component = () => {
                                     arc={tile.arc}
                                     pointer={tile.pointer}
                                     gaugeStyle={tile.gaugeStyle}
-                                  />
+                                  /></Suspense>
                                 </Show>
                                 <Show when={tile.format !== 'gauge'}>
                                   <div
@@ -1974,7 +1974,7 @@ const DeviceDetail: Component = () => {
                             )}
                           </For>
                         </div>}>
-                          <HealthGauge
+                          <Suspense fallback={<div class="skeleton h-24 w-full" />}><HealthGauge
                             value={group.tiles[0].raw ?? null}
                             min={group.tiles[0].min ?? 0}
                             max={group.tiles[0].max ?? 100}
@@ -1987,7 +1987,7 @@ const DeviceDetail: Component = () => {
                             pointer={group.tiles[0].pointer}
                             gaugeStyle={group.tiles[0].gaugeStyle}
                             values={group.tiles.map(tile => ({ value: tile.raw ?? null, label: tile.label, centerText: tile.value }))}
-                          />
+                          /></Suspense>
                         </Show>
                       </div>
                     )}
@@ -2027,7 +2027,7 @@ const DeviceDetail: Component = () => {
                     <Show when={iperfResult()}>
                       <div class="border-t border-subtle pt-3">
                         <h3 class="text-sm font-medium text-secondary mb-3">Latest speedtest result</h3>
-                        <IperfResult runs={iperfResult()!} />
+                        <Suspense fallback={<div class="skeleton h-40 w-full" />}><IperfResult runs={iperfResult()!} /></Suspense>
                       </div>
                     </Show>
                     </div>
@@ -2270,7 +2270,7 @@ const DeviceDetail: Component = () => {
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <For each={groupedMetrics()}>
                     {(group) => (
-                      <MetricChart serial={serial()} metrics={group} refreshKey={autoRefreshTick()} />
+                      <Suspense fallback={<div class="skeleton h-72 w-full" />}><MetricChart serial={serial()} metrics={group} refreshKey={autoRefreshTick()} /></Suspense>
                     )}
                   </For>
                 </div>
@@ -3380,7 +3380,7 @@ const DeviceDetail: Component = () => {
             <Show when={iperfResult()}>
               <div class="border border-subtle rounded-md p-3">
                 <h3 class="text-sm font-medium text-secondary mb-2">Latest iPerf response</h3>
-                <IperfResult runs={iperfResult()!} />
+                <Suspense fallback={<div class="skeleton h-40 w-full" />}><IperfResult runs={iperfResult()!} /></Suspense>
               </div>
             </Show>
             <div class="flex gap-2 pt-2">
@@ -3404,7 +3404,7 @@ const DeviceDetail: Component = () => {
           <div class="space-y-5">
             <For each={interfaceMetricGroups()}>{(group) => <section class="rounded border border-subtle p-3">
               <h3 class="mb-2 text-xs font-medium text-secondary">{group[0].group || group[0].name}</h3>
-              <InterfaceMetricChart serial={serial()} definitions={group} interfacePath={statsInterface()!.path} parameterNames={(parameters() || []).map(parameter => parameter.name)} refreshKey={autoRefreshTick()} />
+              <Suspense fallback={<div class="skeleton h-72 w-full" />}><InterfaceMetricChart serial={serial()} definitions={group} interfacePath={statsInterface()!.path} parameterNames={(parameters() || []).map(parameter => parameter.name)} refreshKey={autoRefreshTick()} /></Suspense>
             </section>}</For>
           </div>
         </Dialog>
