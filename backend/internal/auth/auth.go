@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,6 +16,8 @@ import (
 var (
 	ErrInvalidToken = errors.New("invalid or expired token")
 )
+
+const SessionCookieName = "acs_session"
 
 type contextKey string
 
@@ -116,19 +117,13 @@ const PermissionsContextKey contextKey = "permissions"
 
 func AuthMiddleware(users UserLookup, perms PermissionLookup, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
+		cookie, err := r.Cookie(SessionCookieName)
+		if err != nil || cookie.Value == "" {
 			writeAuthError(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
-		parts := strings.Fields(authHeader)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			writeAuthError(w, `{"error":"invalid authorization header"}`, http.StatusUnauthorized)
-			return
-		}
-
-		claims, err := ValidateToken(parts[1])
+		claims, err := ValidateToken(cookie.Value)
 		if err != nil {
 			writeAuthError(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
 			return

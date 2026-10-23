@@ -135,6 +135,7 @@ func (r *Router) Handler() http.Handler {
 
 	// Auth endpoints
 	apiMux.HandleFunc("GET /auth/me", r.handleAuthMe)
+	apiMux.HandleFunc("POST /auth/logout", r.handleLogout)
 	apiMux.HandleFunc("POST /auth/change-password", r.handleChangePassword)
 
 	// User management
@@ -266,7 +267,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /blocked-devices/{serial}", auth.RequirePermission(models.PermSecurityWrite)(r.handleRemoveBlockedDevice))
 
 	// Authentication precedes the audit logger so actor details are available.
-	mux.Handle("/", auth.AuthMiddleware(r.userRepo, r.roleRepo, auditMiddleware(r.auditRepo, apiMux)))
+	mux.Handle("/", csrfMiddleware(auth.AuthMiddleware(r.userRepo, r.roleRepo, auditMiddleware(r.auditRepo, apiMux))))
 
 	return securityHeaders(corsMiddleware(requestBodyLimit(mux)))
 }
@@ -2437,12 +2438,19 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
+	csrfToken, err := newCSRFToken()
+	if err != nil {
+		log.Printf("Error generating CSRF token: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to generate session")
+		return
+	}
 
 	if err := r.userRepo.UpdateLastLogin(req.Context(), user.ID); err != nil {
 		log.Printf("Failed to record last login for user %d: %v", user.ID, err)
 	}
 	r.loginLimiter.Reset(ip)
 	r.recordLoginAudit(req, user.Username, http.StatusOK)
+	setSessionCookies(w, req, token, csrfToken)
 
 	var perms []string
 	if user.RoleID != nil {
@@ -2450,10 +2458,14 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, models.LoginResponse{
-		Token:       token,
 		User:        user,
 		Permissions: perms,
 	})
+}
+
+func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
+	clearSessionCookies(w, req)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (r *Router) recordLoginAudit(req *http.Request, username string, status int) {

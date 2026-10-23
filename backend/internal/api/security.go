@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net"
@@ -21,6 +24,8 @@ import (
 const (
 	maxJSONBody     = 2 << 20
 	maxFirmwareBody = 64 << 20
+	csrfCookieName  = "acs_csrf"
+	csrfHeaderName  = "X-CSRF-Token"
 )
 
 type responseRecorder struct {
@@ -153,6 +158,66 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+func csrfMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet && req.Method != http.MethodHead && req.Method != http.MethodOptions {
+			cookie, cookieErr := req.Cookie(csrfCookieName)
+			header := req.Header.Get(csrfHeaderName)
+			if cookieErr != nil || cookie.Value == "" || header == "" || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(header)) != 1 {
+				respondError(w, http.StatusForbidden, "CSRF token missing or invalid")
+				return
+			}
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+func newCSRFToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func isSecureRequest(req *http.Request) bool {
+	if req.TLS != nil {
+		return true
+	}
+	remoteIP := remoteAddressIP(req.RemoteAddr)
+	if remoteIP == nil || !isTrustedProxy(remoteIP) {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(strings.Split(req.Header.Get("X-Forwarded-Proto"), ",")[0]), "https")
+}
+
+func setSessionCookies(w http.ResponseWriter, req *http.Request, token, csrfToken string) {
+	secure := isSecureRequest(req)
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.SessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    csrfToken,
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearSessionCookies(w http.ResponseWriter, req *http.Request) {
+	secure := isSecureRequest(req)
+	for _, name := range []string{auth.SessionCookieName, csrfCookieName} {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: name == auth.SessionCookieName, Secure: secure, SameSite: http.SameSiteLaxMode})
+	}
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	configured := strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ",")
 	allowed := map[string]struct{}{
@@ -176,8 +241,9 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Max-Age", "600")
 
 		if req.Method == http.MethodOptions {

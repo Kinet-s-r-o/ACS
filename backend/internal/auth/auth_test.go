@@ -69,7 +69,7 @@ func TestAuthMiddlewareRejectsRevokedToken(t *testing.T) {
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
 	AuthMiddleware(userLookupStub{user: &models.User{ID: 7, Username: "admin", Role: models.RoleFull, TokenVersion: 2}}, nil, next).ServeHTTP(recorder, req)
 	if recorder.Code != http.StatusUnauthorized {

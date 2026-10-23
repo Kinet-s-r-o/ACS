@@ -3,11 +3,14 @@ package api
 import (
 	"crypto/tls"
 	"encoding/hex"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/skydashnet/skyacs/internal/auth"
 )
 
 func TestRefreshIntervalSettingsRejectInvalidValues(t *testing.T) {
@@ -124,5 +127,61 @@ func TestLoginLimiterHasBoundedMemory(t *testing.T) {
 	}
 	if limiter.Allow("over-cap") {
 		t.Fatal("limiter accepted an entry beyond its memory cap")
+	}
+}
+
+func TestCSRFMiddlewareRequiresMatchingTokenForMutation(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	handler := csrfMiddleware(next)
+
+	missing := httptest.NewRequest(http.MethodPost, "/settings", nil)
+	missingRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(missingRecorder, missing)
+	if missingRecorder.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF token returned %d", missingRecorder.Code)
+	}
+
+	valid := httptest.NewRequest(http.MethodPost, "/settings", nil)
+	valid.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-value"})
+	valid.Header.Set(csrfHeaderName, "csrf-value")
+	validRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(validRecorder, valid)
+	if validRecorder.Code != http.StatusNoContent {
+		t.Fatalf("valid CSRF token returned %d", validRecorder.Code)
+	}
+}
+
+func TestCSRFTokenIsCryptographicallyRandom(t *testing.T) {
+	first, err := newCSRFToken()
+	if err != nil || len(first) < 40 {
+		t.Fatalf("unexpected CSRF token: %q, %v", first, err)
+	}
+	second, err := newCSRFToken()
+	if err != nil || first == second {
+		t.Fatalf("CSRF tokens were not unique: %q and %q", first, second)
+	}
+}
+
+func TestSessionCookiesUseHttpOnlyForAuthenticationOnly(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	req := httptest.NewRequest(http.MethodPost, "http://acs.example.test/auth/login", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	recorder := httptest.NewRecorder()
+	setSessionCookies(recorder, req, "session-value", "csrf-value")
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 2 {
+		t.Fatalf("expected two session cookies, got %d", len(cookies))
+	}
+	for _, cookie := range cookies {
+		if !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+			t.Fatalf("cookie %q is missing secure SameSite attributes: %#v", cookie.Name, cookie)
+		}
+		if cookie.Name == auth.SessionCookieName && !cookie.HttpOnly {
+			t.Fatal("authentication cookie is not HttpOnly")
+		}
+		if cookie.Name == csrfCookieName && cookie.HttpOnly {
+			t.Fatal("CSRF cookie must be readable by the Frontend")
+		}
 	}
 }

@@ -60,22 +60,32 @@ export interface MetricDefinition { id: number; name: string; description: strin
 export interface MetricSample { device_id: number; metric_id: number; value: number; timestamp: string }
 export interface AggregatedMetric { timestamp: string; avg: number; min: number; max: number; count: number }
 
-import { readMigratedStorageValue, removeMigratedStorageValue } from './storage';
-
-export const getStoredToken = () => readMigratedStorageValue(sessionStorage, 'acs_token', 'skyacs_token');
+import { removeMigratedStorageValue } from './storage';
 
 export const clearStoredSession = () => {
   removeMigratedStorageValue(sessionStorage, 'acs_token', 'skyacs_token');
   localStorage.removeItem('token');
 };
 
+const getCookie = (name: string): string | null => {
+	const prefix = `${name}=`;
+	const value = document.cookie.split('; ').find((entry) => entry.startsWith(prefix));
+	return value ? decodeURIComponent(value.slice(prefix.length)) : null;
+};
+
+const addCsrfHeader = (headers: Headers, method?: string) => {
+	if (!['GET', 'HEAD', 'OPTIONS'].includes((method ?? 'GET').toUpperCase())) {
+		const csrfToken = getCookie('acs_csrf');
+		if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+	}
+};
+
 export async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+	addCsrfHeader(headers, options.method);
 
-  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+	const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, credentials: 'include' });
   if (!response.ok) {
     if (response.status === 401) {
       clearStoredSession();
@@ -89,10 +99,9 @@ export async function request<T>(endpoint: string, options: RequestInit = {}): P
 }
 
 export async function requestBlob(endpoint: string, options: RequestInit = {}): Promise<Blob> {
-  const token = getStoredToken();
   const headers = new Headers(options.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+	addCsrfHeader(headers, options.method);
+	const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, credentials: 'include' });
   if (!response.ok) {
     if (response.status === 401) {
       clearStoredSession();

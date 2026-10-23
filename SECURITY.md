@@ -16,6 +16,7 @@ If private reporting is unavailable, contact the repository owner privately befo
 - Generate and back up a unique `PARAMETER_ENCRYPTION_KEY`; do not rotate it without re-encrypting existing data.
 - Rotate or remove `INITIAL_ADMIN_PASSWORD` after the first login.
 - Terminate browser traffic with HTTPS and restrict API CORS origins.
+- Browser sessions use an `HttpOnly`, `Secure` session cookie plus a separate CSRF token cookie/header pair; keep the UI and API on the intended trusted origins.
 - Configure `TRUSTED_PROXY_CIDRS` and `CWMP_TRUSTED_PROXY_CIDRS` with proxy addresses only.
 - Set `CONNECTION_REQUEST_ALLOWED_CIDRS` to the managed CPE destination networks.
 - Restrict the CWMP listener to known CPE networks; CWMP Basic Auth must only run behind TLS.
