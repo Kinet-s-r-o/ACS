@@ -165,7 +165,7 @@ func validateCWMPAuthenticationConfig() error {
 	if usernameSet && strings.TrimSpace(os.Getenv("CWMP_TRUSTED_PROXY_CIDRS")) == "" {
 		return errors.New("CWMP Basic authentication requires TLS termination and CWMP_TRUSTED_PROXY_CIDRS")
 	}
-	for _, key := range []string{"CWMP_ALLOWED_CIDRS", "CWMP_TRUSTED_PROXY_CIDRS", "TRUSTED_PROXY_CIDRS", "CONNECTION_REQUEST_ALLOWED_CIDRS"} {
+	for _, key := range []string{"ADMIN_WEB_ALLOWED_CIDRS", "CWMP_ALLOWED_CIDRS", "CWMP_TRUSTED_PROXY_CIDRS", "TRUSTED_PROXY_CIDRS", "CONNECTION_REQUEST_ALLOWED_CIDRS"} {
 		if err := validateCIDRList(key, os.Getenv(key)); err != nil {
 			return err
 		}

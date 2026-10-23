@@ -182,6 +182,7 @@ DB_MAX_OPEN_CONNS=50
 DB_MAX_IDLE_CONNS=10
 
 CORS_ALLOWED_ORIGINS=https://acs.example.com
+ADMIN_WEB_ALLOWED_CIDRS=192.168.1.0/24,203.0.113.10/32
 TRUSTED_PROXY_CIDRS=127.0.0.1/32
 CWMP_USERNAME=
 CWMP_PASSWORD=
@@ -201,6 +202,13 @@ Configure these values from **Settings** after signing in:
 When `CWMP_USERNAME` is configured, `CWMP_PASSWORD` is also required. Basic Authentication is rejected over plain HTTP; TLS termination must originate from an address in `CWMP_TRUSTED_PROXY_CIDRS`. `TRUSTED_PROXY_CIDRS` controls API client-IP headers and must contain proxy addresses only. `CONNECTION_REQUEST_ALLOWED_CIDRS` restricts the destinations that SKYACS may contact and should contain CPE networks. Protect the CWMP endpoint with network firewall rules even when the application allowlist is enabled.
 
 `PARAMETER_ENCRYPTION_KEY` protects stored passwords and sensitive parameters. Back up this key together with the database. Do not replace it directly; key rotation requires a data migration and re-encryption process.
+
+`ADMIN_WEB_ALLOWED_CIDRS` optionally restricts web login and all authenticated
+API requests to administrator source networks. Leave it empty to allow access
+from any source. The client IP is taken from `X-Forwarded-For` only when the
+immediate proxy belongs to `TRUSTED_PROXY_CIDRS`. This setting affects web/API
+authentication only; it does not restrict CWMP sessions or public firmware
+delivery at `/files/...`.
 
 On each CPE Inform, SKYACS checks the last successful refresh stored for that device. Up to 256 known overview parameters are fetched after the overview interval (default 15 minutes), and the full parameter tree after the full-tree interval (default 6 hours) or a BOOTSTRAP event. Both intervals are editable in System settings > Provisioning > Nastavenia. A full-tree fetch discovers newly added objects; overview fetches update known values. These are minimum intervals: a device that does not contact the ACS is refreshed at its next Inform. Failed or empty fetches leave the previous refresh time unchanged, so the next Inform retries. The device record shows both refresh times.
 

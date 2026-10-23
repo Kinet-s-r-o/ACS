@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -48,6 +49,7 @@ type Router struct {
 	tagRepo              *database.TagRepository
 	loginLimiter         *loginLimiter
 	downloadLimiter      *loginLimiter
+	adminWebNetworks     []*net.IPNet
 	uploadDir            string
 	uploadInitErr        error
 	templateImageDir     string
@@ -114,6 +116,7 @@ func NewRouter(db *gorm.DB) *Router {
 		tagRepo:              database.NewTagRepository(db),
 		loginLimiter:         newLoginLimiter(5, 15*time.Minute),
 		downloadLimiter:      newLoginLimiter(60, time.Minute),
+		adminWebNetworks:     parseAllowedNetworks(os.Getenv("ADMIN_WEB_ALLOWED_CIDRS")),
 		uploadDir:            uploadDir,
 		uploadInitErr:        uploadInitErr,
 		templateImageDir:     templateImageDir,
@@ -267,7 +270,8 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /blocked-devices/{serial}", auth.RequirePermission(models.PermSecurityWrite)(r.handleRemoveBlockedDevice))
 
 	// Authentication precedes the audit logger so actor details are available.
-	mux.Handle("/", csrfMiddleware(auth.AuthMiddleware(r.userRepo, r.roleRepo, auditMiddleware(r.auditRepo, apiMux))))
+	protectedHandler := csrfMiddleware(auth.AuthMiddleware(r.userRepo, r.roleRepo, auditMiddleware(r.auditRepo, apiMux)))
+	mux.Handle("/", r.adminWebAccessMiddleware(protectedHandler))
 
 	return securityHeaders(corsMiddleware(requestBodyLimit(mux)))
 }
@@ -2395,6 +2399,11 @@ func respondError(w http.ResponseWriter, status int, message string) {
 }
 
 func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
+	if !r.isAdminWebClientAllowed(req) {
+		r.recordLoginAudit(req, "unknown", http.StatusForbidden)
+		respondError(w, http.StatusForbidden, "Web UI access is not allowed from this network")
+		return
+	}
 	ip := clientIP(req)
 	if !r.loginLimiter.Allow(ip) {
 		r.recordLoginAudit(req, "unknown", http.StatusTooManyRequests)

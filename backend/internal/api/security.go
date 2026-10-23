@@ -134,6 +134,60 @@ func isTrustedProxy(ip net.IP) bool {
 	return false
 }
 
+func parseAllowedNetworks(value string) []*net.IPNet {
+	var networks []*net.IPNet
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if ip := net.ParseIP(item); ip != nil {
+			if ip4 := ip.To4(); ip4 != nil {
+				ip = ip4
+			}
+			bits := 128
+			if ip.To4() != nil {
+				bits = 32
+			}
+			networks = append(networks, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			continue
+		}
+		if _, network, err := net.ParseCIDR(item); err == nil {
+			networks = append(networks, network)
+		}
+	}
+	return networks
+}
+
+func (r *Router) isAdminWebClientAllowed(req *http.Request) bool {
+	if len(r.adminWebNetworks) == 0 {
+		return true
+	}
+	ip := net.ParseIP(clientIP(req))
+	if ip == nil {
+		return false
+	}
+	for _, network := range r.adminWebNetworks {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Router) adminWebAccessMiddleware(next http.Handler) http.Handler {
+	if len(r.adminWebNetworks) == 0 {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if !r.isAdminWebClientAllowed(req) {
+			respondError(w, http.StatusForbidden, "Web UI access is not allowed from this network")
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
 func requestBodyLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		limit := int64(maxJSONBody)

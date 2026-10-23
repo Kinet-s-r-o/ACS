@@ -91,6 +91,66 @@ func TestClientIPOnlyTrustsConfiguredProxy(t *testing.T) {
 	}
 }
 
+func TestAdminWebClientAllowlist(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	router := &Router{adminWebNetworks: parseAllowedNetworks("192.0.2.0/24,198.51.100.10")}
+
+	allowed := httptest.NewRequest("POST", "/auth/login", nil)
+	allowed.RemoteAddr = "127.0.0.1:1234"
+	allowed.Header.Set("X-Forwarded-For", "192.0.2.25, 127.0.0.1")
+	if !router.isAdminWebClientAllowed(allowed) {
+		t.Fatal("allowed administrator network was rejected")
+	}
+
+	denied := httptest.NewRequest("POST", "/auth/login", nil)
+	denied.RemoteAddr = "127.0.0.1:1234"
+	denied.Header.Set("X-Forwarded-For", "203.0.113.25, 127.0.0.1")
+	if router.isAdminWebClientAllowed(denied) {
+		t.Fatal("unallowed administrator network was accepted")
+	}
+
+	spoofed := httptest.NewRequest("POST", "/auth/login", nil)
+	spoofed.RemoteAddr = "203.0.113.50:1234"
+	spoofed.Header.Set("X-Forwarded-For", "192.0.2.25")
+	if router.isAdminWebClientAllowed(spoofed) {
+		t.Fatal("untrusted client spoofed the administrator network")
+	}
+}
+
+func TestAdminWebClientAllowlistEmptyAllowsAll(t *testing.T) {
+	router := &Router{}
+	request := httptest.NewRequest("POST", "/auth/login", nil)
+	request.RemoteAddr = "203.0.113.50:1234"
+	if !router.isAdminWebClientAllowed(request) {
+		t.Fatal("empty administrator allowlist rejected a client")
+	}
+}
+
+func TestAdminWebAccessMiddlewareRejectsDisallowedClient(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	router := &Router{adminWebNetworks: parseAllowedNetworks("192.0.2.0/24")}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	handler := router.adminWebAccessMiddleware(next)
+
+	request := httptest.NewRequest("GET", "/auth/me", nil)
+	request.RemoteAddr = "127.0.0.1:1234"
+	request.Header.Set("X-Forwarded-For", "203.0.113.25, 127.0.0.1")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("disallowed client returned %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+
+	allowed := httptest.NewRequest("GET", "/auth/me", nil)
+	allowed.RemoteAddr = "127.0.0.1:1234"
+	allowed.Header.Set("X-Forwarded-For", "192.0.2.25, 127.0.0.1")
+	allowedRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(allowedRecorder, allowed)
+	if allowedRecorder.Code != http.StatusNoContent {
+		t.Fatalf("allowed client returned %d, want %d", allowedRecorder.Code, http.StatusNoContent)
+	}
+}
+
 func TestFirmwareTokenUsesCryptographicEntropy(t *testing.T) {
 	token, err := newFirmwareToken()
 	if err != nil {
