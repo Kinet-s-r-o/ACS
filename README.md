@@ -127,6 +127,30 @@ npm ci --include=dev
 npm run dev
 ```
 
+### Standalone Docker deployment
+
+For a deployment without Coolify, use the standalone Compose stack in
+`docker-compose.yml`. It runs PostgreSQL, SKYACS, the web container, and a
+Traefik reverse proxy. Traefik publishes ports 80 and 443, obtains the web and
+CWMP certificates through the HTTP-01 Let's Encrypt challenge, and stores the
+renewable ACME state in the `skyacs-traefik-letsencrypt` volume.
+
+Copy the dedicated deployment settings file and set public DNS names that point
+to the server:
+
+```bash
+cp .env.docker.example .env.docker
+# Edit .env.docker and replace the example secrets and domains.
+docker compose --env-file .env.docker -f docker-compose.yml config --quiet
+docker compose --env-file .env.docker -f docker-compose.yml up -d --build
+```
+
+The web console is available at `https://SKYACS_DOMAIN` and the CWMP endpoint
+at `https://CWMP_DOMAIN`. Allow inbound TCP 80 and 443 in the firewall. Do not
+publish PostgreSQL or the backend ports directly. Keep `.env.docker` private;
+it is intentionally ignored by Git. The existing `.env` and
+`docker-compose-coolify.yml` are separate and are not used by this stack.
+
 The frontend reads two build-time variables: `VITE_API_URL` (API base path) and `VITE_APP_NAME` (brand shown in the sidebar, login screen, and browser tab; defaults to `SkydashNET`). For a production build, write them to `frontend/.env.production` before `npm run build`:
 
 ```bash

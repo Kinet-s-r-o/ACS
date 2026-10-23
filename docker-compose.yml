@@ -1,0 +1,188 @@
+services:
+
+  skyacs-postgres:
+    image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
+    command: postgres -c shared_preload_libraries=timescaledb
+
+    environment:
+      POSTGRES_DB: skyacs
+      POSTGRES_USER: skyacs
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+
+    volumes:
+      - skyacs-postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U skyacs -d skyacs
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - backend
+
+
+  skyacs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+
+    restart: unless-stopped
+
+    environment:
+      TZ: ${TZ:-Europe/Bratislava}
+
+      PORT: "7547"
+      API_PORT: "7548"
+
+      CWMP_BIND_ADDR: 0.0.0.0
+      API_BIND_ADDR: 0.0.0.0
+
+      DB_HOST: skyacs-postgres
+      DB_PORT: "5432"
+      DB_NAME: skyacs
+      DB_USER: skyacs
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_SSLMODE: disable
+      DB_MAX_OPEN_CONNS: "50"
+      DB_MAX_IDLE_CONNS: "10"
+
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PARAMETER_ENCRYPTION_KEY: ${PARAMETER_ENCRYPTION_KEY:?PARAMETER_ENCRYPTION_KEY is required}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+
+      CORS_ALLOWED_ORIGINS: https://${SKYACS_DOMAIN:?SKYACS_DOMAIN is required}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+      CWMP_TRUSTED_PROXY_CIDRS: ${CWMP_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+
+      CWMP_USERNAME: ${CWMP_USERNAME:-}
+      CWMP_PASSWORD: ${CWMP_PASSWORD:-}
+      CWMP_ALLOWED_CIDRS: ${CWMP_ALLOWED_CIDRS:-}
+      CONNECTION_REQUEST_ALLOWED_CIDRS: ${CONNECTION_REQUEST_ALLOWED_CIDRS:-}
+
+      FIRMWARE_UPLOAD_DIR: /var/lib/skyacs/firmware
+      TEMPLATE_IMAGE_UPLOAD_DIR: /var/lib/skyacs/template-images
+      ALLOW_INSECURE_FIRMWARE_URL: "false"
+
+    volumes:
+      - skyacs-firmware:/var/lib/skyacs/firmware
+      - skyacs-template-images:/var/lib/skyacs/template-images
+
+    expose:
+      - "7547"
+      - "7548"
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - -q
+        - http://127.0.0.1:7548/health
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+    depends_on:
+      skyacs-postgres:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_APP_NAME: ${VITE_APP_NAME:-SKYACS}
+
+    restart: unless-stopped
+
+    expose:
+      - "8080"
+      - "7547"
+
+    depends_on:
+      skyacs:
+        condition: service_healthy
+
+    networks:
+      - backend
+      - proxy
+
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: skyacs-proxy
+
+      traefik.http.routers.skyacs-web.rule: Host(`${SKYACS_DOMAIN:?SKYACS_DOMAIN is required}`)
+      traefik.http.routers.skyacs-web.entrypoints: websecure
+      traefik.http.routers.skyacs-web.tls: "true"
+      traefik.http.routers.skyacs-web.tls.certresolver: letsencrypt
+      traefik.http.routers.skyacs-web.service: skyacs-web
+      traefik.http.services.skyacs-web.loadbalancer.server.port: "8080"
+
+      traefik.http.routers.skyacs-cwmp.rule: Host(`${CWMP_DOMAIN:?CWMP_DOMAIN is required}`)
+      traefik.http.routers.skyacs-cwmp.entrypoints: websecure
+      traefik.http.routers.skyacs-cwmp.tls: "true"
+      traefik.http.routers.skyacs-cwmp.tls.certresolver: letsencrypt
+      traefik.http.routers.skyacs-cwmp.service: skyacs-cwmp
+      traefik.http.services.skyacs-cwmp.loadbalancer.server.port: "7547"
+
+
+  traefik:
+    image: traefik:v3.5
+    restart: unless-stopped
+
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=skyacs-proxy
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:?LETSENCRYPT_EMAIL is required}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - skyacs-traefik-letsencrypt:/letsencrypt
+
+    depends_on:
+      web:
+        condition: service_started
+
+    networks:
+      - proxy
+
+
+volumes:
+  skyacs-postgres:
+  skyacs-firmware:
+  skyacs-template-images:
+  skyacs-traefik-letsencrypt:
+
+
+networks:
+  backend:
+    driver: bridge
+  proxy:
+    name: skyacs-proxy
+    driver: bridge
