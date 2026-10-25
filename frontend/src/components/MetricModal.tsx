@@ -72,42 +72,40 @@ const MetricModal: Component<MetricModalProps> = (props) => {
   };
 
   const initForm = (m: MetricDefinition | null) => {
-    if (m) {
-      setMetricForm({
-        name: m.name,
-        description: m.description,
-        device_type_match: m.device_type_match,
-        parameter_name: m.parameter_name,
-        unit: m.unit,
-        source: m.source,
-        active: m.active,
-        store_history: m.store_history !== false,
-        group: m.group,
-        color: m.color,
-        axis: m.axis,
-        transform: m.transform,
-        multiplier: m.multiplier,
-        unit_scale: m.unit_scale,
-        health: m.health,
-        health_order: m.health_order ?? 0,
-        health_size: m.health_size || 'small',
-        warn_threshold: m.warn_threshold,
-        critical_threshold: m.critical_threshold,
-        threshold_direction: m.threshold_direction,
-        display_format: m.display_format,
-        gauge_animated: m.gauge_animated,
-        gauge_min: m.gauge_min ?? null,
-        gauge_max: m.gauge_max ?? null,
-        gauge_arc: m.gauge_arc || '270',
-        gauge_pointer: m.gauge_pointer ?? true,
-        gauge_style: m.gauge_style || 'basic',
-        thresholds: m.thresholds || [],
-        chart_type: m.chart_type || 'line',
-      });
-    } else {
-      setMetricForm(EMPTY_METRIC);
-    }
+    const next = m ? {
+      name: m.name,
+      description: m.description,
+      device_type_match: m.device_type_match,
+      parameter_name: m.parameter_name,
+      unit: m.unit,
+      source: m.source,
+      active: m.active,
+      store_history: m.store_history !== false,
+      group: m.group,
+      color: m.color,
+      axis: m.axis,
+      transform: m.transform,
+      multiplier: m.multiplier,
+      unit_scale: m.unit_scale,
+      health: m.health,
+      health_order: m.health_order ?? 0,
+      health_size: m.health_size || 'small',
+      warn_threshold: m.warn_threshold,
+      critical_threshold: m.critical_threshold,
+      threshold_direction: m.threshold_direction,
+      display_format: m.display_format,
+      gauge_animated: m.gauge_animated,
+      gauge_min: m.gauge_min ?? null,
+      gauge_max: m.gauge_max ?? null,
+      gauge_arc: m.gauge_arc || '270',
+      gauge_pointer: m.gauge_pointer ?? true,
+      gauge_style: m.gauge_style || 'basic',
+      thresholds: m.thresholds || [],
+      chart_type: m.chart_type || 'line',
+    } : { ...EMPTY_METRIC };
+    setMetricForm(next);
     setMetricTab('metric');
+    return next;
   };
 
   // The modal stays mounted while the selected metric changes. Read both
@@ -118,9 +116,10 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     const metric = props.editingMetric;
     const copying = props.copyingMetric;
     if (open) {
-      initForm(metric || copying || null);
-      if (!metric && copying) setMetricForm(current => ({ ...current, name: `${copying.name} copy` }));
-      setInitialSnapshot(JSON.stringify(metricForm()));
+      const initial = initForm(metric || copying || null);
+      const next = !metric && copying ? { ...initial, name: `${copying.name} copy` } : initial;
+      if (next !== initial) setMetricForm(next);
+      setInitialSnapshot(JSON.stringify(next));
     }
   });
 
