@@ -27,11 +27,11 @@ const Pagination: Component<PaginationProps> = (props) => {
     <Show when={props.totalItems > 0 || (props.filters && Object.keys(props.filters).length > 0)}>
       <div class="table-footer text-sm">
         <div class="table-footer-meta">
-          <Show when={props.filters && props.onClearFilters && props.onRemoveFilter}>
-            <TableFilterSummary filters={props.filters!} onClear={props.onClearFilters!} onRemove={props.onRemoveFilter!} />
-          </Show>
           <Show when={props.totalItems > 0}>
             <p class="text-muted">Showing {start()} - {end()} of {props.totalItems}</p>
+          </Show>
+          <Show when={props.filters && props.onClearFilters && props.onRemoveFilter}>
+            <TableFilterSummary filters={props.filters!} onClear={props.onClearFilters!} onRemove={props.onRemoveFilter!} />
           </Show>
         </div>
         <Show when={props.totalItems > 0}>
