@@ -1082,9 +1082,9 @@ const Provisioning: Component = () => {
                 <button onClick={backToTemplates} class="icon-button" aria-label="Back to templates">
                   <ChevronLeft size={16} />
                 </button>
-                <div class="h-12 w-16 shrink-0 overflow-hidden rounded border border-subtle bg-elevated grid place-items-center">
+                <div class="h-16 w-24 shrink-0 overflow-hidden rounded border border-subtle bg-elevated grid place-items-center p-1">
                   <Show when={templateImageUrl()} fallback={<ImageIcon size={18} class="text-muted" />}>
-                    <img src={templateImageUrl()!} alt={`Device image for ${selectedTemplate()!.name}`} class="h-auto w-auto max-h-full max-w-full object-contain" />
+                    <img src={templateImageUrl()!} alt={`Device image for ${selectedTemplate()!.name}`} class="h-full w-full object-contain" />
                   </Show>
                 </div>
                 <div>
