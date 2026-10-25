@@ -15,6 +15,7 @@ import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import { formatDateTime, formatRelativeTime } from '../lib/dateTime';
+import { formatUptime } from '../lib/health';
 
 interface ColumnConfig {
   id: string;
@@ -30,10 +31,11 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'product_class', label: 'Product Class', visible: false, order: 3 },
   { id: 'ip_address', label: 'IP Address', visible: true, order: 4 },
   { id: 'rx_power', label: 'RX Power', visible: true, order: 5 },
-  { id: 'ppp_username', label: 'PPP Username', visible: false, order: 6 },
-  { id: 'status', label: 'Status', visible: true, order: 7 },
-  { id: 'last_inform', label: 'Last Inform', visible: true, order: 8 },
-  { id: 'tags', label: 'Tags', visible: true, order: 9 },
+  { id: 'uptime', label: 'Uptime', visible: true, order: 6 },
+  { id: 'ppp_username', label: 'PPP Username', visible: false, order: 7 },
+  { id: 'status', label: 'Status', visible: true, order: 8 },
+  { id: 'last_inform', label: 'Last Inform', visible: true, order: 9 },
+  { id: 'tags', label: 'Tags', visible: true, order: 10 },
 ];
 
 const STORAGE_KEY = 'acs_device_columns';
@@ -154,6 +156,18 @@ const Devices: Component = () => {
     return param?.value || '-';
   };
 
+  const getUptimeSeconds = (device: Device): number | null => {
+    const value = device.parameters?.find((parameter) => parameter.name === 'InternetGatewayDevice.DeviceInfo.UpTime')?.value;
+    if (value === undefined || value === '') return null;
+    const seconds = Number(value);
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+  };
+
+  const getUptime = (device: Device) => {
+    const seconds = getUptimeSeconds(device);
+    return seconds === null ? '-' : formatUptime(seconds);
+  };
+
   const getCellValue = (device: Device, columnId: string) => {
     switch (columnId) {
       case 'serial_number':
@@ -173,6 +187,8 @@ const Devices: Component = () => {
       case 'rx_power':
         const rx = getRxPower(device);
         return <span class={`font-mono text-sm ${rx.color}`}>{rx.value}</span>;
+      case 'uptime':
+        return <span class="font-mono text-sm text-secondary">{getUptime(device)}</span>;
       case 'ppp_username':
         return <span class="text-secondary text-sm font-mono">{getPppUsername(device)}</span>;
       case 'status':
@@ -205,6 +221,10 @@ const Devices: Component = () => {
       case 'rx_power': {
         const rx = getRxPower(device);
         return rx.value === '-' ? '' : rx.value;
+      }
+      case 'uptime': {
+        const uptime = getUptimeSeconds(device);
+        return uptime === null ? '' : String(uptime);
       }
       case 'ppp_username': return getPppUsername(device) === '-' ? '' : getPppUsername(device);
       case 'status': return device.online ? 'Online' : 'Offline';
@@ -258,6 +278,10 @@ const Devices: Component = () => {
         case 'ip_address':
           aVal = a.ip_address || '';
           bVal = b.ip_address || '';
+          break;
+        case 'uptime':
+          aVal = getUptimeSeconds(a) ?? -1;
+          bVal = getUptimeSeconds(b) ?? -1;
           break;
         case 'status':
           aVal = a.online ? 1 : 0;
@@ -376,7 +400,7 @@ const Devices: Component = () => {
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'status', 'last_inform', 'tags'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'uptime', 'status', 'last_inform', 'tags'].includes(col.id);
                     const currentSort = sortBy();
                     const isSorted = currentSort?.column === col.id;
                     
