@@ -445,11 +445,11 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 
 	// Aggregate data
 	rxPowerRanges := map[string]int{
-		"Sangat Bagus (-15 to -23)": 0,
-		"Normal (-23 to -25)":       0,
-		"Buruk (-25 to -29)":        0,
-		"Kritis (< -29)":            0,
-		"N/A":                       0,
+		"Excellent (-15 to -23)": 0,
+		"Normal (-23 to -25)":    0,
+		"Poor (-25 to -29)":      0,
+		"Critical (< -29)":       0,
+		"N/A":                    0,
 	}
 
 	tempRanges := map[string]int{
@@ -467,11 +467,11 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 	}
 
 	uptimeRanges := map[string]int{
-		"< 1 jam":   0,
-		"1-24 jam":  0,
-		"1-7 hari":  0,
-		"1-30 hari": 0,
-		"> 1 bulan": 0,
+		"< 1 hour":   0,
+		"1-24 hours": 0,
+		"1-7 days":   0,
+		"1-30 days":  0,
+		"> 1 month":  0,
 	}
 
 	lastInformRanges := map[string]int{
@@ -591,13 +591,13 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 		// Count RX Power
 		if deviceRxPower != -999 {
 			if deviceRxPower >= -23 && deviceRxPower <= -15 {
-				rxPowerRanges["Sangat Bagus (-15 to -23)"]++
+				rxPowerRanges["Excellent (-15 to -23)"]++
 			} else if deviceRxPower >= -25 && deviceRxPower < -23 {
 				rxPowerRanges["Normal (-23 to -25)"]++
 			} else if deviceRxPower >= -29 && deviceRxPower < -25 {
-				rxPowerRanges["Buruk (-25 to -29)"]++
+				rxPowerRanges["Poor (-25 to -29)"]++
 			} else if deviceRxPower < -29 {
-				rxPowerRanges["Kritis (< -29)"]++
+				rxPowerRanges["Critical (< -29)"]++
 			}
 		} else {
 			rxPowerRanges["N/A"]++
@@ -622,15 +622,15 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 		if deviceUptime >= 0 {
 			hours := deviceUptime / 3600
 			if hours < 1 {
-				uptimeRanges["< 1 jam"]++
+				uptimeRanges["< 1 hour"]++
 			} else if hours < 24 {
-				uptimeRanges["1-24 jam"]++
+				uptimeRanges["1-24 hours"]++
 			} else if hours < 168 {
-				uptimeRanges["1-7 hari"]++
+				uptimeRanges["1-7 days"]++
 			} else if hours < 720 {
-				uptimeRanges["1-30 hari"]++
+				uptimeRanges["1-30 days"]++
 			} else {
-				uptimeRanges["> 1 bulan"]++
+				uptimeRanges["> 1 month"]++
 			}
 		}
 
