@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show, For, onCleanup } from 'solid-js';
 import { List, X } from 'lucide-solid';
+import ClearFiltersButton from './ClearFiltersButton';
 
 export interface ColumnOption {
   id: string;
@@ -15,6 +16,9 @@ interface ColumnVisibilityProps {
   onToggle: (id: string) => void;
   /** Dropdown title. Defaults to the Slovak "Stĺpce". */
   title?: string;
+  /** Optional table-level filter reset shown beside the column visibility control. */
+  activeFilterCount?: number;
+  onClearFilters?: () => void;
 }
 
 const DROPDOWN_WIDTH = 220;
@@ -53,16 +57,21 @@ const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
 
   return (
     <>
-      <button
-        type="button"
-        class="column-toggle"
-        ref={btnRef}
-        onClick={(e) => { e.stopPropagation(); toggle(); }}
-        aria-label="Stĺpce"
-        aria-expanded={open()}
-      >
-        <List size={14} />
-      </button>
+      <div class="table-header-controls">
+        <Show when={props.onClearFilters && props.activeFilterCount !== undefined}>
+          <ClearFiltersButton activeFilterCount={props.activeFilterCount ?? 0} onClear={props.onClearFilters!} />
+        </Show>
+        <button
+          type="button"
+          class="column-toggle"
+          ref={btnRef}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          aria-label="Stĺpce"
+          aria-expanded={open()}
+        >
+          <List size={14} />
+        </button>
+      </div>
       <Show when={open()}>
         <div
           class="column-dropdown"

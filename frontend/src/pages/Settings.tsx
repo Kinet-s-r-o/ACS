@@ -301,7 +301,7 @@ const Settings: Component = () => {
                   <Show when={isFullAccess()}>
                     <th class="text-right px-3 py-2.5 font-semibold text-primary"></th>
                   </Show>
-                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
                 </tr>
               </thead>
               <tbody>

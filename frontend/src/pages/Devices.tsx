@@ -421,7 +421,7 @@ const Devices: Component = () => {
                     );
                   }}
                 </For>
-                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggleColumn} /></th>
+                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggleColumn} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
               </tr>
             </thead>
             <tbody>

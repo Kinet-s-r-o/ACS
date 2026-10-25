@@ -188,7 +188,7 @@ const UsersPage: Component = () => {
                   </th>
                 </Show>
                 <th class="text-right py-2 text-xs text-muted font-medium">Actions</th>
-                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
               </tr>
             </thead>
             <tbody>

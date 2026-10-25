@@ -1178,7 +1178,7 @@ const Provisioning: Component = () => {
                       )}
                     </For>
                     <th class="py-2 text-right text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
-                    <th class="py-2 pr-2"><ColumnVisibility columns={provColumns} onToggle={toggleProvColumn} /></th>
+                    <th class="py-2 pr-2"><ColumnVisibility columns={provColumns} onToggle={toggleProvColumn} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
                   </tr>
                 </thead>
                 <tbody>

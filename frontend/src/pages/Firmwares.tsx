@@ -267,7 +267,7 @@ const Firmwares: Component = () => {
                   </th>
                 </Show>
                 <th class="px-4 py-3 text-left text-xs font-medium text-muted">Actions</th>
-                <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
               </tr>
             </thead>
             <tbody>
