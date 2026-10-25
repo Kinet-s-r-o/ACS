@@ -64,7 +64,7 @@ const DeviceTagPicker: Component<DeviceTagPickerProps> = (props) => {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-1.5 min-w-36">
+    <div class="flex flex-wrap items-center gap-1.5 min-w-0">
       <For each={selected()}>{id => {
         const tag = () => definition(id);
         return <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-elevated text-primary whitespace-nowrap"><span class="tag-color-swatch" data-dynamic-style="tag-color" style={{ '--tag-color': tag()?.color || '#64748b' } as any} />{tag()?.name || id}</span>;
