@@ -5,6 +5,7 @@ import { X } from 'lucide-solid';
 interface DialogProps {
   title: string;
   description?: string;
+  headerBadge?: JSX.Element;
   actions?: JSX.Element;
   size?: 'small' | 'medium' | 'large';
   closeLabel?: string;
@@ -86,10 +87,11 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
           tabindex="-1"
         >
           <header class="dialog-header">
-            <div>
+            <div class="dialog-header-content">
               <h2 id={titleId}>{props.title}</h2>
               {props.description && <p id={descriptionId}>{props.description}</p>}
             </div>
+            {props.headerBadge}
             <button type="button" class="icon-button" onClick={props.onClose} aria-label={props.closeLabel ?? 'Close dialog'}>
               <X size={17} />
             </button>

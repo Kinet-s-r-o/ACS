@@ -365,6 +365,7 @@ const Settings: Component = () => {
           title={editingMetric() ? `Edit metric: ${editingMetric()!.name}` : 'New metric definition'}
           description="Defines a CWMP parameter to collect as a time-series metric. Device match uses glob patterns (e.g. 'Huawei/*'). Source: passive = from Inform, active = polled via GPV, universal = both."
           size="large"
+          headerBadge={<Show when={metricFormDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>}
           onClose={() => void closeMetricModal()}
           actions={
             <>
@@ -377,7 +378,6 @@ const Settings: Component = () => {
           }
         >
           <div class="space-y-4">
-            <Show when={metricFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <div class="flex gap-1 border-b border-zinc-800 pb-2">
               <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'}`}>Metric</button>
               <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'}`}>Health</button>
