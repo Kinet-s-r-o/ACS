@@ -15,7 +15,7 @@ import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
-import { createPersistedSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
 
 const statusBadge = (status: string) => {
@@ -37,7 +37,7 @@ const Tasks: Component = () => {
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.tasks');
   const [selectedTask, setSelectedTask] = createSignal<GlobalTask | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tasks', {});
   const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const [taskPage, setTaskPage] = createSignal(0);

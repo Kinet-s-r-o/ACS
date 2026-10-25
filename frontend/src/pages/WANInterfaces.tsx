@@ -9,7 +9,7 @@ import ColumnFilter from '../components/ColumnFilter';
 import ClearFiltersButton from '../components/ClearFiltersButton';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { statusBadgeClass } from '../lib/lanFields';
-import { createPersistedSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 
 const cpeWebUiUrl = (address: string): string | null => {
   const value = address.trim();
@@ -25,7 +25,7 @@ const cpeWebUiUrl = (address: string): string | null => {
 const WANInterfaces: Component = () => {
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.wan-interfaces', {});
   const [interfaces, { refetch }] = createResource(api.getWANInterfaces);
 
   const filteredInterfaces = createMemo(() => {

@@ -14,7 +14,7 @@ import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
-import { createPersistedSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
 
 const Firmwares: Component = () => {
@@ -23,7 +23,7 @@ const Firmwares: Component = () => {
   const [firmwares, { refetch }] = createResource(() => api.getFirmwares());
   const [uploading, setUploading] = createSignal(false);
   const [validation, setValidation] = createSignal<{ file?: string; version?: string }>({});
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.firmwares', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.firmwares');
   const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));

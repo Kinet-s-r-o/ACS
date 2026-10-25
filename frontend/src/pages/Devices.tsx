@@ -13,7 +13,7 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
-import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import { formatDateTime, formatRelativeTime } from '../lib/dateTime';
 
 interface ColumnConfig {
@@ -66,7 +66,7 @@ const Devices: Component = () => {
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [summoningAll, setSummoningAll] = createSignal(false);
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
   const { isFullAccess, hasPermission } = useAuth();
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);

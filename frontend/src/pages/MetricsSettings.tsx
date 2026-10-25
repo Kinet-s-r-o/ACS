@@ -14,7 +14,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
-import { createPersistedSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 
 const CHART_TYPE_GROUPS: { category: string; types: typeof ECHARTS_TYPES }[] = (() => {
   const map = new Map<string, typeof ECHARTS_TYPES>();
@@ -69,7 +69,7 @@ const MetricsSettings: Component = () => {
   const [showMetricModal, setShowMetricModal] = createSignal(false);
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.metrics', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.metrics');
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
   const { columns, isVisible, toggle } = useColumnVisibility('metrics', [

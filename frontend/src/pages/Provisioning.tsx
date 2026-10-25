@@ -14,7 +14,7 @@ import { usePageSize } from '../lib/usePageSize';
 import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
-import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 interface ProvColumnConfig {
@@ -247,7 +247,7 @@ const Provisioning: Component = () => {
     return [...defaultProvColumns];
   })());
   const [provDraggedRow, setProvDraggedRow] = createSignal<number | null>(null);
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.provisioning', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.provisioning.rules');
 
   const getFilterValue = (rule: ProvisioningRule, colId: string): string => {

@@ -11,6 +11,26 @@ export const createPersistedSignal = (key: string, initialValue = '') => {
   return [value, setPersistedValue] as const;
 };
 
+export const createPersistedJsonSignal = <T>(key: string, initialValue: T) => {
+  let savedValue = initialValue;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) savedValue = JSON.parse(raw) as T;
+  } catch { /* Storage can be unavailable or contain malformed data. */ }
+
+  const [value, setValue] = createSignal<T>(savedValue);
+  const setPersistedValue = (nextValue: T | ((previous: T) => T)) => {
+    setValue((previous) => {
+      const resolved = typeof nextValue === 'function'
+        ? (nextValue as (previous: T) => T)(previous)
+        : nextValue;
+      try { localStorage.setItem(key, JSON.stringify(resolved)); } catch { /* Storage can be unavailable in private browsing. */ }
+      return resolved;
+    });
+  };
+  return [value, setPersistedValue] as const;
+};
+
 export const readMigratedStorageValue = (storage: Storage, key: string, legacyKey: string): string | null => {
   try {
     const current = storage.getItem(key);

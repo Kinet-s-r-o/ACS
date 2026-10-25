@@ -11,6 +11,7 @@ import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
+import { createPersistedJsonSignal } from '../lib/storage';
 
 const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> = {
   name: '',
@@ -60,7 +61,7 @@ const Settings: Component = () => {
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
   const [metricInitialSnapshot, setMetricInitialSnapshot] = createSignal('');
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
-  const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.settings', {});
   const { columns, isVisible, toggle } = useColumnVisibility('settings', [
     { id: 'name', label: 'Name', visible: true },
     { id: 'parameter_name', label: 'Parameter', visible: true },
