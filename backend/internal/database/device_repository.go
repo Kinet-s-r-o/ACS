@@ -106,7 +106,7 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 
 	var devices []*models.Device
 	err := r.db.WithContext(ctx).
-		Preload("Parameters", "name LIKE ?", "%RXPower%").
+		Preload("Parameters", "name LIKE ? OR name = ?", "%RXPower%", "InternetGatewayDevice.DeviceInfo.UpTime").
 		Order("last_inform DESC NULLS LAST").
 		Limit(limit).
 		Offset(offset).
