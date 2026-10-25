@@ -14,7 +14,6 @@ const MetricChart = lazy(() => import('../components/MetricChart'));
 const InterfaceMetricChart = lazy(() => import('../components/InterfaceMetricChart'));
 const IperfResult = lazy(() => import('../components/IperfResult'));
 import ColumnFilter from '../components/ColumnFilter';
-import ClearFiltersButton from '../components/ClearFiltersButton';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
@@ -2859,7 +2858,7 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="uptime" label="Uptime" active={hostColumnFilters()['uptime'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['uptime'] = s; else delete n['uptime']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <th class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} activeFilterCount={Object.keys(hostColumnFilters()).length} onClearFilters={() => setHostColumnFilters({})} /></th>
+                        <th class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} /></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2912,7 +2911,7 @@ const DeviceDetail: Component = () => {
             </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
-                <h2 class="text-sm font-medium text-secondary flex items-center gap-2">CWMP tasks ({tasks()?.length || 0})<ClearFiltersButton activeFilterCount={Object.keys(taskColumnFilters()).length} onClear={() => setTaskColumnFilters({})} /></h2>
+                <h2 class="text-sm font-medium text-secondary">CWMP tasks ({tasks()?.length || 0})</h2>
                 <div class="relative">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                   <input type="text" value={taskSearch()} onInput={(e) => setTaskSearch(e.currentTarget.value)} placeholder="Search tasks…" class="input pl-9! w-48 text-sm" />
@@ -2993,7 +2992,7 @@ const DeviceDetail: Component = () => {
                   </table>
                 </div>
                 <div class="px-4 py-3">
-                  <Pagination page={taskPage()} totalPages={taskTotalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="device_tasks" onPageSizeChange={handleTaskPageSizeChange} />
+                  <Pagination page={taskPage()} totalPages={taskTotalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="device_tasks" onPageSizeChange={handleTaskPageSizeChange} filters={taskColumnFilters()} onClearFilters={() => { setTaskColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setTaskColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} />
                 </div>
               </Show>
               </Show>
@@ -3062,7 +3061,6 @@ const DeviceDetail: Component = () => {
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
                 <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
-                  <ClearFiltersButton activeFilterCount={Object.keys(deviceFaultColumnFilters()).length} onClear={() => setDeviceFaultColumnFilters({})} />
                   <AlertTriangle size={14} />
                   CWMP Faults ({deviceFaults()?.length || 0})
                 </h2>
@@ -3213,7 +3211,7 @@ const DeviceDetail: Component = () => {
                     </table>
                   </div>
                   <div class="px-4 py-3">
-                    <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={filteredDeviceFaults().length} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} />
+                    <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={filteredDeviceFaults().length} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setDeviceFaultColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
                   </div>
                 </Show>
               }>
@@ -3281,7 +3279,7 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="value" label="Value" active={paramColumnFilters()['value'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['value'] = s; else delete n['value']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <th class="px-2 py-2"><ColumnVisibility columns={paramColumns} onToggle={toggleParamColumn} activeFilterCount={Object.keys(paramColumnFilters()).length} onClearFilters={() => setParamColumnFilters({})} /></th>
+                        <th class="px-2 py-2"><ColumnVisibility columns={paramColumns} onToggle={toggleParamColumn} /></th>
                       </tr>
                     </thead>
                     <tbody>

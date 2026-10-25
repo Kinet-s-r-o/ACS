@@ -315,9 +315,17 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 /* Column visibility */
 .column-toggle { display: grid; place-items: center; width: 24px; height: 24px; margin-left: auto; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
 .column-toggle:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
-.table-header-controls { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; }
-.clear-filters-button { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 3px 7px; color: rgb(var(--accent-hover)); background: rgb(var(--accent) / .08); border: 1px solid rgb(var(--accent) / .28); border-radius: 4px; font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; }
-.clear-filters-button:hover { color: rgb(var(--text-primary)); background: rgb(var(--accent) / .16); border-color: rgb(var(--accent) / .5); }
+.table-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.table-filter-summary { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.table-filter-clear { display: grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.table-filter-clear:hover { color: rgb(var(--accent-hover)); background: rgb(var(--accent) / .1); }
+.table-filter-clear-icon { position: relative; display: inline-flex; }
+.table-filter-clear-icon > svg:last-child { position: absolute; right: -3px; bottom: -2px; stroke-width: 2.5; }
+.table-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.table-filter-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; padding: 5px 6px 5px 9px; color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); border-radius: 999px; font-size: 11px; line-height: 1; white-space: nowrap; }
+.table-filter-chip > span { overflow: hidden; text-overflow: ellipsis; }
+.table-filter-chip button { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
+.table-filter-chip button:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-hover)); }
 .column-dropdown { z-index: 50; width: 220px; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
 .column-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
 .column-dropdown-title { font-size: 11px; font-weight: 600; color: rgb(var(--text-primary)); }

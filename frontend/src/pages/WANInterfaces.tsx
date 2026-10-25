@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
-import ClearFiltersButton from '../components/ClearFiltersButton';
+import TableFilterSummary from '../components/TableFilterSummary';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { statusBadgeClass } from '../lib/lanFields';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
@@ -76,7 +76,6 @@ const WANInterfaces: Component = () => {
           <div class="flex items-center gap-2 text-sm text-secondary">
             <Network size={16} />
             <span>{sortedInterfaces().length} interface{sortedInterfaces().length === 1 ? '' : 's'}</span>
-            <ClearFiltersButton activeFilterCount={Object.keys(columnFilters()).length} onClear={() => setColumnFilters({})} />
           </div>
           <label class="relative block w-full sm:w-72">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
@@ -151,6 +150,7 @@ const WANInterfaces: Component = () => {
                     </For>
                   </tbody>
                 </table>
+                <div class="table-footer px-4 py-3"><TableFilterSummary filters={columnFilters()} onClear={() => setColumnFilters({})} onRemove={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} /></div>
               </div>
             </div>
           </Show>

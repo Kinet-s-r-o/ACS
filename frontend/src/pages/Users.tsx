@@ -188,7 +188,7 @@ const UsersPage: Component = () => {
                   </th>
                 </Show>
                 <th class="text-right py-2 text-xs text-muted font-medium">Actions</th>
-                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
               </tr>
             </thead>
             <tbody>
@@ -225,7 +225,7 @@ const UsersPage: Component = () => {
             </tbody>
           </table></div>
           <div class="mt-3">
-            <Pagination page={userPage()} totalPages={userTotalPages()} totalItems={filteredUsers().length} pageSize={pageSize()} onPageChange={setUserPage} storageKey="users" onPageSizeChange={handlePageSizeChange} />
+            <Pagination page={userPage()} totalPages={userTotalPages()} totalItems={filteredUsers().length} pageSize={pageSize()} onPageChange={setUserPage} storageKey="users" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setUserPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setUserPage(0); }} />
           </div>
         </Show>
         <Show when={!users.loading && !users.error && (users()?.length ?? 0) === 0}><EmptyState compact title="No additional operators exist" description="Create a named operator account instead of sharing administrative credentials." action={<button type="button" class="btn btn-primary" onClick={openCreateUser}>Add operator</button>} /></Show>

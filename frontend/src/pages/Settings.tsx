@@ -8,6 +8,7 @@ import ColorSwatch from '../components/ColorSwatch';
 import { useFeedback } from '../components/Feedback';
 import { useAuth } from '../lib/auth';
 import ColumnFilter from '../components/ColumnFilter';
+import TableFilterSummary from '../components/TableFilterSummary';
 import ColumnVisibility from '../components/ColumnVisibility';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
@@ -302,7 +303,7 @@ const Settings: Component = () => {
                   <Show when={isFullAccess()}>
                     <th class="text-right px-3 py-2.5 font-semibold text-primary"></th>
                   </Show>
-                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
               <tbody>
@@ -356,6 +357,7 @@ const Settings: Component = () => {
                 </For>
               </tbody>
             </table>
+            <div class="table-footer px-4 py-3"><TableFilterSummary filters={columnFilters()} onClear={() => setColumnFilters({})} onRemove={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} /></div>
           </div>
         </Show>
       </div>

@@ -267,7 +267,7 @@ const Firmwares: Component = () => {
                   </th>
                 </Show>
                 <th class="px-4 py-3 text-left text-xs font-medium text-muted">Actions</th>
-                <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
               </tr>
             </thead>
             <tbody>
@@ -295,7 +295,7 @@ const Firmwares: Component = () => {
             </tbody>
           </table></div>
           <div class="px-4 py-3">
-            <Pagination page={fwPage()} totalPages={fwTotalPages()} totalItems={filteredFirmwares().length} pageSize={pageSize()} onPageChange={setFwPage} storageKey="firmwares" onPageSizeChange={handlePageSizeChange} />
+            <Pagination page={fwPage()} totalPages={fwTotalPages()} totalItems={filteredFirmwares().length} pageSize={pageSize()} onPageChange={setFwPage} storageKey="firmwares" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setFwPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFwPage(0); }} />
           </div>
         </Show>
       </div>

@@ -265,7 +265,7 @@ const Faults: Component = () => {
                       </th>
                     </Show>
                     <th class="text-right px-4 py-3 text-xs font-medium text-muted">Actions</th>
-                    <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                    <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -343,7 +343,7 @@ const Faults: Component = () => {
               </table>
             </div>
             <div class="px-4 py-3">
-              <Pagination page={faultPage()} totalPages={faultTotalPages()} totalItems={filteredFaults().length} pageSize={pageSize()} onPageChange={setFaultPage} storageKey="faults" onPageSizeChange={handlePageSizeChange} />
+              <Pagination page={faultPage()} totalPages={faultTotalPages()} totalItems={filteredFaults().length} pageSize={pageSize()} onPageChange={setFaultPage} storageKey="faults" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
             </div>
           </Show>
         </Show>

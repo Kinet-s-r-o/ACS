@@ -421,7 +421,7 @@ const Devices: Component = () => {
                     );
                   }}
                 </For>
-                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggleColumn} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggleColumn} /></th>
               </tr>
             </thead>
             <tbody>
@@ -466,7 +466,7 @@ const Devices: Component = () => {
         </div>
       </div></Show>
 
-      <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} />
+      <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => setColumnFilters({})} onRemoveFilter={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} />
     </div>
   );
 };

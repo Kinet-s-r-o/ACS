@@ -1178,7 +1178,7 @@ const Provisioning: Component = () => {
                       )}
                     </For>
                     <th class="py-2 text-right text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
-                    <th class="py-2 pr-2"><ColumnVisibility columns={provColumns} onToggle={toggleProvColumn} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                    <th class="py-2 pr-2"><ColumnVisibility columns={provColumns} onToggle={toggleProvColumn} /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1272,7 +1272,7 @@ const Provisioning: Component = () => {
               </table>
             </div>
             <div class="px-4 py-3">
-              <Pagination page={provPage()} totalPages={provTotalPages()} totalItems={filteredProvRules().length} pageSize={pageSize()} onPageChange={setProvPage} storageKey="provisioning" onPageSizeChange={handlePageSizeChange} />
+              <Pagination page={provPage()} totalPages={provTotalPages()} totalItems={filteredProvRules().length} pageSize={pageSize()} onPageChange={setProvPage} storageKey="provisioning" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setProvPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setProvPage(0); }} />
             </div>
           </Show>
 

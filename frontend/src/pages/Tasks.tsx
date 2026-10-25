@@ -6,7 +6,6 @@ import { api, type GlobalTask } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import ColumnFilter from '../components/ColumnFilter';
-import ClearFiltersButton from '../components/ClearFiltersButton';
 import Pagination from '../components/Pagination';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
@@ -146,7 +145,7 @@ const Tasks: Component = () => {
 
       <div class="card overflow-hidden">
         <div class="p-5 border-b border-subtle flex items-center justify-between">
-            <h2 class="text-sm font-medium text-secondary flex items-center gap-2">Task History ({filteredTasks().length})<ClearFiltersButton activeFilterCount={Object.keys(columnFilters()).length} onClear={() => { setColumnFilters({}); setTaskPage(0); }} /></h2>
+            <h2 class="text-sm font-medium text-secondary">Task History ({filteredTasks().length})</h2>
           <div class="relative">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input type="text" value={searchQuery()} onInput={(event) => { setSearchQuery(event.currentTarget.value); setTaskPage(0); }} placeholder="Search tasks…" class="input pl-9! w-56 text-sm" />
@@ -193,7 +192,7 @@ const Tasks: Component = () => {
                   </tbody>
                 </table>
               </div>
-              <div class="px-4 py-3"><Pagination page={taskPage()} totalPages={totalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="global_tasks" onPageSizeChange={(size) => { changeTaskPageSize(size); setTaskPage(0); }} /></div>
+              <div class="px-4 py-3"><Pagination page={taskPage()} totalPages={totalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="global_tasks" onPageSizeChange={(size) => { changeTaskPageSize(size); setTaskPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} /></div>
             </Show>
           </Show>
         </Show>

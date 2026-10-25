@@ -346,7 +346,7 @@ const MetricsSettings: Component = () => {
                   <Show when={isFullAccess()}>
                     <th class="text-right px-3 py-2.5 font-semibold text-primary"></th>
                   </Show>
-                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} activeFilterCount={Object.keys(columnFilters()).length} onClearFilters={() => setColumnFilters({})} /></th>
+                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
               <tbody>
@@ -405,7 +405,7 @@ const MetricsSettings: Component = () => {
             </table>
           </div>
           <div class="mt-3">
-            <Pagination page={metricPage()} totalPages={metricTotalPages()} totalItems={filteredMetrics().length} pageSize={pageSize()} onPageChange={setMetricPage} storageKey="metrics" onPageSizeChange={handlePageSizeChange} />
+            <Pagination page={metricPage()} totalPages={metricTotalPages()} totalItems={filteredMetrics().length} pageSize={pageSize()} onPageChange={setMetricPage} storageKey="metrics" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setMetricPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setMetricPage(0); }} />
           </div>
         </Show>
       </div>
