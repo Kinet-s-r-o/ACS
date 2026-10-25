@@ -6,7 +6,7 @@ import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { api } from '../lib/api';
 import ColumnFilter from '../components/ColumnFilter';
-import TableFilterSummary from '../components/TableFilterSummary';
+import Pagination from '../components/Pagination';
 import ColumnVisibility from '../components/ColumnVisibility';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
@@ -14,11 +14,14 @@ import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
+import { usePageSize } from '../lib/usePageSize';
 
 const Security: Component = () => {
   const { confirm, notify } = useFeedback();
   const [overview, { refetch: refetchOverview }] = createResource(() => api.getSecurityOverview());
-  const [audit, { refetch: refetchAudit }] = createResource(() => api.getAuditLogs());
+  const [auditPage, setAuditPage] = createSignal(0);
+  const { pageSize: auditPageSize, changePageSize: changeAuditPageSize } = usePageSize('security_audit', 20);
+  const [audit, { refetch: refetchAudit }] = createResource(() => ({ limit: auditPageSize(), offset: auditPage() * auditPageSize() }), ({ limit, offset }) => api.getAuditLogs(limit, offset));
   const [blocked, { refetch: refetchBlocked }] = createResource(() => api.getBlockedDevices());
   const [serial, setSerial] = createSignal('');
   const [reason, setReason] = createSignal('');
@@ -28,7 +31,16 @@ const Security: Component = () => {
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.security', {});
   const [auditSearch, setAuditSearch] = createPersistedSignal('acs.search.security.audit');
   const [auditSort, setAuditSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
-  const handleAuditSort = (column: string) => setAuditSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const handleAuditSort = (column: string) => { setAuditPage(0); setAuditSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
+  const updateAuditFilter = (columnId: string, state: ColumnFilterState | null) => {
+    setAuditPage(0);
+    setColumnFilters((previous) => {
+      const next = { ...previous };
+      if (state) next[columnId] = state;
+      else delete next[columnId];
+      return next;
+    });
+  };
   const { columns, isVisible, toggle } = useColumnVisibility('security', [
     { id: 'created_at', label: 'Time', visible: true },
     { id: 'username', label: 'Actor', visible: true },
@@ -125,22 +137,22 @@ const Security: Component = () => {
         </section>
 
         <section class="data-panel overflow-hidden">
-          <div class="table-panel-toolbar"><div><h3>Operator audit trail</h3><p>Append-only record of login and mutation activity.</p></div><div class="flex items-center gap-2"><div class="relative"><Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" /><input type="text" value={auditSearch()} onInput={(e) => setAuditSearch(e.currentTarget.value)} placeholder="Search events…" class="input pl-9! w-48 text-sm" /><Show when={auditSearch()}><button onClick={() => setAuditSearch('')} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show></div><span class="badge badge-success">{audit()?.total ?? 0} events</span></div></div>
+          <div class="table-panel-toolbar"><div><h3>Operator audit trail</h3><p>Append-only record of login and mutation activity.</p></div><div class="flex items-center gap-2"><div class="relative"><Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" /><input type="text" value={auditSearch()} onInput={(e) => { setAuditPage(0); setAuditSearch(e.currentTarget.value); }} placeholder="Search events…" class="input pl-9! w-48 text-sm" /><Show when={auditSearch()}><button onClick={() => { setAuditPage(0); setAuditSearch(''); }} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show></div><span class="badge badge-success">{audit()?.total ?? 0} events</span></div></div>
           <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
             <table class="data-table min-w-[720px]"><thead class="sticky top-0"><tr>
-                <Show when={isVisible('created_at')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Time" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="created_at" label="Time" active={columnFilters()['created_at'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} /></div></th></Show>
-                <Show when={isVisible('username')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="username" label="Actor" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="username" label="Actor" active={columnFilters()['username'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['username'] = s; else delete n['username']; return n; }); }} /></div></th></Show>
-                <Show when={isVisible('action')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="action" label="Action" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="action" label="Action" active={columnFilters()['action'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['action'] = s; else delete n['action']; return n; }); }} /></div></th></Show>
-                <Show when={isVisible('resource')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="resource" label="Resource" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="resource" label="Resource" active={columnFilters()['resource'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['resource'] = s; else delete n['resource']; return n; }); }} /></div></th></Show>
-                <Show when={isVisible('ip_address')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="ip_address" label="Source" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="ip_address" label="Source" active={columnFilters()['ip_address'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['ip_address'] = s; else delete n['ip_address']; return n; }); }} /></div></th></Show>
-                <Show when={isVisible('status')}><th class="text-right px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="status" label="HTTP status" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="status" label="HTTP status" active={columnFilters()['status'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} /></div></th></Show>
+                <Show when={isVisible('created_at')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Time" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="created_at" label="Time" active={columnFilters()['created_at'] || null} onApply={(s) => updateAuditFilter('created_at', s)} /></div></th></Show>
+                <Show when={isVisible('username')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="username" label="Actor" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="username" label="Actor" active={columnFilters()['username'] || null} onApply={(s) => updateAuditFilter('username', s)} /></div></th></Show>
+                <Show when={isVisible('action')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="action" label="Action" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="action" label="Action" active={columnFilters()['action'] || null} onApply={(s) => updateAuditFilter('action', s)} /></div></th></Show>
+                <Show when={isVisible('resource')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="resource" label="Resource" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="resource" label="Resource" active={columnFilters()['resource'] || null} onApply={(s) => updateAuditFilter('resource', s)} /></div></th></Show>
+                <Show when={isVisible('ip_address')}><th class="text-left px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="ip_address" label="Source" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="ip_address" label="Source" active={columnFilters()['ip_address'] || null} onApply={(s) => updateAuditFilter('ip_address', s)} /></div></th></Show>
+                <Show when={isVisible('status')}><th class="text-right px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="status" label="HTTP status" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="status" label="HTTP status" active={columnFilters()['status'] || null} onApply={(s) => updateAuditFilter('status', s)} /></div></th></Show>
                 <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
               </tr></thead>
               <tbody><For each={filteredAudit()}>{(entry) => <tr class="border-t border-subtle"><Show when={isVisible('created_at')}><td class="px-4 py-2.5 whitespace-nowrap text-[10px] text-muted">{formatDate(entry.created_at)}</td></Show><Show when={isVisible('username')}><td class="px-4 py-2.5 text-xs">{entry.username || 'unknown'}</td></Show><Show when={isVisible('action')}><td class="px-4 py-2.5"><span class="font-mono text-[10px] text-sky-500">{entry.action}</span></td></Show><Show when={isVisible('resource')}><td class="px-4 py-2.5 font-mono text-[10px] text-secondary max-w-[210px] truncate" title={entry.resource}>{entry.resource}</td></Show><Show when={isVisible('ip_address')}><td class="px-4 py-2.5 font-mono text-[10px] text-muted">{entry.ip_address || '—'}</td></Show><Show when={isVisible('status')}><td class="px-4 py-2.5 text-right"><span class={`badge ${entry.status >= 400 ? 'badge-error' : 'badge-success'}`}>{entry.status}</span></td></Show><td class="px-2 py-2.5"></td></tr>}</For></tbody>
             </table>
-            <div class="table-footer px-4 py-3"><TableFilterSummary filters={columnFilters()} onClear={() => setColumnFilters({})} onRemove={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} /></div>
+            <div class="px-4 py-3"><Pagination page={auditPage()} totalPages={Math.ceil((audit()?.total ?? 0) / auditPageSize())} totalItems={audit()?.total ?? 0} pageSize={auditPageSize()} onPageChange={setAuditPage} storageKey="security_audit" onPageSizeChange={(size) => { changeAuditPageSize(size); setAuditPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setAuditPage(0); }} onRemoveFilter={(columnId) => { updateAuditFilter(columnId, null); }} /></div>
             <Show when={audit.loading}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
-            <Show when={!audit.loading && !audit.error && (audit()?.entries.length ?? 0) === 0}><EmptyState compact title="No operator security events are recorded" description="Authentication and mutation events will appear after operators begin using this deployment." /></Show>
+            <Show when={!audit.loading && !audit.error && (audit()?.total ?? 0) === 0}><EmptyState compact title="No operator security events are recorded" description="Authentication and mutation events will appear after operators begin using this deployment." /></Show>
           </div>
         </section>
       </div>

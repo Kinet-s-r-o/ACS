@@ -222,7 +222,7 @@ export const api = {
   },
 
   getSecurityOverview: () => request<{ total_users: number; full_access_admins: number; recorded_failures: number; jwt_configured: boolean; login_rate_limit_enabled: boolean; cors_restricted: boolean; audit_logging_enabled: boolean }>('/security/overview'),
-  getAuditLogs: (limit = 100) => request<{ entries: AuditLog[]; total: number; limit: number; offset: number }>(`/audit-logs?limit=${limit}`),
+  getAuditLogs: (limit = 100, offset = 0) => request<{ entries: AuditLog[]; total: number; limit: number; offset: number }>(`/audit-logs?limit=${limit}&offset=${offset}`),
   getBlockedDevices: () => request<BlockedDevice[]>('/blocked-devices'),
   blockDevice: (serialNumber: string, reason: string) => request<BlockedDevice>('/blocked-devices', { method: 'POST', body: JSON.stringify({ serial_number: serialNumber, reason }) }),
   unblockDevice: (serialNumber: string) => request<{ status: string }>(`/blocked-devices/${encodeURIComponent(serialNumber)}`, { method: 'DELETE' }),
