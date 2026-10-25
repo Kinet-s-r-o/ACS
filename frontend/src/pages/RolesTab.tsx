@@ -126,7 +126,7 @@ const RolesTab: Component = () => {
       <Show when={!roles.loading && !roles.error}>
         <Show when={(roles()?.length ?? 0) > 0}>
           <div class="overflow-x-auto rounded-lg border border-border">
-            <table class="w-full text-sm">
+            <table class="data-table w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-muted/30">
                   <th class="px-3 py-2 text-left font-medium">Name</th>
@@ -179,7 +179,7 @@ const RolesTab: Component = () => {
               <input id="role-description" type="text" value={roleForm().description} onInput={(e) => setRoleForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="Optional description" maxlength={256} />
             </div>
             <div>
-              <label class="block text-xs text-muted mb-2">Permissions</label>
+              <div class="block text-xs text-muted mb-2">Permissions</div>
               <div class="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
                 <For each={PERMISSION_GROUPS}>
                   {(group) => (

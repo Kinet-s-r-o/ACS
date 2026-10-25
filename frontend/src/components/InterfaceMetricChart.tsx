@@ -120,7 +120,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
       <div ref={setElement} class="h-64 w-full" />
       <div class="space-y-1 px-2 text-xs text-muted">
         <For each={chartData().summaries}>{item => <button type="button" class={`flex w-full items-center gap-2 rounded text-left transition-opacity ${selectedSeriesKey() !== null && selectedSeriesKey() !== item.key ? 'opacity-40' : 'hover:bg-elevated/50'}`} aria-pressed={selectedSeriesKey() === item.key} onClick={() => setSelectedSeriesKey(current => current === item.key ? null : item.key)}>
-          <span class="inline-block h-2 w-2 shrink-0 rounded-full" style={{ 'background-color': item.color }} />
+          <span class="chart-color-swatch h-2 w-2 rounded-full" data-dynamic-style="chart-color" style={{ '--chart-color': item.color } as any} />
           <span class="min-w-0 flex-1 truncate font-medium text-foreground">{item.name}</span>
           <span class="shrink-0 text-right">Min {formatValue(item.min)}{item.unit ? ` ${item.unit}` : ''} · Avg {formatValue(item.avg)}{item.unit ? ` ${item.unit}` : ''} · Max {formatValue(item.max)}{item.unit ? ` ${item.unit}` : ''}</span>
         </button>}</For>

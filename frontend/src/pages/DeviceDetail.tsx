@@ -1789,7 +1789,7 @@ const DeviceDetail: Component = () => {
   return (
     <div class="space-y-5">
       {/* Header - More prominent serial/status */}
-      <div class="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+      <div class="device-detail-header flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
         <div class="flex-1">
           <div class="flex items-center gap-3 mb-1">
             <A href="/devices" class="icon-button" aria-label="Back to CPE inventory">
@@ -1804,6 +1804,10 @@ const DeviceDetail: Component = () => {
           <Show when={device()}>
             <h1 class="text-xl sm:text-2xl font-bold text-primary font-mono tracking-tight">{device()?.serial_number}</h1>
             <p class="text-sm text-muted mt-0.5">{device()?.manufacturer} {device()?.product_class}</p>
+            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+              <span class="font-mono">{device()?.ip_address || 'IP unavailable'}</span>
+              <span>Last Inform: <span class="text-secondary">{formatDate(device()?.last_inform)}</span></span>
+            </div>
           </Show>
         </div>
         <div class="flex gap-2 items-center">
@@ -1843,7 +1847,7 @@ const DeviceDetail: Component = () => {
         </div>
       </div>
 
-      <nav role="tablist" class="tab-bar" aria-label="Device detail sections">
+      <nav role="tablist" class="tab-bar device-detail-tabs" aria-label="Device detail sections">
         <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>Connected Hosts</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
@@ -1964,6 +1968,7 @@ const DeviceDetail: Component = () => {
                                 <Show when={tile.format !== 'gauge'}>
                                   <div
                                     class={`text-lg font-bold font-mono ${tile.color.startsWith('#') ? '' : tile.color}`}
+                                    data-dynamic-style="health-value-color"
                                     style={tile.color.startsWith('#') ? { color: tile.color } : {}}
                                   >
                                     {tile.value}
@@ -2085,7 +2090,7 @@ const DeviceDetail: Component = () => {
                         const rows = fields.map(field => [field, result()[root + field] || '']).filter(([, value]) => value !== '');
                         return <div class="border-t border-subtle pt-3">
                           <h3 class="text-xs font-medium text-secondary mb-2">Latest result</h3>
-                          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">{rows.map(([name, value]) => <div class="rounded bg-base px-3 py-2" style={{ background: name === 'SuccessCount' ? '#34d399' : name === 'FailureCount' ? '#fb923c' : undefined, color: name === 'SuccessCount' || name === 'FailureCount' ? '#0f172a' : undefined }}><div class="text-[10px]" style={{ color: name === 'SuccessCount' || name === 'FailureCount' ? '#0f172a' : undefined }}>{name === 'SuccessCount' ? 'Successful packets' : name === 'FailureCount' ? 'Failed packets' : name === 'MinimumResponseTime' ? 'Min. response (ms)' : name === 'AverageResponseTime' ? 'Avg. response (ms)' : name === 'MaximumResponseTime' ? 'Max. response (ms)' : 'State'}</div><div class="text-sm font-mono break-all">{value}</div></div>)}</div>
+                          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">{rows.map(([name, value]) => <div class={`rounded px-3 py-2 ${name === 'SuccessCount' ? 'diagnostic-result-success' : name === 'FailureCount' ? 'diagnostic-result-failure' : 'bg-base'}`}><div class="text-[10px]">{name === 'SuccessCount' ? 'Successful packets' : name === 'FailureCount' ? 'Failed packets' : name === 'MinimumResponseTime' ? 'Min. response (ms)' : name === 'AverageResponseTime' ? 'Avg. response (ms)' : name === 'MaximumResponseTime' ? 'Max. response (ms)' : 'State'}</div><div class="text-sm font-mono break-all">{value}</div></div>)}</div>
                           <Show when={rows.length === 0}><p class="text-xs text-muted">No result values were returned.</p></Show>
                         </div>;
                       }}
@@ -2234,7 +2239,7 @@ const DeviceDetail: Component = () => {
                                   const isBranch = row.hasChildren;
                                   return (
                                     <div class="grid grid-cols-[minmax(280px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-3 items-center border-t border-subtle/60 px-3 py-2 text-xs">
-                                      <div style={{ 'padding-left': `${row.depth * 16}px` }} class="flex items-center gap-2 min-w-0">
+                                      <div class="flex items-center gap-2 min-w-0" data-dynamic-style="snapshot-indent" style={{ 'padding-left': `${row.depth * 16}px` } as any}>
                                         <Show when={row.hasChildren} fallback={<span class="w-4 shrink-0" />}>
                                           <button type="button" class="icon-button w-4 h-4 shrink-0" aria-label={`${collapsedSnapshotPaths().has(row.path) ? 'Expand' : 'Collapse'} ${row.path}`} onClick={() => toggleSnapshotBranch(row.path)}>
                                             <Show when={collapsedSnapshotPaths().has(row.path)} fallback={<Minus size={12} />}><Plus size={12} /></Show>
@@ -2335,7 +2340,7 @@ const DeviceDetail: Component = () => {
               }>
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-xs text-muted mb-1.5">Credential mode</label>
+                    <div class="block text-xs text-muted mb-1.5">Credential mode</div>
                     <div class="flex gap-2">
                       {(['inherit', 'auto', 'custom'] as const).map((mode) => (
                         <button

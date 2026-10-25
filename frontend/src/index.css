@@ -247,8 +247,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .field-error { margin: 5px 0 0; color: rgb(var(--error-text)); font-size: 11px; line-height: 1.4; }
 select.input { appearance: auto; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; }
-table thead th { text-align: center !important; }
-table thead th > div { justify-content: center; }
+table thead th { text-align: left; }
+table thead th > div { justify-content: flex-start; }
 thead { background: rgb(var(--bg-elevated) / .45); }
 th { color: rgb(var(--text-muted)); font-size: 10px; font-weight: 600; letter-spacing: .015em; }
 tbody tr { transition: background-color 100ms ease; } tbody tr:hover { background: rgb(var(--bg-elevated) / .42); }
@@ -256,8 +256,30 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .data-table th { color: rgb(var(--text-muted)); font-size: 11px; font-weight: 600; }
 .data-table td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
 .data-table tbody td { line-height: 1.45; }
+.data-table th.text-right, .data-table td.text-right { text-align: right; }
+.data-table th.text-center, .data-table td.text-center { text-align: center; }
 .table-scroll table:not(.data-table) { font-size: 13px; }
 .table-scroll table:not(.data-table) td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
+
+.ops-attention-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: rgb(var(--border-default)); border: 1px solid rgb(var(--border-default)); }
+.ops-attention-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 11px 14px; color: rgb(var(--text-secondary)); background: rgb(var(--bg-surface)); text-decoration: none; }
+.ops-attention-link:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
+.ops-attention-link strong { display: block; color: rgb(var(--text-primary)); font-size: 12px; font-weight: 600; }
+.ops-attention-link span { display: block; margin-top: 2px; color: rgb(var(--text-muted)); font-size: 10px; }
+.ops-attention-link svg { flex: 0 0 auto; color: rgb(var(--accent)); }
+.device-detail-header { position: sticky; top: 58px; z-index: 20; margin: -4px -4px 0; padding: 4px; background: rgb(var(--bg-base)); border-bottom: 1px solid rgb(var(--border-subtle)); }
+.device-detail-tabs { overflow-x: auto; scrollbar-width: thin; }
+.device-detail-tabs .tab-btn { flex: 0 0 auto; white-space: nowrap; }
+.device-filter-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 38px; padding: 8px 12px; color: rgb(var(--text-secondary)); background: rgb(var(--bg-elevated) / .45); border-bottom: 1px solid rgb(var(--border-subtle)); font-size: 11px; }
+.device-filter-summary strong { color: rgb(var(--text-primary)); font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+.device-filter-summary button { color: rgb(var(--accent)); background: transparent; border: 0; font-size: 11px; }
+.device-filter-summary button:hover { color: rgb(var(--accent-hover)); }
+.tag-color-swatch { display: inline-block; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--tag-color, rgb(var(--text-muted))); }
+.tag-color-swatch-large { width: 12px; height: 12px; }
+.chart-color-swatch { display: inline-block; flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; background: var(--chart-color, rgb(var(--accent))); }
+.color-swatch { background: var(--swatch-color, rgb(var(--text-muted))); }
+.diagnostic-result-success { background: rgb(var(--success) / .18); color: rgb(15 23 42); }
+.diagnostic-result-failure { background: rgb(var(--warning) / .22); color: rgb(15 23 42); }
 
 /* Column filter */
 .filter-toggle { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
@@ -343,6 +365,8 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
   .dialog-panel { max-height: calc(100vh - 16px); }
   .dialog-actions { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   .data-table th:first-child, .data-table td:first-child { position: sticky; left: 0; z-index: 2; background: rgb(var(--bg-surface)); box-shadow: 1px 0 0 rgb(var(--border-subtle)); }
+  .ops-attention-list { grid-template-columns: 1fr; }
+  .device-detail-header { top: 58px; }
 }
 @media (min-width: 640px) {
   .service-state { display: flex; }

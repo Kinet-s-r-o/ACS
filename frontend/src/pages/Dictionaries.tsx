@@ -85,7 +85,7 @@ const Dictionaries: Component = () => {
           <div class="overflow-x-auto"><table class="data-table w-full text-sm">
             <thead><tr class="border-b-2 border-subtle bg-base"><th class="text-left px-3 py-2.5 font-semibold text-primary">Tag</th><th class="text-left px-3 py-2.5 font-semibold text-primary">Color</th><Show when={canManageTags()}><th class="w-20" /></Show></tr></thead>
             <tbody><For each={tags()}>{tag => <tr class="border-t border-subtle hover:bg-elevated/30">
-              <td class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style={{ background: tag.color }} /><span class="text-primary">{tag.name}</span></div></td>
+              <td class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td>
               <td class="px-3 py-2.5 font-mono text-xs text-secondary">{tag.color}</td>
               <Show when={canManageTags()}><td class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show>
             </tr>}</For></tbody>

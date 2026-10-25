@@ -315,7 +315,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
           const date = new Date(ts);
           const timeStr = date.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
           const dateStr = date.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' });
-          let html = `<div style="margin-bottom:3px;opacity:0.7">${dateStr} ${timeStr}</div>`;
+          let html = `<div data-dynamic-style="chart-tooltip" style="margin-bottom:3px;opacity:0.7">${dateStr} ${timeStr}</div>`;
           let hasVal = false;
           for (const p of params) {
             if (p.value == null || p.value[1] == null) continue;
@@ -325,7 +325,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
             const m = metrics[metricIndex];
             const effUnit = effectiveUnit(m.unit, m.unit_scale, s.suffixes[metricIndex]);
             const unit = effUnit ? ` ${effUnit}` : '';
-            html += `<div style="display:flex;align-items:center;gap:4px;margin-top:2px"><span style="width:8px;height:8px;border-radius:2px;background:${p.color};display:inline-block"></span><span>${p.seriesName}: ${typeof p.value[1] === 'number' ? p.value[1].toFixed(2) : p.value[1]}${unit}</span></div>`;
+            html += `<div data-dynamic-style="chart-tooltip" style="display:flex;align-items:center;gap:4px;margin-top:2px"><span data-dynamic-style="chart-tooltip" style="width:8px;height:8px;border-radius:2px;background:${p.color};display:inline-block"></span><span>${p.seriesName}: ${typeof p.value[1] === 'number' ? p.value[1].toFixed(2) : p.value[1]}${unit}</span></div>`;
           }
           return hasVal ? html : '';
         },
@@ -414,7 +414,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
               {(s, index) => (
                 <button type="button" class={`flex w-full items-center justify-between rounded px-1 text-left transition-opacity ${selectedMetricId() !== null && selectedMetricId() !== props.metrics[index()].id ? 'opacity-40' : 'hover:bg-elevated/50'}`} aria-pressed={selectedMetricId() === props.metrics[index()].id} onClick={() => setSelectedMetricId(current => current === props.metrics[index()].id ? null : props.metrics[index()].id)}>
                   <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: s.color }} />
+                    <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': s.color } as any} />
                     <span class="text-xs text-secondary">{s.name}</span>
                   </div>
                   <span class="text-[10px] text-muted font-mono">

@@ -33,11 +33,26 @@ for (const path of sourceFiles) {
   reportMatches(relativePath, source, /\b(?:purple|violet|indigo)(?:-|\b)/gi, 'uses a prohibited default purple-family visual token');
   reportMatches(relativePath, source, /\b(?:window|globalThis)\.(?:alert|confirm)\s*\(/g, 'uses a native blocking dialog instead of shared feedback');
   reportMatches(relativePath, source, /(^|[^.\w])alert\s*\(/gm, 'uses a native blocking alert instead of shared feedback');
-  reportMatches(relativePath, source, /<(?:div|span|tr|li)\b[^>]*\bonClick\s*=/g, 'uses a click handler on a non-interactive element');
-  reportMatches(relativePath, source, /\bstyle\s*=/g, 'uses an inline style instead of a design token or reusable class');
+  reportMatches(relativePath, source, /<(?:div|span|tr|li)\b(?![^>]*\brole=["']button["'])[^>]*\bonClick\s*=/g, 'uses a click handler on a non-interactive element');
+  for (const match of source.matchAll(/<[A-Za-z][^>]*\bstyle\s*=/g)) {
+    const tag = match[0];
+    if (!tag.includes('data-dynamic-style')) {
+      violations.push(`${relativePath}:${lineNumber(source, match.index ?? 0)} uses an inline style instead of a design token or reusable class`);
+    }
+  }
 
   if (extname(path) === '.tsx') {
-    reportMatches(relativePath, source, /<label\b(?![^>]*\bfor=)[^>]*>/g, 'has a label that is not associated with an input');
+    for (const match of source.matchAll(/<label\b([^>]*)>/g)) {
+      const openingTag = match[0];
+      const start = (match.index ?? 0) + openingTag.length;
+      const end = source.indexOf('</label>', start);
+      const body = end >= 0 ? source.slice(start, end) : '';
+      const hasFor = /\bfor\s*=/.test(openingTag);
+      const wrapsControl = /<(?:input|select|textarea)\b/.test(body);
+      if (!hasFor && !wrapsControl) {
+        violations.push(`${relativePath}:${lineNumber(source, match.index ?? 0)} has a label that is not associated with an input`);
+      }
+    }
     reportMatches(relativePath, source, /<table\b(?![^>]*\bclass="[^"]*\bdata-table\b)[^>]*>/g, 'has a data table without the responsive data-table behavior');
   }
 

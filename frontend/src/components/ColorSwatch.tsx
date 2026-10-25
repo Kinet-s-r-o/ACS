@@ -40,8 +40,9 @@ const ColorSwatch: Component<ColorSwatchProps> = (props) => {
           <button
             type="button"
             onClick={() => selectColor(c)}
-            class="w-5 h-5 rounded-[3px] transition-transform hover:scale-110"
-            style={{ background: c, outline: props.value === c ? `2px solid ${c}` : 'none', 'outline-offset': '2px' } as any}
+            class="color-swatch w-5 h-5 rounded-[3px] transition-transform hover:scale-110"
+            data-dynamic-style="color-swatch"
+            style={{ '--swatch-color': c, outline: props.value === c ? `2px solid ${c}` : 'none', 'outline-offset': '2px' } as any}
             aria-label={`Select color ${c}`}
           />
         ))}

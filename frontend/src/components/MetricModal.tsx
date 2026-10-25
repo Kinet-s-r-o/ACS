@@ -202,7 +202,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
             </div>
           </div>
           <div>
-            <label class="block text-xs text-muted mb-1.5">Line Color</label>
+            <div class="block text-xs text-muted mb-1.5">Line Color</div>
             <ColorSwatch value={metricForm().color} onChange={(c) => setMetricForm(f => ({ ...f, color: c }))} />
           </div>
           <div class="grid grid-cols-2 gap-3">
@@ -244,7 +244,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
           </Show>
           <Show when={metricTab() === 'health'}>
           <div>
-            <label class="block text-xs font-medium text-secondary mb-2">Health indicator</label>
+            <div class="block text-xs font-medium text-secondary mb-2">Health indicator</div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label for="metric-health" class="block text-xs text-muted mb-1.5">Show in Device Health</label>
@@ -336,7 +336,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </div>
               </Show>
               <div class="col-span-2">
-                <label class="block text-xs text-muted mb-1.5">Custom threshold bands</label>
+                <div class="block text-xs text-muted mb-1.5">Custom threshold bands</div>
                 <div class="space-y-1.5">
                   <For each={metricForm().thresholds}>
                     {(t, i) => (

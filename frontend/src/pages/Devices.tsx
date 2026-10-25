@@ -231,6 +231,9 @@ const Devices: Component = () => {
     return applyColumnFilters(devices, columnFilters(), getFilterValue);
   });
 
+  const activeFilterCount = createMemo(() => Object.keys(columnFilters()).length);
+  const hasInventoryFilter = createMemo(() => Boolean(searchQuery().trim()) || activeFilterCount() > 0);
+
   const sortedDevices = createMemo(() => {
     const devices = [...filteredDevices()];
     const sort = sortBy();
@@ -343,11 +346,13 @@ const Devices: Component = () => {
             }}
             disabled={summoningAll()}
             class="btn btn-secondary"
+            aria-label="Summon visible CPEs"
+            title="Summon visible CPEs"
           >
             <Send size={14} class={summoningAll() ? 'animate-pulse' : ''} />
-            <span class="hidden sm:inline">{summoningAll() ? 'Summoning...' : 'Summon All'}</span>
+            <span class="hidden sm:inline">{summoningAll() ? 'Summoning...' : 'Summon visible CPEs'}</span>
           </button></Show>
-          <button onClick={() => refetch()} class="btn btn-secondary" disabled={deviceList.loading}>
+          <button onClick={() => refetch()} class="btn btn-secondary" disabled={deviceList.loading} aria-label="Refresh CPE inventory" title="Refresh CPE inventory">
             <RefreshCw size={14} />
             <span class="hidden sm:inline">Refresh</span>
           </button>
@@ -359,6 +364,12 @@ const Devices: Component = () => {
       </Show>
 
       <Show when={!deviceList.error}><div class="card overflow-hidden">
+        <div class="device-filter-summary" role="status" aria-live="polite">
+          <span><strong>{filteredDevices().length}</strong> visible on this page · <strong>{deviceList()?.total ?? 0}</strong> total CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
+          <Show when={hasInventoryFilter()}>
+            <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); }}>Clear search and filters</button>
+          </Show>
+        </div>
         <div class="overflow-x-auto table-scroll">
           <table class="data-table w-full">
             <thead>

@@ -177,7 +177,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
   return (
     <div>
       <Show when={props.value !== null}>
-        <div ref={chartRef!} style={{ width: '100%', height: props.gaugeStyle === 'ring' ? '108px' : '96px' }} />
+        <div ref={chartRef!} class={`w-full ${props.gaugeStyle === 'ring' ? 'h-[108px]' : 'h-[96px]'}`} />
       </Show>
       <Show when={props.value === null}>
         <div class="flex items-center justify-center h-20 text-muted text-lg font-mono">-</div>

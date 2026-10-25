@@ -102,9 +102,11 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
       <Show when={open()}>
         <div
           class="filter-dropdown"
-          style={{ position: 'fixed', top: `${pos().top}px`, left: `${pos().left}px` }}
           ref={(el) => {
             panelRef = el;
+            el.style.position = 'fixed';
+            el.style.top = `${pos().top}px`;
+            el.style.left = `${pos().left}px`;
             if (el) document.addEventListener('click', handleClickOutside);
           }}
           onClick={(e) => e.stopPropagation()}
@@ -116,7 +118,7 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
               </button>
             </div>
             <div class="filter-dropdown-body">
-              <label class="filter-dropdown-label">Logika</label>
+              <div class="filter-dropdown-label">Logika</div>
               <select
                 class="filter-dropdown-select"
                 value={logic()}

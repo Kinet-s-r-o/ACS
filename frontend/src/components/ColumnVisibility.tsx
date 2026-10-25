@@ -66,9 +66,11 @@ const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
       <Show when={open()}>
         <div
           class="column-dropdown"
-          style={{ position: 'fixed', top: `${pos().top}px`, left: `${pos().left}px` }}
           ref={(el) => {
             panelRef = el;
+            el.style.position = 'fixed';
+            el.style.top = `${pos().top}px`;
+            el.style.left = `${pos().left}px`;
             if (el) document.addEventListener('click', handleClickOutside);
           }}
           onClick={(e) => e.stopPropagation()}

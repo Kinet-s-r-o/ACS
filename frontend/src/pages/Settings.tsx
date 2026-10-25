@@ -192,11 +192,11 @@ const Settings: Component = () => {
         <h2 class="text-sm font-medium text-secondary mb-4">Account</h2>
         <div class="space-y-4">
           <div>
-            <label class="block text-xs text-muted mb-1.5">Username</label>
+            <div class="block text-xs text-muted mb-1.5">Username</div>
             <div class="text-sm text-primary">{user()?.username}</div>
           </div>
           <div>
-            <label class="block text-xs text-muted mb-1.5">Role</label>
+            <div class="block text-xs text-muted mb-1.5">Role</div>
             <span class={`badge ${isFullAccess() ? 'badge-success' : 'badge-warning'}`}>
               {isFullAccess() ? 'Full Access' : 'Read Only'}
             </span>
@@ -319,7 +319,7 @@ const Settings: Component = () => {
                       <Show when={isVisible('group')}>
                         <td class="px-3 py-2.5 text-secondary">
                           <div class="flex items-center gap-1.5">
-                            <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: def.color || '#475569' }} />
+                            <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
                             <span class="text-xs">{def.group || '-'}</span>
                           </div>
                         </td>
@@ -427,7 +427,7 @@ const Settings: Component = () => {
               </div>
             </div>
             <div>
-              <label class="block text-xs text-muted mb-1.5">Line Color</label>
+              <div class="block text-xs text-muted mb-1.5">Line Color</div>
               <ColorSwatch value={metricForm().color} onChange={(c) => setMetricForm(f => ({ ...f, color: c }))} />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -456,7 +456,7 @@ const Settings: Component = () => {
             </Show>
             <Show when={metricTab() === 'health'}>
             <div>
-              <label class="block text-xs font-medium text-secondary mb-2">Health indicator</label>
+              <div class="block text-xs font-medium text-secondary mb-2">Health indicator</div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label for="metric-health" class="block text-xs text-muted mb-1.5">Show in Device Health</label>
@@ -516,7 +516,7 @@ const Settings: Component = () => {
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
+                  <div class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</div>
                   <select value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as GaugeStyle; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'temperature' ? '220' : ['speed', 'stage', 'grade', 'barometer'].includes(style) ? '180' : '270' })); }} class="input w-full">
                     <option value="basic">Gauge Basic</option><option value="simple">Simple Gauge</option><option value="speed">Speed Gauge</option><option value="progress">Progress Gauge</option><option value="stage">Stage Speed Gauge</option><option value="grade">Grade Gauge</option><option value="multi">Multi Title Gauge</option><option value="temperature">Temperature Gauge</option><option value="ring">Ring Gauge</option><option value="barometer">Gauge Barometer</option>
                   </select>

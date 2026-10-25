@@ -372,7 +372,7 @@ const MetricsSettings: Component = () => {
                       <Show when={isVisible('group')}>
                         <td class="px-3 py-2.5 text-secondary">
                           <div class="flex items-center gap-1.5">
-                            <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: def.color || '#475569' }} />
+                            <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
                             <span class="text-xs">{def.group || '—'}</span>
                           </div>
                         </td>
@@ -489,7 +489,7 @@ const MetricsSettings: Component = () => {
               </div>
             </div>
             <div>
-              <label class="block text-xs text-muted mb-1.5">Line Color</label>
+              <div class="block text-xs text-muted mb-1.5">Line Color</div>
               <ColorSwatch value={metricForm().color} onChange={(c) => setMetricForm(f => ({ ...f, color: c }))} />
             </div>
             <div class="grid grid-cols-2 gap-3">
@@ -532,7 +532,7 @@ const MetricsSettings: Component = () => {
             </Show>
             <Show when={metricTab() === 'health'}>
             <div>
-              <label class="block text-xs font-medium text-secondary mb-2">Health indicator</label>
+            <div class="block text-xs font-medium text-secondary mb-2">Health indicator</div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label for="metric-health" class="block text-xs text-muted mb-1.5">Show in Device Health</label>
@@ -593,7 +593,7 @@ const MetricsSettings: Component = () => {
                 </div>
                 <Show when={metricForm().display_format === 'gauge'}>
                 <div>
-                  <label for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
+                  <div class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</div>
                   <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as GaugeStyle; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'temperature' ? '220' : ['speed', 'stage', 'grade', 'barometer'].includes(style) ? '180' : '270' })); }} class="input w-full">
                     <option value="basic">Gauge Basic</option><option value="simple">Simple Gauge</option><option value="speed">Speed Gauge</option><option value="progress">Progress Gauge</option><option value="stage">Stage Speed Gauge</option><option value="grade">Grade Gauge</option><option value="multi">Multi Title Gauge</option><option value="temperature">Temperature Gauge</option><option value="ring">Ring Gauge</option><option value="barometer">Gauge Barometer</option>
                   </select>
@@ -624,7 +624,7 @@ const MetricsSettings: Component = () => {
                   </div>
                 </Show>
                 <div class="col-span-2">
-                  <label class="block text-xs text-muted mb-1.5">Custom threshold bands</label>
+                  <div class="block text-xs text-muted mb-1.5">Custom threshold bands</div>
                   <div class="space-y-1.5">
                     <For each={metricForm().thresholds}>
                       {(t, i) => (

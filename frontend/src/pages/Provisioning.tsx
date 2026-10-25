@@ -440,7 +440,7 @@ const Provisioning: Component = () => {
       case 'type': return <td class="py-2 pr-3 uppercase">{def.interface_type}</td>;
       case 'source': return <td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
       case 'unit_scale': return <td class="py-2 pr-3">{def.unit_scale || 'none'}</td>;
-      case 'group': return <td class="py-2 pr-3"><div class="flex items-center gap-1.5"><span class="inline-block h-3 w-6 shrink-0 rounded-sm" style={{ background: def.color || '#38bdf8' }} title={def.color || 'Default'} /><span>{def.group || '—'}</span></div></td>;
+      case 'group': return <td class="py-2 pr-3"><div class="flex items-center gap-1.5"><span class="chart-color-swatch inline-block h-3 w-6 shrink-0 rounded-sm" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#38bdf8' } as any} title={def.color || 'Default'} /><span>{def.group || '—'}</span></div></td>;
       case 'active': return <td class="py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
       case 'chart': return <td class="py-2 pr-3">{def.chart_type || 'line'}</td>;
       case 'transform': return <td class="py-2 pr-3">{def.transform || 'raw'}</td>;
@@ -990,9 +990,9 @@ const Provisioning: Component = () => {
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <For each={provTemplates()}>
                   {(t) => (
-                    <div class="rounded border border-subtle p-4 hover:border-primary/30 transition-colors cursor-pointer" onClick={() => selectTemplate(t)}>
+                      <div class="rounded border border-subtle p-4 hover:border-primary/30 transition-colors">
                       <div class="flex items-start justify-between">
-                        <div class="min-w-0">
+                        <button type="button" class="min-w-0 flex-1 text-left" onClick={() => selectTemplate(t)} aria-label={`Select provisioning template ${t.name}`}>
                           <h3 class="text-sm font-medium text-primary truncate">{t.name}</h3>
                           <p class="text-xs text-muted mt-1">
                             {t.manufacturer || t.product_class
@@ -1002,7 +1002,7 @@ const Provisioning: Component = () => {
                           <Show when={t.description}>
                             <p class="text-xs text-muted mt-1 truncate">{t.description}</p>
                           </Show>
-                        </div>
+                        </button>
                         <div class="flex items-center gap-1 shrink-0 ml-2">
                           <button onClick={(e) => { e.stopPropagation(); openCloneTemplate(t); }} class="icon-button" aria-label={`Duplicate template ${t.name}`} title="Duplicate template">
                             <Copy size={13} />
@@ -1015,7 +1015,7 @@ const Provisioning: Component = () => {
                           </button>
                         </div>
                       </div>
-                    </div>
+                      </div>
                   )}
                 </For>
               </div>
@@ -1154,7 +1154,7 @@ const Provisioning: Component = () => {
                               <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 ml-1.5">AddObject</span>
                             </Show>
                             <Show when={p.condition}>
-                              <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 ml-1.5">Conditional</span>
+                              <span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 ml-1.5">Conditional</span>
                             </Show>
                             <Show when={p.description}>
                               <p class="text-muted text-xs">{p.description}</p>
@@ -1308,7 +1308,7 @@ const Provisioning: Component = () => {
                           <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">{def.unit || '—'}</td></Show>
                           <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">
                             <div class="flex items-center gap-1.5 whitespace-nowrap">
-                              <span class="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: def.color || '#475569' }} />
+                              <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
                               <span class="text-xs">{def.group || '—'}</span>
                             </div>
                           </td></Show>
@@ -1577,7 +1577,7 @@ const Provisioning: Component = () => {
             <label for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></label>
             <label class="block text-xs text-muted">Parameter path pattern<input required class="input mt-1 w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Stats.EthernetBytesReceived" value={interfaceMetricForm().parameter_pattern} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, parameter_pattern: e.currentTarget.value }))} /></label>
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4"><label class="block text-xs text-muted">Unit<input class="input mt-1 w-full" value={interfaceMetricForm().unit} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} /></label><label class="block text-xs text-muted">Transform<select class="input mt-1 w-full" value={interfaceMetricForm().transform} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, transform: e.currentTarget.value }))}><option value="">Raw value</option><option value="rate">Rate</option></select></label><label class="block text-xs text-muted">Multiplier<input type="number" min="0" step="any" class="input mt-1 w-full" value={interfaceMetricForm().multiplier} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, multiplier: Number(e.currentTarget.value) }))} /></label><label class="block text-xs text-muted">Unit Scale<select class="input mt-1 w-full" value={interfaceMetricForm().unit_scale} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, unit_scale: e.currentTarget.value }))}><option value="">None</option><option value="bytes">Bytes (KB/MB/GB/TB)</option><option value="bits">Bits (Kb/Mb/Gb/Tb)</option><option value="pps">Packets per second (pps/Kpps/Mpps/Gpps)</option></select></label></div>
-            <label class="block text-xs text-muted">Line color<ColorSwatch value={interfaceMetricForm().color} onChange={(color) => setInterfaceMetricForm(f => ({ ...f, color }))} /></label>
+            <div class="block text-xs text-muted">Line color<ColorSwatch value={interfaceMetricForm().color} onChange={(color) => setInterfaceMetricForm(f => ({ ...f, color }))} /></div>
             <div class="grid grid-cols-2 gap-3"><label class="block text-xs text-muted">ECharts visualization<select class="input mt-1 w-full" value={interfaceMetricForm().chart_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, chart_type: e.currentTarget.value }))}><For each={ECHARTS_TYPES.filter(type => type.timeSeries)}>{(type) => <option value={type.value}>{type.label}</option>}</For></select></label><label class="block text-xs text-muted">Graph group<input class="input mt-1 w-full" maxLength={64} value={interfaceMetricForm().group} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, group: e.currentTarget.value }))} placeholder="e.g. WAN traffic" /></label></div>
             <p class="text-xs text-muted">Metrics with the same group name and chart type can be plotted together, such as received and sent bytes.</p>
             <label class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></label>

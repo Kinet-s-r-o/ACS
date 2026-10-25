@@ -67,7 +67,7 @@ const DeviceTagPicker: Component<DeviceTagPickerProps> = (props) => {
     <div class="flex flex-wrap items-center gap-1.5 min-w-36">
       <For each={selected()}>{id => {
         const tag = () => definition(id);
-        return <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-elevated text-primary whitespace-nowrap"><span class="w-2 h-2 rounded-full" style={{ background: tag()?.color || '#64748b' }} />{tag()?.name || id}</span>;
+        return <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-elevated text-primary whitespace-nowrap"><span class="tag-color-swatch" data-dynamic-style="tag-color" style={{ '--tag-color': tag()?.color || '#64748b' } as any} />{tag()?.name || id}</span>;
       }}</For>
       <Show when={props.writable}>
         <button ref={trigger} type="button" onClick={() => open() ? close() : openPicker()} class="inline-flex items-center gap-1 rounded-full border border-subtle px-2 py-1 text-[11px] text-secondary hover:text-primary hover:bg-elevated whitespace-nowrap" aria-haspopup="dialog" aria-expanded={open()}>
@@ -76,15 +76,15 @@ const DeviceTagPicker: Component<DeviceTagPickerProps> = (props) => {
       </Show>
       <Show when={open()}>
         <Portal>
-          <div class="fixed inset-0 z-[80]" aria-hidden="true" onClick={close} />
-          <div class="fixed z-[81] rounded-lg border border-subtle bg-elevated shadow-2xl p-2 overflow-y-auto" style={{ top: `${position().top}px`, left: `${position().left}px`, width: `${position().width}px`, 'max-height': `${Math.min(360, window.innerHeight - 16)}px` }} role="dialog" aria-label={`Assign tags to ${props.device.serial_number}`}>
+          <button type="button" class="fixed inset-0 z-[80] border-0 bg-transparent" aria-label="Close tag picker" onClick={close} />
+          <div class="fixed z-[81] rounded-lg border border-subtle bg-elevated shadow-2xl p-2 overflow-y-auto" data-dynamic-style="tag-picker-position" style={{ top: `${position().top}px`, left: `${position().left}px`, width: `${position().width}px`, 'max-height': `${Math.min(360, window.innerHeight - 16)}px` }} role="dialog" aria-label={`Assign tags to ${props.device.serial_number}`}>
             <div class="relative mb-2"><Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><input autofocus class="input w-full pl-8 py-2 text-sm" placeholder="Search tags…" aria-label="Search tags" value={query()} onInput={event => setQuery(event.currentTarget.value)} /></div>
             <div class="max-h-64 overflow-y-auto rounded border border-subtle bg-base p-1">
               <Show when={filteredTags().length > 0} fallback={<div class="px-3 py-4 text-center text-xs text-muted">No matching tags</div>}>
                 <For each={filteredTags()}>{tag => {
                   const checked = () => selected().includes(tag.id);
                   return <button type="button" role="menuitemcheckbox" aria-checked={checked()} onClick={() => void toggleTag(tag.id)} disabled={saving()} class="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-sm text-primary hover:bg-elevated disabled:opacity-50">
-                    <span class="w-3 h-3 rounded-full shrink-0" style={{ background: tag.color }} /><span class="flex-1 truncate">{tag.name}</span><Show when={checked()}><Check size={14} class="text-sky-400" /></Show>
+                    <span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="flex-1 truncate">{tag.name}</span><Show when={checked()}><Check size={14} class="text-sky-400" /></Show>
                   </button>;
                 }}</For>
               </Show>
