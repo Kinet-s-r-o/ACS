@@ -29,6 +29,7 @@ import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
+import { formatDateTime } from '../lib/dateTime';
 
 interface HostColumnConfig {
   id: string;
@@ -1339,8 +1340,7 @@ const DeviceDetail: Component = () => {
   });
 
   const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleString('id-ID');
+    return formatDateTime(dateStr);
   };
 
   const getDeviceUptime = () => {

@@ -12,6 +12,7 @@ import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { createPersistedSignal } from '../lib/storage';
+import { formatDateTime } from '../lib/dateTime';
 
 const Security: Component = () => {
   const { confirm, notify } = useFeedback();
@@ -87,7 +88,7 @@ const Security: Component = () => {
     } catch (error) { notify({ tone: 'error', title: 'Could not unblock CPE', message: 'The admission rule remains unchanged.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingUnblock(null); }
   };
-  const formatDate = (value: string) => new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  const formatDate = (value: string) => formatDateTime(value);
 
   return (
     <div class="space-y-5">

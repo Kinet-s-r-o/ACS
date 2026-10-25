@@ -15,6 +15,7 @@ import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import RolesTab from './RolesTab';
 import { createPersistedSignal } from '../lib/storage';
+import { formatDateTime } from '../lib/dateTime';
 
 const UsersPage: Component = () => {
   const { hasPermission, isFullAccess } = useAuth();
@@ -204,7 +205,7 @@ const UsersPage: Component = () => {
                     </Show>
                     <Show when={isVisible('last_login')}>
                       <td class="py-2 text-muted text-xs">
-                        {u.last_login ? new Date(u.last_login).toLocaleString('id-ID') : 'Never'}
+                        <span title={u.last_login ? formatDateTime(u.last_login) : undefined}>{u.last_login ? formatDateTime(u.last_login) : 'Never'}</span>
                       </td>
                     </Show>
                     <td class="py-2 text-right">

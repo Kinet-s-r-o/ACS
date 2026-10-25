@@ -15,6 +15,7 @@ import { useFeedback } from '../components/Feedback';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { createPersistedSignal } from '../lib/storage';
+import { formatDateTime } from '../lib/dateTime';
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -27,7 +28,7 @@ const statusBadge = (status: string) => {
   }
 };
 
-const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString('id-ID') : '-';
+const formatDate = (value?: string | null) => formatDateTime(value);
 
 const Tasks: Component = () => {
   const { isFullAccess } = useAuth();

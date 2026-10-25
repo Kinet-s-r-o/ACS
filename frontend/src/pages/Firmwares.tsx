@@ -15,6 +15,7 @@ import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { createPersistedSignal } from '../lib/storage';
+import { formatDateTime } from '../lib/dateTime';
 
 const Firmwares: Component = () => {
   const { isFullAccess } = useAuth();
@@ -124,7 +125,7 @@ const Firmwares: Component = () => {
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
-  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString('id-ID');
+  const formatDate = (dateStr: string) => formatDateTime(dateStr);
 
   return (
     <div class="space-y-6">

@@ -102,12 +102,14 @@ const Provisioning: Component = () => {
   const [settingsLoading, setSettingsLoading] = createSignal(false);
   const [settingsSaving, setSettingsSaving] = createSignal(false);
   const [refreshSettings, setRefreshSettings] = createSignal({ overview: '15m', full: '6h' });
+  const [settingsInitialSnapshot, setSettingsInitialSnapshot] = createSignal('');
   let settingsMenu: HTMLDivElement | undefined;
   let provisioningImportInput: HTMLInputElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
   const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], excluded_tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
   const [provForm, setProvForm] = createSignal({ ...emptyProvisioningRule });
+  const [provInitialSnapshot, setProvInitialSnapshot] = createSignal('');
   const [tagInput, setTagInput] = createSignal('');
   const [tagMode, setTagMode] = createSignal<'tags' | 'excluded_tags'>('tags');
   const addRuleTag = () => {
@@ -124,6 +126,7 @@ const Provisioning: Component = () => {
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '' });
+  const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
   let templateImageInput: HTMLInputElement | undefined;
@@ -136,10 +139,12 @@ const Provisioning: Component = () => {
   const [featureEditorPage, setFeatureEditorPage] = createSignal<'section' | 'control'>('section');
   const [editingFeatureID, setEditingFeatureID] = createSignal<string | null>(null);
   const [featureDraft, setFeatureDraft] = createSignal<ProvisioningFeature>({ id: '', name: '', description: '', controls: [] });
+  const [featureInitialSnapshot, setFeatureInitialSnapshot] = createSignal('');
   const [featureDraggedControl, setFeatureDraggedControl] = createSignal<string | null>(null);
   const [featureEditorDraggedControl, setFeatureEditorDraggedControl] = createSignal<string | null>(null);
   const emptyControlDraft = (): FeatureControlDraft => ({ key: '', label: '', type: 'string', parameter: '', optionsText: '', objectFieldsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
   const [controlDraft, setControlDraft] = createSignal<FeatureControlDraft>(emptyControlDraft());
+  const [controlInitialSnapshot, setControlInitialSnapshot] = createSignal('');
   const [editingControlKey, setEditingControlKey] = createSignal<string | null>(null);
   const [featuresSaving, setFeaturesSaving] = createSignal(false);
   createEffect(() => {
@@ -166,6 +171,20 @@ const Provisioning: Component = () => {
   const [editingInterfaceMetric, setEditingInterfaceMetric] = createSignal<InterfaceMetricDefinition | null>(null);
   const [showInterfaceMetricModal, setShowInterfaceMetricModal] = createSignal(false);
   const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true });
+  const [interfaceMetricInitialSnapshot, setInterfaceMetricInitialSnapshot] = createSignal('');
+
+  const settingsDirty = () => settingsInitialSnapshot() !== '' && JSON.stringify(refreshSettings()) !== settingsInitialSnapshot();
+  const provFormDirty = () => provInitialSnapshot() !== '' && JSON.stringify(provForm()) !== provInitialSnapshot();
+  const templateFormDirty = () => templateInitialSnapshot() !== '' && JSON.stringify(templateForm()) !== templateInitialSnapshot();
+  const featureDraftDirty = () => featureInitialSnapshot() !== '' && JSON.stringify(featureDraft()) !== featureInitialSnapshot();
+  const controlDraftDirty = () => controlInitialSnapshot() !== '' && JSON.stringify(controlDraft()) !== controlInitialSnapshot();
+  const featureEditorDirty = () => featureDraftDirty() || controlDraftDirty();
+  const interfaceMetricDirty = () => interfaceMetricInitialSnapshot() !== '' && JSON.stringify(interfaceMetricForm()) !== interfaceMetricInitialSnapshot();
+
+  const closeWithDirtyCheck = async (dirty: () => boolean, close: () => void, subject: string) => {
+    if (dirty() && !await confirm({ title: `Discard unsaved ${subject} changes?`, description: 'The entered values have not been saved.', confirmLabel: 'Discard changes', tone: 'primary' })) return;
+    close();
+  };
 
   const exportProvisioningBackup = async () => {
     try {
@@ -397,6 +416,7 @@ const Provisioning: Component = () => {
         overview: settings.overview_poll_interval || '15m',
         full: settings.full_tree_poll_interval || '6h',
       });
+      setSettingsInitialSnapshot(JSON.stringify({ overview: settings.overview_poll_interval || '15m', full: settings.full_tree_poll_interval || '6h' }));
       setShowSettingsModal(true);
     } catch (error) {
       notify({ tone: 'error', title: 'Could not load provisioning settings', detail: (error as Error).message, persistent: true });
@@ -413,6 +433,7 @@ const Provisioning: Component = () => {
         overview_poll_interval: refreshSettings().overview.trim(),
         full_tree_poll_interval: refreshSettings().full.trim(),
       });
+      setSettingsInitialSnapshot(JSON.stringify(refreshSettings()));
       setShowSettingsModal(false);
       notify({ tone: 'success', title: 'Provisioning settings saved' });
     } catch (error) {
@@ -422,12 +443,18 @@ const Provisioning: Component = () => {
     }
   };
 
+  const closeSettingsModal = () => void closeWithDirtyCheck(settingsDirty, () => setShowSettingsModal(false), 'provisioning settings');
+
   createEffect(() => {
     const cols = provColumns();
     writeMigratedStorageValue(localStorage, PROV_STORAGE_KEY, LEGACY_PROV_STORAGE_KEY, JSON.stringify(cols));
   });
 
   const visibleProvColumns = () => provColumns().filter(c => c.visible).sort((a, b) => a.order - b.order);
+  const closeProvModal = () => void closeWithDirtyCheck(provFormDirty, () => setShowProvModal(false), 'provisioning rule');
+  const closeTemplateModal = () => void closeWithDirtyCheck(templateFormDirty, () => { setShowTemplateModal(false); setCloningTemplate(null); }, 'template');
+  const closeFeatureEditor = () => void closeWithDirtyCheck(featureEditorDirty, () => setFeatureEditorOpen(false), 'feature');
+  const closeInterfaceMetricModal = () => void closeWithDirtyCheck(interfaceMetricDirty, () => setShowInterfaceMetricModal(false), 'interface metric');
 
   const toggleProvColumn = (id: string) => {
     setProvColumns(cols => cols.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
@@ -545,7 +572,9 @@ const Provisioning: Component = () => {
     setEditingProv(p);
     setCopyingProv(false);
     setIsAddObjectRule(Boolean(p.add_object_path));
-    setProvForm({ template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], excluded_tags: p.excluded_tags || [], enabled: p.enabled, description: p.description || '', add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' });
+    const next = { template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], excluded_tags: p.excluded_tags || [], enabled: p.enabled, description: p.description || '', add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' };
+    setProvForm(next);
+    setProvInitialSnapshot(JSON.stringify(next));
     setShowProvModal(true);
   };
 
@@ -555,7 +584,9 @@ const Provisioning: Component = () => {
     setEditingProv(null);
     setCopyingProv(false);
     setIsAddObjectRule(false);
-    setProvForm({ ...emptyProvisioningRule, template_id: selectedTemplate()?.id || 0 });
+    const next = { ...emptyProvisioningRule, template_id: selectedTemplate()?.id || 0 };
+    setProvForm(next);
+    setProvInitialSnapshot(JSON.stringify(next));
     setShowProvModal(true);
   };
 
@@ -565,14 +596,18 @@ const Provisioning: Component = () => {
     setEditingProv(null);
     setCopyingProv(true);
     setIsAddObjectRule(Boolean(p.add_object_path));
-    setProvForm({ template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], excluded_tags: p.excluded_tags || [], enabled: p.enabled, description: p.description || '', add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' });
+    const next = { template_id: p.template_id, parameter_name: p.add_object_path || p.parameter_name, parameter_value: p.parameter_value, parameter_type: p.parameter_type, phase: p.phase || 'bootstrap', tags: p.tags || [], excluded_tags: p.excluded_tags || [], enabled: p.enabled, description: p.description || '', add_object_path: p.add_object_path || '', order: p.order, condition: p.condition || '' };
+    setProvForm(next);
+    setProvInitialSnapshot(JSON.stringify(next));
     setShowProvModal(true);
   };
 
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setCloningTemplate(null);
-    setTemplateForm({ name: '', manufacturer: '', product_class: '', description: '' });
+    const next = { name: '', manufacturer: '', product_class: '', description: '' };
+    setTemplateForm(next);
+    setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
     setShowTemplateModal(true);
   };
@@ -580,7 +615,9 @@ const Provisioning: Component = () => {
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setCloningTemplate(null);
     setEditingTemplate(t);
-    setTemplateForm({ name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '' });
+    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '' };
+    setTemplateForm(next);
+    setTemplateInitialSnapshot(JSON.stringify(next));
     void loadTemplateImage(t);
     setShowTemplateModal(true);
   };
@@ -588,7 +625,9 @@ const Provisioning: Component = () => {
   const openCloneTemplate = (template: ProvisioningTemplate) => {
     setEditingTemplate(null);
     setCloningTemplate(template);
-    setTemplateForm({ name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '' });
+    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '' };
+    setTemplateForm(next);
+    setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
     setShowTemplateModal(true);
   };
@@ -732,8 +771,15 @@ const Provisioning: Component = () => {
     setFeatureDraft(next);
     setFeatureEditorPage(control || page === 'control' ? 'control' : 'section');
     setEditingControlKey(control?.key || null);
-    setControlDraft(control ? { ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') } : emptyControlDraft());
+    const nextControl = control ? { ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') } : emptyControlDraft();
+    setControlEditorDraft(nextControl);
+    setFeatureInitialSnapshot(JSON.stringify(next));
     setFeatureEditorOpen(true);
+  };
+
+  const setControlEditorDraft = (draft: FeatureControlDraft) => {
+    setControlDraft(draft);
+    setControlInitialSnapshot(JSON.stringify(draft));
   };
 
   const saveFeatureControlDraft = () => {
@@ -891,13 +937,17 @@ const Provisioning: Component = () => {
 
   const openInterfaceMetric = (def: InterfaceMetricDefinition | null = null) => {
     setEditingInterfaceMetric(def);
-    setInterfaceMetricForm(def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan', parameter_pattern: '', unit: 'bytes', source: 'active', unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true });
+    const next = def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true };
+    setInterfaceMetricForm(next);
+    setInterfaceMetricInitialSnapshot(JSON.stringify(next));
     setShowInterfaceMetricModal(true);
   };
 
   const copyInterfaceMetric = (def: InterfaceMetricDefinition) => {
     setEditingInterfaceMetric(null);
-    setInterfaceMetricForm({ name: `${def.name} copy`, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active });
+    const next = { name: `${def.name} copy`, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active };
+    setInterfaceMetricForm(next);
+    setInterfaceMetricInitialSnapshot(JSON.stringify(next));
     setShowInterfaceMetricModal(true);
   };
 
@@ -1354,11 +1404,12 @@ const Provisioning: Component = () => {
 
       {/* Provisioning Modal */}
       <Show when={showSettingsModal()}>
-        <Dialog title="Provisioning settings" description="Refresh intervals are checked whenever the CPE sends an Inform." onClose={() => setShowSettingsModal(false)} actions={<>
-          <button type="button" class="btn btn-secondary" onClick={() => setShowSettingsModal(false)} disabled={settingsSaving()}>Cancel</button>
+        <Dialog title="Provisioning settings" description="Refresh intervals are checked whenever the CPE sends an Inform." onClose={closeSettingsModal} actions={<>
+          <button type="button" class="btn btn-secondary" onClick={closeSettingsModal} disabled={settingsSaving()}>Cancel</button>
           <Show when={isFullAccess()}><button type="submit" form="provisioning-settings-form" class="btn btn-primary" disabled={settingsSaving()}>{settingsSaving() ? 'Saving…' : 'Save settings'}</button></Show>
         </>}>
           <form id="provisioning-settings-form" class="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveRefreshSettings(); }}>
+            <Show when={settingsDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <div>
               <label for="overview-poll-interval" class="block text-xs text-muted mb-1.5">Overview refresh interval</label>
               <input id="overview-poll-interval" type="text" class="input w-full" value={refreshSettings().overview} onInput={(event) => setRefreshSettings(settings => ({ ...settings, overview: event.currentTarget.value }))} disabled={!isFullAccess()} required />
@@ -1375,9 +1426,10 @@ const Provisioning: Component = () => {
       <Show when={showProvModal()}>
         <Dialog
           title={editingProv() ? 'Edit provisioning rule' : copyingProv() ? 'Duplicate provisioning rule' : 'Add provisioning rule'}
-          onClose={() => setShowProvModal(false)}
+          onClose={closeProvModal}
         >
           <form onSubmit={(e) => { e.preventDefault(); editingProv() ? handleUpdateProv() : handleCreateProv(); }} class="space-y-4">
+            <Show when={provFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <div>
               <label for="provisioning-parameter" class="block text-xs text-muted mb-1.5">{isAddObjectRule() ? 'CWMP object path' : 'CWMP parameter name'}</label>
               <input id="provisioning-parameter" type="text" value={provForm().parameter_name} onInput={(e) => setProvForm(f => ({ ...f, parameter_name: e.currentTarget.value }))} class="input w-full" placeholder={isAddObjectRule() ? 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection' : 'Path to a writable CWMP parameter'} />
@@ -1461,7 +1513,7 @@ const Provisioning: Component = () => {
               <label for="provisioning-enabled" class="text-sm text-secondary">Enable this rule</label>
             </div>
             <div class="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowProvModal(false)} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
+              <button type="button" onClick={closeProvModal} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
               <button type="submit" class="btn btn-primary flex-1" disabled={pendingAction() !== null}>
                 {pendingAction() ? 'Saving rule…' : editingProv() ? 'Update rule' : 'Add rule'}
               </button>
@@ -1470,10 +1522,11 @@ const Provisioning: Component = () => {
         </Dialog>
       </Show>
       <Show when={featureEditorOpen()}>
-        <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit feature field' : 'Add feature field') : (editingFeatureID() ? 'Edit feature section' : 'Add feature section')} size="large" onClose={() => setFeatureEditorOpen(false)}>
+        <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit feature field' : 'Add feature field') : (editingFeatureID() ? 'Edit feature section' : 'Add feature section')} size="large" onClose={closeFeatureEditor}>
           <form class="space-y-4" onSubmit={saveFeatureDraft}>
             <Show when={featureEditorPage() === 'section'} fallback={
               <div class="space-y-4">
+                <Show when={featureEditorDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
                 <p class="text-xs text-muted">Define one device control and the CWMP parameter it writes.</p>
                 <label class="block text-xs text-muted">Field label<input class="input mt-1 w-full" maxlength={128} required value={controlDraft().label} onInput={event => setControlDraft(current => ({ ...current, label: event.currentTarget.value }))} placeholder="Wi-Fi radio" /></label>
                 <label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono text-xs" required value={controlDraft().parameter} onInput={event => setControlDraft(current => ({ ...current, parameter: event.currentTarget.value }))} placeholder="InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable" /></label>
@@ -1497,15 +1550,15 @@ const Provisioning: Component = () => {
                 <label class="block text-xs text-muted">Section name<input class="input mt-1 w-full" maxlength={128} required value={featureDraft().name} onInput={event => setFeatureDraft(current => ({ ...current, name: event.currentTarget.value }))} placeholder="Internet settings" /></label>
                 <label class="block text-xs text-muted">Description (optional)<textarea class="input mt-1 w-full" rows={2} maxlength={512} value={featureDraft().description || ''} onInput={event => setFeatureDraft(current => ({ ...current, description: event.currentTarget.value }))} /></label>
                 <div class="space-y-2">
-                  <div class="flex items-center justify-between"><h3 class="text-xs font-medium text-secondary">Fields ({featureDraft().controls.length})</h3><button type="button" class="btn btn-secondary text-xs" onClick={() => { setControlDraft(emptyControlDraft()); setEditingControlKey(null); setFeatureEditorPage('control'); }}><Plus size={13} />Add field</button></div>
+                <div class="flex items-center justify-between"><h3 class="text-xs font-medium text-secondary">Fields ({featureDraft().controls.length})</h3><button type="button" class="btn btn-secondary text-xs" onClick={() => { setControlEditorDraft(emptyControlDraft()); setEditingControlKey(null); setFeatureEditorPage('control'); }}><Plus size={13} />Add field</button></div>
                   <Show when={featureDraft().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-4 text-center text-xs text-muted">Fields added here will be available to supported devices.</p>}>
                     <div class="max-h-64 space-y-2 overflow-y-auto"><For each={featureDraft().controls}>{control => <div draggable onDragStart={event => { setFeatureEditorDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderFeatureDraftControl(control.key); }} onDragEnd={() => setFeatureEditorDraggedControl(null)} class={`flex items-center justify-between gap-3 rounded border border-subtle p-3 cursor-grab active:cursor-grabbing ${featureEditorDraggedControl() === control.key ? 'opacity-50' : ''}`}>
                       <div class="flex min-w-0 items-center gap-2"><GripVertical size={14} class="shrink-0 text-muted" /><div class="min-w-0"><p class="truncate text-xs font-medium text-primary">{control.label} <span class="font-normal text-muted">· {control.type}</span></p><p class="truncate font-mono text-[10px] text-muted">{control.parameter}</p><Show when={control.options?.length}><p class="mt-1 text-[10px] text-muted">Select: {control.options!.join(', ')}</p></Show><Show when={control.object_fields?.length}><p class="mt-1 text-[10px] text-muted">Object form: {control.object_fields!.length} fields</p></Show></div></div>
-                      <div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" onClick={() => { setEditingControlKey(null); setControlDraft({ ...control, key: '', label: `${control.label} copy`, parameter: '', optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div>
+                      <div class="flex shrink-0 gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => { setEditingControlKey(control.key); setControlEditorDraft({ ...control, optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" onClick={() => { setEditingControlKey(null); setControlEditorDraft({ ...control, key: '', label: `${control.label} copy`, parameter: '', optionsText: (control.options || []).join('\n'), objectFieldsText: (control.object_fields || []).map(field => [field.name, field.label, field.type, field.input, (field.options || []).map(option => `${option}=${field.option_labels?.[option] || option}`).join(';'), field.help || ''].join('|')).join('\n') }); setFeatureEditorPage('control'); }}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Remove ${control.label}`} onClick={() => setFeatureDraft(current => ({ ...current, controls: current.controls.filter(item => item.key !== control.key) }))}><Trash2 size={13} /></button></div>
                     </div>}</For></div>
                   </Show>
                 </div>
-                <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={() => setFeatureEditorOpen(false)} disabled={featuresSaving()}>Cancel</button><button type="submit" class="btn btn-primary flex-1" disabled={featuresSaving()}><Save size={13} />{featuresSaving() ? 'Saving…' : editingFeatureID() ? 'Save section' : 'Create section'}</button></div>
+                <div class="flex gap-2 pt-2"><button type="button" class="btn btn-secondary flex-1" onClick={closeFeatureEditor} disabled={featuresSaving()}>Cancel</button><button type="submit" class="btn btn-primary flex-1" disabled={featuresSaving()}><Save size={13} />{featuresSaving() ? 'Saving…' : editingFeatureID() ? 'Save section' : 'Create section'}</button></div>
               </div>
             </Show>
           </form>
@@ -1514,9 +1567,10 @@ const Provisioning: Component = () => {
       <Show when={showTemplateModal()}>
         <Dialog
           title={editingTemplate() ? 'Edit template' : cloningTemplate() ? 'Duplicate template' : 'Add template'}
-          onClose={() => { setShowTemplateModal(false); setCloningTemplate(null); }}
+          onClose={closeTemplateModal}
         >
           <form onSubmit={(e) => { e.preventDefault(); editingTemplate() ? handleUpdateTemplate() : cloningTemplate() ? handleCloneTemplate() : handleCreateTemplate(); }} class="space-y-4">
+            <Show when={templateFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <div>
               <label for="template-name" class="block text-xs text-muted mb-1.5">Name</label>
               <input id="template-name" type="text" value={templateForm().name} onInput={(e) => setTemplateForm(f => ({ ...f, name: e.currentTarget.value }))} class="input w-full" placeholder="e.g. SkyDash AC1000" required />
@@ -1559,7 +1613,7 @@ const Provisioning: Component = () => {
             </Show>
             <p class="text-xs text-muted">Specificity: both fields set = most specific (score 2), one field = partial (score 1), neither = global fallback (score 0). The most specific matching template wins.</p>
             <div class="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowTemplateModal(false)} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
+              <button type="button" onClick={closeTemplateModal} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
               <button type="submit" class="btn btn-primary flex-1" disabled={pendingAction() !== null}>
                 {pendingAction() ? 'Saving…' : editingTemplate() ? 'Update template' : cloningTemplate() ? 'Duplicate template' : 'Add template'}
               </button>
@@ -1570,8 +1624,9 @@ const Provisioning: Component = () => {
 
       {/* Metric Modal */}
       <Show when={showInterfaceMetricModal()}>
-        <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." onClose={() => setShowInterfaceMetricModal(false)} actions={<><button type="button" class="btn btn-secondary" onClick={() => setShowInterfaceMetricModal(false)}>Cancel</button><button type="submit" form="interface-metric-form" class="btn btn-primary">Save metric</button></>}>
+        <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" class="btn btn-primary">Save metric</button></>}>
           <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}>
+            <Show when={interfaceMetricDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <label class="block text-xs text-muted">Name<input required class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
             <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
             <label for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></label>

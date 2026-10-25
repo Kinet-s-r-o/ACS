@@ -58,6 +58,7 @@ const Settings: Component = () => {
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
+  const [metricInitialSnapshot, setMetricInitialSnapshot] = createSignal('');
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
   const [columnFilters, setColumnFilters] = createSignal<Record<string, ColumnFilterState>>({});
   const { columns, isVisible, toggle } = useColumnVisibility('settings', [
@@ -87,6 +88,12 @@ const Settings: Component = () => {
     const all = metrics() || [];
     return applyColumnFilters(all, columnFilters(), getFilterValue);
   });
+
+  const metricFormDirty = () => metricInitialSnapshot() !== '' && JSON.stringify(metricForm()) !== metricInitialSnapshot();
+  const closeMetricModal = async () => {
+    if (metricFormDirty() && !await confirm({ title: 'Discard unsaved metric changes?', description: 'The changes in this metric form have not been saved.', confirmLabel: 'Discard changes', tone: 'primary' })) return;
+    setShowMetricModal(false);
+  };
 
   const openEditMetric = (def: MetricDefinition) => {
     setEditingMetric(def);
@@ -121,6 +128,7 @@ const Settings: Component = () => {
       thresholds: def.thresholds || [],
       chart_type: def.chart_type || 'line',
     });
+    setMetricInitialSnapshot(JSON.stringify(metricForm()));
     setMetricTab('metric');
     setShowMetricModal(true);
   };
@@ -357,10 +365,10 @@ const Settings: Component = () => {
           title={editingMetric() ? `Edit metric: ${editingMetric()!.name}` : 'New metric definition'}
           description="Defines a CWMP parameter to collect as a time-series metric. Device match uses glob patterns (e.g. 'Huawei/*'). Source: passive = from Inform, active = polled via GPV, universal = both."
           size="large"
-          onClose={() => setShowMetricModal(false)}
+          onClose={() => void closeMetricModal()}
           actions={
             <>
-              <button onClick={() => setShowMetricModal(false)} class="btn btn-secondary">Cancel</button>
+              <button onClick={() => void closeMetricModal()} class="btn btn-secondary">Cancel</button>
               <button onClick={() => void handleSaveMetric()} disabled={pendingAction() === 'save-metric'} class="btn btn-primary">
                 <Save size={14} />
                 {pendingAction() === 'save-metric' ? 'Saving…' : 'Save metric'}
@@ -369,6 +377,7 @@ const Settings: Component = () => {
           }
         >
           <div class="space-y-4">
+            <Show when={metricFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <div class="flex gap-1 border-b border-zinc-800 pb-2">
               <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'}`}>Metric</button>
               <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'}`}>Health</button>

@@ -15,6 +15,7 @@ import { usePageSize } from '../lib/usePageSize';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
+import { formatDateTime } from '../lib/dateTime';
 
 const Faults: Component = () => {
   const { isFullAccess } = useAuth();
@@ -132,7 +133,7 @@ const Faults: Component = () => {
   };
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleString('id-ID');
+    return formatDateTime(date);
   };
 
   const getFaultColor = (code: string) => {

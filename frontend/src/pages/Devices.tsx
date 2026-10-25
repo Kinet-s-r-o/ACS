@@ -14,6 +14,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { formatDateTime, formatRelativeTime } from '../lib/dateTime';
 
 interface ColumnConfig {
   id: string;
@@ -111,8 +112,7 @@ const Devices: Component = () => {
   );
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleString('id-ID');
+    return formatRelativeTime(dateStr);
   };
 
   const toggleColumn = (id: string) => {
@@ -187,7 +187,7 @@ const Devices: Component = () => {
           </span>
         );
       case 'last_inform':
-        return <span class="text-muted text-xs">{formatDate(device.last_inform)}</span>;
+        return <span class="text-muted text-xs" title={formatDateTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
       case 'tags':
         return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasPermission('devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
       default:

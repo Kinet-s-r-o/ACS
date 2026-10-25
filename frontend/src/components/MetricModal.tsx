@@ -59,10 +59,17 @@ interface MetricModalProps {
 }
 
 const MetricModal: Component<MetricModalProps> = (props) => {
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
+  const [initialSnapshot, setInitialSnapshot] = createSignal('');
+  const isDirty = () => initialSnapshot() !== '' && JSON.stringify(metricForm()) !== initialSnapshot();
+  const closeModal = async () => {
+    if (pendingAction()) return;
+    if (isDirty() && !await confirm({ title: 'Discard unsaved metric changes?', description: 'The changes in this metric form have not been saved.', confirmLabel: 'Discard changes', tone: 'primary' })) return;
+    props.onClose();
+  };
 
   const initForm = (m: MetricDefinition | null) => {
     if (m) {
@@ -113,6 +120,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     if (open) {
       initForm(metric || copying || null);
       if (!metric && copying) setMetricForm(current => ({ ...current, name: `${copying.name} copy` }));
+      setInitialSnapshot(JSON.stringify(metricForm()));
     }
   });
 
@@ -147,9 +155,10 @@ const MetricModal: Component<MetricModalProps> = (props) => {
       <Dialog
         title={props.editingMetric ? 'Edit metric' : 'Add metric'}
         description="Define a CWMP parameter to collect as a time-series metric."
-        onClose={() => { if (!pendingAction()) props.onClose(); }}
+        onClose={() => void closeModal()}
       >
         <div class="space-y-4">
+          <Show when={isDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
           <div class="flex gap-1 border-b border-zinc-800 pb-2">
             <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'}`}>Metric</button>
             <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'}`}>Health</button>

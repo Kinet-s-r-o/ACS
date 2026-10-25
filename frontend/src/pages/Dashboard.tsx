@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, RefreshCw, Router, WifiOff } from 'lucide-so
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { api } from '../lib/api';
+import { formatDateTime } from '../lib/dateTime';
 
 interface DistributionListProps {
   data: Record<string, number>;
@@ -65,7 +66,7 @@ const Dashboard: Component = () => {
       <PageHeader
         title="Fleet status"
         description="Current fleet reachability, contact recency, health thresholds, and hardware mix."
-        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${dashboard()!.fetchedAt.toLocaleTimeString()}` : 'Update unavailable'}</span>}
+        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
         <button type="button" class="btn btn-secondary" onClick={() => refetch()} disabled={dashboard.loading}><RefreshCw size={14} />Refresh fleet data</button>
       </PageHeader>
