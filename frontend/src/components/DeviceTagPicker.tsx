@@ -78,7 +78,7 @@ const DeviceTagPicker: Component<DeviceTagPickerProps> = (props) => {
         <Portal>
           <button type="button" class="fixed inset-0 z-[80] border-0 bg-transparent" aria-label="Close tag picker" onClick={close} />
           <div class="fixed z-[81] rounded-lg border border-subtle bg-elevated shadow-2xl p-2 overflow-y-auto" data-dynamic-style="tag-picker-position" style={{ top: `${position().top}px`, left: `${position().left}px`, width: `${position().width}px`, 'max-height': `${Math.min(360, window.innerHeight - 16)}px` }} role="dialog" aria-label={`Assign tags to ${props.device.serial_number}`}>
-            <div class="relative mb-2"><Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><input autofocus class="input w-full pl-8 py-2 text-sm" placeholder="Search tags…" aria-label="Search tags" value={query()} onInput={event => setQuery(event.currentTarget.value)} /></div>
+            <div class="relative mb-2"><Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" /><input autofocus class="input w-full pl-9! py-2 text-sm" placeholder="Search tags…" aria-label="Search tags" value={query()} onInput={event => setQuery(event.currentTarget.value)} /></div>
             <div class="max-h-64 overflow-y-auto rounded border border-subtle bg-base p-1">
               <Show when={filteredTags().length > 0} fallback={<div class="px-3 py-4 text-center text-xs text-muted">No matching tags</div>}>
                 <For each={filteredTags()}>{tag => {
