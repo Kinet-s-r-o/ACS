@@ -381,7 +381,7 @@ const Devices: Component = () => {
                     const isSorted = currentSort?.column === col.id;
                     
                     return (
-                      <th class="px-4 py-2 text-left whitespace-nowrap" aria-sort={isSorted ? (currentSort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
+                      <th class="text-left whitespace-nowrap" aria-sort={isSorted ? (currentSort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
                         <div class="flex items-center gap-1.5">
                           <button
                             onClick={(e) => {
@@ -421,7 +421,7 @@ const Devices: Component = () => {
                     );
                   }}
                 </For>
-                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggleColumn} /></th>
+                <th><ColumnVisibility columns={columns} onToggle={toggleColumn} /></th>
               </tr>
             </thead>
             <tbody>

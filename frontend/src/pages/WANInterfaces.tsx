@@ -6,10 +6,11 @@ import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
-import TableFilterSummary from '../components/TableFilterSummary';
+import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { statusBadgeClass } from '../lib/lanFields';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
+import { usePageSize } from '../lib/usePageSize';
 
 const cpeWebUiUrl = (address: string): string | null => {
   const value = address.trim();
@@ -23,6 +24,8 @@ const cpeWebUiUrl = (address: string): string | null => {
 };
 
 const WANInterfaces: Component = () => {
+  const [page, setPage] = createSignal(0);
+  const { pageSize, changePageSize } = usePageSize('wan-interfaces', 20);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.wan-interfaces', {});
@@ -51,6 +54,7 @@ const WANInterfaces: Component = () => {
   });
 
   const handleSort = (column: string) => {
+    setPage(0);
     const current = sortBy();
     if (current?.column === column) {
       setSortBy(current.direction === 'asc' ? { column, direction: 'desc' } : null);
@@ -58,6 +62,9 @@ const WANInterfaces: Component = () => {
       setSortBy({ column, direction: 'asc' });
     }
   };
+
+  const pagedInterfaces = createMemo(() => sortedInterfaces().slice(page() * pageSize(), (page() + 1) * pageSize()));
+  const totalPages = createMemo(() => Math.ceil(sortedInterfaces().length / pageSize()));
 
   return (
     <div class="space-y-5">
@@ -79,7 +86,7 @@ const WANInterfaces: Component = () => {
           </div>
           <label class="relative block w-full sm:w-72">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => setSearchQuery(event.currentTarget.value)} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
+            <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => { setPage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
           </label>
         </div>
       </div>
@@ -108,12 +115,15 @@ const WANInterfaces: Component = () => {
                                   columnId={column[0]}
                                   label={column[1]}
                                   active={columnFilters()[column[0]] || null}
-                                  onApply={(state) => setColumnFilters((previous) => {
-                                    const next = { ...previous };
-                                    if (state) next[column[0]] = state;
-                                    else delete next[column[0]];
-                                    return next;
-                                  })}
+                                  onApply={(state) => {
+                                    setPage(0);
+                                    setColumnFilters((previous) => {
+                                      const next = { ...previous };
+                                      if (state) next[column[0]] = state;
+                                      else delete next[column[0]];
+                                      return next;
+                                    });
+                                  }}
                                 />
                               </div>
                             </th>
@@ -123,7 +133,7 @@ const WANInterfaces: Component = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={sortedInterfaces()}>
+                    <For each={pagedInterfaces()}>
                       {(row) => {
                         const webUrl = () => cpeWebUiUrl(row.ip_address);
                         return (
@@ -150,8 +160,8 @@ const WANInterfaces: Component = () => {
                     </For>
                   </tbody>
                 </table>
-                <div class="table-footer px-4 py-3"><TableFilterSummary filters={columnFilters()} onClear={() => setColumnFilters({})} onRemove={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} /></div>
               </div>
+              <div class="px-4 py-3"><Pagination page={page()} totalPages={totalPages()} totalItems={sortedInterfaces().length} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} /></div>
             </div>
           </Show>
         </Show>
