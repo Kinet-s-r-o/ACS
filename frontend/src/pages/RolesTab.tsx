@@ -125,7 +125,7 @@ const RolesTab: Component = () => {
 
       <Show when={!roles.loading && !roles.error}>
         <Show when={(roles()?.length ?? 0) > 0}>
-          <div class="overflow-x-auto rounded-lg border border-border">
+          <div class="overflow-x-auto table-scroll">
             <table class="data-table w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-muted/30">

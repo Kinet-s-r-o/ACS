@@ -139,8 +139,8 @@ const UsersPage: Component = () => {
       </div>
 
       <Show when={activeTab() === 'users'}>
-      <div class="card p-5">
-        <div class="flex items-center justify-between mb-4">
+      <div class="card overflow-hidden">
+        <div class="table-panel-toolbar">
           <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
             <Users size={14} />
             Operator management

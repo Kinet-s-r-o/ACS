@@ -144,7 +144,7 @@ const Tasks: Component = () => {
       </dl>
 
       <div class="card overflow-hidden">
-        <div class="p-5 border-b border-subtle flex items-center justify-between">
+        <div class="table-panel-toolbar">
             <h2 class="text-sm font-medium text-secondary">Task History ({filteredTasks().length})</h2>
           <div class="relative">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
