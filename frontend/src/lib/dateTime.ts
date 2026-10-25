@@ -1,4 +1,4 @@
-const locale = 'sk-SK';
+const locale = 'en-GB';
 
 const dateTimeFormatter = new Intl.DateTimeFormat(locale, {
   dateStyle: 'medium',

@@ -313,8 +313,8 @@ const MetricChart: Component<MetricChartProps> = (props) => {
           if (!Array.isArray(params) || params.length === 0) return '';
           const ts = params[0].value[0];
           const date = new Date(ts);
-          const timeStr = date.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
-          const dateStr = date.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' });
+          const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' });
           let html = `<div data-dynamic-style="chart-tooltip" style="margin-bottom:3px;opacity:0.7">${dateStr} ${timeStr}</div>`;
           let hasVal = false;
           for (const p of params) {
