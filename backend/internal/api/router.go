@@ -2485,8 +2485,12 @@ func (r *Router) beginTwoFactorChallenge(w http.ResponseWriter, req *http.Reques
 			return err
 		}
 	}
-	label := url.PathEscape("SKYACS:" + user.Username)
-	otpURL := "otpauth://totp/" + label + "?secret=" + url.QueryEscape(secret) + "&issuer=SKYACS&algorithm=SHA1&digits=6&period=30"
+	appName := "ACS"
+	if setting, settingErr := r.settingsRepo.Get(req.Context(), "app_name"); settingErr == nil && setting != nil && strings.TrimSpace(setting.Value) != "" {
+		appName = strings.TrimSpace(setting.Value)
+	}
+	label := url.PathEscape(appName + ":" + user.Username)
+	otpURL := "otpauth://totp/" + label + "?secret=" + url.QueryEscape(secret) + "&issuer=" + url.QueryEscape(appName) + "&algorithm=SHA1&digits=6&period=30"
 	clearSessionCookies(w, req)
 	setTwoFactorChallengeCookie(w, req, token)
 	respondJSON(w, http.StatusOK, models.LoginResponse{TwoFactorSetupRequired: true, TwoFactorSecret: secret, TwoFactorOTPAuthURL: otpURL})
