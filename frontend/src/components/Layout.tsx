@@ -99,6 +99,18 @@ const Layout: ParentComponent = (props) => {
 
   const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();
   const isActive = (href: string) => href === '/' ? location.pathname === '/' : location.pathname.startsWith(href);
+  const operatorName = () => {
+    const firstName = user()?.first_name?.trim();
+    const lastName = user()?.last_name?.trim();
+    return firstName && lastName ? `${firstName} ${lastName}` : user()?.username || '';
+  };
+  const operatorInitials = () => {
+    const firstName = user()?.first_name?.trim();
+    const lastName = user()?.last_name?.trim();
+    return firstName && lastName
+      ? `${firstName[0]}${lastName[0]}`.toUpperCase()
+      : user()?.username?.slice(0, 2).toUpperCase() || '';
+  };
   const pageTitle = () => location.pathname.startsWith('/device/') ? 'CPE record' : pageNames[location.pathname] || 'Control plane';
 
   return (
@@ -163,9 +175,9 @@ const Layout: ParentComponent = (props) => {
 
         <div class="sidebar-footer">
           <div class="operator-card">
-            <div class="operator-avatar">{user()?.username?.slice(0, 2).toUpperCase()}</div>
+            <div class="operator-avatar">{operatorInitials()}</div>
             <div class="operator-copy">
-              <strong>{user()?.username}</strong>
+              <strong>{operatorName()}</strong>
               <span>{isFullAccess() ? 'Full access' : 'Read only'}</span>
             </div>
             <button class="icon-button" onClick={logout} aria-label="Sign out" title="Sign out"><LogOut size={16} /></button>
