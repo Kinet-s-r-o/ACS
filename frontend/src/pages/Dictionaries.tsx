@@ -132,7 +132,7 @@ const Dictionaries: Component = () => {
         </Show>
         <Show when={!tags.loading && !tags.error && (tags() || []).length > 0}>
           <div class="table-panel-toolbar">
-            <h2 class="text-sm font-medium text-secondary">Tags ({filteredTags().length})</h2>
+            <span><strong>{pagedTags().length}</strong> visible on this page · <strong>{tags()?.length ?? 0}</strong> total tags</span>
           </div>
           <Show when={filteredTags().length > 0} fallback={<EmptyState compact title="No matching tags" description="Try a different search term or clear the column filters." />}>
           <div class="overflow-x-auto"><table class="data-table w-full text-sm">
