@@ -14,7 +14,7 @@ The complete machine-readable contract is [OpenAPI 3.0.3](../backend/internal/ap
 
 ## Authentication and lifecycle
 
-Tokens contain 256 random bits and use the `acs_` prefix. PostgreSQL stores only the SHA-256 digest and a non-secret identifying prefix. Requests never accept tokens in a query string or cookie. A web JWT cannot replace an API token, and an API token cannot log into the console or create other tokens. Previously issued credentials remain valid until revoked or expired.
+Tokens contain 256 random bits and use the `acs_` prefix. PostgreSQL stores only the SHA-256 digest and a non-secret identifying prefix. Requests never accept tokens in a query string or cookie. A web JWT cannot replace an API token, and an API token cannot log into the console or create other tokens.
 
 The owning user and current role are checked for every request. Role changes affect the next request; a missing user, revoked token or expired token cannot authenticate. Role/database lookup failures deny access. An empty role grants no permissions. There are no separate token grants that could exceed the user's permissions. Existing in-flight operations can finish when permissions change or a token is revoked.
 

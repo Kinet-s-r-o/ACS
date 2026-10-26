@@ -51,9 +51,8 @@ func APITokenMiddleware(tokens APITokenLookup, users UserLookup, roles APIRoleLo
 			writeAuthError(w, `{"error":"Invalid, expired or revoked API token"}`, http.StatusUnauthorized)
 		}
 		header := strings.Fields(req.Header.Get("Authorization"))
-		validPrefix := len(header) == 2 && (strings.HasPrefix(header[1], "acs_") || strings.HasPrefix(header[1], "skyacs_"))
-		validLength := len(header) == 2 && ((strings.HasPrefix(header[1], "acs_") && len(header[1]) == 47) || (strings.HasPrefix(header[1], "skyacs_") && len(header[1]) == 50))
-		if len(req.Header.Values("Authorization")) != 1 || len(header) != 2 || !strings.EqualFold(header[0], "Bearer") || !validPrefix || !validLength {
+		validFormat := len(header) == 2 && strings.HasPrefix(header[1], "acs_") && len(header[1]) == 47
+		if len(req.Header.Values("Authorization")) != 1 || len(header) != 2 || !strings.EqualFold(header[0], "Bearer") || !validFormat {
 			unauthorized()
 			return
 		}
