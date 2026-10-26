@@ -6,11 +6,13 @@ import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
+import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { statusBadgeClass } from '../lib/lanFields';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { usePageSize } from '../lib/usePageSize';
+import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 const cpeWebUiUrl = (address: string): string | null => {
   const value = address.trim();
@@ -28,6 +30,14 @@ const WANInterfaces: Component = () => {
   const { pageSize, changePageSize } = usePageSize('wan-interfaces', 20);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const { columns, isVisible, toggle } = useColumnVisibility('wan-interfaces', [
+    { id: 'serial_number', label: 'Serial number', visible: true },
+    { id: 'name', label: 'Name', visible: true },
+    { id: 'type', label: 'Type', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'ip_address', label: 'IP address', visible: true },
+    { id: 'mac_address', label: 'MAC address', visible: true },
+  ]);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.wan-interfaces', {});
   const [interfaces, { refetch }] = createResource(api.getWANInterfaces);
 
@@ -35,7 +45,7 @@ const WANInterfaces: Component = () => {
     const query = searchQuery().trim().toLowerCase();
     let rows = interfaces() || [];
     if (query) {
-      rows = rows.filter(row => [row.serial_number, row.name, row.status, row.ip_address, row.mac_address]
+      rows = rows.filter(row => [row.serial_number, row.name, row.type, row.status, row.ip_address, row.mac_address]
         .some(value => value.toLowerCase().includes(query)));
     }
     return applyColumnFilters(rows, columnFilters(), (row, columnId) => row[columnId as keyof typeof row] || '');
@@ -99,37 +109,38 @@ const WANInterfaces: Component = () => {
                 <table class="data-table w-full min-w-[760px] text-sm">
                   <thead>
                     <tr class="border-b-2 border-subtle bg-base">
-                      <For each={[['serial_number', 'Serial number'], ['name', 'Name'], ['status', 'Status'], ['ip_address', 'IP address'], ['mac_address', 'MAC address']] as const}>
+                      <For each={columns()}>
                         {(column) => {
-                          const isSorted = () => sortBy()?.column === column[0];
+                          const isSorted = () => sortBy()?.column === column.id;
                           return (
-                            <th class="text-left px-4 py-3 whitespace-nowrap" aria-sort={isSorted() ? (sortBy()?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
+                            <Show when={column.visible}><th class="text-left px-4 py-3 whitespace-nowrap" aria-sort={isSorted() ? (sortBy()?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
                               <div class="flex items-center gap-1.5">
-                                <button type="button" class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${isSorted() ? 'text-sky-400' : 'text-muted'} hover:text-primary`} onClick={() => handleSort(column[0])}>
-                                  {column[1]}
+                                <button type="button" class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${isSorted() ? 'text-sky-400' : 'text-muted'} hover:text-primary`} onClick={() => handleSort(column.id)}>
+                                  {column.label}
                                   <Show when={isSorted()} fallback={<ArrowUpDown size={10} class="opacity-50" />}>
                                     <Show when={sortBy()?.direction === 'asc'} fallback={<ArrowDown size={12} />}><ArrowUp size={12} /></Show>
                                   </Show>
                                 </button>
                                 <ColumnFilter
-                                  columnId={column[0]}
-                                  label={column[1]}
-                                  active={columnFilters()[column[0]] || null}
+                                  columnId={column.id}
+                                  label={column.label}
+                                  active={columnFilters()[column.id] || null}
                                   onApply={(state) => {
                                     setPage(0);
                                     setColumnFilters((previous) => {
                                       const next = { ...previous };
-                                      if (state) next[column[0]] = state;
-                                      else delete next[column[0]];
+                                      if (state) next[column.id] = state;
+                                      else delete next[column.id];
                                       return next;
                                     });
                                   }}
                                 />
                               </div>
-                            </th>
+                            </th></Show>
                           );
                         }}
                       </For>
+                      <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -138,22 +149,24 @@ const WANInterfaces: Component = () => {
                         const webUrl = () => cpeWebUiUrl(row.ip_address);
                         return (
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                            <td class="px-4 py-3">
+                            <Show when={isVisible('serial_number')}><td class="px-4 py-3">
                               <A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(row.serial_number)}`} aria-label={`Open CPE ${row.serial_number}`}>
                                 {row.serial_number}
                               </A>
-                            </td>
-                            <td class="px-4 py-3 text-primary">{row.name}</td>
-                            <td class="px-4 py-3"><span class={`badge ${statusBadgeClass(row.status)}`}>{row.status}</span></td>
-                            <td class="px-4 py-3 text-primary font-mono">
+                            </td></Show>
+                            <Show when={isVisible('name')}><td class="px-4 py-3 text-primary">{row.name}</td></Show>
+                            <Show when={isVisible('type')}><td class="px-4 py-3 text-secondary">{row.type || '-'}</td></Show>
+                            <Show when={isVisible('status')}><td class="px-4 py-3"><span class={`badge ${statusBadgeClass(row.status)}`}>{row.status}</span></td></Show>
+                            <Show when={isVisible('ip_address')}><td class="px-4 py-3 text-primary font-mono">
                               <div class="flex items-center gap-1.5">
                                 <span>{row.ip_address}</span>
                                 <Show when={webUrl()}>
                                   {(url) => <a href={url()} target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded p-1 text-muted hover:text-primary hover:bg-elevated" aria-label={`Open CPE web interface at ${row.ip_address}`} title="Open CPE web interface in a new tab"><ExternalLink size={13} /></a>}
                                 </Show>
                               </div>
-                            </td>
-                            <td class="px-4 py-3 text-secondary font-mono">{row.mac_address}</td>
+                            </td></Show>
+                            <Show when={isVisible('mac_address')}><td class="px-4 py-3 text-secondary font-mono">{row.mac_address}</td></Show>
+                            <td></td>
                           </tr>
                         );
                       }}

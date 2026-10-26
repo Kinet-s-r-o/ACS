@@ -16,6 +16,8 @@ import { useColumnVisibility } from '../lib/useColumnVisibility';
 import RolesTab from './RolesTab';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
+import SortableHeader from '../components/SortableHeader';
+import { sortRows, type SortDirection } from '../lib/sorting';
 
 const UsersPage: Component = () => {
   const { hasPermission, isFullAccess } = useAuth();
@@ -47,6 +49,17 @@ const UsersPage: Component = () => {
     { id: 'role', label: 'Role', visible: true },
     { id: 'last_login', label: 'Last Login', visible: true },
   ]);
+  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'username', direction: 'asc' });
+  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const applyUserFilter = (column: string, state: ColumnFilterState | null) => {
+    setColumnFilters(previous => {
+      const next = { ...previous };
+      if (state) next[column] = state;
+      else delete next[column];
+      return next;
+    });
+    setUserPage(0);
+  };
   const [userPage, setUserPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('users', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setUserPage(0); };
@@ -79,12 +92,13 @@ const UsersPage: Component = () => {
     }
     return applyColumnFilters(all, columnFilters(), getFilterValue);
   });
+  const sortedUsers = createMemo(() => sortRows(filteredUsers(), sortState().column, sortState().direction, getFilterValue));
   const pagedUsers = createMemo(() => {
-    const all = filteredUsers();
+    const all = sortedUsers();
     const start = userPage() * pageSize();
     return all.slice(start, start + pageSize());
   });
-  const userTotalPages = createMemo(() => Math.ceil(filteredUsers().length / pageSize()));
+  const userTotalPages = createMemo(() => Math.ceil(sortedUsers().length / pageSize()));
   const roleName = (user: User) => roles()?.find(role => role.id === user.role_id)?.name ?? (user.role === 'full' ? 'admin' : 'viewer');
   const systemRoleId = (role: 'full' | 'read') => roles()?.find(item => item.name === (role === 'full' ? 'admin' : 'viewer'))?.id.toString() ?? '';
   const selectedRole = () => roles()?.find(role => role.id === Number(userForm().roleId));
@@ -182,28 +196,24 @@ const UsersPage: Component = () => {
               <tr class="border-b border-subtle">
                 <Show when={isVisible('username')}>
                   <th class="text-left py-2 text-xs text-muted font-medium">
-                    <div class="flex items-center gap-1.5">Username
-                      <ColumnFilter columnId="username" label="Username" active={columnFilters()['username'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['username'] = s; else delete n['username']; return n; }); }} />
-                    </div>
+                    <SortableHeader column="username" label="Username" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>
+                      <ColumnFilter columnId="username" label="Username" active={columnFilters()['username'] || null} onApply={(state) => applyUserFilter('username', state)} />
+                    </SortableHeader>
                   </th>
                 </Show>
-                <Show when={isVisible('first_name')}><th class="text-left py-2 text-xs text-muted font-medium">First name</th></Show>
-                <Show when={isVisible('last_name')}><th class="text-left py-2 text-xs text-muted font-medium">Last name</th></Show>
-                <Show when={isVisible('email')}><th class="text-left py-2 text-xs text-muted font-medium">Email</th></Show>
-                <Show when={isVisible('required_2fa')}><th class="text-left py-2 text-xs text-muted font-medium">Required 2FA</th></Show>
-                <Show when={isVisible('two_factor_configured')}><th class="text-left py-2 text-xs text-muted font-medium">Authenticator</th></Show>
+                <Show when={isVisible('first_name')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="first_name" label="First name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="first_name" label="First name" active={columnFilters()['first_name'] || null} onApply={(state) => applyUserFilter('first_name', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('last_name')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="last_name" label="Last name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_name" label="Last name" active={columnFilters()['last_name'] || null} onApply={(state) => applyUserFilter('last_name', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('email')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="email" label="Email" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="email" label="Email" active={columnFilters()['email'] || null} onApply={(state) => applyUserFilter('email', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('required_2fa')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="required_2fa" label="Required 2FA" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="required_2fa" label="Required 2FA" active={columnFilters()['required_2fa'] || null} onApply={(state) => applyUserFilter('required_2fa', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('two_factor_configured')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="two_factor_configured" label="Authenticator" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="two_factor_configured" label="Authenticator" active={columnFilters()['two_factor_configured'] || null} onApply={(state) => applyUserFilter('two_factor_configured', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('role')}>
                   <th class="text-left py-2 text-xs text-muted font-medium">
-                    <div class="flex items-center gap-1.5">Role
-                      <ColumnFilter columnId="role" label="Role" active={columnFilters()['role'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['role'] = s; else delete n['role']; return n; }); }} />
-                    </div>
+                    <SortableHeader column="role" label="Role" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="role" label="Role" active={columnFilters()['role'] || null} onApply={(state) => applyUserFilter('role', state)} /></SortableHeader>
                   </th>
                 </Show>
                 <Show when={isVisible('last_login')}>
                   <th class="text-left py-2 text-xs text-muted font-medium">
-                    <div class="flex items-center gap-1.5">Last Login
-                      <ColumnFilter columnId="last_login" label="Last Login" active={columnFilters()['last_login'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['last_login'] = s; else delete n['last_login']; return n; }); }} />
-                    </div>
+                    <SortableHeader column="last_login" label="Last Login" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_login" label="Last Login" active={columnFilters()['last_login'] || null} onApply={(state) => applyUserFilter('last_login', state)} /></SortableHeader>
                   </th>
                 </Show>
                 <th class="text-right py-2 text-xs text-muted font-medium">Actions</th>

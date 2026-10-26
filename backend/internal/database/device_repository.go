@@ -190,6 +190,7 @@ func (r *DeviceRepository) ListWANInterfaces(ctx context.Context) ([]models.WANI
 			interfaces = append(interfaces, models.WANInterface{
 				SerialNumber: device.SerialNumber,
 				Name:         name,
+				Type:         ownValue("ConnectionType"),
 				Status:       ownValue("ConnectionStatus"),
 				IPAddress:    firstValue("ExternalIPAddress", "IPAddress"),
 				MACAddress:   firstValue("MACAddress", "MAC"),

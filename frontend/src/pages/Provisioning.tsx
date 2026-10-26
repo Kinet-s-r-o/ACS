@@ -36,11 +36,11 @@ const defaultProvColumns: ProvColumnConfig[] = [
 const metricTableColumns = [
   { id: 'name', label: 'Name', visible: true },
   { id: 'parameter', label: 'Parameter', visible: true },
-  { id: 'device_match', label: 'Device Match', visible: true },
   { id: 'source', label: 'Source', visible: true },
-  { id: 'unit', label: 'Unit', visible: true },
   { id: 'group', label: 'Group', visible: true },
   { id: 'active', label: 'Active', visible: true },
+  { id: 'device_match', label: 'Device Match', visible: false },
+  { id: 'unit', label: 'Unit', visible: false },
 ];
 const interfaceMetricTableColumns = [
   { id: 'name', label: 'Name', visible: true },
@@ -1351,11 +1351,9 @@ const Provisioning: Component = () => {
                             </Show>
                           </td></Show>
                           <Show when={metricColumns.isVisible('parameter')}><td class="w-[45%] px-3 py-2.5 text-secondary font-mono text-xs break-words [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
-                          <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs whitespace-nowrap">{def.device_type_match}</td></Show>
                           <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5 whitespace-nowrap">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">{def.unit || '—'}</td></Show>
                           <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">
                             <div class="flex items-center gap-1.5 whitespace-nowrap">
                               <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
@@ -1365,6 +1363,8 @@ const Provisioning: Component = () => {
                           <Show when={metricColumns.isVisible('active')}><td class="px-3 py-2.5 text-center whitespace-nowrap">
                             <span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span>
                           </td></Show>
+                          <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs whitespace-nowrap">{def.device_type_match}</td></Show>
+                          <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">{def.unit || '—'}</td></Show>
                           <td class="px-3 py-2.5 text-right whitespace-nowrap">
                             <div class="flex justify-end gap-1">
                               <button type="button" onClick={() => openEditMetric(def)} class="icon-button" title="Edit metric" aria-label={`Edit ${def.name}`}>

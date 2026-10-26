@@ -1814,10 +1814,6 @@ const DeviceDetail: Component = () => {
           <Show when={device()}>
             <h1 class="text-xl sm:text-2xl font-bold text-primary font-mono tracking-tight">{device()?.serial_number}</h1>
             <p class="text-sm text-muted mt-0.5">{device()?.manufacturer} {device()?.product_class}</p>
-            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
-              <span class="font-mono">{device()?.ip_address || 'IP unavailable'}</span>
-              <span>Last Inform: <span class="text-secondary">{formatDate(device()?.last_inform)}</span></span>
-            </div>
           </Show>
         </div>
         <div class="flex gap-2 items-center">

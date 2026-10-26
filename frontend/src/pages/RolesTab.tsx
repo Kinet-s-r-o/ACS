@@ -6,6 +6,13 @@ import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
+import ColumnFilter from '../components/ColumnFilter';
+import ColumnVisibility from '../components/ColumnVisibility';
+import SortableHeader from '../components/SortableHeader';
+import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import { useColumnVisibility } from '../lib/useColumnVisibility';
+import { createPersistedJsonSignal } from '../lib/storage';
+import { sortRows, type SortDirection } from '../lib/sorting';
 
 const PERMISSION_GROUPS: { label: string; read: string; write: string }[] = [
   { label: 'Users', read: 'users.read', write: 'users.write' },
@@ -27,6 +34,32 @@ const RolesTab: Component = () => {
   const [roles, { refetch: refetchRoles }] = createResource(async () => {
     if (!hasPermission('roles.read')) return [];
     return api.getRoles();
+  });
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.roles', {});
+  const { columns, isVisible, toggle } = useColumnVisibility('roles', [
+    { id: 'name', label: 'Name', visible: true },
+    { id: 'description', label: 'Description', visible: true },
+    { id: 'permissions', label: 'Permissions', visible: true },
+    { id: 'type', label: 'Type', visible: true },
+  ]);
+  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'name', direction: 'asc' });
+  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const getFilterValue = (role: Role, column: string): string => {
+    switch (column) {
+      case 'name': return role.name;
+      case 'description': return role.description || '';
+      case 'permissions': return `${role.permissions.length} / 18`;
+      case 'type': return role.is_system ? 'System' : 'Custom';
+      default: return '';
+    }
+  };
+  const filteredRoles = () => applyColumnFilters(roles() || [], columnFilters(), getFilterValue);
+  const sortedRoles = () => sortRows(filteredRoles(), sortState().column, sortState().direction, getFilterValue);
+  const applyRoleFilter = (column: string, state: ColumnFilterState | null) => setColumnFilters(previous => {
+    const next = { ...previous };
+    if (state) next[column] = state;
+    else delete next[column];
+    return next;
   });
 
   const [showRoleModal, setShowRoleModal] = createSignal(false);
@@ -125,28 +158,30 @@ const RolesTab: Component = () => {
 
       <Show when={!roles.loading && !roles.error}>
         <Show when={(roles()?.length ?? 0) > 0}>
+        <Show when={sortedRoles().length > 0} fallback={<EmptyState compact title="No roles match these filters" description="Adjust or clear the column filters to see roles again." />}>
           <div class="overflow-x-auto table-scroll">
             <table class="data-table w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-muted/30">
-                  <th class="px-3 py-2 text-left font-medium">Name</th>
-                  <th class="px-3 py-2 text-left font-medium">Description</th>
-                  <th class="px-3 py-2 text-left font-medium">Permissions</th>
-                  <th class="px-3 py-2 text-left font-medium">Type</th>
+                  <Show when={isVisible('name')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="name" label="Name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="name" label="Name" active={columnFilters().name || null} onApply={state => applyRoleFilter('name', state)} /></SortableHeader></th></Show>
+                  <Show when={isVisible('description')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyRoleFilter('description', state)} /></SortableHeader></th></Show>
+                  <Show when={isVisible('permissions')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="permissions" label="Permissions" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="permissions" label="Permissions" active={columnFilters().permissions || null} onApply={state => applyRoleFilter('permissions', state)} /></SortableHeader></th></Show>
+                  <Show when={isVisible('type')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="type" label="Type" active={columnFilters().type || null} onApply={state => applyRoleFilter('type', state)} /></SortableHeader></th></Show>
                   <th class="px-3 py-2"></th>
+                  <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
               <tbody>
-                <For each={roles()}>
+                <For each={sortedRoles()}>
                   {(role) => (
                     <tr class="border-b border-border/50 hover:bg-muted/20">
-                      <td class="px-3 py-2 font-medium">{role.name}</td>
-                      <td class="px-3 py-2 text-muted">{role.description || '—'}</td>
-                      <td class="px-3 py-2"><span class="badge">{role.permissions.length} / 18</span></td>
-                      <td class="px-3 py-2">
+                      <Show when={isVisible('name')}><td class="px-3 py-2 font-medium">{role.name}</td></Show>
+                      <Show when={isVisible('description')}><td class="px-3 py-2 text-muted">{role.description || '—'}</td></Show>
+                      <Show when={isVisible('permissions')}><td class="px-3 py-2"><span class="badge">{role.permissions.length} / 18</span></td></Show>
+                      <Show when={isVisible('type')}><td class="px-3 py-2">
                         <Show when={role.is_system}><span class="badge badge-info">System</span></Show>
                         <Show when={!role.is_system}><span class="badge">Custom</span></Show>
-                      </td>
+                      </td></Show>
                       <td class="px-3 py-2">
                         <div class="flex gap-1 justify-end">
                           <Show when={canWrite() && !role.is_system}>
@@ -155,12 +190,14 @@ const RolesTab: Component = () => {
                           </Show>
                         </div>
                       </td>
+                      <td></td>
                     </tr>
                   )}
                 </For>
               </tbody>
             </table>
           </div>
+        </Show>
         </Show>
         <Show when={(roles()?.length ?? 0) === 0}>
           <EmptyState compact title="No roles defined" description="Create a role to define a set of permissions." />

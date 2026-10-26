@@ -27,7 +27,7 @@ export interface Device {
 export interface DeviceStats { total: number; online: number; offline: number }
 export interface DeviceListResponse { devices: Device[]; total: number; limit: number; offset: number }
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
-export interface WANInterface { serial_number: string; name: string; status: string; ip_address: string; mac_address: string }
+export interface WANInterface { serial_number: string; name: string; type: string; status: string; ip_address: string; mac_address: string }
 export interface Task { id: number; device_id: number; type: string; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
 export interface GlobalTask extends Task { serial_number: string }
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
