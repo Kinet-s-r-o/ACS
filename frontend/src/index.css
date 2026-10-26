@@ -200,10 +200,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .distribution-list { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .distribution-row { display: grid; grid-template-columns: minmax(78px, 1fr) minmax(110px, 2fr) auto; align-items: center; gap: 10px; min-width: 0; }
 .distribution-label { overflow: hidden; color: rgb(var(--text-secondary)); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.distribution-progress { width: 100%; height: 5px; overflow: hidden; appearance: none; border: 0; background: rgb(var(--bg-elevated)); }
+.distribution-progress { width: 100%; height: 10px; overflow: hidden; appearance: none; border: 1px solid rgb(var(--border-subtle)); border-radius: 2px; background: rgb(var(--bg-elevated)); box-shadow: inset 0 1px 2px rgb(15 23 42 / 14%), 0 1px 1px rgb(255 255 255 / 70%); }
 .distribution-progress::-webkit-progress-bar { background: rgb(var(--bg-elevated)); }
-.distribution-progress::-webkit-progress-value { background: rgb(var(--accent)); }
-.distribution-progress::-moz-progress-bar { background: rgb(var(--accent)); }
+.distribution-progress::-webkit-progress-value { background: rgb(var(--accent)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 38%), inset 0 -1px 0 rgb(15 23 42 / 15%), 0 1px 2px rgb(15 23 42 / 20%); }
+.distribution-progress::-moz-progress-bar { background: rgb(var(--accent)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 38%), inset 0 -1px 0 rgb(15 23 42 / 15%), 0 1px 2px rgb(15 23 42 / 20%); }
 .distribution-progress.is-error::-webkit-progress-value { background: rgb(var(--error)); }
 .distribution-progress.is-error::-moz-progress-bar { background: rgb(var(--error)); }
 .distribution-progress.is-warning::-webkit-progress-value { background: rgb(var(--warning)); }

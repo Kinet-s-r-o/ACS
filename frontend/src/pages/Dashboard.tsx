@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createMemo, createResource, For, Show } from 'solid-js';
 import { A } from '@solidjs/router';
-import { AlertTriangle, ArrowRight, RefreshCw, Router, WifiOff } from 'lucide-solid';
+import { RefreshCw, Router } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { api } from '../lib/api';
@@ -120,21 +120,6 @@ const Dashboard: Component = () => {
             <small>Online share of inventory</small>
           </div>
         </dl>
-
-        <nav class="ops-attention-list" aria-label="Operational shortcuts">
-          <A href="/devices" class="ops-attention-link">
-            <div><strong><WifiOff size={13} class="mr-1.5 inline-block" />Review offline CPEs</strong><span>{(stats()?.offline ?? 0).toLocaleString()} devices require review</span></div>
-            <ArrowRight size={14} aria-hidden="true" />
-          </A>
-          <A href="/faults" class="ops-attention-link">
-            <div><strong><AlertTriangle size={13} class="mr-1.5 inline-block" />Open CWMP fault center</strong><span>Review protocol and parameter failures</span></div>
-            <ArrowRight size={14} aria-hidden="true" />
-          </A>
-          <A href="/tasks" class="ops-attention-link">
-            <div><strong><RefreshCw size={13} class="mr-1.5 inline-block" />Track CWMP tasks</strong><span>Confirm queued and completed operations</span></div>
-            <ArrowRight size={14} aria-hidden="true" />
-          </A>
-        </nav>
 
         <section class="data-panel">
           <div class="data-panel-header">
