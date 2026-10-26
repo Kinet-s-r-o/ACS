@@ -1,5 +1,10 @@
 export const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:7548`;
 
+export interface APIToken {
+  id: number; user_id: number; name: string; description: string; prefix: string;
+  created_at: string; expires_at: string; last_used_at: string | null; revoked_at: string | null;
+}
+
 export interface Device {
   id: number;
   serial_number: string;
@@ -175,6 +180,10 @@ export const api = {
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getUsers: () => request<User[]>('/users'),
+  getAPITokens: (userId: number) => request<APIToken[]>(`/users/${userId}/api-tokens`),
+  createAPIToken: (userId: number, body: { name: string; description: string; expires_in_days: number }) => request<APIToken & { token: string }>(`/users/${userId}/api-tokens`, { method: 'POST', body: JSON.stringify(body) }),
+  revokeAPIToken: (userId: number, tokenId: number) => request<{ status: string }>(`/users/${userId}/api-tokens/${tokenId}`, { method: 'DELETE' }),
+  getIntegrationSpec: () => request<Record<string, unknown>>('/openapi.json'),
   createUser: (body: { username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
   updateUser: (id: number, body: Partial<{ username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteUser: (id: number) => request<{ status: string }>(`/users/${id}`, { method: 'DELETE' }),

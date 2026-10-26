@@ -17,6 +17,7 @@ const Firmwares = lazy(() => import('./pages/Firmwares'));
 const Security = lazy(() => import('./pages/Security'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Users = lazy(() => import('./pages/Users'));
+const APIDocs = lazy(() => import('./pages/APIDocs'));
 const Delivery = lazy(() => import('./pages/Delivery'));
 const Provisioning = lazy(() => import('./pages/Provisioning'));
 const GeneralSettings = lazy(() => import('./pages/GeneralSettings'));
@@ -57,6 +58,7 @@ const App: Component = () => {
             <Route path="/security" component={Security} />
             <Route path="/settings" component={Settings} />
             <Route path="/settings/users" component={Users} />
+            <Route path="/settings/api-docs" component={APIDocs} />
             <Route path="/settings/delivery" component={Delivery} />
             <Route path="/settings/provisioning" component={Provisioning} />
             <Route path="/settings/general" component={GeneralSettings} />

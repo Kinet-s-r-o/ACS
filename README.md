@@ -235,6 +235,10 @@ sudo tar -C /var/lib/skyacs -czf skyacs-firmware-$(date +%F).tar.gz firmware
 
 SKYACS currently operates as a **single-node control plane**. Local firmware storage and the in-process scheduler are not designed for active-active or high-availability deployments. Run one backend instance per database. The project remains in beta until a public vendor interoperability matrix and fleet load-test results are available.
 
+## External integration API
+
+External billing systems can read and write CPE parameters by serial number using user-linked API tokens. See the [integration API guide](docs/integration-api.md), the [OpenAPI contract](backend/internal/api/openapi.json), and **System settings → API documentation** in the console. Generate and revoke tokens using the key button beside an operator in **Users and Roles**.
+
 ## Validation
 
 ```bash

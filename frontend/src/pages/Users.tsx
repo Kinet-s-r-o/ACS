@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
-import { Users, ShieldCheck, Trash2, Edit2, Plus, Search, X } from 'lucide-solid';
+import { Users, ShieldCheck, Trash2, Edit2, Plus, Search, X, KeyRound } from 'lucide-solid';
+import UserAPITokens from '../components/UserAPITokens';
 import { api, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
@@ -35,6 +36,7 @@ const UsersPage: Component = () => {
   });
 
   const [showUserModal, setShowUserModal] = createSignal(false);
+  const [tokenUser, setTokenUser] = createSignal<User | null>(null);
   const [editingUser, setEditingUser] = createSignal<User | null>(null);
   const [userForm, setUserForm] = createSignal({ username: '', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read' as 'full' | 'read', roleId: '' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.users', {});
@@ -244,6 +246,7 @@ const UsersPage: Component = () => {
                     </Show>
                     <td class="py-2 text-right">
                       <div class="flex items-center justify-end gap-1">
+                        <Show when={isFullAccess() && hasPermission('users.read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
                         <button onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}>
                           <Edit2 size={14} />
                         </button>
@@ -271,6 +274,7 @@ const UsersPage: Component = () => {
       </Show>
 
       {/* User Modal */}
+      <Show when={tokenUser()}>{(user) => <UserAPITokens user={user()} onClose={() => setTokenUser(null)} />}</Show>
       <Show when={showUserModal()}>
         <Dialog title={editingUser() ? 'Edit operator' : 'Add operator'} description="Operator roles determine access to configuration and destructive CPE actions." size="small" onClose={() => { if (!pendingAction()) setShowUserModal(false); }}>
           <form class="space-y-4" onSubmit={(event) => { event.preventDefault(); void (editingUser() ? handleUpdateUser() : handleCreateUser()); }}>

@@ -110,4 +110,4 @@ jobs:
         working-directory: backend
         env:
           TEST_DATABASE_URL: postgres://skyacs:skyacs-ci-password@127.0.0.1:5432/skyacs?sslmode=disable
-        run: go test -race ./internal/database/
+        run: go test -race ./internal/database/ ./internal/api/

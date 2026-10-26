@@ -12,3 +12,5 @@
 | `*_test.go` | Unit and integration coverage by package | Run `go test -race ./...` |
 
 Keep sensitive values out of logs and tests. Database schema changes must remain compatible with the supported PostgreSQL 14–18 matrix.
+
+External integration contract: [API guide](../docs/integration-api.md) and `internal/api/openapi.json`. Keep the embedded OpenAPI document synchronized with `integration.go` and `api_tokens.go`. The token middleware in `internal/auth/api_token.go` must resolve current permissions without a permissive fallback on lookup failure. `integration_postgres_test.go` runs in an isolated schema when `TEST_DATABASE_URL` is set.

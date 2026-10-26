@@ -30,6 +30,7 @@ const navigation = [
       { href: '/settings/retention', label: 'DB retention' },
       { href: '/settings/dictionaries', label: 'Dictionaries' },
       { href: '/settings/users', label: 'Users and Roles' },
+      { href: '/settings/api-docs', label: 'API documentation' },
       { href: '/settings/delivery', label: 'Delivery & Connection' },
       { href: '/settings/provisioning', label: 'Provisioning' },
     ] },
@@ -49,6 +50,7 @@ const pageNames: Record<string, string> = {
   '/settings/retention': 'DB retention',
   '/settings/dictionaries': 'Dictionaries',
   '/settings/users': 'Users and Roles',
+  '/settings/api-docs': 'API documentation',
   '/settings/delivery': 'Delivery & Connection Request',
   '/settings/provisioning': 'Provisioning',
 };

@@ -41,6 +41,9 @@ type Router struct {
 	firmwareRepo         *database.FirmwareRepository
 	faultRepo            *database.FaultRepository
 	userRepo             *database.UserRepository
+	apiTokenRepo         *database.APITokenRepository
+	apiTokenLimiter      *loginLimiter
+	apiIPLimiter         *loginLimiter
 	roleRepo             *database.RoleRepository
 	provisioningRepo     *database.ProvisioningRepository
 	auditRepo            *database.AuditRepository
@@ -109,6 +112,9 @@ func NewRouter(db *gorm.DB) *Router {
 		firmwareRepo:         database.NewFirmwareRepository(db),
 		faultRepo:            database.NewFaultRepository(db),
 		userRepo:             database.NewUserRepository(db),
+		apiTokenRepo:         database.NewAPITokenRepository(db),
+		apiTokenLimiter:      newLoginLimiter(120, time.Minute),
+		apiIPLimiter:         newLoginLimiter(600, time.Minute),
 		roleRepo:             database.NewRoleRepository(db),
 		provisioningRepo:     database.NewProvisioningRepository(db),
 		auditRepo:            database.NewAuditRepository(db),
@@ -142,6 +148,14 @@ func (r *Router) Handler() http.Handler {
 
 	// Protected API mux
 	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("GET /users/{id}/api-tokens", auth.RequireFullAccess(auth.RequirePermission(models.PermUsersRead)(r.handleListAPITokens)))
+	apiMux.HandleFunc("POST /users/{id}/api-tokens", auth.RequireFullAccess(auth.RequirePermission(models.PermUsersWrite)(r.handleCreateAPIToken)))
+	apiMux.HandleFunc("DELETE /users/{id}/api-tokens/{tokenID}", auth.RequireFullAccess(auth.RequirePermission(models.PermUsersWrite)(r.handleRevokeAPIToken)))
+	apiMux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(integrationOpenAPI)
+	})
+	mux.Handle("/v1/", r.adminWebAccessMiddleware(r.integrationHandler()))
 
 	// Auth endpoints
 	apiMux.HandleFunc("GET /auth/me", r.handleAuthMe)

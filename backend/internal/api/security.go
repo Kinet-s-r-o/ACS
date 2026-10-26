@@ -304,7 +304,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Authorization, Idempotency-Key")
+		w.Header().Set("Access-Control-Expose-Headers", "Location, Retry-After")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Max-Age", "600")
 
@@ -346,7 +347,7 @@ func auditMiddleware(repo *database.AuditRepository, next http.Handler) http.Han
 		recorder := &responseRecorder{ResponseWriter: w}
 		next.ServeHTTP(recorder, req)
 
-		if req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodOptions {
+		if auth.GetAPITokenFromContext(req.Context()) == nil && (req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodOptions) {
 			return
 		}
 		claims := auth.GetUserFromContext(req.Context())
@@ -368,6 +369,10 @@ func auditMiddleware(repo *database.AuditRepository, next http.Handler) http.Han
 			UserAgent: truncate(req.UserAgent(), 512),
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		if token := auth.GetAPITokenFromContext(req.Context()); token != nil {
+			entry.APITokenID = &token.ID
+			entry.APITokenName = token.Name
+		}
 		defer cancel()
 		if err := repo.Create(ctx, entry); err != nil {
 			// The API response has already been sent; report persistence failure

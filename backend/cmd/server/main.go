@@ -327,6 +327,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.DeviceParameter{},
 		&models.Task{},
 		&models.User{},
+		&models.APIToken{},
 		&models.Role{},
 		&models.Fault{},
 		&models.Firmware{},
