@@ -8,7 +8,9 @@ interface AuthContextType {
   isFullAccess: Accessor<boolean>;
   permissions: Accessor<string[]>;
   hasPermission: (perm: string) => boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<{ stage: 'complete' | 'setup' | 'verify'; secret?: string; otpauthURL?: string }>;
+  completeTwoFactor: (code: string, setup: boolean) => Promise<void>;
+  cancelTwoFactor: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -47,9 +49,38 @@ export const AuthProvider: ParentComponent = (props) => {
     const body = await response.json().catch(() => ({ error: 'Login service unavailable' }));
     if (!response.ok) throw new Error(body.error || 'Login failed');
 
+    if (body.two_factor_setup_required || body.two_factor_required) {
+      setUser(null);
+      setPermissions([]);
+      setIsAuthenticated(false);
+      if (body.two_factor_setup_required) return { stage: 'setup' as const, secret: body.two_factor_secret, otpauthURL: body.two_factor_otpauth_url };
+      return { stage: 'verify' as const };
+    }
+
     setUser(body.user);
     setPermissions(body.permissions || []);
     setIsAuthenticated(true);
+    return { stage: 'complete' as const };
+  };
+
+  const completeTwoFactor = async (code: string, setup: boolean) => {
+    const response = await fetch(`${API_BASE}/auth/2fa/${setup ? 'setup' : 'verify'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+      credentials: 'include',
+    });
+    const body = await response.json().catch(() => ({ error: 'Authentication service unavailable' }));
+    if (!response.ok) throw new Error(body.error || 'Two-factor verification failed');
+    setUser(body.user);
+    setPermissions(body.permissions || []);
+    setIsAuthenticated(true);
+  };
+
+  const cancelTwoFactor = async () => {
+    try {
+      await fetch(`${API_BASE}/auth/2fa/cancel`, { method: 'POST', credentials: 'include' });
+    } catch { /* The short-lived challenge cookie expires automatically. */ }
   };
 
   const logout = async () => {
@@ -67,7 +98,7 @@ export const AuthProvider: ParentComponent = (props) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, ready, isAuthenticated, isFullAccess, permissions, hasPermission, login, logout }}>
+    <AuthContext.Provider value={{ user, ready, isAuthenticated, isFullAccess, permissions, hasPermission, login, completeTwoFactor, cancelTwoFactor, logout }}>
       {props.children}
     </AuthContext.Provider>
   );

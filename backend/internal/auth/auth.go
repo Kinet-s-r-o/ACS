@@ -18,6 +18,7 @@ var (
 )
 
 const SessionCookieName = "acs_session"
+const TwoFactorCookieName = "acs_2fa"
 
 type contextKey string
 
@@ -39,6 +40,7 @@ type Claims struct {
 	Role         models.UserRole `json:"role"`
 	RoleID       int64           `json:"role_id"`
 	TokenVersion uint64          `json:"token_version"`
+	Purpose      string          `json:"purpose,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -53,6 +55,14 @@ func CheckPassword(password, hash string) bool {
 }
 
 func GenerateToken(user *models.User) (string, error) {
+	return generateToken(user, "", 24*time.Hour)
+}
+
+func GenerateTwoFactorChallengeToken(user *models.User) (string, error) {
+	return generateToken(user, "two_factor", 5*time.Minute)
+}
+
+func generateToken(user *models.User, purpose string, duration time.Duration) (string, error) {
 	var roleID int64
 	if user.RoleID != nil {
 		roleID = *user.RoleID
@@ -63,8 +73,9 @@ func GenerateToken(user *models.User) (string, error) {
 		Role:         user.Role,
 		RoleID:       roleID,
 		TokenVersion: user.TokenVersion,
+		Purpose:      purpose,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now().Add(-30 * time.Second)),
 			Subject:   user.Username,
@@ -124,7 +135,7 @@ func AuthMiddleware(users UserLookup, perms PermissionLookup, next http.Handler)
 		}
 
 		claims, err := ValidateToken(cookie.Value)
-		if err != nil {
+		if err != nil || claims.Purpose != "" {
 			writeAuthError(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
 			return
 		}

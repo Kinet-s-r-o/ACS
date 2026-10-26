@@ -36,7 +36,7 @@ export interface DeviceSnapshot { id: number; device_id: number; name: string; m
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
 export interface Fault { id: number; device_id: number; serial_number: string; fault_code: string; fault_string: string; parameter_name: string; resolved: boolean; created_at: string; resolved_at: string | null }
 export interface FaultCounts { active: number; resolved: number; total: number }
-export interface User { id: number; username: string; first_name: string; last_name: string; email: string; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
+export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
 export interface TagDefinition { id: string; name: string; color: string; description?: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string> }
@@ -174,8 +174,8 @@ export const api = {
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getUsers: () => request<User[]>('/users'),
-  createUser: (body: { username: string; first_name: string; last_name: string; email: string; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
-  updateUser: (id: number, body: Partial<{ username: string; first_name: string; last_name: string; email: string; password: string; role: 'full' | 'read'; role_id: number }>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createUser: (body: { username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser: (id: number, body: Partial<{ username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteUser: (id: number) => request<{ status: string }>(`/users/${id}`, { method: 'DELETE' }),
   getRoles: () => request<Role[]>('/roles'),
   createRole: (body: { name: string; description: string; permissions: string[] }) => request<Role>('/roles', { method: 'POST', body: JSON.stringify(body) }),

@@ -65,7 +65,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id int64, passwordH
 		}).Error
 }
 
-func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, firstName, lastName, email string, role models.UserRole, roleID *int64, passwordHash string) error {
+func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, firstName, lastName, email string, required2FA, reset2FA bool, role models.UserRole, roleID *int64, passwordHash string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
 			return err
@@ -88,6 +88,7 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, 
 			"first_name":    firstName,
 			"last_name":     lastName,
 			"email":         email,
+			"required_2fa":  required2FA,
 			"role":          role,
 			"role_id":       roleID,
 			"token_version": gorm.Expr("token_version + 1"),
@@ -95,8 +96,42 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, 
 		if passwordHash != "" {
 			updates["password_hash"] = passwordHash
 		}
+		if reset2FA {
+			updates["two_factor_secret"] = ""
+			updates["two_factor_pending_secret"] = ""
+			updates["two_factor_last_step"] = -1
+		}
 		return tx.Model(&models.User{}).Where("id = ?", id).Updates(updates).Error
 	})
+}
+
+func (r *UserRepository) SetTwoFactorPendingSecret(ctx context.Context, id int64, encryptedSecret string) error {
+	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", id).
+		Update("two_factor_pending_secret", encryptedSecret).Error
+}
+
+func (r *UserRepository) CompleteTwoFactorSetup(ctx context.Context, id int64, step int64) error {
+	result := r.db.WithContext(ctx).Model(&models.User{}).Where("id = ? AND two_factor_pending_secret <> ''", id).
+		Updates(map[string]interface{}{
+			"two_factor_secret":         gorm.Expr("two_factor_pending_secret"),
+			"two_factor_pending_secret": "",
+			"two_factor_last_step":      step,
+			"token_version":             gorm.Expr("token_version + 1"),
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *UserRepository) ConsumeTwoFactorStep(ctx context.Context, id, step int64) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ? AND two_factor_last_step < ?", id, step).
+		Update("two_factor_last_step", step)
+	return result.RowsAffected == 1, result.Error
 }
 
 func (r *UserRepository) DeleteSafely(ctx context.Context, id int64) error {

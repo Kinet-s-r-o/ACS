@@ -49,6 +49,7 @@ type Router struct {
 	snapshotRepo         *database.SnapshotRepository
 	tagRepo              *database.TagRepository
 	loginLimiter         *loginLimiter
+	twoFactorLimiter     *loginLimiter
 	downloadLimiter      *loginLimiter
 	adminWebNetworks     []*net.IPNet
 	uploadDir            string
@@ -116,6 +117,7 @@ func NewRouter(db *gorm.DB) *Router {
 		snapshotRepo:         database.NewSnapshotRepository(db),
 		tagRepo:              database.NewTagRepository(db),
 		loginLimiter:         newLoginLimiter(5, 15*time.Minute),
+		twoFactorLimiter:     newLoginLimiter(5, 15*time.Minute),
 		downloadLimiter:      newLoginLimiter(60, time.Minute),
 		adminWebNetworks:     parseAllowedNetworks(os.Getenv("ADMIN_WEB_ALLOWED_CIDRS")),
 		uploadDir:            uploadDir,
@@ -132,6 +134,9 @@ func (r *Router) Handler() http.Handler {
 	mux.HandleFunc("GET /health", r.handleHealth)
 	mux.HandleFunc("GET /meta", r.handleMeta)
 	mux.HandleFunc("POST /auth/login", r.handleLogin)
+	mux.Handle("POST /auth/2fa/setup", r.twoFactorChallengeMiddleware(http.HandlerFunc(r.handleCompleteTwoFactorSetup)))
+	mux.Handle("POST /auth/2fa/verify", r.twoFactorChallengeMiddleware(http.HandlerFunc(r.handleVerifyTwoFactor)))
+	mux.Handle("POST /auth/2fa/cancel", r.twoFactorChallengeMiddleware(http.HandlerFunc(r.handleCancelTwoFactor)))
 	mux.HandleFunc("GET /files/{id}/{filename}", r.handleFirmwareFile)
 
 	// Protected API mux
@@ -2441,7 +2446,161 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
+	r.loginLimiter.Reset(ip)
+	if user.Required2FA {
+		if err := r.beginTwoFactorChallenge(w, req, user); err != nil {
+			log.Printf("Could not start 2FA for user %d: %v", user.ID, err)
+			respondError(w, http.StatusInternalServerError, "Could not start two-factor authentication")
+		}
+		return
+	}
+	r.finishLogin(w, req, user)
+}
 
+func (r *Router) beginTwoFactorChallenge(w http.ResponseWriter, req *http.Request, user *models.User) error {
+	token, err := auth.GenerateTwoFactorChallengeToken(user)
+	if err != nil {
+		return err
+	}
+	if user.TwoFactorSecret != "" {
+		clearSessionCookies(w, req)
+		setTwoFactorChallengeCookie(w, req, token)
+		respondJSON(w, http.StatusOK, models.LoginResponse{TwoFactorRequired: true})
+		return nil
+	}
+	secret, err := database.DecryptValue(user.TwoFactorPendingSecret)
+	if err != nil {
+		return err
+	}
+	if secret == "" {
+		secret, err = auth.GenerateTOTPSecret()
+		if err != nil {
+			return err
+		}
+		encrypted, encryptErr := database.EncryptValue(secret)
+		if encryptErr != nil {
+			return encryptErr
+		}
+		if err := r.userRepo.SetTwoFactorPendingSecret(req.Context(), user.ID, encrypted); err != nil {
+			return err
+		}
+	}
+	label := url.PathEscape("SKYACS:" + user.Username)
+	otpURL := "otpauth://totp/" + label + "?secret=" + url.QueryEscape(secret) + "&issuer=SKYACS&algorithm=SHA1&digits=6&period=30"
+	clearSessionCookies(w, req)
+	setTwoFactorChallengeCookie(w, req, token)
+	respondJSON(w, http.StatusOK, models.LoginResponse{TwoFactorSetupRequired: true, TwoFactorSecret: secret, TwoFactorOTPAuthURL: otpURL})
+	return nil
+}
+
+func (r *Router) twoFactorChallengeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if !r.isAdminWebClientAllowed(req) {
+			respondError(w, http.StatusForbidden, "Web UI access is not allowed from this network")
+			return
+		}
+		cookie, err := req.Cookie(auth.TwoFactorCookieName)
+		if err != nil {
+			respondError(w, http.StatusUnauthorized, "Two-factor challenge expired; sign in again")
+			return
+		}
+		claims, err := auth.ValidateToken(cookie.Value)
+		if err != nil || claims.Purpose != "two_factor" {
+			respondError(w, http.StatusUnauthorized, "Two-factor challenge expired; sign in again")
+			return
+		}
+		user, err := r.userRepo.GetByID(req.Context(), claims.UserID)
+		if err != nil || user == nil || !user.Required2FA || user.Username != claims.Username || user.Role != claims.Role || user.TokenVersion != claims.TokenVersion {
+			respondError(w, http.StatusUnauthorized, "Two-factor challenge expired; sign in again")
+			return
+		}
+		ctx := context.WithValue(req.Context(), auth.UserContextKey, claims)
+		next.ServeHTTP(w, req.WithContext(ctx))
+	})
+}
+
+func (r *Router) handleCompleteTwoFactorSetup(w http.ResponseWriter, req *http.Request) {
+	r.completeTwoFactorChallenge(w, req, true)
+}
+
+func (r *Router) handleVerifyTwoFactor(w http.ResponseWriter, req *http.Request) {
+	r.completeTwoFactorChallenge(w, req, false)
+}
+
+func (r *Router) handleCancelTwoFactor(w http.ResponseWriter, req *http.Request) {
+	clearTwoFactorChallengeCookie(w, req)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (r *Router) completeTwoFactorChallenge(w http.ResponseWriter, req *http.Request, setup bool) {
+	if !r.twoFactorLimiter.Allow(clientIP(req)) {
+		w.Header().Set("Retry-After", "900")
+		respondError(w, http.StatusTooManyRequests, "Too many two-factor attempts; try again later")
+		return
+	}
+	claims := auth.GetUserFromContext(req.Context())
+	user, err := r.userRepo.GetByID(req.Context(), claims.UserID)
+	if err != nil || user == nil {
+		respondError(w, http.StatusUnauthorized, "Two-factor challenge expired; sign in again")
+		return
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "Enter the six-digit code from your authenticator app")
+		return
+	}
+	secretValue := user.TwoFactorSecret
+	if setup {
+		if user.TwoFactorSecret != "" {
+			respondError(w, http.StatusConflict, "Two-factor authentication is already configured")
+			return
+		}
+		secretValue = user.TwoFactorPendingSecret
+	} else if user.TwoFactorSecret == "" {
+		respondError(w, http.StatusConflict, "Two-factor authentication setup is required")
+		return
+	}
+	secret, err := database.DecryptValue(secretValue)
+	if err != nil || secret == "" {
+		respondError(w, http.StatusUnauthorized, "Two-factor challenge expired; sign in again")
+		return
+	}
+	step, valid := auth.VerifyTOTP(secret, body.Code, time.Now())
+	if !valid {
+		r.recordLoginAudit(req, user.Username, http.StatusUnauthorized)
+		respondError(w, http.StatusUnauthorized, "Invalid authenticator code")
+		return
+	}
+	if setup {
+		if err := r.userRepo.CompleteTwoFactorSetup(req.Context(), user.ID, step); err != nil {
+			respondError(w, http.StatusInternalServerError, "Could not complete two-factor setup")
+			return
+		}
+		user, err = r.userRepo.GetByID(req.Context(), user.ID)
+		if err != nil || user == nil {
+			respondError(w, http.StatusInternalServerError, "Could not load user account")
+			return
+		}
+	} else {
+		consumed, consumeErr := r.userRepo.ConsumeTwoFactorStep(req.Context(), user.ID, step)
+		if consumeErr != nil {
+			respondError(w, http.StatusInternalServerError, "Could not verify authenticator code")
+			return
+		}
+		if !consumed {
+			respondError(w, http.StatusUnauthorized, "This authenticator code has already been used")
+			return
+		}
+	}
+	r.twoFactorLimiter.Reset(clientIP(req))
+	r.finishLogin(w, req, user)
+}
+
+func (r *Router) finishLogin(w http.ResponseWriter, req *http.Request, user *models.User) {
 	token, err := auth.GenerateToken(user)
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
@@ -2454,27 +2613,24 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to generate session")
 		return
 	}
-
 	if err := r.userRepo.UpdateLastLogin(req.Context(), user.ID); err != nil {
 		log.Printf("Failed to record last login for user %d: %v", user.ID, err)
 	}
-	r.loginLimiter.Reset(ip)
+	r.loginLimiter.Reset(clientIP(req))
+	r.twoFactorLimiter.Reset(clientIP(req))
 	r.recordLoginAudit(req, user.Username, http.StatusOK)
+	clearTwoFactorChallengeCookie(w, req)
 	setSessionCookies(w, req, token, csrfToken)
-
 	var perms []string
 	if user.RoleID != nil {
 		perms, _ = r.roleRepo.GetPermissions(req.Context(), *user.RoleID)
 	}
-
-	respondJSON(w, http.StatusOK, models.LoginResponse{
-		User:        user,
-		Permissions: perms,
-	})
+	respondJSON(w, http.StatusOK, models.LoginResponse{User: user, Permissions: perms})
 }
 
 func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	clearSessionCookies(w, req)
+	clearTwoFactorChallengeCookie(w, req)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2579,6 +2735,9 @@ func (r *Router) handleListUsers(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to list users")
 		return
 	}
+	for _, user := range users {
+		user.TwoFactorConfigured = user.TwoFactorSecret != ""
+	}
 
 	respondJSON(w, http.StatusOK, users)
 }
@@ -2630,6 +2789,7 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 		FirstName:    body.FirstName,
 		LastName:     body.LastName,
 		Email:        body.Email,
+		Required2FA:  body.Required2FA,
 		PasswordHash: hash,
 		Role:         legacyRole,
 		RoleID:       roleID,
@@ -2702,6 +2862,9 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 	if body.Email != nil {
 		user.Email = strings.TrimSpace(*body.Email)
 	}
+	if body.Required2FA != nil {
+		user.Required2FA = *body.Required2FA
+	}
 	if err := validateUserProfile(user.FirstName, user.LastName, user.Email); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -2716,7 +2879,7 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		user.Role = legacyRole
 	}
 
-	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.FirstName, user.LastName, user.Email, user.Role, user.RoleID, passwordHash); err != nil {
+	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.FirstName, user.LastName, user.Email, user.Required2FA, body.Reset2FA, user.Role, user.RoleID, passwordHash); err != nil {
 		if errors.Is(err, database.ErrLastFullAdmin) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -2729,6 +2892,7 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	user.TwoFactorConfigured = user.TwoFactorSecret != "" && !body.Reset2FA
 	respondJSON(w, http.StatusOK, user)
 }
 

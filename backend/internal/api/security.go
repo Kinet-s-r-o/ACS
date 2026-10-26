@@ -272,6 +272,14 @@ func clearSessionCookies(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func setTwoFactorChallengeCookie(w http.ResponseWriter, req *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{Name: auth.TwoFactorCookieName, Value: token, Path: "/", HttpOnly: true, Secure: isSecureRequest(req), SameSite: http.SameSiteLaxMode, MaxAge: 5 * 60})
+}
+
+func clearTwoFactorChallengeCookie(w http.ResponseWriter, req *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: auth.TwoFactorCookieName, Value: "", Path: "/", HttpOnly: true, Secure: isSecureRequest(req), SameSite: http.SameSiteLaxMode, MaxAge: -1})
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	configured := strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ",")
 	allowed := map[string]struct{}{
