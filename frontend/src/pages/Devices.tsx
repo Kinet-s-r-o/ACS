@@ -325,29 +325,6 @@ const Devices: Component = () => {
     <div class="space-y-5">
       <PageHeader title="CPE inventory" description="Search, inspect, and operate registered TR-069 endpoints.">
         <div class="flex gap-2">
-          <div class="flex flex-col gap-1">
-            <label for="device-search" class="text-[10px] text-muted">Find CPE</label>
-            <div class="relative">
-            <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <input
-              id="device-search"
-              type="text"
-              value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              placeholder="Serial, model, vendor, or IP"
-              class="input device-search-input w-48 text-sm"
-            />
-            <Show when={searchQuery()}>
-              <button
-                onClick={() => setSearchQuery('')}
-                class="input-clear"
-                aria-label="Clear CPE search"
-              >
-                <X size={12} />
-              </button>
-            </Show>
-            </div>
-          </div>
           <Show when={isFullAccess()}><button
             onClick={async () => {
               const list = deviceList()?.devices;
@@ -388,11 +365,30 @@ const Devices: Component = () => {
       </Show>
 
       <Show when={!deviceList.error}><div class="card overflow-hidden">
-        <div class="device-filter-summary" role="status" aria-live="polite">
+        <div class="table-panel-toolbar">
           <span><strong>{filteredDevices().length}</strong> visible on this page · <strong>{deviceList()?.total ?? 0}</strong> total CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
-          <Show when={hasInventoryFilter()}>
-            <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); }}>Clear search and filters</button>
-          </Show>
+          <div class="flex items-center gap-2">
+            <Show when={hasInventoryFilter()}>
+              <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); }}>Clear search and filters</button>
+            </Show>
+            <div class="relative">
+              <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <input
+                id="device-search"
+                type="text"
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                placeholder="Search CPEs..."
+                aria-label="Search CPEs by serial, model, vendor, or IP"
+                class="input pl-9! w-56 text-sm"
+              />
+              <Show when={searchQuery()}>
+                <button type="button" onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear CPE search">
+                  <X size={12} />
+                </button>
+              </Show>
+            </div>
+          </div>
         </div>
         <div class="overflow-x-auto table-scroll">
           <table class="data-table w-full">
