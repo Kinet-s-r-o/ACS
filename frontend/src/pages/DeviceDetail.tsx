@@ -30,6 +30,7 @@ import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageVa
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { formatDateTime } from '../lib/dateTime';
+import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 interface HostColumnConfig {
   id: string;
@@ -210,6 +211,15 @@ const DeviceDetail: Component = () => {
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('device_tasks', 10);
   const handleTaskPageSizeChange = (size: number) => { changeTaskPageSize(size); setTaskPage(0); };
   const [taskColumnFilters, setTaskColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.tasks`, {});
+  const { columns: deviceTaskColumns, isVisible: isDeviceTaskColumnVisible, toggle: toggleDeviceTaskColumn } = useColumnVisibility('device_tasks', [
+    { id: 'type', label: 'Type', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'created_at', label: 'Created', visible: true },
+    { id: 'completed_at', label: 'Completed', visible: true },
+    { id: 'created_by', label: 'User', visible: true },
+    { id: 'deleted_by', label: 'Deleted by', visible: true },
+    { id: 'error', label: 'Error', visible: true },
+  ]);
   const [deviceFaultColumnFilters, setDeviceFaultColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.faults`, {});
   const [taskSort, setTaskSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
@@ -2926,51 +2936,52 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-sm min-w-[980px]">
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('type')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="type" label="Type" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="type" label="Type" active={taskColumnFilters()['type'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['type'] = s; else delete n['type']; return n; }); }} />
                           </div>
-                        </th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        </th></Show>
+                        <Show when={isDeviceTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="status" label="Status" active={taskColumnFilters()['status'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} />
                           </div>
-                        </th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        </th></Show>
+                        <Show when={isDeviceTaskColumnVisible('created_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Created" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="created_at" label="Created" active={taskColumnFilters()['created_at'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} />
                           </div>
-                        </th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        </th></Show>
+                        <Show when={isDeviceTaskColumnVisible('completed_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="completed_at" label="Completed" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="completed_at" label="Completed" active={taskColumnFilters()['completed_at'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['completed_at'] = s; else delete n['completed_at']; return n; }); }} />
                           </div>
-                        </th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        </th></Show>
+                        <Show when={isDeviceTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="User" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="created_by" label="User" active={taskColumnFilters()['created_by'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_by'] = s; else delete n['created_by']; return n; }); }} />
                           </div>
-                        </th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} /></th>
-                        <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        </th></Show>
+                        <Show when={isDeviceTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} /></th></Show>
+                        <Show when={isDeviceTaskColumnVisible('error')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="error" label="Error" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="error" label="Error" active={taskColumnFilters()['error'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['error'] = s; else delete n['error']; return n; }); }} />
                           </div>
-                        </th>
+                        </th></Show>
                         <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
+                        <th class="px-2 py-2"><ColumnVisibility columns={deviceTaskColumns} onToggle={toggleDeviceTaskColumn} /></th>
                       </tr>
                     </thead>
                     <tbody>
                       <For each={pagedTasks()}>
                         {(task) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <td class="px-4 py-2 text-primary">{task.type}</td>
-                            <td class="px-4 py-2"><span class={`badge ${getStatusBadge(task.status)}`}>{task.status}</span></td>
-                            <td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td>
-                            <td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td>
-                            <td class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td>
-                            <td class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td>
-                            <td class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td>
+                            <Show when={isDeviceTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('status')}><td class="px-4 py-2"><span class={`badge ${getStatusBadge(task.status)}`}>{task.status}</span></td></Show>
+                            <Show when={isDeviceTaskColumnVisible('created_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('completed_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('created_by')}><td class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('deleted_by')}><td class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('error')}><td class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td></Show>
                             <td class="px-4 py-2 text-right">
                               <div class="inline-flex items-center gap-1">
                                 <button
@@ -2985,6 +2996,7 @@ const DeviceDetail: Component = () => {
                                 </Show>
                               </div>
                             </td>
+                            <td></td>
                           </tr>
                         )}
                       </For>

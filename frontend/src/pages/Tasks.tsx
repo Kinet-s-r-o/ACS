@@ -7,6 +7,7 @@ import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import ColumnFilter from '../components/ColumnFilter';
 import Pagination from '../components/Pagination';
+import ColumnVisibility from '../components/ColumnVisibility';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
@@ -16,6 +17,7 @@ import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
+import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -40,6 +42,16 @@ const Tasks: Component = () => {
   const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const [taskPage, setTaskPage] = createSignal(0);
+  const { columns: taskColumns, isVisible: isTaskColumnVisible, toggle: toggleTaskColumn } = useColumnVisibility('global_tasks', [
+    { id: 'serial_number', label: 'Serial number', visible: true },
+    { id: 'type', label: 'Type', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'created_at', label: 'Created', visible: true },
+    { id: 'completed_at', label: 'Completed', visible: true },
+    { id: 'created_by', label: 'User', visible: true },
+    { id: 'deleted_by', label: 'Deleted by', visible: true },
+    { id: 'error', label: 'Error', visible: true },
+  ]);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('global_tasks', 20);
   const [tasks, { refetch }] = createResource(api.getTasks);
   const [taskDetails] = createResource(() => selectedTask()?.id, (id) => api.getTask(id));
@@ -163,30 +175,32 @@ const Tasks: Component = () => {
                 <table class="data-table w-full text-sm min-w-[1240px]">
                   <thead class="bg-base sticky top-0 z-10">
                     <tr class="bg-base">
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="serial_number" label="Serial number" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('serial_number', 'Serial number')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('type', 'Type')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="status" label="Status" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('status', 'Status')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_at" label="Created" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_at', 'Created')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="completed_at" label="Completed" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('completed_at', 'Completed')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_by" label="User" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_by', 'User')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('deleted_by', 'Deleted by')}</SortableHeader></th>
-                      <th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="error" label="Error" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('error', 'Error')}</SortableHeader></th>
+                      <Show when={isTaskColumnVisible('serial_number')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="serial_number" label="Serial number" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('serial_number', 'Serial number')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('type')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('type', 'Type')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="status" label="Status" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('status', 'Status')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('created_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_at" label="Created" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_at', 'Created')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('completed_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="completed_at" label="Completed" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('completed_at', 'Completed')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_by" label="User" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_by', 'User')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('deleted_by', 'Deleted by')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('error')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="error" label="Error" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('error', 'Error')}</SortableHeader></th></Show>
                       <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
+                      <th class="px-2 py-2"><ColumnVisibility columns={taskColumns} onToggle={toggleTaskColumn} /></th>
                     </tr>
                   </thead>
                   <tbody>
                     <For each={pagedTasks()}>
                       {(task) => (
                         <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                          <td class="px-4 py-2"><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(task.serial_number)}?tab=tasks`} aria-label={`Open tasks for CPE ${task.serial_number}`}>{task.serial_number}</A></td>
-                          <td class="px-4 py-2 text-primary">{task.type}</td>
-                          <td class="px-4 py-2"><span class={`badge ${statusBadge(task.status)}`}>{task.status}</span></td>
-                          <td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td>
-                          <td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td>
-                          <td class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td>
-                          <td class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td>
-                          <td class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td>
+                          <Show when={isTaskColumnVisible('serial_number')}><td class="px-4 py-2"><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(task.serial_number)}?tab=tasks`} aria-label={`Open tasks for CPE ${task.serial_number}`}>{task.serial_number}</A></td></Show>
+                          <Show when={isTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}</td></Show>
+                          <Show when={isTaskColumnVisible('status')}><td class="px-4 py-2"><span class={`badge ${statusBadge(task.status)}`}>{task.status}</span></td></Show>
+                          <Show when={isTaskColumnVisible('created_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>
+                          <Show when={isTaskColumnVisible('completed_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
+                          <Show when={isTaskColumnVisible('created_by')}><td class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td></Show>
+                          <Show when={isTaskColumnVisible('deleted_by')}><td class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td></Show>
+                          <Show when={isTaskColumnVisible('error')}><td class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td></Show>
                           <td class="px-4 py-2 text-right"><div class="inline-flex items-center gap-1"><button type="button" class="btn btn-ghost btn-xs" onClick={() => { setSelectedTask(task); setTaskDetailTab('requested'); }}><Eye size={13} />Details</button><Show when={task.status === 'pending' && isFullAccess()}><button type="button" class="btn btn-ghost btn-xs text-rose-400" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button></Show></div></td>
+                          <td></td>
                         </tr>
                       )}
                     </For>
