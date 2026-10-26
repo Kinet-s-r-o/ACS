@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1>SKYACS</h1>
+<h1>ACS</h1>
 
 <p><strong>Independent TR-069/CWMP control plane for managed CPE fleets</strong></p>
 
@@ -9,14 +9,12 @@
 [![Node.js](https://img.shields.io/badge/Node.js-24%20LTS-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-2563EB?style=for-the-badge)](LICENSE)
-[![Saweria](https://img.shields.io/badge/Saweria-Support%20SKYACS-FAAE2B?style=for-the-badge)](https://saweria.co/skydashnet)
-
 </div>
 
-SKYACS is a standalone TR-069/CWMP control plane for CPE inventory, monitoring, provisioning, and configuration. Its CWMP server, management API, scheduler, database layer, and web console run as one independent platform without requiring GenieACS.
+ACS is a standalone TR-069/CWMP control plane for CPE inventory, monitoring, provisioning, and configuration. Its CWMP server, management API, scheduler, database layer, and web console run as one independent platform without requiring GenieACS.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="SKYACS fleet status dashboard" width="1280" />
+  <img src="docs/screenshots/dashboard.png" alt="ACS fleet status dashboard" width="1280" />
   <br />
   <sub>Fleet status with representative lab telemetry.</sub>
 </p>
@@ -27,19 +25,19 @@ The screenshots below use representative lab data and do not contain production 
 
 <table>
   <tr>
-    <td width="50%"><strong>Operator sign in</strong><br /><img src="docs/screenshots/login.png" alt="SKYACS operator sign-in screen" /></td>
-    <td width="50%"><strong>CPE inventory</strong><br /><img src="docs/screenshots/devices.png" alt="SKYACS searchable CPE inventory" /></td>
+    <td width="50%"><strong>Operator sign in</strong><br /><img src="docs/screenshots/login.png" alt="ACS operator sign-in screen" /></td>
+    <td width="50%"><strong>CPE inventory</strong><br /><img src="docs/screenshots/devices.png" alt="ACS searchable CPE inventory" /></td>
   </tr>
   <tr>
-    <td width="50%"><strong>CPE record</strong><br /><img src="docs/screenshots/device-detail.png" alt="SKYACS CPE record with health, WAN, and Wi-Fi details" /></td>
-    <td width="50%"><strong>CWMP faults</strong><br /><img src="docs/screenshots/faults.png" alt="SKYACS CWMP fault investigation screen" /></td>
+    <td width="50%"><strong>CPE record</strong><br /><img src="docs/screenshots/device-detail.png" alt="ACS CPE record with health, WAN, and Wi-Fi details" /></td>
+    <td width="50%"><strong>CWMP faults</strong><br /><img src="docs/screenshots/faults.png" alt="ACS CWMP fault investigation screen" /></td>
   </tr>
   <tr>
-    <td width="50%"><strong>Firmware library</strong><br /><img src="docs/screenshots/firmwares.png" alt="SKYACS firmware artifact library" /></td>
-    <td width="50%"><strong>Access controls</strong><br /><img src="docs/screenshots/security.png" alt="SKYACS device admission and operator audit screen" /></td>
+    <td width="50%"><strong>Firmware library</strong><br /><img src="docs/screenshots/firmwares.png" alt="ACS firmware artifact library" /></td>
+    <td width="50%"><strong>Access controls</strong><br /><img src="docs/screenshots/security.png" alt="ACS device admission and operator audit screen" /></td>
   </tr>
   <tr>
-    <td colspan="2"><strong>System settings</strong><br /><img src="docs/screenshots/settings.png" alt="SKYACS operator, provisioning, and connection settings" /></td>
+    <td colspan="2"><strong>System settings</strong><br /><img src="docs/screenshots/settings.png" alt="ACS operator, provisioning, and connection settings" /></td>
   </tr>
 </table>
 
@@ -70,7 +68,7 @@ The screenshots below use representative lab data and do not contain production 
 
 The backend uses Go 1.25, GORM, and PostgreSQL. The frontend uses SolidJS, TypeScript, Tailwind CSS, and Vite.
 
-Console changes follow the documented [SKYACS UI/UX standard](docs/ui-ux-standard.md), including domain terminology, interaction states, responsive behavior, accessibility, and reusable component contracts.
+Console changes follow the documented [ACS UI/UX standard](docs/ui-ux-standard.md), including domain terminology, interaction states, responsive behavior, accessibility, and reusable component contracts.
 
 ## Quick start
 
@@ -106,7 +104,7 @@ Supported operating systems and their distribution-provided PostgreSQL versions:
 | Debian 12 | 15 |
 | Debian 13 | 17 |
 
-SKYACS validates the running PostgreSQL server and supports majors 14 through 18. PostgreSQL 13 and older are rejected because they are no longer supported upstream. A future major newer than 18 is allowed with a startup warning until it is added to the tested matrix.
+ACS validates the running PostgreSQL server and supports majors 14 through 18. PostgreSQL 13 and older are rejected because they are no longer supported upstream. A future major newer than 18 is allowed with a startup warning until it is added to the tested matrix.
 
 ### Manual development setup
 
@@ -130,7 +128,7 @@ npm run dev
 ### Standalone Docker deployment
 
 For a deployment without Coolify, use the standalone Compose stack in
-`docker-compose.yml`. It runs PostgreSQL, SKYACS, the web container, and a
+`docker-compose.yml`. It runs PostgreSQL, the ACS backend, the web container, and a
 Traefik reverse proxy. Traefik publishes ports 80 and 443, obtains the web and
 CWMP certificates through the HTTP-01 Let's Encrypt challenge, and stores the
 renewable ACME state in the `skyacs-traefik-letsencrypt` volume.
@@ -145,7 +143,7 @@ docker compose --env-file .env.docker -f docker-compose.yml config --quiet
 docker compose --env-file .env.docker -f docker-compose.yml up -d --build
 ```
 
-The web console is available at `https://SKYACS_DOMAIN` and the CWMP endpoint
+The web console is available at the configured domain and the CWMP endpoint
 at `https://CWMP_DOMAIN`. Allow inbound TCP 80 and 443 in the firewall. Do not
 publish PostgreSQL or the backend ports directly. Keep `.env.docker` private;
 it is intentionally ignored by Git. The existing `.env` and
@@ -159,7 +157,7 @@ printf 'VITE_API_URL=/api\nVITE_APP_NAME=MyBrand\n' > .env.production
 npm run build
 ```
 
-The initial username is `admin`. Its password is read from `INITIAL_ADMIN_PASSWORD`; when that variable is empty, the backend generates and prints a random password once while creating the first operator. SKYACS does not ship with an `admin/admin` credential.
+The initial username is `admin`. Its password is read from `INITIAL_ADMIN_PASSWORD`; when that variable is empty, the backend generates and prints a random password once while creating the first operator. ACS does not ship with a default password.
 
 ## Security configuration
 
@@ -199,7 +197,7 @@ Configure these values from **Settings** after signing in:
 - `firmware_base_url`: the API base URL reachable by managed CPEs, for example `https://acs.example.com/api` when Nginx exposes the API under `/api`.
 - Connection request credentials. Automatic mode requires a master secret of at least 16 characters and derives a unique HMAC-SHA256 password for every serial number.
 
-When `CWMP_USERNAME` is configured, `CWMP_PASSWORD` is also required. Basic Authentication is rejected over plain HTTP; TLS termination must originate from an address in `CWMP_TRUSTED_PROXY_CIDRS`. `TRUSTED_PROXY_CIDRS` controls API client-IP headers and must contain proxy addresses only. `CONNECTION_REQUEST_ALLOWED_CIDRS` restricts the destinations that SKYACS may contact and should contain CPE networks. Protect the CWMP endpoint with network firewall rules even when the application allowlist is enabled.
+When `CWMP_USERNAME` is configured, `CWMP_PASSWORD` is also required. Basic Authentication is rejected over plain HTTP; TLS termination must originate from an address in `CWMP_TRUSTED_PROXY_CIDRS`. `TRUSTED_PROXY_CIDRS` controls API client-IP headers and must contain proxy addresses only. `CONNECTION_REQUEST_ALLOWED_CIDRS` restricts the destinations the ACS may contact and should contain CPE networks. Protect the CWMP endpoint with network firewall rules even when the application allowlist is enabled.
 
 `PARAMETER_ENCRYPTION_KEY` protects stored passwords and sensitive parameters. Back up this key together with the database. Do not replace it directly; key rotation requires a data migration and re-encryption process.
 
@@ -210,7 +208,7 @@ immediate proxy belongs to `TRUSTED_PROXY_CIDRS`. This setting affects web/API
 authentication only; it does not restrict CWMP sessions or public firmware
 delivery at `/files/...`.
 
-On each CPE Inform, SKYACS checks the last successful refresh stored for that device. Up to 256 known overview parameters are fetched after the overview interval (default 15 minutes), and the full parameter tree after the full-tree interval (default 6 hours) or a BOOTSTRAP event. Both intervals are editable in System settings > Provisioning > Nastavenia. A full-tree fetch discovers newly added objects; overview fetches update known values. These are minimum intervals: a device that does not contact the ACS is refreshed at its next Inform. Failed or empty fetches leave the previous refresh time unchanged, so the next Inform retries. The device record shows both refresh times.
+On each CPE Inform, ACS checks the last successful refresh stored for that device. Up to 256 known overview parameters are fetched after the overview interval (default 15 minutes), and the full parameter tree after the full-tree interval (default 6 hours) or a BOOTSTRAP event. Both intervals are editable in System settings > Provisioning > Nastavenia. A full-tree fetch discovers newly added objects; overview fetches update known values. These are minimum intervals: a device that does not contact the ACS is refreshed at its next Inform. Failed or empty fetches leave the previous refresh time unchanged, so the next Inform retries. The device record shows both refresh times.
 
 ## Reverse proxy
 
@@ -218,7 +216,7 @@ Use [setup_nginx.md](setup_nginx.md) for TLS termination, static frontend delive
 
 ## Production baseline
 
-Before deploying SKYACS into an operational network:
+Before deploying the ACS into an operational network:
 
 1. Terminate TLS for the web console, API, and CWMP endpoint. Never expose port `7548` directly.
 2. Configure explicit CORS and trusted-proxy values, then restrict CWMP access with firewall and CIDR rules.
@@ -233,7 +231,7 @@ sudo -u postgres pg_dump -Fc skyacs > skyacs-$(date +%F).dump
 sudo tar -C /var/lib/skyacs -czf skyacs-firmware-$(date +%F).tar.gz firmware
 ```
 
-SKYACS currently operates as a **single-node control plane**. Local firmware storage and the in-process scheduler are not designed for active-active or high-availability deployments. Run one backend instance per database. The project remains in beta until a public vendor interoperability matrix and fleet load-test results are available.
+ACS currently operates as a **single-node control plane**. Local firmware storage and the in-process scheduler are not designed for active-active or high-availability deployments. Run one backend instance per database. The project remains in beta until a public vendor interoperability matrix and fleet load-test results are available.
 
 ## External integration API
 
@@ -264,17 +262,9 @@ The CI workflow runs the same checks on every push and pull request.
 
 ## Device support
 
-SKYACS supports CPEs that implement CWMP/TR-069 with a TR-098 or TR-181 root. Vendor extensions vary across firmware releases, so always verify writable parameters in a lab. The console recognizes common Huawei, ZTE, and FiberHome parameter patterns, but compatibility is not guaranteed for every firmware version.
+ACS supports CPEs that implement CWMP/TR-069 with a TR-098 or TR-181 root. Vendor extensions vary across firmware releases, so always verify writable parameters in a lab. The console recognizes common Huawei, ZTE, and FiberHome parameter patterns, but compatibility is not guaranteed for every firmware version.
 
 The currently handled RPCs include `Inform`, `TransferComplete`, SOAP Fault, and responses for `GetParameterValues`, `GetParameterNames`, `SetParameterValues`, `Reboot`, `FactoryReset`, and `Download`. Methods outside this matrix receive CWMP fault `8000` and must be validated before onboarding devices that depend on them.
-
-## Support SKYACS
-
-If SKYACS helps your network operations, support its continued development and maintenance through Saweria.
-
-<p align="center">
-  <a href="https://saweria.co/skydashnet"><img src="https://img.shields.io/badge/Saweria-Support%20SKYACS-FAAE2B?style=for-the-badge" alt="Support SKYACS on Saweria" /></a>
-</p>
 
 ## Reporting security issues
 

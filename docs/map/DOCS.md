@@ -2,7 +2,7 @@
 
 | Question | Where | Notes |
 | --- | --- | --- |
-| What is SKYACS and how do I run it? | [README.md](../../README.md) | Product, architecture, quick start, validation, operator baseline |
+| What is this ACS and how do I run it? | [README.md](../../README.md) | Product, architecture, quick start, validation, operator baseline |
 | Which UI conventions apply? | [docs/ui-ux-standard.md](../ui-ux-standard.md) | Terminology, responsive behavior, accessibility, component contracts |
 | How do I deploy behind Nginx? | [setup_nginx.md](../../setup_nginx.md) | TLS termination, proxy routes, firmware delivery |
 | How do I use Cloudflare? | [setup_cloudflare.md](../../setup_cloudflare.md) | Tunnel topology and Access boundary |

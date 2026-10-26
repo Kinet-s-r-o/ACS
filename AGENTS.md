@@ -1,6 +1,6 @@
-# SKYACS Agent Guide
+# ACS Agent Guide
 
-SKYACS is a beta TR-069/CWMP control plane: Go backend, SolidJS/TypeScript console, PostgreSQL, and Nginx/Docker deployment.
+ACS is a beta TR-069/CWMP control plane: Go backend, SolidJS/TypeScript console, PostgreSQL, and Nginx/Docker deployment.
 
 ## Read first
 

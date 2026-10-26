@@ -1,6 +1,6 @@
 # External billing integration API
 
-SKYACS exposes a versioned integration API for identifying CPEs by serial number, reading stored parameters, requesting fresh values, writing parameters and tracking CWMP tasks. Each external system uses its own named, expiring API token attached to an existing operator account.
+The ACS exposes a versioned integration API for identifying CPEs by serial number, reading stored parameters, requesting fresh values, writing parameters and tracking CWMP tasks. Each external system uses its own named, expiring API token attached to an existing operator account.
 
 The complete machine-readable contract is [OpenAPI 3.0.3](../backend/internal/api/openapi.json). Interactive Swagger UI is available in **System settings → API documentation** (`/settings/api-docs`). The console can download the same document from `/api/openapi.json` using its session. It covers all integration and token-administration endpoints; internal console endpoints are not part of the external API contract.
 
@@ -14,7 +14,7 @@ The complete machine-readable contract is [OpenAPI 3.0.3](../backend/internal/ap
 
 ## Authentication and lifecycle
 
-Tokens contain 256 random bits and use the `skyacs_` prefix. PostgreSQL stores only the SHA-256 digest and a non-secret identifying prefix. Requests never accept tokens in a query string or cookie. A web JWT cannot replace an API token, and an API token cannot log into the console or create other tokens.
+Tokens contain 256 random bits and use the `acs_` prefix. PostgreSQL stores only the SHA-256 digest and a non-secret identifying prefix. Requests never accept tokens in a query string or cookie. A web JWT cannot replace an API token, and an API token cannot log into the console or create other tokens. Previously issued credentials remain valid until revoked or expired.
 
 The owning user and current role are checked for every request. Role changes affect the next request; a missing user, revoked token or expired token cannot authenticate. Role/database lookup failures deny access. An empty role grants no permissions. There are no separate token grants that could exceed the user's permissions. Existing in-flight operations can finish when permissions change or a token is revoked.
 
@@ -110,7 +110,7 @@ curl --fail-with-body "$ACS_BASE/v1/devices/$CPE_SERIAL/write" \
 
 A new request returns **202 Accepted**, a task object containing `id`, `status: "pending"`, timestamps and attribution, and a relative `Location: tasks/{id}` header. Resolve Location against the POST request URL (not the host root) to preserve a proxy prefix such as `/api`.
 
-SKYACS executes the task during a CWMP session; these endpoints do not send a connection request or guarantee immediate execution. A disconnected CPE can stay pending. Periodic Inform and the existing task watchdog/retention settings control scheduling and history. `202` does not mean a configuration change has completed.
+The ACS executes the task during a CWMP session; these endpoints do not send a connection request or guarantee immediate execution. A disconnected CPE can stay pending. Periodic Inform and the existing task watchdog/retention settings control scheduling and history. `202` does not mean a configuration change has completed.
 
 ```bash
 curl --fail-with-body "$ACS_BASE/v1/devices/$CPE_SERIAL/tasks/1234" \

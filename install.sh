@@ -10,8 +10,8 @@ SERVICE_USER="${SKYACS_SERVICE_USER:-skyacs}"
 OS_RELEASE_FILE="${SKYACS_OS_RELEASE_FILE:-/etc/os-release}"
 TEMP_DIR=""
 
-log() { printf '[SKYACS] %s\n' "$*"; }
-fail() { printf '[SKYACS] ERROR: %s\n' "$*" >&2; exit 1; }
+log() { printf '[ACS] %s\n' "$*"; }
+fail() { printf '[ACS] ERROR: %s\n' "$*" >&2; exit 1; }
 
 cleanup() {
   if [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]]; then
@@ -40,10 +40,10 @@ validate_platform() {
 }
 
 validate_inputs() {
-  [[ "$INSTALL_DIR" == /* && "$INSTALL_DIR" != "/" ]] || fail "SKYACS_INSTALL_DIR must be an absolute path other than /."
-  [[ "$INSTALL_DIR" != *$'\n'* && "$INSTALL_DIR" != *$'\r'* ]] || fail "SKYACS_INSTALL_DIR contains invalid characters."
-  [[ "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]+$ && "$SOURCE_REF" != *..* ]] || fail "SKYACS_REF contains invalid characters."
-  [[ "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "SKYACS_SERVICE_USER is not a valid Linux username."
+  [[ "$INSTALL_DIR" == /* && "$INSTALL_DIR" != "/" ]] || fail "Install directory must be an absolute path other than /."
+  [[ "$INSTALL_DIR" != *$'\n'* && "$INSTALL_DIR" != *$'\r'* ]] || fail "Install directory contains invalid characters."
+  [[ "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]+$ && "$SOURCE_REF" != *..* ]] || fail "Source revision contains invalid characters."
+  [[ "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "Service account is not a valid Linux username."
 }
 
 if [[ "${SKYACS_INSTALLER_TEST:-0}" == "1" ]]; then
@@ -68,7 +68,7 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   log "Creating dedicated service account: $SERVICE_USER"
   useradd --system --home-dir "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
-[[ "$(id -u "$SERVICE_USER")" -ne 0 ]] || fail "SKYACS_SERVICE_USER must not be root."
+[[ "$(id -u "$SERVICE_USER")" -ne 0 ]] || fail "Service account must not be root."
 
 TEMP_DIR="$(mktemp -d -t skyacs-install.XXXXXXXX)"
 archive="$TEMP_DIR/source.tar.gz"
@@ -84,7 +84,7 @@ grep -q '^module github.com/skydashnet/skyacs$' "$source_dir/backend/go.mod" || 
 
 marker="$INSTALL_DIR/.skyacs-managed-install"
 if [[ -d "$INSTALL_DIR" && ! -f "$marker" ]] && [[ -n "$(find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
-  fail "$INSTALL_DIR already exists and is not managed by the SKYACS installer. Choose another SKYACS_INSTALL_DIR or move the existing directory."
+  fail "$INSTALL_DIR already exists and is not managed by the installer. Choose another install directory or move the existing directory."
 fi
 
 install -d -m 0755 "$INSTALL_DIR"

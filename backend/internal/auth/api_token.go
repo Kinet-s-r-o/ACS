@@ -29,7 +29,7 @@ func NewAPIToken() (secret, digest, prefix string, err error) {
 	if _, err = rand.Read(random[:]); err != nil {
 		return
 	}
-	secret = "skyacs_" + base64.RawURLEncoding.EncodeToString(random[:])
+	secret = "acs_" + base64.RawURLEncoding.EncodeToString(random[:])
 	return secret, APITokenDigest(secret), secret[:15], nil
 }
 
@@ -47,11 +47,13 @@ func GetAPITokenFromContext(ctx context.Context) *models.APIToken {
 func APITokenMiddleware(tokens APITokenLookup, users UserLookup, roles APIRoleLookup, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		unauthorized := func() {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="SKYACS API"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="ACS integration API"`)
 			writeAuthError(w, `{"error":"Invalid, expired or revoked API token"}`, http.StatusUnauthorized)
 		}
 		header := strings.Fields(req.Header.Get("Authorization"))
-		if len(req.Header.Values("Authorization")) != 1 || len(header) != 2 || !strings.EqualFold(header[0], "Bearer") || len(header[1]) != 50 || !strings.HasPrefix(header[1], "skyacs_") {
+		validPrefix := len(header) == 2 && (strings.HasPrefix(header[1], "acs_") || strings.HasPrefix(header[1], "skyacs_"))
+		validLength := len(header) == 2 && ((strings.HasPrefix(header[1], "acs_") && len(header[1]) == 47) || (strings.HasPrefix(header[1], "skyacs_") && len(header[1]) == 50))
+		if len(req.Header.Values("Authorization")) != 1 || len(header) != 2 || !strings.EqualFold(header[0], "Bearer") || !validPrefix || !validLength {
 			unauthorized()
 			return
 		}

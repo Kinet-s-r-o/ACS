@@ -1,10 +1,10 @@
-# SKYACS UI/UX Standard
+# ACS UI/UX Standard
 
-This document turns the project-wide [non-generic UI/UX rules](https://raw.githubusercontent.com/wweagle09/ui-ux-design/refs/heads/main/rules-design.md) into implementation requirements for SKYACS. It is the review baseline for every console change.
+This document turns the project-wide [non-generic UI/UX rules](https://raw.githubusercontent.com/wweagle09/ui-ux-design/refs/heads/main/rules-design.md) into implementation requirements for the ACS. It is the review baseline for every console change.
 
 ## Product context
 
-SKYACS is an operational TR-069/CWMP control plane, not a general-purpose SaaS dashboard.
+The ACS is an operational TR-069/CWMP control plane, not a general-purpose SaaS dashboard.
 
 - **Primary user:** network operator responsible for CPE availability, diagnosis, and configuration.
 - **Secondary users:** read-only support staff and auditors; full-access administrators responsible for operators, admission controls, and provisioning rules.

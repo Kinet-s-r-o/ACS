@@ -21,7 +21,7 @@ const APIDocs: Component = () => {
   return (
     <div class="space-y-5">
       <PageHeader title="API documentation" description="Billing integration: CPE parameters by serial number, asynchronous CWMP tasks and user-linked API tokens.">
-        <a class="btn btn-secondary" href={`${API_BASE}/openapi.json`} download="skyacs-openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
+        <a class="btn btn-secondary" href={`${API_BASE}/openapi.json`} download="acs-openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
       </PageHeader>
       <p class="text-sm text-muted">Generate tokens in Users and Roles using the key button. Use Authorize below to test the integration API. Authorization is kept only in memory. Token administration requires a console session and CSRF protection; use the Users and Roles screen.</p>
       <Show when={spec.loading}><p class="text-sm text-muted" role="status">Loading API documentation…</p></Show>

@@ -17,7 +17,7 @@ else
   PSQL=(env "PGPASSWORD=$DB_ADMIN_PASSWORD" psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_ADMIN_USER")
 fi
 
-echo "SKYACS database setup"
+echo "ACS database setup"
 if [[ "$("${PSQL[@]}" -tAc "SELECT 1 FROM pg_database WHERE datname = '$APP_DB'")" == "1" ]]; then
   if [[ -f "$ENV_FILE" ]]; then
     if ! grep -q '^JWT_SECRET=' "$ENV_FILE"; then
@@ -49,7 +49,7 @@ fi
 APP_PASSWORD="$(openssl rand -hex 24)"
 JWT_SECRET="$(openssl rand -hex 32)"
 PARAMETER_ENCRYPTION_KEY="$(openssl rand -hex 32)"
-INITIAL_ADMIN_PASSWORD="SKYACS-$(openssl rand -hex 12)"
+INITIAL_ADMIN_PASSWORD="ACS-$(openssl rand -hex 12)"
 
 if [[ "$("${PSQL[@]}" -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$APP_USER'")" != "1" ]]; then
   "${PSQL[@]}" -c "CREATE USER $APP_USER WITH PASSWORD '$APP_PASSWORD'"

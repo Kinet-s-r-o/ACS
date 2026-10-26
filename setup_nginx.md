@@ -1,6 +1,6 @@
 # Nginx deployment
 
-Contoh ini menyajikan frontend statis, meneruskan `/api/` ke API SKYACS, dan menempatkan CWMP pada hostname TLS terpisah.
+Contoh ini menyajikan frontend statis, meneruskan `/api/` ke API ACS, dan menempatkan CWMP pada hostname TLS terpisah.
 
 ```nginx
 server {

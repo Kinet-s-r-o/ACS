@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestAPITokenAuthenticationAndLivePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(secret) != 50 || len(digest) != 64 || prefix != secret[:15] || digest == secret {
+	if len(secret) != 47 || len(digest) != 64 || !strings.HasPrefix(secret, "acs_") || prefix != secret[:15] || digest == secret {
 		t.Fatal("invalid generated token metadata")
 	}
 	roleID := int64(8)
@@ -64,6 +65,12 @@ func TestAPITokenAuthenticationAndLivePermissions(t *testing.T) {
 	if code := call("Bearer "+secret, lookup); code != 204 {
 		t.Fatalf("valid token: %d", code)
 	}
+	legacySecret := "skyacs_" + strings.Repeat("A", 43)
+	tokens.digest = APITokenDigest(legacySecret)
+	if code := call("Bearer "+legacySecret, lookup); code != 204 {
+		t.Fatalf("existing token remains valid during prefix migration: %d", code)
+	}
+	tokens.digest = digest
 	roles.role.Permissions = nil
 	if code := call("Bearer "+secret, lookup); code != 403 {
 		t.Fatalf("empty role must not fall back to legacy full access: %d", code)
@@ -73,7 +80,7 @@ func TestAPITokenAuthenticationAndLivePermissions(t *testing.T) {
 		t.Fatalf("role lookup must fail closed: %d", code)
 	}
 	roles.err = nil
-	for _, header := range []string{"", "Basic " + secret, "Bearer bad", "Bearer " + secret + " extra", "Bearer " + secret[:49] + "!"} {
+	for _, header := range []string{"", "Basic " + secret, "Bearer bad", "Bearer " + secret + " extra", "Bearer " + secret[:46] + "!"} {
 		if code := call(header, lookup); code != 401 {
 			t.Errorf("malformed/unknown token accepted: %d", code)
 		}

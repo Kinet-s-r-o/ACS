@@ -31,17 +31,17 @@ esac
 
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   if [[ ! "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-    echo "SKYACS_SERVICE_USER is not a valid Linux username." >&2
+    echo "Service account is not a valid Linux username." >&2
     exit 1
   fi
   useradd --system --home-dir "$ROOT_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 if [[ "$(id -u "$SERVICE_USER")" -eq 0 ]]; then
-  echo "SKYACS_SERVICE_USER must not be root." >&2
+  echo "Service account must not be root." >&2
   exit 1
 fi
 
-echo "SKYACS production installer"
+echo "ACS production installer"
 echo "Project: ${ROOT_DIR}"
 
 apt-get update -qq
@@ -68,7 +68,7 @@ if [[ ! "$server_version_num" =~ ^[0-9]+$ ]]; then
 fi
 postgres_major=$((server_version_num / 10000))
 if (( postgres_major < MIN_POSTGRES_MAJOR )); then
-  echo "PostgreSQL $postgres_major is unsupported. SKYACS requires PostgreSQL $MIN_POSTGRES_MAJOR or newer." >&2
+  echo "PostgreSQL $postgres_major is unsupported. ACS requires PostgreSQL $MIN_POSTGRES_MAJOR or newer." >&2
   exit 1
 fi
 if (( postgres_major > MAX_TESTED_POSTGRES_MAJOR )); then
@@ -153,7 +153,7 @@ chown -R "$SERVICE_USER":"$SERVICE_USER" "$ROOT_DIR/backend/uploads"
 
 cat >/etc/systemd/system/skyacs.service <<EOF
 [Unit]
-Description=SKYACS control plane and CWMP server
+Description=ACS control plane and CWMP server
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -224,7 +224,7 @@ server {
 }
 EOF
 
-# SKYACS releases before v2.0.0 used a standalone Node.js web service.
+# Releases before v2.0.0 used a standalone Node.js web service.
 if systemctl list-unit-files skyacs-web.service --no-legend 2>/dev/null | grep -q '^skyacs-web.service'; then
   systemctl disable --now skyacs-web.service || true
 fi
@@ -245,7 +245,7 @@ for _ in {1..30}; do
   sleep 1
 done
 if [[ "$ready" != true ]]; then
-  echo "SKYACS failed its startup health check. Recent logs:" >&2
+  echo "ACS failed its startup health check. Recent logs:" >&2
   journalctl -u skyacs -n 50 --no-pager >&2 || true
   exit 1
 fi

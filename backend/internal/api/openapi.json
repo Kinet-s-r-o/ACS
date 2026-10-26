@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "SKYACS Billing Integration API",
+    "title": "ACS Billing Integration API",
     "version": "1.0.0",
     "description": "External systems use opaque Bearer tokens generated for a user in Users and Roles. The API resolves the user's current permissions on every call. Only /v1 routes accept API tokens; browser session cookies do not authenticate /v1. Use HTTPS through the configured reverse proxy (normally /api/v1), never expose the backend port. ADMIN_WEB_ALLOWED_CIDRS applies to integration clients too. Cached reads return stored values; fresh reads and writes are asynchronous CWMP tasks. Tokens expire after 1–365 days (default 90), can be revoked, and become unusable when the owner is deleted. Keep tokens outside URLs, browser storage and logs. Limits apply per API process. JSON requests are limited to 2 MiB. See docs/integration-api.md for complete deployment, rotation, pagination and retry guidance."
   },
@@ -1606,7 +1606,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "Opaque API token",
-        "description": "skyacs_… secret generated in Users and Roles. Not a web JWT."
+        "description": "acs_… secret generated in Users and Roles. Not a web JWT."
       },
       "sessionCookie": {
         "type": "apiKey",

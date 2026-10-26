@@ -1,5 +1,5 @@
 {
-  "name": "skyacs-frontend",
+  "name": "acs-frontend",
   "private": true,
   "scarfSettings": { "enabled": false },
   "version": "2.0.0",

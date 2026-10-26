@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// DeviceSnapshot stores a point-in-time copy of the parameters known by SKYACS.
+// DeviceSnapshot stores a point-in-time copy of parameters known by the ACS.
 // Sensitive values are encrypted before they are serialized into Parameters.
 type DeviceSnapshot struct {
 	ID              int64     `json:"id" gorm:"primaryKey;autoIncrement"`

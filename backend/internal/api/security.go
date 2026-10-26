@@ -105,7 +105,7 @@ func clientIP(req *http.Request) string {
 	remoteIP := net.ParseIP(host)
 	if remoteIP != nil && isTrustedProxy(remoteIP) {
 		forwarded := strings.Split(req.Header.Get("X-Forwarded-For"), ",")
-		// Walk from the proxy nearest to SKYACS toward the client. This
+		// Walk from the proxy nearest to the API server toward the client. This
 		// discards trusted hops without accepting a spoofed left-most value.
 		for index := len(forwarded) - 1; index >= 0; index-- {
 			candidate := strings.TrimSpace(forwarded[index])

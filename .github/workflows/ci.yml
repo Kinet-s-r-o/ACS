@@ -76,7 +76,7 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-      - name: Start SKYACS against PostgreSQL ${{ matrix.postgresql }}
+      - name: Start ACS against PostgreSQL ${{ matrix.postgresql }}
         working-directory: backend
         env:
           API_BIND_ADDR: 127.0.0.1
@@ -89,7 +89,7 @@ jobs:
           DB_SSLMODE: disable
           JWT_SECRET: 0123456789abcdef0123456789abcdef
           PARAMETER_ENCRYPTION_KEY: abcdef0123456789abcdef0123456789
-          INITIAL_ADMIN_PASSWORD: SKYACS-CI-password-123
+          INITIAL_ADMIN_PASSWORD: ACS-CI-password-123
         run: |
           set -euo pipefail
           go run ./cmd/server >/tmp/skyacs-postgres-${{ matrix.postgresql }}.log 2>&1 &
