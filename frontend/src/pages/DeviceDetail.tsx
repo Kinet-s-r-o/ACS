@@ -1832,7 +1832,7 @@ const DeviceDetail: Component = () => {
                 <div class="absolute right-0 top-full z-50 mt-2 min-w-44 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
                   <button type="button" role="menuitemcheckbox" aria-checked={autoRefreshEnabled() === 'true'} class="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setAutoRefreshEnabled(autoRefreshEnabled() === 'true' ? 'false' : 'true'); setShowActionsMenu(false); }}>
                     Auto-refresh
-                    <span class="text-muted">{autoRefreshEnabled() === 'true' ? 'On' : 'Off'}</span>
+                    <span class={autoRefreshEnabled() === 'true' ? 'text-emerald-400' : 'text-rose-400'}>{autoRefreshEnabled() === 'true' ? 'On' : 'Off'}</span>
                   </button>
                   <Show when={isFullAccess()}>
                   <div class="my-1 border-t border-subtle" role="separator"></div>
