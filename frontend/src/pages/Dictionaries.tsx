@@ -144,12 +144,12 @@ const Dictionaries: Component = () => {
             </tr>}</For></tbody>
           </table></div>
           </Show>
-          <Pagination page={tagsPage()} totalPages={Math.ceil(filteredTags().length / pageSize())} totalItems={filteredTags().length} pageSize={pageSize()} onPageChange={setTagsPage} storageKey="tags" onPageSizeChange={size => { changePageSize(size); setTagsPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setTagsPage(0); }} onRemoveFilter={column => { setColumnFilters(previous => { const next = { ...previous }; delete next[column]; return next; }); setTagsPage(0); }} />
         </Show>
       </div>
       <Show when={showModal()}><Dialog title={editing() ? `Edit tag: ${editing()!.name}` : 'New tag'} description="Tags are shared in the device inventory and provisioning rules." size="small" onClose={() => setShowModal(false)} actions={<><button type="button" onClick={() => setShowModal(false)} class="btn btn-secondary">Cancel</button><button type="button" onClick={() => void saveTag()} disabled={saving()} class="btn btn-primary"><Save size={13} />{saving() ? 'Saving…' : 'Save tag'}</button></>}>
         <div class="space-y-4"><div><label class="block text-xs text-muted mb-1.5" for="tag-name">Name</label><input id="tag-name" class="input w-full" value={name()} onInput={event => setName(event.currentTarget.value)} disabled={saving()} maxLength={64} placeholder="e.g. Active" /></div><div><label class="block text-xs text-muted mb-1.5" for="tag-description">Description <span class="text-muted">(optional)</span></label><textarea id="tag-description" class="input w-full min-h-20 resize-y" value={description()} onInput={event => setDescription(event.currentTarget.value)} disabled={saving()} maxLength={500} placeholder="Describe how this tag is used" /></div><div><div class="text-xs text-muted mb-2">Color</div><ColorSwatch value={color()} onChange={setColor} /></div></div>
       </Dialog></Show>
+      <Pagination page={tagsPage()} totalPages={Math.ceil(filteredTags().length / pageSize())} totalItems={filteredTags().length} pageSize={pageSize()} onPageChange={setTagsPage} storageKey="tags" onPageSizeChange={size => { changePageSize(size); setTagsPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setTagsPage(0); }} onRemoveFilter={column => { setColumnFilters(previous => { const next = { ...previous }; delete next[column]; return next; }); setTagsPage(0); }} />
     </div>
   );
 };

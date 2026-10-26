@@ -294,11 +294,9 @@ const Firmwares: Component = () => {
               </For>
             </tbody>
           </table></div>
-          <div class="px-4 py-3">
-            <Pagination page={fwPage()} totalPages={fwTotalPages()} totalItems={filteredFirmwares().length} pageSize={pageSize()} onPageChange={setFwPage} storageKey="firmwares" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setFwPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFwPage(0); }} />
-          </div>
         </Show>
       </div>
+      <Pagination page={fwPage()} totalPages={fwTotalPages()} totalItems={filteredFirmwares().length} pageSize={pageSize()} onPageChange={setFwPage} storageKey="firmwares" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setFwPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFwPage(0); }} />
 
       <p class="text-muted text-xs">
         To deploy an artifact, open a CPE record and create a controlled firmware download task.

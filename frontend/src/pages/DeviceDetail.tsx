@@ -2999,12 +2999,10 @@ const DeviceDetail: Component = () => {
                     </tbody>
                   </table>
                 </div>
-                <div class="px-4 py-3">
-                  <Pagination page={taskPage()} totalPages={taskTotalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="device_tasks" onPageSizeChange={handleTaskPageSizeChange} filters={taskColumnFilters()} onClearFilters={() => { setTaskColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setTaskColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} />
-                </div>
               </Show>
               </Show>
             </div>
+            <Pagination page={taskPage()} totalPages={taskTotalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="device_tasks" onPageSizeChange={handleTaskPageSizeChange} filters={taskColumnFilters()} onClearFilters={() => { setTaskColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setTaskColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} />
             </Show>
 
             {/* Task Detail Dialog */}
@@ -3218,14 +3216,12 @@ const DeviceDetail: Component = () => {
                       </tbody>
                     </table>
                   </div>
-                  <div class="px-4 py-3">
-                    <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={filteredDeviceFaults().length} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setDeviceFaultColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
-                  </div>
                 </Show>
               }>
                 <div class="p-5 space-y-2" aria-label="Loading CWMP faults"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /></div>
               </Show>
             </div>
+            <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={filteredDeviceFaults().length} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setDeviceFaultColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
             </Show>
 
             <Show when={activeTab() === 'overview'}>

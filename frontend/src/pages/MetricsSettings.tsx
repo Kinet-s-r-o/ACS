@@ -404,11 +404,9 @@ const MetricsSettings: Component = () => {
               </tbody>
             </table>
           </div>
-          <div class="mt-3">
-            <Pagination page={metricPage()} totalPages={metricTotalPages()} totalItems={filteredMetrics().length} pageSize={pageSize()} onPageChange={setMetricPage} storageKey="metrics" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setMetricPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setMetricPage(0); }} />
-          </div>
         </Show>
       </div>
+      <Pagination page={metricPage()} totalPages={metricTotalPages()} totalItems={filteredMetrics().length} pageSize={pageSize()} onPageChange={setMetricPage} storageKey="metrics" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setMetricPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setMetricPage(0); }} />
 
       {/* Metric Modal */}
       <Show when={showMetricModal()}>

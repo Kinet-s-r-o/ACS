@@ -207,11 +207,11 @@ const Tasks: Component = () => {
                   </tbody>
                 </table>
               </div>
-              <div class="px-4 py-3"><Pagination page={taskPage()} totalPages={totalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="global_tasks" onPageSizeChange={(size) => { changeTaskPageSize(size); setTaskPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} /></div>
             </Show>
           </Show>
         </Show>
       </div>
+      <Pagination page={taskPage()} totalPages={totalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="global_tasks" onPageSizeChange={(size) => { changeTaskPageSize(size); setTaskPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} />
 
       <Show when={selectedTask()}>
         <Dialog title={`Task #${selectedTask()!.id} — ${selectedTask()!.type}`} size="large" onClose={() => setSelectedTask(null)}>

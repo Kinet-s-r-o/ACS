@@ -174,8 +174,8 @@ const WANInterfaces: Component = () => {
                   </tbody>
                 </table>
               </div>
-              <div class="px-4 py-3"><Pagination page={page()} totalPages={totalPages()} totalItems={sortedInterfaces().length} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} /></div>
             </div>
+            <Pagination page={page()} totalPages={totalPages()} totalItems={sortedInterfaces().length} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
           </Show>
         </Show>
       </Show>

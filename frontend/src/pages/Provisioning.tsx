@@ -1271,9 +1271,6 @@ const Provisioning: Component = () => {
                 </tbody>
               </table>
             </div>
-            <div class="px-4 py-3">
-              <Pagination page={provPage()} totalPages={provTotalPages()} totalItems={filteredProvRules().length} pageSize={pageSize()} onPageChange={setProvPage} storageKey="provisioning" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setProvPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setProvPage(0); }} />
-            </div>
           </Show>
 
           <Show when={!provError() && provRules() !== null && (provRules()?.length ?? 0) === 0}>
@@ -1400,6 +1397,7 @@ const Provisioning: Component = () => {
           </Show>
           </div>
         </Show>
+        <Show when={selectedTemplate() && templateTab() === 'rules'}><Pagination page={provPage()} totalPages={provTotalPages()} totalItems={filteredProvRules().length} pageSize={pageSize()} onPageChange={setProvPage} storageKey="provisioning" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setProvPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setProvPage(0); }} /></Show>
       </Show>
 
       {/* Provisioning Modal */}
