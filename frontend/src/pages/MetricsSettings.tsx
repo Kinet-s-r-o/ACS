@@ -82,7 +82,7 @@ const MetricsSettings: Component = () => {
     { id: 'active', label: 'Active', visible: true },
   ]);
   const [metricPage, setMetricPage] = createSignal(0);
-  const { pageSize, changePageSize } = usePageSize('metrics', 15);
+  const { pageSize, changePageSize } = usePageSize('metrics', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setMetricPage(0); };
 
   const getFilterValue = (def: MetricDefinition, colId: string): string => {

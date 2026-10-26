@@ -208,7 +208,7 @@ const DeviceDetail: Component = () => {
   const [taskPage, setTaskPage] = createSignal(0);
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
-  const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('device_tasks', 10);
+  const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('device_tasks', 20);
   const handleTaskPageSizeChange = (size: number) => { changeTaskPageSize(size); setTaskPage(0); };
   const [taskColumnFilters, setTaskColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.tasks`, {});
   const { columns: deviceTaskColumns, isVisible: isDeviceTaskColumnVisible, toggle: toggleDeviceTaskColumn } = useColumnVisibility('device_tasks', [
@@ -258,7 +258,7 @@ const DeviceDetail: Component = () => {
   });
   const taskTotalPages = createMemo(() => Math.ceil(filteredTasks().length / taskPageSize()));
   const [faultPage, setFaultPage] = createSignal(0);
-  const { pageSize: faultPageSize, changePageSize: changeFaultPageSize } = usePageSize('device_faults', 10);
+  const { pageSize: faultPageSize, changePageSize: changeFaultPageSize } = usePageSize('device_faults', 20);
   const handleFaultPageSizeChange = (size: number) => { changeFaultPageSize(size); setFaultPage(0); };
   const filteredDeviceFaults = createMemo(() => {
     let all = deviceFaults() || [];

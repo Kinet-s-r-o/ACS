@@ -279,7 +279,7 @@ const Provisioning: Component = () => {
     return applyColumnFilters(all, columnFilters(), getFilterValue);
   });
   const [provPage, setProvPage] = createSignal(0);
-  const { pageSize, changePageSize } = usePageSize('provisioning', 15);
+  const { pageSize, changePageSize } = usePageSize('provisioning', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setProvPage(0); };
   const pagedProvRules = createMemo(() => {
     const all = filteredProvRules();

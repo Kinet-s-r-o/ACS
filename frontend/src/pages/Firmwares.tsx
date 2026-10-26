@@ -35,7 +35,7 @@ const Firmwares: Component = () => {
     { id: 'created_at', label: 'Uploaded', visible: true },
   ]);
   const [fwPage, setFwPage] = createSignal(0);
-  const { pageSize, changePageSize } = usePageSize('firmwares', 15);
+  const { pageSize, changePageSize } = usePageSize('firmwares', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFwPage(0); };
 
   const getFilterValue = (fw: Firmware, colId: string): string => {

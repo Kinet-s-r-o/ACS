@@ -48,7 +48,7 @@ const UsersPage: Component = () => {
     { id: 'last_login', label: 'Last Login', visible: true },
   ]);
   const [userPage, setUserPage] = createSignal(0);
-  const { pageSize, changePageSize } = usePageSize('users', 15);
+  const { pageSize, changePageSize } = usePageSize('users', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setUserPage(0); };
 
   const getFilterValue = (user: User, colId: string): string => {
