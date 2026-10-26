@@ -3248,12 +3248,13 @@ const DeviceDetail: Component = () => {
                   />
                   <button
                     type="button"
-                    class="btn btn-secondary text-xs"
+                    class="icon-button"
                     onClick={exportParamsCSV}
                     disabled={filteredParams().length === 0}
+                    title="Export CSV"
+                    aria-label="Export parameters as CSV"
                   >
                     <Download size={14} />
-                    Export CSV
                   </button>
                 </div>
               </div>
