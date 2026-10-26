@@ -331,16 +331,34 @@ const Devices: Component = () => {
           <Show when={isFullAccess()}><button
             onClick={async () => {
               const list = sortedDevices();
-              if (!list || summoningAll()) return;
+              if (list.length === 0 || summoningAll()) return;
               setSummoningAll(true);
               try {
-                const results = await Promise.allSettled(list.map((device) => api.connectionRequest(device.serial_number)));
-                const successCount = results.filter((result) => result.status === 'fulfilled').length;
-                const failureCount = list.length - successCount;
+                const results = await Promise.all(list.map(async (device) => {
+                  let taskQueued = false;
+                  try {
+                    let parameters = device.parameters || [];
+                    try {
+                      parameters = await api.getDeviceParameters(device.serial_number);
+                    } catch {
+                      // Use the inventory snapshot when the stored parameter tree cannot be read.
+                    }
+                    const hasTR181 = parameters.some(parameter => parameter.name.startsWith('Device.'));
+                    await api.getParameterValues(device.serial_number, [hasTR181 ? 'Device.' : 'InternetGatewayDevice.']);
+                    taskQueued = true;
+                    const connectionRequest = await api.connectionRequest(device.serial_number);
+                    return { taskQueued, requestAccepted: connectionRequest.status === 'success' };
+                  } catch {
+                    return { taskQueued, requestAccepted: false };
+                  }
+                }));
+                const queuedCount = results.filter(result => result.taskQueued).length;
+                const acceptedCount = results.filter(result => result.requestAccepted).length;
+                const failureCount = list.length - queuedCount;
                 notify({
                   tone: failureCount > 0 ? 'error' : 'success',
-                  title: failureCount > 0 ? 'Connection requests partially completed' : 'Connection requests sent',
-                  message: `${successCount} of ${list.length} visible CPEs accepted the request.${failureCount > 0 ? ` ${failureCount} require individual review.` : ''}`,
+                  title: failureCount > 0 ? 'CWMP tasks partially queued' : 'CWMP tasks queued',
+                  message: `${queuedCount} of ${list.length} visible CPEs have a CWMP refresh task queued. ${acceptedCount} connection request${acceptedCount === 1 ? '' : 's'} accepted.${failureCount > 0 ? ` ${failureCount} require individual review.` : ''}`,
                   persistent: failureCount > 0,
                 });
                 await refetch();
