@@ -115,7 +115,7 @@ const Dictionaries: Component = () => {
       </div>
       <div class="card p-5">
         <div class="flex items-center justify-between gap-3 mb-4">
-          <h2 class="text-sm font-medium text-secondary">Tags</h2>
+          <span><strong>{pagedTags().length}</strong> visible on this page · <strong>{tags()?.length ?? 0}</strong> total tags</span>
           <div class="flex items-center gap-2">
             <div class="relative">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
@@ -131,9 +131,6 @@ const Dictionaries: Component = () => {
           <EmptyState compact title="No tags defined" description="Create a tag here, then assign it to devices from the CPE inventory." action={canManageTags() ? <button type="button" onClick={openCreate} class="btn btn-secondary text-xs"><Plus size={12} />New tag</button> : undefined} />
         </Show>
         <Show when={!tags.loading && !tags.error && (tags() || []).length > 0}>
-          <div class="table-panel-toolbar">
-            <span><strong>{pagedTags().length}</strong> visible on this page · <strong>{tags()?.length ?? 0}</strong> total tags</span>
-          </div>
           <Show when={filteredTags().length > 0} fallback={<EmptyState compact title="No matching tags" description="Try a different search term or clear the column filters." />}>
           <div class="overflow-x-auto"><table class="data-table w-full text-sm">
             <thead><tr class="border-b-2 border-subtle bg-base">
