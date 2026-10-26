@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, For, Show } from 'solid-js';
-import { Edit, Plus, Save, Tags, Trash2 } from 'lucide-solid';
+import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
+import { Edit, Plus, Save, Search, Tags, Trash2, X } from 'lucide-solid';
 import { api, type TagDefinition } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -8,6 +8,13 @@ import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import ColorSwatch from '../components/ColorSwatch';
 import { EmptyState, ResourceError } from '../components/ResourceState';
+import ColumnFilter from '../components/ColumnFilter';
+import ColumnVisibility from '../components/ColumnVisibility';
+import SortableHeader from '../components/SortableHeader';
+import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import { sortRows, type SortDirection } from '../lib/sorting';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
+import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 const Dictionaries: Component = () => {
   const { hasPermission } = useAuth();
@@ -21,6 +28,28 @@ const Dictionaries: Component = () => {
   const [description, setDescription] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [deleting, setDeleting] = createSignal<string | null>(null);
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.tags');
+  const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tags', {});
+  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'name', direction: 'asc' });
+  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const { columns, isVisible, toggle } = useColumnVisibility('tags', [
+    { id: 'name', label: 'Tag', visible: true },
+    { id: 'description', label: 'Description', visible: true },
+    { id: 'color', label: 'Color', visible: true },
+  ]);
+  const filteredTags = createMemo(() => {
+    let all = tags() || [];
+    const query = searchQuery().toLowerCase().trim();
+    if (query) all = all.filter(tag => [tag.name, tag.description || '', tag.color].some(value => value.toLowerCase().includes(query)));
+    const value = (tag: TagDefinition, column: string) => column === 'name' ? tag.name : column === 'description' ? tag.description || '' : column === 'color' ? tag.color : '';
+    return sortRows(applyColumnFilters(all, columnFilters(), value), sortState().column, sortState().direction, value);
+  });
+  const applyFilter = (column: string, state: ColumnFilterState | null) => setColumnFilters(previous => {
+    const next = { ...previous };
+    if (state) next[column] = state;
+    else delete next[column];
+    return next;
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -85,15 +114,26 @@ const Dictionaries: Component = () => {
           <EmptyState compact title="No tags defined" description="Create a tag here, then assign it to devices from the CPE inventory." action={canManageTags() ? <button type="button" onClick={openCreate} class="btn btn-secondary text-xs"><Plus size={12} />New tag</button> : undefined} />
         </Show>
         <Show when={!tags.loading && !tags.error && (tags() || []).length > 0}>
+          <div class="table-panel-toolbar">
+            <h2 class="text-sm font-medium text-secondary">Tags ({filteredTags().length})</h2>
+            <div class="relative"><Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" /><input type="text" value={searchQuery()} onInput={event => setSearchQuery(event.currentTarget.value)} placeholder="Search tags..." class="input pl-9! w-56 text-sm" /><Show when={searchQuery()}><button type="button" onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show></div>
+          </div>
+          <Show when={filteredTags().length > 0} fallback={<EmptyState compact title="No matching tags" description="Try a different search term or clear the column filters." />}>
           <div class="overflow-x-auto"><table class="data-table w-full text-sm">
-            <thead><tr class="border-b-2 border-subtle bg-base"><th class="text-left px-3 py-2.5 font-semibold text-primary">Tag</th><th class="text-left px-3 py-2.5 font-semibold text-primary">Description</th><th class="text-left px-3 py-2.5 font-semibold text-primary">Color</th><Show when={canManageTags()}><th class="w-20" /></Show></tr></thead>
-            <tbody><For each={tags()}>{tag => <tr class="border-t border-subtle hover:bg-elevated/30">
-              <td class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td>
-              <td class="px-3 py-2.5 text-secondary">{tag.description || <span class="text-muted">—</span>}</td>
-              <td class="px-3 py-2.5 font-mono text-xs text-secondary">{tag.color}</td>
-              <Show when={canManageTags()}><td class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show>
+            <thead><tr class="border-b-2 border-subtle bg-base">
+              <Show when={isVisible('name')}><th class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="name" label="Tag" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="name" label="Tag" active={columnFilters().name || null} onApply={state => applyFilter('name', state)} /></SortableHeader></th></Show>
+              <Show when={isVisible('description')}><th class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyFilter('description', state)} /></SortableHeader></th></Show>
+              <Show when={isVisible('color')}><th class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="color" label="Color" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="color" label="Color" active={columnFilters().color || null} onApply={state => applyFilter('color', state)} /></SortableHeader></th></Show>
+              <Show when={canManageTags()}><th class="w-20" /></Show><th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+            </tr></thead>
+            <tbody><For each={filteredTags()}>{tag => <tr class="border-t border-subtle hover:bg-elevated/30">
+              <Show when={isVisible('name')}><td class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td></Show>
+              <Show when={isVisible('description')}><td class="px-3 py-2.5 text-secondary">{tag.description || <span class="text-muted">—</span>}</td></Show>
+              <Show when={isVisible('color')}><td class="px-3 py-2.5 font-mono text-xs text-secondary">{tag.color}</td></Show>
+              <Show when={canManageTags()}><td class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show><td />
             </tr>}</For></tbody>
           </table></div>
+          </Show>
         </Show>
       </div>
       <Show when={showModal()}><Dialog title={editing() ? `Edit tag: ${editing()!.name}` : 'New tag'} description="Tags are shared in the device inventory and provisioning rules." size="small" onClose={() => setShowModal(false)} actions={<><button type="button" onClick={() => setShowModal(false)} class="btn btn-secondary">Cancel</button><button type="button" onClick={() => void saveTag()} disabled={saving()} class="btn btn-primary"><Save size={13} />{saving() ? 'Saving…' : 'Save tag'}</button></>}>
