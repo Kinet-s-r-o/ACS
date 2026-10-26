@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Network, RefreshCw, Search } from 'lucide-solid';
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Network, Search } from 'lucide-solid';
 import { A } from '@solidjs/router';
 import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
@@ -87,10 +87,6 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
           title="WAN Interfaces"
           description="WAN interfaces collected from all CPE devices. Values are based on the latest stored parameter tree."
         >
-          <button type="button" class="btn btn-secondary" onClick={() => void refetch()} disabled={interfaces.loading}>
-            <RefreshCw size={14} class={interfaces.loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
         </PageHeader>
       </Show>
 
@@ -101,12 +97,6 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
             <span>{sortedInterfaces().length} interface{sortedInterfaces().length === 1 ? '' : 's'}</span>
           </div>
           <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <Show when={props.embedded}>
-              <button type="button" class="btn btn-secondary" onClick={() => void refetch()} disabled={interfaces.loading}>
-                <RefreshCw size={14} class={interfaces.loading ? 'animate-spin' : ''} />
-                Refresh
-              </button>
-            </Show>
             <label class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => { setPage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />

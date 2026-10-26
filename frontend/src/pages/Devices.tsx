@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
-import { RefreshCw, Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
+import { Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -330,7 +330,7 @@ const Devices: Component = () => {
         <div class="flex gap-2">
           <Show when={isFullAccess()}><button
             onClick={async () => {
-              const list = deviceList()?.devices;
+              const list = sortedDevices();
               if (!list || summoningAll()) return;
               setSummoningAll(true);
               try {
@@ -356,10 +356,6 @@ const Devices: Component = () => {
             <Send size={14} class={summoningAll() ? 'animate-pulse' : ''} />
             <span class="hidden sm:inline">{summoningAll() ? 'Summoning...' : 'Summon visible CPEs'}</span>
           </button></Show>
-          <button onClick={() => refetch()} class="btn btn-secondary" disabled={deviceList.loading} aria-label="Refresh CPE inventory" title="Refresh CPE inventory">
-            <RefreshCw size={14} />
-            <span class="hidden sm:inline">Refresh</span>
-          </button>
         </div>
       </PageHeader>
 
