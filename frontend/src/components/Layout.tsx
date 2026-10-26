@@ -15,10 +15,7 @@ import { enableTableColumnReordering } from '../lib/tableColumnReorder';
 const navigation = [
   { section: 'Monitor', items: [
     { href: '/', label: 'Fleet status', icon: LayoutDashboard },
-    { href: '/devices', label: 'CPE inventory', icon: Router, children: [
-      { href: '/devices', label: 'CPEs' },
-      { href: '/devices/wan-interfaces', label: 'WAN interfaces' },
-    ] },
+    { href: '/devices', label: 'CPE inventory', icon: Router },
     { href: '/tasks', label: 'CWMP tasks', icon: Activity },
     { href: '/faults', label: 'CWMP faults', icon: AlertTriangle },
   ] },
@@ -40,7 +37,6 @@ const navigation = [
 const pageNames: Record<string, string> = {
   '/': 'Fleet status',
   '/devices': 'CPE inventory',
-  '/devices/wan-interfaces': 'WAN interfaces',
   '/tasks': 'CWMP tasks',
   '/faults': 'Fault center',
   '/firmwares': 'Firmware library',

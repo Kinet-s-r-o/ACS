@@ -25,7 +25,11 @@ const cpeWebUiUrl = (address: string): string | null => {
   return null;
 };
 
-const WANInterfaces: Component = () => {
+interface WANInterfacesProps {
+  embedded?: boolean;
+}
+
+export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
   const [page, setPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('wan-interfaces', 20);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
@@ -78,15 +82,17 @@ const WANInterfaces: Component = () => {
 
   return (
     <div class="space-y-5">
-      <PageHeader
-        title="WAN Interfaces"
-        description="WAN interfaces collected from all CPE devices. Values are based on the latest stored parameter tree."
-      >
-        <button type="button" class="btn btn-secondary" onClick={() => void refetch()} disabled={interfaces.loading}>
-          <RefreshCw size={14} class={interfaces.loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </PageHeader>
+      <Show when={!props.embedded}>
+        <PageHeader
+          title="WAN Interfaces"
+          description="WAN interfaces collected from all CPE devices. Values are based on the latest stored parameter tree."
+        >
+          <button type="button" class="btn btn-secondary" onClick={() => void refetch()} disabled={interfaces.loading}>
+            <RefreshCw size={14} class={interfaces.loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </PageHeader>
+      </Show>
 
       <div class="card p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -94,10 +100,18 @@ const WANInterfaces: Component = () => {
             <Network size={16} />
             <span>{sortedInterfaces().length} interface{sortedInterfaces().length === 1 ? '' : 's'}</span>
           </div>
-          <label class="relative block w-full sm:w-72">
-            <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => { setPage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
-          </label>
+          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Show when={props.embedded}>
+              <button type="button" class="btn btn-secondary" onClick={() => void refetch()} disabled={interfaces.loading}>
+                <RefreshCw size={14} class={interfaces.loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+            </Show>
+            <label class="relative block w-full sm:w-72">
+              <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => { setPage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
+            </label>
+          </div>
         </div>
       </div>
 

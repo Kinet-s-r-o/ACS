@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
-import { A } from '@solidjs/router';
+import { A, useSearchParams } from '@solidjs/router';
 import { RefreshCw, Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -16,6 +16,7 @@ import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import { formatDateTime, formatRelativeTime } from '../lib/dateTime';
 import { formatUptime } from '../lib/health';
+import WANInterfaces from './WANInterfaces';
 
 interface ColumnConfig {
   id: string;
@@ -63,6 +64,8 @@ const TagChips: Component<{ tags: string[] }> = (props) => {
 };
 
 const Devices: Component = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = () => searchParams.tab === 'wans' ? 'wans' : 'cpes';
   const [page, setPage] = createSignal(0);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.devices');
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
@@ -360,6 +363,16 @@ const Devices: Component = () => {
         </div>
       </PageHeader>
 
+      <nav role="tablist" class="tab-bar" aria-label="CPE inventory sections">
+        <button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button>
+        <button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button>
+      </nav>
+
+      <Show when={activeTab() === 'wans'}>
+        <WANInterfaces embedded />
+      </Show>
+
+      <Show when={activeTab() === 'cpes'}>
       <Show when={deviceList.error}>
         <div class="card"><ResourceError title="CPE inventory is unavailable" description="The inventory request failed. Check the API service status and retry without losing the current search or column settings." onRetry={() => refetch()} /></div>
       </Show>
@@ -487,6 +500,7 @@ const Devices: Component = () => {
       </div></Show>
 
       <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => setColumnFilters({})} onRemoveFilter={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} />
+      </Show>
     </div>
   );
 };
