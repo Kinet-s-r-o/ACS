@@ -256,6 +256,10 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .data-table { font-size: 12px; background: rgb(var(--bg-surface)); }
 .data-table thead { background: rgb(var(--bg-elevated) / .58); }
 .data-table thead th { height: 40px; padding: 9px 14px; color: rgb(var(--text-muted)); font-size: 10px; font-weight: 600; letter-spacing: .025em; line-height: 1.2; vertical-align: middle; }
+.data-table thead th.column-reorderable { cursor: grab; }
+.data-table thead th.column-reorderable:active { cursor: grabbing; }
+.data-table thead th.column-reorderable:hover { color: rgb(var(--text-primary)); }
+.data-table thead th.is-column-dragging { opacity: .45; }
 .data-table td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
 .data-table tbody td { padding: 10px 14px; border-top: 1px solid rgb(var(--border-subtle)); line-height: 1.35; vertical-align: middle; }
 .data-table tbody tr:first-child td { border-top: 0; }

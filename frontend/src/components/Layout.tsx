@@ -10,6 +10,7 @@ import { useAuth } from '../lib/auth';
 import { APP_VERSION } from '../lib/version';
 import { appName, appLogo } from '../lib/appName';
 import { useTheme } from '../lib/theme';
+import { enableTableColumnReordering } from '../lib/tableColumnReorder';
 
 const navigation = [
   { section: 'Monitor', items: [
@@ -80,6 +81,7 @@ const Layout: ParentComponent = (props) => {
     try { await api.health(); setAPIOnline(true); } catch { setAPIOnline(false); }
   };
   onMount(() => {
+    const disableTableColumnReordering = enableTableColumnReordering(() => location.pathname);
     const media = window.matchMedia('(min-width: 1024px)');
     const updateViewport = () => setDesktopViewport(media.matches);
     media.addEventListener('change', updateViewport);
@@ -92,7 +94,7 @@ const Layout: ParentComponent = (props) => {
       }
     };
     document.addEventListener('keydown', closeOnEscape);
-    onCleanup(() => { window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); media.removeEventListener('change', updateViewport); });
+    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); media.removeEventListener('change', updateViewport); });
   });
 
   const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();
