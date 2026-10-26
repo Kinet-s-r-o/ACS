@@ -316,6 +316,11 @@ func envInt(key string, fallback, minimum, maximum int) (int, error) {
 
 func runAutoMigrate(db *gorm.DB) error {
 	log.Println("Running database migrations...")
+	if db.Migrator().HasColumn(&models.User{}, "required2_fa") && !db.Migrator().HasColumn(&models.User{}, "required_2fa") {
+		if err := db.Migrator().RenameColumn(&models.User{}, "required2_fa", "required_2fa"); err != nil {
+			return fmt.Errorf("rename required 2FA column: %w", err)
+		}
+	}
 
 	allModels := []interface{}{
 		&models.Device{},
