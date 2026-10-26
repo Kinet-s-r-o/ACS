@@ -94,7 +94,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center gap-2 text-sm text-secondary">
             <Network size={16} />
-            <span>{sortedInterfaces().length} interface{sortedInterfaces().length === 1 ? '' : 's'}</span>
+            <span><strong>{pagedInterfaces().length}</strong> visible on this page · <strong>{interfaces()?.length ?? 0}</strong> total WANs</span>
           </div>
           <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <label class="relative block w-full sm:w-72">

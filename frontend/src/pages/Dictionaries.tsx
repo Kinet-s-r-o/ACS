@@ -116,7 +116,14 @@ const Dictionaries: Component = () => {
       <div class="card p-5">
         <div class="flex items-center justify-between gap-3 mb-4">
           <h2 class="text-sm font-medium text-secondary">Tags</h2>
-          <Show when={canManageTags()}><button type="button" onClick={openCreate} class="btn btn-primary text-xs"><Plus size={13} />New tag</button></Show>
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <input type="text" value={searchQuery()} onInput={event => { setSearchQuery(event.currentTarget.value); setTagsPage(0); }} placeholder="Search tags..." aria-label="Search tags" class="input pl-9! w-56 text-sm" />
+              <Show when={searchQuery()}><button type="button" onClick={() => { setSearchQuery(''); setTagsPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show>
+            </div>
+            <Show when={canManageTags()}><button type="button" onClick={openCreate} class="btn btn-primary text-xs"><Plus size={13} />New tag</button></Show>
+          </div>
         </div>
         <Show when={tags.error}><ResourceError title="Tag catalog is unavailable" description="Retry loading the tag dictionary." onRetry={() => refetch()} /></Show>
         <Show when={tags.loading}><div class="skeleton h-12 w-full" /></Show>
@@ -126,7 +133,6 @@ const Dictionaries: Component = () => {
         <Show when={!tags.loading && !tags.error && (tags() || []).length > 0}>
           <div class="table-panel-toolbar">
             <h2 class="text-sm font-medium text-secondary">Tags ({filteredTags().length})</h2>
-            <div class="relative"><Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" /><input type="text" value={searchQuery()} onInput={event => { setSearchQuery(event.currentTarget.value); setTagsPage(0); }} placeholder="Search tags..." class="input pl-9! w-56 text-sm" /><Show when={searchQuery()}><button type="button" onClick={() => { setSearchQuery(''); setTagsPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show></div>
           </div>
           <Show when={filteredTags().length > 0} fallback={<EmptyState compact title="No matching tags" description="Try a different search term or clear the column filters." />}>
           <div class="overflow-x-auto"><table class="data-table w-full text-sm">
@@ -134,7 +140,7 @@ const Dictionaries: Component = () => {
               <Show when={isVisible('name')}><th class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="name" label="Tag" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="name" label="Tag" active={columnFilters().name || null} onApply={state => applyFilter('name', state)} /></SortableHeader></th></Show>
               <Show when={isVisible('description')}><th class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyFilter('description', state)} /></SortableHeader></th></Show>
               <Show when={isVisible('color')}><th class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="color" label="Color" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="color" label="Color" active={columnFilters().color || null} onApply={state => applyFilter('color', state)} /></SortableHeader></th></Show>
-              <Show when={canManageTags()}><th class="w-20" /></Show><th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+              <Show when={canManageTags()}><th class="px-3 py-2 text-left font-semibold text-primary">Actions</th></Show><th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
             </tr></thead>
             <tbody><For each={pagedTags()}>{tag => <tr class="border-t border-subtle hover:bg-elevated/30">
               <Show when={isVisible('name')}><td class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td></Show>

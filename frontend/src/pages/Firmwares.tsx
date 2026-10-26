@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
-import { Upload, Trash2, HardDrive, Package, Search, X } from 'lucide-solid';
+import { Upload, Trash2, HardDrive, Search, X } from 'lucide-solid';
 import { api, type Firmware } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -211,10 +211,7 @@ const Firmwares: Component = () => {
 
       <div class="card overflow-hidden">
         <div class="p-5 border-b border-subtle flex items-center justify-between">
-          <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
-            <Package size={14} />
-            Firmware Library ({firmwares()?.length || 0})
-          </h2>
+          <span><strong>{pagedFirmwares().length}</strong> visible on this page · <strong>{firmwares()?.length ?? 0}</strong> total firmware artifacts</span>
           <div class="relative">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input type="text" value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} placeholder="Search firmware…" class="input pl-9! w-56 text-sm" />

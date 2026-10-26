@@ -171,10 +171,7 @@ const UsersPage: Component = () => {
       <Show when={activeTab() === 'users'}>
       <div class="card overflow-hidden">
         <div class="table-panel-toolbar">
-          <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
-            <Users size={14} />
-            Operator management
-          </h2>
+          <span><strong>{pagedUsers().length}</strong> visible on this page · <strong>{users()?.length ?? 0}</strong> total users</span>
           <div class="flex items-center gap-2">
             <div class="relative">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />

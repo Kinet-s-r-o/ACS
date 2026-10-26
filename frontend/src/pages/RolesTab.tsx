@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, Show, For } from 'solid-js';
-import { Plus, Pencil, Trash2, X } from 'lucide-solid';
+import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-solid';
 import { api, type Role } from '../lib/api';
 import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
@@ -8,11 +8,13 @@ import { EmptyState, ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
+import Pagination from '../components/Pagination';
 import SortableHeader from '../components/SortableHeader';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
-import { createPersistedJsonSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { sortRows, type SortDirection } from '../lib/sorting';
+import { usePageSize } from '../lib/usePageSize';
 
 const PERMISSION_GROUPS: { label: string; read: string; write: string }[] = [
   { label: 'Users', read: 'users.read', write: 'users.write' },
@@ -36,6 +38,9 @@ const RolesTab: Component = () => {
     return api.getRoles();
   });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.roles', {});
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.roles');
+  const [rolePage, setRolePage] = createSignal(0);
+  const { pageSize, changePageSize } = usePageSize('roles', 20);
   const { columns, isVisible, toggle } = useColumnVisibility('roles', [
     { id: 'name', label: 'Name', visible: true },
     { id: 'description', label: 'Description', visible: true },
@@ -43,7 +48,10 @@ const RolesTab: Component = () => {
     { id: 'type', label: 'Type', visible: true },
   ]);
   const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'name', direction: 'asc' });
-  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const handleSort = (column: string) => {
+    setRolePage(0);
+    setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  };
   const getFilterValue = (role: Role, column: string): string => {
     switch (column) {
       case 'name': return role.name;
@@ -53,14 +61,36 @@ const RolesTab: Component = () => {
       default: return '';
     }
   };
-  const filteredRoles = () => applyColumnFilters(roles() || [], columnFilters(), getFilterValue);
+  const filteredRoles = () => {
+    const query = searchQuery().toLowerCase().trim();
+    let all = roles() || [];
+    if (query) {
+      all = all.filter(role => [
+        role.name,
+        role.description || '',
+        role.permissions.join(' '),
+        role.is_system ? 'system' : 'custom',
+      ].some(value => value.toLowerCase().includes(query)));
+    }
+    return applyColumnFilters(all, columnFilters(), getFilterValue);
+  };
   const sortedRoles = () => sortRows(filteredRoles(), sortState().column, sortState().direction, getFilterValue);
-  const applyRoleFilter = (column: string, state: ColumnFilterState | null) => setColumnFilters(previous => {
-    const next = { ...previous };
-    if (state) next[column] = state;
-    else delete next[column];
-    return next;
+  const applyRoleFilter = (column: string, state: ColumnFilterState | null) => {
+    setRolePage(0);
+    setColumnFilters(previous => {
+      const next = { ...previous };
+      if (state) next[column] = state;
+      else delete next[column];
+      return next;
+    });
+  };
+  const pagedRoles = createMemo(() => {
+    const all = sortedRoles();
+    const start = rolePage() * pageSize();
+    return all.slice(start, start + pageSize());
   });
+  const roleTotalPages = createMemo(() => Math.ceil(sortedRoles().length / pageSize()));
+  const handlePageSizeChange = (size: number) => { changePageSize(size); setRolePage(0); };
 
   const [showRoleModal, setShowRoleModal] = createSignal(false);
   const [editingRole, setEditingRole] = createSignal<Role | null>(null);
@@ -144,12 +174,24 @@ const RolesTab: Component = () => {
   return (
     <div>
       <div class="flex items-center justify-between mb-4">
-        <p class="text-sm text-muted">Define permission sets that can be assigned to users.</p>
-        <Show when={canWrite()}>
-          <button type="button" class="btn btn-primary" onClick={openCreateRole}>
-            <Plus size={14} /> New Role
-          </button>
-        </Show>
+        <div>
+          <p class="text-sm"><strong>{pagedRoles().length}</strong> visible on this page · <strong>{roles()?.length ?? 0}</strong> total roles</p>
+          <p class="text-sm text-muted mt-1">Define permission sets that can be assigned to users.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <input type="text" value={searchQuery()} onInput={(event) => { setRolePage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search roles…" aria-label="Search roles" class="input pl-9! w-48 text-sm" />
+            <Show when={searchQuery()}>
+              <button type="button" onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear role search"><X size={12} /></button>
+            </Show>
+          </div>
+          <Show when={canWrite()}>
+            <button type="button" class="btn btn-primary" onClick={openCreateRole}>
+              <Plus size={14} /> New Role
+            </button>
+          </Show>
+        </div>
       </div>
 
       <Show when={roles.error}>
@@ -172,7 +214,7 @@ const RolesTab: Component = () => {
                 </tr>
               </thead>
               <tbody>
-                <For each={sortedRoles()}>
+                <For each={pagedRoles()}>
                   {(role) => (
                     <tr class="border-b border-border/50 hover:bg-muted/20">
                       <Show when={isVisible('name')}><td class="px-3 py-2 font-medium">{role.name}</td></Show>
@@ -197,6 +239,7 @@ const RolesTab: Component = () => {
               </tbody>
             </table>
           </div>
+          <Pagination page={rolePage()} totalPages={roleTotalPages()} totalItems={sortedRoles().length} pageSize={pageSize()} onPageChange={setRolePage} storageKey="roles" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setRolePage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setRolePage(0); }} />
         </Show>
         </Show>
         <Show when={(roles()?.length ?? 0) === 0}>

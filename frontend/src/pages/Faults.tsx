@@ -202,6 +202,9 @@ const Faults: Component = () => {
 
       {/* Faults List */}
       <Show when={!faults.error}><div class="card p-0 overflow-hidden">
+        <div class="table-panel-toolbar">
+          <span><strong>{pagedFaults().length}</strong> visible on this page · <strong>{stats()?.total ?? 0}</strong> total CWMP faults</span>
+        </div>
         <Show when={!faults.loading} fallback={
           <div class="p-4 space-y-3" aria-label="Loading fault records"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div>
         }>

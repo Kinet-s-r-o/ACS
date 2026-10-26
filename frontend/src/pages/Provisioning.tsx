@@ -98,12 +98,14 @@ const Provisioning: Component = () => {
   const [provError, setProvError] = createSignal<Error | null>(null);
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
   const [showSettingsMenu, setShowSettingsMenu] = createSignal(false);
+  const [showFeatureMenu, setShowFeatureMenu] = createSignal(false);
   const [showSettingsModal, setShowSettingsModal] = createSignal(false);
   const [settingsLoading, setSettingsLoading] = createSignal(false);
   const [settingsSaving, setSettingsSaving] = createSignal(false);
   const [refreshSettings, setRefreshSettings] = createSignal({ overview: '15m', full: '6h' });
   const [settingsInitialSnapshot, setSettingsInitialSnapshot] = createSignal('');
   let settingsMenu: HTMLDivElement | undefined;
+  let featureMenu: HTMLDivElement | undefined;
   let provisioningImportInput: HTMLInputElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
@@ -293,9 +295,13 @@ const Provisioning: Component = () => {
     loadProvTemplates();
     const closeMenu = (event: MouseEvent) => {
       if (!settingsMenu?.contains(event.target as Node)) setShowSettingsMenu(false);
+      if (!featureMenu?.contains(event.target as Node)) setShowFeatureMenu(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowSettingsMenu(false);
+      if (event.key === 'Escape') {
+        setShowSettingsMenu(false);
+        setShowFeatureMenu(false);
+      }
     };
     document.addEventListener('click', closeMenu);
     document.addEventListener('keydown', closeOnEscape);
@@ -1145,7 +1151,7 @@ const Provisioning: Component = () => {
                 <Show when={activeFeature()}>{feature => <section class="card p-4 space-y-4">
                   <div class="flex flex-wrap items-start justify-between gap-3">
                     <div><h3 class="text-sm font-medium text-primary">{feature().name}</h3><p class="mt-1 text-xs text-muted">{feature().description || `${feature().controls.length} fields`}</p></div>
-                    <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-secondary text-xs" onClick={() => openFeatureEditor(feature())}><Edit2 size={13} />Edit section</button><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void deleteTemplateFeature(feature().id)}><Trash2 size={13} />Delete</button></div>
+                    <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><div class="relative" ref={featureMenu}><button type="button" class="icon-button" aria-label={`Actions for feature section ${feature().name}`} aria-haspopup="menu" aria-expanded={showFeatureMenu()} onClick={() => setShowFeatureMenu(value => !value)}><MoreVertical size={18} /></button><Show when={showFeatureMenu()}><div class="absolute right-0 top-full z-50 mt-2 min-w-40 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu"><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowFeatureMenu(false); openFeatureEditor(feature()); }}><Edit2 size={14} />Edit section</button><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-base" onClick={() => { setShowFeatureMenu(false); void deleteTemplateFeature(feature().id); }}><Trash2 size={14} />Delete</button></div></Show></div></div>
                   </div>
                   <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
                     <div class="overflow-x-auto"><table class="data-table w-full min-w-[820px] text-xs"><thead><tr><th class="w-8 whitespace-nowrap"><input type="checkbox" aria-label="Select all fields" checked={feature().controls.length > 0 && feature().controls.every(control => selectedFeatureControlKeys().includes(control.key))} onChange={event => selectAllFeatureControls(feature(), event.currentTarget.checked)} /></th><th class="w-8 whitespace-nowrap"></th><For each={featureTableColumns}>{column => <Show when={featureColumns.isVisible(column.id)}><th class="text-left whitespace-nowrap">{column.label}</th></Show>}</For><th class="text-right whitespace-nowrap">Actions</th><th class="py-2 pr-2 whitespace-nowrap"><ColumnVisibility columns={featureColumns.columns} onToggle={featureColumns.toggle} /></th></tr></thead><tbody>

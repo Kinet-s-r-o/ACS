@@ -158,7 +158,7 @@ const Tasks: Component = () => {
 
       <div class="card overflow-hidden">
         <div class="table-panel-toolbar">
-            <h2 class="text-sm font-medium text-secondary">Task History ({filteredTasks().length})</h2>
+            <span><strong>{pagedTasks().length}</strong> visible on this page · <strong>{taskCounts().total}</strong> total CWMP tasks</span>
           <div class="relative">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input type="text" value={searchQuery()} onInput={(event) => { setSearchQuery(event.currentTarget.value); setTaskPage(0); }} placeholder="Search tasks…" class="input pl-9! w-56 text-sm" />
