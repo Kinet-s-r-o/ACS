@@ -133,6 +133,7 @@ func (r *Router) Handler() http.Handler {
 	// Public endpoints (no auth required)
 	mux.HandleFunc("GET /health", r.handleHealth)
 	mux.HandleFunc("GET /meta", r.handleMeta)
+	mux.HandleFunc("GET /meta/logo", r.handleMetaLogo)
 	mux.HandleFunc("POST /auth/login", r.handleLogin)
 	mux.Handle("POST /auth/2fa/setup", r.twoFactorChallengeMiddleware(http.HandlerFunc(r.handleCompleteTwoFactorSetup)))
 	mux.Handle("POST /auth/2fa/verify", r.twoFactorChallengeMiddleware(http.HandlerFunc(r.handleVerifyTwoFactor)))
@@ -163,6 +164,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /devices", auth.RequirePermission(models.PermDevicesRead)(r.handleListDevices))
 	apiMux.HandleFunc("GET /wan-interfaces", auth.RequirePermission(models.PermDevicesRead)(r.handleListWANInterfaces))
 	apiMux.HandleFunc("GET /tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListTasks))
+	apiMux.HandleFunc("GET /tasks/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetTask))
 	apiMux.HandleFunc("DELETE /tasks/{id}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeletePendingTask))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
@@ -313,6 +315,33 @@ func (r *Router) handleMeta(w http.ResponseWriter, req *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName, "app_logo": appLogo})
 }
 
+func (r *Router) handleMetaLogo(w http.ResponseWriter, req *http.Request) {
+	setting, err := r.settingsRepo.Get(req.Context(), "app_logo")
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Application logo is unavailable")
+		return
+	}
+	if setting == nil || setting.Value == "" {
+		http.NotFound(w, req)
+		return
+	}
+	const prefix = "data:image/webp;base64,"
+	if !strings.HasPrefix(setting.Value, prefix) {
+		http.NotFound(w, req)
+		return
+	}
+	logo, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(setting.Value, prefix))
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Application logo is invalid")
+		return
+	}
+	w.Header().Set("Content-Type", "image/webp")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(logo)
+}
+
 func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 	limit := 50
 	offset := 0
@@ -364,6 +393,25 @@ func (r *Router) handleListTasks(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, tasks)
+}
+
+func (r *Router) handleGetTask(w http.ResponseWriter, req *http.Request) {
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid task ID")
+		return
+	}
+	task, err := r.taskRepo.GetWithDevice(req.Context(), id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		respondError(w, http.StatusNotFound, "Task not found")
+		return
+	}
+	if err != nil {
+		log.Printf("Error getting task %d: %v", id, err)
+		respondError(w, http.StatusInternalServerError, "Failed to get task")
+		return
+	}
+	respondJSON(w, http.StatusOK, task)
 }
 
 func (r *Router) handleDeletePendingTask(w http.ResponseWriter, req *http.Request) {
@@ -2491,10 +2539,35 @@ func (r *Router) beginTwoFactorChallenge(w http.ResponseWriter, req *http.Reques
 	}
 	label := url.PathEscape(appName + ":" + user.Username)
 	otpURL := "otpauth://totp/" + label + "?secret=" + url.QueryEscape(secret) + "&issuer=" + url.QueryEscape(appName) + "&algorithm=SHA1&digits=6&period=30"
+	if logo, logoErr := r.settingsRepo.Get(req.Context(), "app_logo"); logoErr == nil && logo != nil && strings.HasPrefix(logo.Value, "data:image/webp;base64,") {
+		if imageURL := publicAppLogoURL(req); imageURL != "" {
+			otpURL += "&image=" + url.QueryEscape(imageURL)
+		}
+	}
 	clearSessionCookies(w, req)
 	setTwoFactorChallengeCookie(w, req, token)
 	respondJSON(w, http.StatusOK, models.LoginResponse{TwoFactorSetupRequired: true, TwoFactorSecret: secret, TwoFactorOTPAuthURL: otpURL})
 	return nil
+}
+
+func publicAppLogoURL(req *http.Request) string {
+	origin := req.Header.Get("Origin")
+	if origin == "" {
+		return ""
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.User != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return ""
+	}
+	path := "/meta/logo"
+	if isSameOrigin(req, origin) {
+		path = "/api/meta/logo"
+	}
+	scheme := "http"
+	if isSecureRequest(req) {
+		scheme = "https"
+	}
+	return (&url.URL{Scheme: scheme, Host: req.Host, Path: path}).String()
 }
 
 func (r *Router) twoFactorChallengeMiddleware(next http.Handler) http.Handler {

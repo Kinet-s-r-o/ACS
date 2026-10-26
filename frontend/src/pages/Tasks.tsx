@@ -42,6 +42,7 @@ const Tasks: Component = () => {
   const [taskPage, setTaskPage] = createSignal(0);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('global_tasks', 20);
   const [tasks, { refetch }] = createResource(api.getTasks);
+  const [taskDetails] = createResource(() => selectedTask()?.id, (id) => api.getTask(id));
   const [deletingTask, setDeletingTask] = createSignal<number | null>(null);
   const taskCounts = createMemo(() => {
     const counts = { pending: 0, sent: 0, completed: 0, failed: 0, deleted: 0, total: 0 };
@@ -215,15 +216,15 @@ const Tasks: Component = () => {
               <button type="button" class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'result' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('result')}>Result</button>
             </div>
             <Show when={taskDetailTab() === 'requested'}>
-              <Show when={selectedTask()!.payload != null} fallback={<p class="text-sm text-muted">No payload for this task type.</p>}>
-                <Show when={Array.isArray(selectedTask()!.payload)} fallback={<div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody><For each={Object.entries(selectedTask()!.payload as Record<string, unknown>)}>{([key, value]) => <tr class="border-t border-subtle/50"><td class="px-3 py-1.5 font-mono text-xs text-primary">{key}</td><td class="px-3 py-1.5 text-xs">{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}</td></tr>}</For></tbody></table></div>}>
-                  <div class="space-y-1"><For each={selectedTask()!.payload as string[]}>{(param) => <div class="font-mono text-xs text-primary px-3 py-1.5 bg-elevated/50 rounded">{param}</div>}</For></div>
+              <Show when={taskDetails()?.payload != null} fallback={<p class="text-sm text-muted">{taskDetails.loading ? 'Loading task details…' : 'No payload for this task type.'}</p>}>
+                <Show when={Array.isArray(taskDetails()?.payload)} fallback={<div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody><For each={Object.entries(taskDetails()?.payload as Record<string, unknown>)}>{([key, value]) => <tr class="border-t border-subtle/50"><td class="px-3 py-1.5 font-mono text-xs text-primary">{key}</td><td class="px-3 py-1.5 text-xs">{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}</td></tr>}</For></tbody></table></div>}>
+                  <div class="space-y-1"><For each={taskDetails()?.payload as string[]}>{(param) => <div class="font-mono text-xs text-primary px-3 py-1.5 bg-elevated/50 rounded">{param}</div>}</For></div>
                 </Show>
               </Show>
             </Show>
             <Show when={taskDetailTab() === 'result'}>
-              <Show when={selectedTask()!.result != null} fallback={<p class="text-sm text-muted">No result yet — task may still be pending.</p>}>
-                <pre class="text-xs font-mono bg-elevated/50 rounded p-3 overflow-x-auto">{JSON.stringify(selectedTask()!.result, null, 2)}</pre>
+              <Show when={taskDetails()?.result != null} fallback={<p class="text-sm text-muted">{taskDetails.loading ? 'Loading task details…' : 'No result yet — task may still be pending.'}</p>}>
+                <pre class="text-xs font-mono bg-elevated/50 rounded p-3 overflow-x-auto">{JSON.stringify(taskDetails()?.result, null, 2)}</pre>
               </Show>
             </Show>
           </div>

@@ -21,19 +21,49 @@ type TaskWithDevice struct {
 	SerialNumber string `json:"serial_number"`
 }
 
+type TaskListItem struct {
+	ID           int64             `json:"id"`
+	DeviceID     int64             `json:"device_id"`
+	Type         models.TaskType   `json:"type"`
+	Status       models.TaskStatus `json:"status"`
+	ErrorMessage string            `json:"error_message,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	SentAt       *time.Time        `json:"sent_at,omitempty"`
+	CompletedAt  *time.Time        `json:"completed_at,omitempty"`
+	CreatedBy    string            `json:"created_by,omitempty"`
+	DeletedBy    string            `json:"deleted_by,omitempty"`
+	SerialNumber string            `json:"serial_number"`
+}
+
 func NewTaskRepository(db *gorm.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
-func (r *TaskRepository) ListWithDevices(ctx context.Context) ([]TaskWithDevice, error) {
-	var tasks []TaskWithDevice
+func (r *TaskRepository) ListWithDevices(ctx context.Context) ([]TaskListItem, error) {
+	var tasks []TaskListItem
+	err := r.db.WithContext(ctx).
+		Table("tasks").
+		Select("tasks.id, tasks.device_id, tasks.type, tasks.status, tasks.error_message, tasks.created_at, tasks.sent_at, tasks.completed_at, tasks.created_by, tasks.deleted_by, devices.serial_number").
+		Joins("JOIN devices ON devices.id = tasks.device_id").
+		Order("tasks.created_at DESC, tasks.id DESC").
+		Find(&tasks).Error
+	return tasks, err
+}
+
+func (r *TaskRepository) GetWithDevice(ctx context.Context, id int64) (*TaskWithDevice, error) {
+	var task TaskWithDevice
 	err := r.db.WithContext(ctx).
 		Table("tasks").
 		Select("tasks.*, devices.serial_number").
 		Joins("JOIN devices ON devices.id = tasks.device_id").
-		Order("tasks.created_at DESC").
-		Find(&tasks).Error
-	return tasks, err
+		Where("tasks.id = ?", id).
+		First(&task).Error
+	if err != nil {
+		return nil, err
+	}
+	redactSetTaskPayload(&task.Task)
+	redactGetTaskResult(&task.Task)
+	return &task, nil
 }
 
 func (r *TaskRepository) Create(ctx context.Context, task *models.Task) error {
