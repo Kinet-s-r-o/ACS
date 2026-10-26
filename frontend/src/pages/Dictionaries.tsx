@@ -18,6 +18,7 @@ const Dictionaries: Component = () => {
   const [showModal, setShowModal] = createSignal(false);
   const [name, setName] = createSignal('');
   const [color, setColor] = createSignal('#38bdf8');
+  const [description, setDescription] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [deleting, setDeleting] = createSignal<string | null>(null);
 
@@ -25,6 +26,7 @@ const Dictionaries: Component = () => {
     setEditing(null);
     setName('');
     setColor('#38bdf8');
+    setDescription('');
     setShowModal(true);
   };
 
@@ -32,6 +34,7 @@ const Dictionaries: Component = () => {
     setEditing(tag);
     setName(tag.name);
     setColor(tag.color);
+    setDescription(tag.description || '');
     setShowModal(true);
   };
 
@@ -43,8 +46,8 @@ const Dictionaries: Component = () => {
     }
     setSaving(true);
     try {
-      if (editing()) await api.updateTag(editing()!.id, { name: tagName, color: color() });
-      else await api.createTag({ name: tagName, color: color() });
+      if (editing()) await api.updateTag(editing()!.id, { name: tagName, color: color(), description: description().trim() });
+      else await api.createTag({ name: tagName, color: color(), description: description().trim() });
       setShowModal(false);
       await refetch();
       notify({ tone: 'success', title: editing() ? 'Tag updated' : 'Tag created' });
@@ -83,9 +86,10 @@ const Dictionaries: Component = () => {
         </Show>
         <Show when={!tags.loading && !tags.error && (tags() || []).length > 0}>
           <div class="overflow-x-auto"><table class="data-table w-full text-sm">
-            <thead><tr class="border-b-2 border-subtle bg-base"><th class="text-left px-3 py-2.5 font-semibold text-primary">Tag</th><th class="text-left px-3 py-2.5 font-semibold text-primary">Color</th><Show when={canManageTags()}><th class="w-20" /></Show></tr></thead>
+            <thead><tr class="border-b-2 border-subtle bg-base"><th class="text-left px-3 py-2.5 font-semibold text-primary">Tag</th><th class="text-left px-3 py-2.5 font-semibold text-primary">Description</th><th class="text-left px-3 py-2.5 font-semibold text-primary">Color</th><Show when={canManageTags()}><th class="w-20" /></Show></tr></thead>
             <tbody><For each={tags()}>{tag => <tr class="border-t border-subtle hover:bg-elevated/30">
               <td class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td>
+              <td class="px-3 py-2.5 text-secondary">{tag.description || <span class="text-muted">—</span>}</td>
               <td class="px-3 py-2.5 font-mono text-xs text-secondary">{tag.color}</td>
               <Show when={canManageTags()}><td class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show>
             </tr>}</For></tbody>
@@ -93,7 +97,7 @@ const Dictionaries: Component = () => {
         </Show>
       </div>
       <Show when={showModal()}><Dialog title={editing() ? `Edit tag: ${editing()!.name}` : 'New tag'} description="Tags are shared in the device inventory and provisioning rules." size="small" onClose={() => setShowModal(false)} actions={<><button type="button" onClick={() => setShowModal(false)} class="btn btn-secondary">Cancel</button><button type="button" onClick={() => void saveTag()} disabled={saving()} class="btn btn-primary"><Save size={13} />{saving() ? 'Saving…' : 'Save tag'}</button></>}>
-        <div class="space-y-4"><div><label class="block text-xs text-muted mb-1.5" for="tag-name">Name</label><input id="tag-name" class="input w-full" value={name()} onInput={event => setName(event.currentTarget.value)} disabled={saving()} maxLength={64} placeholder="e.g. Active" /></div><div><div class="text-xs text-muted mb-2">Color</div><ColorSwatch value={color()} onChange={setColor} /></div></div>
+        <div class="space-y-4"><div><label class="block text-xs text-muted mb-1.5" for="tag-name">Name</label><input id="tag-name" class="input w-full" value={name()} onInput={event => setName(event.currentTarget.value)} disabled={saving()} maxLength={64} placeholder="e.g. Active" /></div><div><label class="block text-xs text-muted mb-1.5" for="tag-description">Description <span class="text-muted">(optional)</span></label><textarea id="tag-description" class="input w-full min-h-20 resize-y" value={description()} onInput={event => setDescription(event.currentTarget.value)} disabled={saving()} maxLength={500} placeholder="Describe how this tag is used" /></div><div><div class="text-xs text-muted mb-2">Color</div><ColorSwatch value={color()} onChange={setColor} /></div></div>
       </Dialog></Show>
     </div>
   );

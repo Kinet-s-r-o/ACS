@@ -15,6 +15,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -2604,6 +2605,13 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	body.FirstName = strings.TrimSpace(body.FirstName)
+	body.LastName = strings.TrimSpace(body.LastName)
+	body.Email = strings.TrimSpace(body.Email)
+	if err := validateUserProfile(body.FirstName, body.LastName, body.Email); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	roleID, legacyRole, err := r.resolveAssignedRole(req.Context(), body.RoleID, body.Role)
 	if err != nil {
@@ -2619,6 +2627,9 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 
 	user := &models.User{
 		Username:     body.Username,
+		FirstName:    body.FirstName,
+		LastName:     body.LastName,
+		Email:        body.Email,
 		PasswordHash: hash,
 		Role:         legacyRole,
 		RoleID:       roleID,
@@ -2682,6 +2693,19 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		}
 		user.Username = body.Username
 	}
+	if body.FirstName != nil {
+		user.FirstName = strings.TrimSpace(*body.FirstName)
+	}
+	if body.LastName != nil {
+		user.LastName = strings.TrimSpace(*body.LastName)
+	}
+	if body.Email != nil {
+		user.Email = strings.TrimSpace(*body.Email)
+	}
+	if err := validateUserProfile(user.FirstName, user.LastName, user.Email); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if body.RoleID != nil || body.Role != "" {
 		roleID, legacyRole, resolveErr := r.resolveAssignedRole(req.Context(), body.RoleID, body.Role)
 		if resolveErr != nil {
@@ -2692,7 +2716,7 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		user.Role = legacyRole
 	}
 
-	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.Role, user.RoleID, passwordHash); err != nil {
+	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.FirstName, user.LastName, user.Email, user.Role, user.RoleID, passwordHash); err != nil {
 		if errors.Is(err, database.ErrLastFullAdmin) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -2706,6 +2730,22 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, user)
+}
+
+func validateUserProfile(firstName, lastName, email string) error {
+	if len(firstName) > 100 || len(lastName) > 100 {
+		return errors.New("First and last name must be 100 characters or fewer")
+	}
+	if len(email) > 254 {
+		return errors.New("Email must be 254 characters or fewer")
+	}
+	if email != "" {
+		address, err := mail.ParseAddress(email)
+		if err != nil || address.Address != email {
+			return errors.New("Enter a valid email address")
+		}
+	}
+	return nil
 }
 
 func (r *Router) resolveAssignedRole(ctx context.Context, roleID *int64, fallback models.UserRole) (*int64, models.UserRole, error) {

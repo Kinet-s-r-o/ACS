@@ -34,11 +34,14 @@ const UsersPage: Component = () => {
 
   const [showUserModal, setShowUserModal] = createSignal(false);
   const [editingUser, setEditingUser] = createSignal<User | null>(null);
-  const [userForm, setUserForm] = createSignal({ username: '', password: '', role: 'read' as 'full' | 'read', roleId: '' });
+  const [userForm, setUserForm] = createSignal({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'read' as 'full' | 'read', roleId: '' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.users', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.users');
   const { columns, isVisible, toggle } = useColumnVisibility('users', [
     { id: 'username', label: 'Username', visible: true },
+    { id: 'first_name', label: 'First name', visible: true },
+    { id: 'last_name', label: 'Last name', visible: true },
+    { id: 'email', label: 'Email', visible: true },
     { id: 'role', label: 'Role', visible: true },
     { id: 'last_login', label: 'Last Login', visible: true },
   ]);
@@ -49,6 +52,9 @@ const UsersPage: Component = () => {
   const getFilterValue = (user: User, colId: string): string => {
     switch (colId) {
       case 'username': return user.username || '';
+      case 'first_name': return user.first_name || '';
+      case 'last_name': return user.last_name || '';
+      case 'email': return user.email || '';
       case 'role': return roleName(user);
       case 'last_login': return user.last_login || '';
       default: return '';
@@ -61,6 +67,9 @@ const UsersPage: Component = () => {
     if (query) {
       all = all.filter(u =>
         u.username?.toLowerCase().includes(query) ||
+        u.first_name?.toLowerCase().includes(query) ||
+        u.last_name?.toLowerCase().includes(query) ||
+        u.email?.toLowerCase().includes(query) ||
         roleName(u).toLowerCase().includes(query)
       );
     }
@@ -81,10 +90,10 @@ const UsersPage: Component = () => {
     setPendingAction('create-user');
     try {
       const selected = selectedRole();
-      await api.createUser({ username: userForm().username, password: userForm().password, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) });
+      await api.createUser({ username: userForm().username, first_name: userForm().firstName, last_name: userForm().lastName, email: userForm().email, password: userForm().password, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) });
       notify({ tone: 'success', title: 'Operator account created', message: userForm().username });
       setShowUserModal(false);
-      setUserForm({ username: '', password: '', role: 'read', roleId: '' });
+      setUserForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'read', roleId: '' });
       refetchUsers();
     } catch (error) { notify({ tone: 'error', title: 'Could not create operator', message: 'The operator account was not created. The entered values are preserved.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
@@ -95,14 +104,14 @@ const UsersPage: Component = () => {
     if (!u || pendingAction()) return;
     setPendingAction('update-user');
     const selected = selectedRole();
-    const body: Partial<{ username: string; password: string; role: 'full' | 'read'; role_id: number }> = { username: userForm().username, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) };
+    const body: Partial<{ username: string; first_name: string; last_name: string; email: string; password: string; role: 'full' | 'read'; role_id: number }> = { username: userForm().username, first_name: userForm().firstName, last_name: userForm().lastName, email: userForm().email, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) };
     if (userForm().password) body.password = userForm().password;
     try {
       await api.updateUser(u.id, body);
       notify({ tone: 'success', title: 'Operator account updated', message: userForm().username });
       setShowUserModal(false);
       setEditingUser(null);
-      setUserForm({ username: '', password: '', role: 'read', roleId: '' });
+      setUserForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'read', roleId: '' });
       refetchUsers();
     } catch (error) { notify({ tone: 'error', title: 'Could not update operator', message: 'The existing account remains unchanged. The entered values are preserved.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
@@ -119,13 +128,13 @@ const UsersPage: Component = () => {
 
   const openEditUser = (u: User) => {
     setEditingUser(u);
-    setUserForm({ username: u.username, password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
+    setUserForm({ username: u.username, firstName: u.first_name || '', lastName: u.last_name || '', email: u.email || '', password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
     setShowUserModal(true);
   };
 
   const openCreateUser = () => {
     setEditingUser(null);
-    setUserForm({ username: '', password: '', role: 'read', roleId: systemRoleId('read') });
+    setUserForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'read', roleId: systemRoleId('read') });
     setShowUserModal(true);
   };
 
@@ -163,7 +172,7 @@ const UsersPage: Component = () => {
         <Show when={users.error}><ResourceError title="Operator accounts are unavailable" description="ACS could not read the account directory. Retry before changing access." onRetry={() => refetchUsers()} /></Show>
         <Show when={users.loading}><div class="space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
         <Show when={!users.loading && !users.error && (users()?.length ?? 0) > 0}>
-          <div class="overflow-x-auto table-scroll"><table class="data-table w-full text-sm min-w-[620px]">
+          <div class="overflow-x-auto table-scroll"><table class="data-table w-full text-sm min-w-[900px]">
             <thead>
               <tr class="border-b border-subtle">
                 <Show when={isVisible('username')}>
@@ -173,6 +182,9 @@ const UsersPage: Component = () => {
                     </div>
                   </th>
                 </Show>
+                <Show when={isVisible('first_name')}><th class="text-left py-2 text-xs text-muted font-medium">First name</th></Show>
+                <Show when={isVisible('last_name')}><th class="text-left py-2 text-xs text-muted font-medium">Last name</th></Show>
+                <Show when={isVisible('email')}><th class="text-left py-2 text-xs text-muted font-medium">Email</th></Show>
                 <Show when={isVisible('role')}>
                   <th class="text-left py-2 text-xs text-muted font-medium">
                     <div class="flex items-center gap-1.5">Role
@@ -196,6 +208,9 @@ const UsersPage: Component = () => {
                 {(u) => (
                   <tr class="border-b border-subtle/50">
                     <Show when={isVisible('username')}><td class="py-2 text-primary">{u.username}</td></Show>
+                    <Show when={isVisible('first_name')}><td class="py-2 text-primary">{u.first_name || '—'}</td></Show>
+                    <Show when={isVisible('last_name')}><td class="py-2 text-primary">{u.last_name || '—'}</td></Show>
+                    <Show when={isVisible('email')}><td class="py-2 text-secondary">{u.email || '—'}</td></Show>
                     <Show when={isVisible('role')}>
                       <td class="py-2">
                         <span class={`badge ${u.role_id?.toString() === systemRoleId('full') || (!u.role_id && u.role === 'full') ? 'badge-success' : 'badge-warning'}`}>
@@ -252,6 +267,18 @@ const UsersPage: Component = () => {
                 required
                 maxlength={64}
               />
+            </div>
+            <div>
+              <label for="operator-first-name" class="block text-xs text-muted mb-1.5">First name</label>
+              <input id="operator-first-name" type="text" value={userForm().firstName} onInput={(e) => setUserForm(f => ({ ...f, firstName: e.currentTarget.value }))} class="input w-full" maxlength={100} />
+            </div>
+            <div>
+              <label for="operator-last-name" class="block text-xs text-muted mb-1.5">Last name</label>
+              <input id="operator-last-name" type="text" value={userForm().lastName} onInput={(e) => setUserForm(f => ({ ...f, lastName: e.currentTarget.value }))} class="input w-full" maxlength={100} />
+            </div>
+            <div>
+              <label for="operator-email" class="block text-xs text-muted mb-1.5">Email</label>
+              <input id="operator-email" type="email" value={userForm().email} onInput={(e) => setUserForm(f => ({ ...f, email: e.currentTarget.value }))} class="input w-full" maxlength={254} />
             </div>
             <div>
               <label for="operator-password" class="block text-xs text-muted mb-1.5">

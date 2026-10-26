@@ -51,9 +51,9 @@ func (r *TagRepository) Create(ctx context.Context, tag *models.TagDefinition) e
 	return r.db.WithContext(ctx).Create(tag).Error
 }
 
-func (r *TagRepository) Update(ctx context.Context, id string, name, color string) error {
+func (r *TagRepository) Update(ctx context.Context, id string, name, color, description string) error {
 	return r.db.WithContext(ctx).Model(&models.TagDefinition{}).Where("id = ?", id).
-		Updates(map[string]interface{}{"name": name, "color": color}).Error
+		Updates(map[string]interface{}{"name": name, "color": color, "description": description}).Error
 }
 
 func (r *TagRepository) Delete(ctx context.Context, id string) error {

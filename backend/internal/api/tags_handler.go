@@ -24,8 +24,9 @@ func (r *Router) handleListTags(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handleCreateTag(w http.ResponseWriter, req *http.Request) {
 	var body struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
+		Name        string `json:"name"`
+		Color       string `json:"color"`
+		Description string `json:"description"`
 	}
 	if err := decodeTagBody(req, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid tag body")
@@ -33,7 +34,8 @@ func (r *Router) handleCreateTag(w http.ResponseWriter, req *http.Request) {
 	}
 	name := strings.TrimSpace(body.Name)
 	id := strings.ToLower(name)
-	if err := validateTag(name, body.Color); err != nil {
+	body.Description = strings.TrimSpace(body.Description)
+	if err := validateTag(name, body.Color, body.Description); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -55,7 +57,7 @@ func (r *Router) handleCreateTag(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusConflict, "This tag identifier is already in use")
 		return
 	}
-	tag := &models.TagDefinition{ID: id, Name: name, Color: strings.ToLower(body.Color)}
+	tag := &models.TagDefinition{ID: id, Name: name, Color: strings.ToLower(body.Color), Description: body.Description}
 	if err := r.tagRepo.Create(req.Context(), tag); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create tag")
 		return
@@ -75,15 +77,17 @@ func (r *Router) handleUpdateTag(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
+		Name        string `json:"name"`
+		Color       string `json:"color"`
+		Description string `json:"description"`
 	}
 	if err := decodeTagBody(req, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid tag body")
 		return
 	}
 	name := strings.TrimSpace(body.Name)
-	if err := validateTag(name, body.Color); err != nil {
+	body.Description = strings.TrimSpace(body.Description)
+	if err := validateTag(name, body.Color, body.Description); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -96,7 +100,7 @@ func (r *Router) handleUpdateTag(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusConflict, "A tag with this name already exists")
 		return
 	}
-	if err := r.tagRepo.Update(req.Context(), id, name, strings.ToLower(body.Color)); err != nil {
+	if err := r.tagRepo.Update(req.Context(), id, name, strings.ToLower(body.Color), body.Description); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update tag")
 		return
 	}
@@ -136,12 +140,15 @@ func decodeTagBody(req *http.Request, body interface{}) error {
 	return decoder.Decode(body)
 }
 
-func validateTag(name, color string) error {
+func validateTag(name, color, description string) error {
 	if name == "" || len(name) > 64 {
 		return errors.New("Tag name must be between 1 and 64 characters")
 	}
 	if !tagColorPattern.MatchString(color) {
 		return errors.New("Tag color must be a six-digit hex color")
+	}
+	if len(description) > 500 {
+		return errors.New("Tag description must be 500 characters or fewer")
 	}
 	return nil
 }
