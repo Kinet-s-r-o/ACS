@@ -2,12 +2,12 @@ import type { Component } from 'solid-js';
 import { createMemo, createResource, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, ToolboxComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { api, type InterfaceMetricDefinition } from '../lib/api';
 import { computeUnitScale, effectiveUnit } from '../lib/health';
 
-echarts.use([LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
+echarts.use([LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, ToolboxComponent, CanvasRenderer]);
 
 interface Props {
   serial: string;
@@ -99,6 +99,17 @@ const InterfaceMetricChart: Component<Props> = (props) => {
             const summary = summaries[point.seriesIndex];
             return `${point.seriesName}: ${formatValue(point.value[1])}${summary?.unit ? ` ${summary.unit}` : ''}`;
           })].join('<br/>');
+        },
+      },
+      toolbox: {
+        top: 0,
+        right: 8,
+        itemSize: 14,
+        feature: {
+          dataZoom: {
+            yAxisIndex: 'none',
+            title: { zoom: 'Drag to select a time range', back: 'Undo zoom' },
+          },
         },
       },
       grid: { left: 60, right: 18, top: 34, bottom: 48 },
