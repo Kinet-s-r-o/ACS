@@ -81,6 +81,7 @@ interface SnapshotTreeRow {
 }
 
 const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
+const DEVICE_LOG_PARAMETER = 'InternetGatewayDevice.DeviceInfo.DeviceLog';
 const NSLOOKUP_ROOTS = ['InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.'];
 const IPPING_ROOTS = ['InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.'];
 const TRACEROUTE_ROOTS = ['InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'];
@@ -917,6 +918,24 @@ const DeviceDetail: Component = () => {
       showMessage('error', 'Connection request failed. Verify reachability and credentials, then retry.', (err as Error).message);
     }
     setActionLoading(null);
+  };
+
+  const handleDeviceLogRefresh = async () => {
+    if (!isFullAccess() || actionLoading() !== null) return;
+    setActionLoading('device-log-refresh');
+    try {
+      const task = await api.getParameterValues(serial(), [DEVICE_LOG_PARAMETER]);
+      await api.connectionRequest(serial());
+      await waitForTask(task.id, 'Device log refresh');
+      setDeviceLogPage(0);
+      await refetchDeviceLog();
+      showMessage('success', 'Device log updated from the CPE.');
+    } catch (error) {
+      showMessage('error', 'Could not update the device log from the CPE.', (error as Error).message);
+      void refetchTasks();
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const waitForTask = async (taskId: number, label: string, timeoutMs = 120_000): Promise<Task> => {
@@ -1880,7 +1899,6 @@ const DeviceDetail: Component = () => {
 
       <nav role="tablist" class="tab-bar device-detail-tabs" aria-label="Device detail sections">
         <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'log' ? 'is-active' : ''}`} aria-selected={activeTab() === 'log'} onClick={() => setSearchParams({ tab: 'log' })}>Device log</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>Connected Hosts</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
         <Show when={(matchingProvisioningTemplate()?.features?.length || 0) > 0}><button role="tab" class={`tab-btn ${activeTab() === 'features' ? 'is-active' : ''}`} aria-selected={activeTab() === 'features'} onClick={() => setSearchParams({ tab: 'features' })}>Features</button></Show>
@@ -1899,6 +1917,7 @@ const DeviceDetail: Component = () => {
         </button>
         <button role="tab" class={`tab-btn ${activeTab() === 'credentials' ? 'is-active' : ''}`} aria-selected={activeTab() === 'credentials'} onClick={() => setSearchParams({ tab: 'credentials' })}>Credentials</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'diagnostic' })}>Maintenance</button>
+        <button role="tab" class={`tab-btn ${activeTab() === 'log' ? 'is-active' : ''}`} aria-selected={activeTab() === 'log'} onClick={() => setSearchParams({ tab: 'log' })}>Device log</button>
       </nav>
 
       <Show when={message()}>
@@ -3257,8 +3276,11 @@ const DeviceDetail: Component = () => {
                   <h2 id="device-log-title" class="text-sm font-medium text-secondary">Device log</h2>
                   <p class="mt-1 text-xs text-muted">From InternetGatewayDevice.DeviceInfo.DeviceLog · {deviceLogPageData()?.total ?? 0} entries</p>
                 </div>
-                <label class="sr-only" for="device-log-filter">Search device log</label>
-                <input id="device-log-filter" type="search" class="input w-full sm:w-72 py-1.5 text-sm" placeholder="Search log entries…" value={deviceLogFilter()} onInput={event => { setDeviceLogFilter(event.currentTarget.value); setDeviceLogPage(0); }} />
+                <div class="flex w-full sm:w-auto items-center gap-2">
+                  <label class="sr-only" for="device-log-filter">Search device log</label>
+                  <input id="device-log-filter" type="search" class="input min-w-0 flex-1 sm:w-72 py-1.5 text-sm" placeholder="Search log entries…" value={deviceLogFilter()} onInput={event => { setDeviceLogFilter(event.currentTarget.value); setDeviceLogPage(0); }} />
+                  <Show when={isFullAccess()}><button type="button" class="btn btn-secondary whitespace-nowrap" onClick={() => void handleDeviceLogRefresh()} disabled={actionLoading() !== null} title="Request the current DeviceLog value from the CPE"><RefreshCw size={14} class={actionLoading() === 'device-log-refresh' ? 'animate-spin' : ''} />{actionLoading() === 'device-log-refresh' ? 'Updating…' : 'Refresh'}</button></Show>
+                </div>
               </div>
               <Show when={deviceLogPageData.error}><div class="p-5"><ResourceError title="Device logs are unavailable" description="The stored CPE log history could not be loaded. Retry the request." onRetry={() => void refetchDeviceLog()} /></div></Show>
               <Show when={!deviceLogPageData.error}>

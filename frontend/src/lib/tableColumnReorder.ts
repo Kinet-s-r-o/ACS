@@ -8,12 +8,20 @@ interface ReorderableHeader {
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 
+const headerLabel = (cell: HTMLTableCellElement) => {
+  const sortableLabel = cell.querySelector<HTMLButtonElement>('button[aria-label^="Sort by "]')?.textContent;
+  if (sortableLabel) return normalize(sortableLabel);
+  const clone = cell.cloneNode(true) as HTMLTableCellElement;
+  clone.querySelectorAll('.filter-dropdown, .filter-toggle, .column-toggle, [aria-hidden="true"]').forEach((element) => element.remove());
+  return normalize(clone.textContent || '');
+};
+
 const getHeaders = (table: HTMLTableElement): ReorderableHeader[] => {
   const row = table.tHead?.rows[0];
   if (!row) return [];
   const occurrences = new Map<string, number>();
   return Array.from(row.cells).flatMap((cell, index) => {
-    const label = normalize(cell.textContent || '');
+    const label = headerLabel(cell);
     if (!label || cell.querySelector('.column-toggle')) return [];
     const occurrence = occurrences.get(label) ?? 0;
     occurrences.set(label, occurrence + 1);
