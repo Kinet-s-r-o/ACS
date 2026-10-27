@@ -2063,7 +2063,7 @@ const DeviceDetail: Component = () => {
                   <div class="space-y-4">
                   <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
-                      <div><div class="flex items-center gap-2"><Activity size={14} class="text-muted" /><h2 class="text-sm font-medium text-secondary">Speedtest</h2></div><p class="text-xs text-muted mt-1">Run an iPerf speed test from this CPE.</p></div>
+                      <div><div class="flex items-center gap-2"><Activity size={14} class="section-title-icon" /><h2 class="text-sm font-medium text-secondary">Speedtest</h2></div><p class="text-xs text-muted mt-1">Run an iPerf speed test from this CPE.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="px-5 pb-5 space-y-4">
@@ -2090,7 +2090,7 @@ const DeviceDetail: Component = () => {
                   </details>
                   <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
-                      <div><div class="flex items-center gap-2"><Search size={14} class="text-muted" /><h2 class="text-sm font-medium text-secondary">NS lookup</h2></div><p class="text-xs text-muted mt-1">Resolve a hostname from the CPE using its DNS diagnostics.</p></div>
+                      <div><div class="flex items-center gap-2"><Search size={14} class="section-title-icon" /><h2 class="text-sm font-medium text-secondary">NS lookup</h2></div><p class="text-xs text-muted mt-1">Resolve a hostname from the CPE using its DNS diagnostics.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="px-5 pb-5 space-y-4">
@@ -2119,7 +2119,7 @@ const DeviceDetail: Component = () => {
                   </details>
                   <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
-                      <div><div class="flex items-center gap-2"><Radio size={14} class="text-muted" /><h2 class="text-sm font-medium text-secondary">IP ping</h2></div><p class="text-xs text-muted mt-1">Send ICMP echo requests from the CPE and review packet loss and response times.</p></div>
+                      <div><div class="flex items-center gap-2"><Radio size={14} class="section-title-icon" /><h2 class="text-sm font-medium text-secondary">IP ping</h2></div><p class="text-xs text-muted mt-1">Send ICMP echo requests from the CPE and review packet loss and response times.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="px-5 pb-5 space-y-4">
@@ -2150,7 +2150,7 @@ const DeviceDetail: Component = () => {
                   </details>
                   <details class="card group">
                     <summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3">
-                      <div><div class="flex items-center gap-2"><Network size={14} class="text-muted" /><h2 class="text-sm font-medium text-secondary">Traceroute</h2></div><p class="text-xs text-muted mt-1">Show the network hops from the CPE to a destination.</p></div>
+                      <div><div class="flex items-center gap-2"><Network size={14} class="section-title-icon" /><h2 class="text-sm font-medium text-secondary">Traceroute</h2></div><p class="text-xs text-muted mt-1">Show the network hops from the CPE to a destination.</p></div>
                       <ChevronDown size={16} class="shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="px-5 pb-5 space-y-4">

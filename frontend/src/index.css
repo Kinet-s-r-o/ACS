@@ -193,6 +193,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .device-health-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .device-health-header h2 { display: flex; align-items: center; gap: 7px; margin: 0; color: rgb(var(--text-primary)); font-size: 13px; font-weight: 600; }
 .device-health-header h2 svg { color: rgb(var(--accent)); }
+:is(h1, h2, h3, h4) svg, .section-title-icon { color: rgb(var(--accent)); }
 .device-health-header p { margin: 3px 0 0 21px; color: rgb(var(--text-muted)); font-size: 10px; }
 .device-health-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .health-metric-card { min-width: 0; padding: 9px; border: 1px solid rgb(var(--border-subtle)); background: rgb(var(--bg-base) / .45); }
