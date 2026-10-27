@@ -32,6 +32,8 @@ export interface Device {
 export interface DeviceStats { total: number; online: number; offline: number }
 export interface DeviceListResponse { devices: Device[]; total: number; limit: number; offset: number }
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
+export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
+export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number }
 export interface WANInterface { serial_number: string; name: string; type: string; status: string; ip_address: string; mac_address: string }
 export interface Task { id: number; device_id: number; type: string; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
 export interface GlobalTask extends Task { serial_number: string }
@@ -135,6 +137,12 @@ export const api = {
   getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics'),
   getDeviceTypes: () => request<string[]>('/devices/device-types'),
   getDeviceParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameters`),
+  getDeviceLogs: (query: { serial: string; limit: number; offset: number; search: string; filters: Record<string, { logic: string; rules: { operator: string; value: string }[] }>; sort: string; direction: string }) => {
+    const params = new URLSearchParams({ limit: String(query.limit), offset: String(query.offset), sort: query.sort, direction: query.direction });
+    if (query.search) params.set('search', query.search);
+    if (Object.keys(query.filters).length) params.set('filters', JSON.stringify(query.filters));
+    return request<DeviceLogPage>(`/device/${encodeURIComponent(query.serial)}/logs?${params.toString()}`);
+  },
   getDeviceTasks: (serial: string) => request<Task[]>(`/device/${encodeURIComponent(serial)}/tasks`),
   getDeviceTaskCounts: (serial: string) => request<DeviceTaskCounts>(`/device/${encodeURIComponent(serial)}/task-counts`),
   getDeviceSnapshots: (serial: string) => request<DeviceSnapshot[]>(`/device/${encodeURIComponent(serial)}/snapshots`),

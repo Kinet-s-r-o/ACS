@@ -104,6 +104,13 @@ func NewParameterRepository(db *gorm.DB) *ParameterRepository {
 }
 
 func (r *ParameterRepository) UpsertMany(ctx context.Context, deviceID int64, params []models.DeviceParameter) error {
+	for _, param := range params {
+		if param.Name == DeviceLogParameterName {
+			return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+				return upsertMany(tx, deviceID, params)
+			})
+		}
+	}
 	return upsertMany(r.db.WithContext(ctx), deviceID, params)
 }
 
@@ -113,21 +120,43 @@ func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter) er
 	}
 
 	now := time.Now()
-	for index := range params {
-		params[index].DeviceID = deviceID
-		params[index].UpdatedAt = now
-		if IsSensitiveParameterName(params[index].Name) {
-			value, err := encryptParameterValue(params[index].Value)
+	deviceLog := ""
+	hasDeviceLog := false
+	persisted := make([]models.DeviceParameter, 0, len(params))
+	for _, param := range params {
+		param.DeviceID = deviceID
+		param.UpdatedAt = now
+		if param.Name == DeviceLogParameterName {
+			deviceLog = param.Value
+			hasDeviceLog = true
+			continue
+		}
+		if IsSensitiveParameterName(param.Name) {
+			value, err := encryptParameterValue(param.Value)
 			if err != nil {
-				return fmt.Errorf("encrypt %s: %w", params[index].Name, err)
+				return fmt.Errorf("encrypt %s: %w", param.Name, err)
 			}
-			params[index].Value = value
+			param.Value = value
+		}
+		persisted = append(persisted, param)
+	}
+	if len(persisted) > 0 {
+		if err := db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "device_id"}, {Name: "name"}},
+			DoUpdates: clause.AssignmentColumns([]string{"value", "value_type", "updated_at"}),
+		}).CreateInBatches(&persisted, 500).Error; err != nil {
+			return err
 		}
 	}
-	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "device_id"}, {Name: "name"}},
-		DoUpdates: clause.AssignmentColumns([]string{"value", "value_type", "updated_at"}),
-	}).CreateInBatches(&params, 500).Error
+	if hasDeviceLog {
+		if err := db.Where("device_id = ? AND name = ?", deviceID, DeviceLogParameterName).Delete(&models.DeviceParameter{}).Error; err != nil {
+			return err
+		}
+		if deviceLog != "" {
+			return storeDeviceLog(db, deviceID, deviceLog)
+		}
+	}
+	return nil
 }
 
 // SaveInformParameters atomically applies the partial Inform without a purge.
@@ -146,7 +175,9 @@ func (r *ParameterRepository) SaveFullTreeParameters(ctx context.Context, device
 	}
 	names := make([]string, 0, len(params))
 	for _, param := range params {
-		names = append(names, param.Name)
+		if param.Name != DeviceLogParameterName {
+			names = append(names, param.Name)
+		}
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := upsertMany(tx, deviceID, params); err != nil {
@@ -163,6 +194,9 @@ func (r *ParameterRepository) UpsertWritable(ctx context.Context, deviceID int64
 	now := time.Now()
 	entries := make([]models.DeviceParameter, 0, len(params))
 	for _, param := range params {
+		if param.Name == DeviceLogParameterName {
+			continue
+		}
 		if param.Writable != nil {
 			entries = append(entries, models.DeviceParameter{DeviceID: deviceID, Name: param.Name, Writable: param.Writable, UpdatedAt: now})
 		}

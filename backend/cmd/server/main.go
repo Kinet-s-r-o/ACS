@@ -325,6 +325,7 @@ func runAutoMigrate(db *gorm.DB) error {
 	allModels := []interface{}{
 		&models.Device{},
 		&models.DeviceParameter{},
+		&models.DeviceLogEntry{},
 		&models.Task{},
 		&models.User{},
 		&models.APIToken{},
@@ -349,6 +350,9 @@ func runAutoMigrate(db *gorm.DB) error {
 		if err := db.AutoMigrate(model); err != nil {
 			return fmt.Errorf("migrate %T: %w", model, err)
 		}
+	}
+	if err := database.BackfillDeviceLogs(context.Background(), db); err != nil {
+		return fmt.Errorf("backfill device logs: %w", err)
 	}
 	if err := database.NewTagRepository(db).SeedLegacyDefinitions(context.Background()); err != nil {
 		return fmt.Errorf("seed legacy tag definitions: %w", err)

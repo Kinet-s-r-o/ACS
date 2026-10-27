@@ -60,3 +60,18 @@ type DeviceParameter struct {
 func (DeviceParameter) TableName() string {
 	return "device_parameters"
 }
+
+type DeviceLogEntry struct {
+	ID          int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	DeviceID    int64     `json:"device_id" gorm:"not null;uniqueIndex:idx_device_logs_fingerprint,priority:1;index:idx_device_logs_device_time,priority:1"`
+	Timestamp   string    `json:"timestamp" gorm:"column:occurred_at;type:varchar(32);index:idx_device_logs_device_time,priority:2"`
+	Severity    string    `json:"severity" gorm:"type:varchar(32)"`
+	Message     string    `json:"message" gorm:"type:text;not null"`
+	Fingerprint string    `json:"-" gorm:"type:char(64);not null;uniqueIndex:idx_device_logs_fingerprint,priority:2"`
+	ReceivedAt  time.Time `json:"received_at" gorm:"autoCreateTime;index:idx_device_logs_received_at"`
+	Device      Device    `json:"-" gorm:"foreignKey:DeviceID;constraint:OnDelete:CASCADE"`
+}
+
+func (DeviceLogEntry) TableName() string {
+	return "device_logs"
+}

@@ -19,6 +19,7 @@ const groups = [
     { key: 'retention_completed_task_days', label: 'Completed CWMP tasks (days)', min: 0, max: 3650, description: 'Age since completion. Pending and sent tasks are retained.' },
     { key: 'retention_failed_task_days', label: 'Failed CWMP tasks (days)', min: 0, max: 3650, description: 'Age since the task was marked completed with a failure.' },
     { key: 'retention_snapshot_days', label: 'Configuration snapshots (days)', min: 0, max: 3650, description: 'Age since snapshot creation. Default: keep all snapshots.' },
+    { key: 'retention_device_log_days', label: 'Device logs (days)', min: 0, max: 3650, description: 'Age since a log entry was first received. Default: 30 days.' },
   ] },
   { title: 'Metric history', fields: [
     { key: 'retention_metric_hours', label: 'Raw metric samples (hours)', min: 0, max: 87600, description: 'Retention of individual device metric samples.' },
@@ -34,6 +35,7 @@ const retentionTables = [
   { table: 'faults', label: 'CWMP faults' },
   { table: 'tasks', label: 'CWMP tasks' },
   { table: 'device_snapshots', label: 'Configuration snapshots' },
+  { table: 'device_logs', label: 'Device logs' },
   { table: 'metric_samples', label: 'Raw metric samples' },
   { table: 'interface_metric_samples', label: 'Interface metric samples' },
   { table: 'metric_samples_5min', label: '5-minute aggregates' },

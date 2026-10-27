@@ -203,6 +203,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /device/{serial}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceBySerial))
 	apiMux.HandleFunc("DELETE /device/{serial}", auth.RequirePermission(models.PermDevicesWrite)(r.handleDeleteDeviceBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParametersBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/logs", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceLogsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/task-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTaskCountsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesRead)(r.handleListSnapshotsBySerial))
@@ -1651,6 +1652,48 @@ func (r *Router) handleGetDeviceParametersBySerial(w http.ResponseWriter, req *h
 	}
 	redactSensitiveParameters(req, params)
 	respondJSON(w, http.StatusOK, params)
+}
+
+func (r *Router) handleGetDeviceLogsBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	query := req.URL.Query()
+	limit := 100
+	if raw := query.Get("limit"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > 500 {
+			respondError(w, http.StatusBadRequest, "Limit must be between 1 and 500")
+			return
+		}
+	}
+	offset := 0
+	if raw := query.Get("offset"); raw != "" {
+		offset, err = strconv.Atoi(raw)
+		if err != nil || offset < 0 {
+			respondError(w, http.StatusBadRequest, "Offset must be a non-negative integer")
+			return
+		}
+	}
+	if len(query.Get("filters")) > 8192 || len(query.Get("search")) > 256 {
+		respondError(w, http.StatusBadRequest, "Log filters are too large")
+		return
+	}
+	filters, err := database.ParseDeviceLogFilters(query.Get("filters"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid log filters")
+		return
+	}
+	page, err := database.ListDeviceLogs(req.Context(), r.db, device.ID, offset, limit, database.DeviceLogFilter{
+		Search: query.Get("search"), Filters: filters, Sort: query.Get("sort"), Desc: query.Get("direction") == "desc",
+	})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get device logs")
+		return
+	}
+	respondJSON(w, http.StatusOK, page)
 }
 
 func redactSensitiveParameters(req *http.Request, params []models.DeviceParameter) {

@@ -55,6 +55,7 @@ func TestRetentionCleanupSQL(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	values := RetentionDefaults()
 	values["retention_resolved_fault_days"] = "2"
+	values["retention_device_log_days"] = "4"
 	values["retention_batch_size"] = "250"
 	if err := runRetentionCleanup(context.Background(), db, values, now); err != nil {
 		t.Fatal(err)
@@ -64,6 +65,7 @@ func TestRetentionCleanupSQL(t *testing.T) {
 		"resolved = true AND resolved_at < '2026-10-20 12:00:00'",
 		"status = 'completed' AND completed_at <",
 		"status = 'failed' AND completed_at <",
+		"DELETE FROM device_logs WHERE id IN (SELECT id FROM device_logs WHERE received_at < '2026-10-18 12:00:00' ORDER BY id LIMIT 250)",
 		"ORDER BY id LIMIT 250",
 		"drop_chunks(CAST('metric_samples' AS regclass), older_than => CAST('2026-10-22 06:00:00' AS timestamptz))",
 	} {
