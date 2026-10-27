@@ -1939,25 +1939,28 @@ const DeviceDetail: Component = () => {
 
               </div>
 
-              {/* Device Health - Compact Horizontal */}
-              <div class="card p-4 lg:col-span-7">
-                <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
-                  <HeartPulse size={14} />
-                  Device Health
-                </h2>
-                <div class="grid grid-cols-6 gap-x-3 gap-y-10 text-center">
+              {/* Device Health */}
+              <section class="card device-health-card p-4 lg:col-span-7" aria-labelledby="device-health-title">
+                <div class="device-health-header">
+                  <div>
+                    <h2 id="device-health-title"><HeartPulse size={14} />Device health</h2>
+                    <p>Latest readings from this CPE</p>
+                  </div>
+                  <span class="device-health-count"><Activity size={12} />{healthTileGroups().reduce((count, group) => count + group.tiles.length, 0)} indicators</span>
+                </div>
+                <div class="device-health-grid">
                   <For each={healthTileGroups()}>
                     {(group) => (
-                      <div class={group.size === 'large' ? 'col-span-6' : group.size === 'medium' ? 'col-span-6 sm:col-span-3' : 'col-span-6 sm:col-span-2'}>
-                        <Show when={group.label}>
-                          <div class="text-[10px] font-medium text-muted uppercase tracking-wide mb-1">{group.label}</div>
+                      <div class={`health-metric-card ${group.size === 'large' ? 'is-large' : group.size === 'medium' ? 'is-medium' : ''}`}>
+                        <Show when={group.label || (group.tiles.length === 1 && ['ring', 'progress'].includes(group.tiles[0].gaugeStyle || ''))}>
+                          <h3>{group.label || group.tiles[0].label}</h3>
                         </Show>
-                        <Show when={group.tiles.length > 1 && group.tiles.every(tile => tile.format === 'gauge')} fallback={<div class={group.tiles.length > 1 ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : ''}>
+                        <Show when={group.tiles.length > 1 && group.tiles.every(tile => tile.format === 'gauge')} fallback={<div class={group.tiles.length > 1 ? 'health-mixed-tiles' : 'health-single-tile'}>
                           <For each={group.tiles}>
                             {(tile) => (
-                              <div>
+                              <div class={tile.format === 'gauge' ? 'health-gauge-tile' : 'health-value-tile'}>
                                 <Show when={tile.format === 'gauge'}>
-                                  <Suspense fallback={<div class="skeleton h-24 w-full" />}><HealthGauge
+                                  <Suspense fallback={<div class="skeleton h-28 w-full" />}><HealthGauge
                                     value={tile.raw ?? null}
                                     min={tile.min ?? 0}
                                     max={tile.max ?? 100}
@@ -1972,20 +1975,18 @@ const DeviceDetail: Component = () => {
                                   /></Suspense>
                                 </Show>
                                 <Show when={tile.format !== 'gauge'}>
-                                  <div
-                                    class={`text-lg font-bold font-mono ${tile.color.startsWith('#') ? '' : tile.color}`}
+                                  <span class="health-value-label">{tile.label}</span>
+                                  <strong
+                                    class={`health-value ${tile.color.startsWith('#') ? '' : tile.color}`}
                                     data-dynamic-style="health-value-color"
                                     style={tile.color.startsWith('#') ? { color: tile.color } : {}}
-                                  >
-                                    {tile.value}
-                                  </div>
-                                  <div class="text-[10px] text-muted mt-0.5">{tile.label}</div>
+                                  >{tile.value}</strong>
                                 </Show>
                               </div>
                             )}
                           </For>
                         </div>}>
-                          <Suspense fallback={<div class="skeleton h-24 w-full" />}><HealthGauge
+                          <Suspense fallback={<div class="skeleton h-28 w-full" />}><HealthGauge
                             value={group.tiles[0].raw ?? null}
                             min={group.tiles[0].min ?? 0}
                             max={group.tiles[0].max ?? 100}
@@ -2004,7 +2005,7 @@ const DeviceDetail: Component = () => {
                     )}
                   </For>
                 </div>
-              </div>
+              </section>
             </div>
 
             </Show>
