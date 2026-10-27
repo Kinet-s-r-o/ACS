@@ -7,6 +7,7 @@ interface ReorderableHeader {
 }
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+const stableHeading = (value: string) => normalize(value.replace(/\s*\(\s*[\d,.\s]+\s*\)\s*$/, ''));
 
 const headerLabel = (cell: HTMLTableCellElement) => {
   const sortableLabel = cell.querySelector<HTMLButtonElement>('button[aria-label^="Sort by "]')?.textContent;
@@ -78,12 +79,43 @@ const moveColumn = (table: HTMLTableElement, key: string, fromId: string, toId: 
   applyOrder(table, key);
 };
 
+const tableHeading = (table: HTMLTableElement) => table.closest('.card')?.querySelector('h1, h2, h3, h4')?.textContent || '';
+
+const tableSchema = (table: HTMLTableElement) => getHeaders(table).map((header) => header.id.split('#')[0]).sort().join('|');
+
 const makeTableKey = (table: HTMLTableElement, route: string, occurrence: number) => {
+  const heading = stableHeading(tableHeading(table));
+  const schema = tableSchema(table);
+  const scope = `${heading || 'table'}::${schema || 'columns'}`;
+  return `${route.replace(/^\/device\/[^/]+/, '/device/:serial')}::${scope}::${occurrence}`;
+};
+
+const makeLegacyTableKey = (table: HTMLTableElement, route: string, occurrence: number) => {
   const card = table.closest('.card');
   const title = card?.querySelector('h1, h2, h3, h4')?.textContent || '';
-  const schema = getHeaders(table).map((header) => header.id.split('#')[0]).sort().join('|');
+  const schema = tableSchema(table);
   const scope = normalize(title) || schema || 'table';
   return `${route.replace(/^\/device\/[^/]+/, '/device/:serial')}::${scope}::${occurrence}`;
+};
+
+const migrateStoredOrder = (key: string, legacyKey: string, route: string, heading: string, occurrence: number) => {
+  try {
+    const storageKey = `${STORAGE_PREFIX}${key}`;
+    if (localStorage.getItem(storageKey)) return;
+    let saved = localStorage.getItem(`${STORAGE_PREFIX}${legacyKey}`);
+    if (!saved && heading) {
+      const prefix = `${STORAGE_PREFIX}${route.replace(/^\/device\/[^/]+/, '/device/:serial')}::`;
+      for (let index = 0; index < localStorage.length; index++) {
+        const candidateKey = localStorage.key(index);
+        if (!candidateKey?.startsWith(prefix)) continue;
+        const parts = candidateKey.slice(prefix.length).split('::');
+        if (parts.length < 2 || parts[parts.length - 1] !== String(occurrence) || stableHeading(parts.slice(0, -1).join('::')) !== heading) continue;
+        saved = localStorage.getItem(candidateKey);
+        if (saved) break;
+      }
+    }
+    if (saved) localStorage.setItem(storageKey, saved);
+  } catch { /* Browser storage can be unavailable. */ }
 };
 
 export const enableTableColumnReordering = (getRoute: () => string) => {
@@ -94,11 +126,17 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
   const refresh = () => {
     const occurrences = new Map<string, number>();
     for (const table of Array.from(document.querySelectorAll<HTMLTableElement>('table.data-table'))) {
-      const signature = normalize(table.closest('.card')?.querySelector('h1, h2, h3, h4')?.textContent || '')
-        || getHeaders(table).map((header) => header.id.split('#')[0]).sort().join('|') || 'table';
+      const heading = stableHeading(tableHeading(table));
+      const schema = tableSchema(table);
+      const signature = `${heading || 'table'}::${schema || 'columns'}`;
       const occurrence = occurrences.get(signature) ?? 0;
       occurrences.set(signature, occurrence + 1);
-      if (!tableKeys.has(table)) tableKeys.set(table, makeTableKey(table, getRoute(), occurrence));
+      if (!tableKeys.has(table)) {
+        const route = getRoute();
+        const key = makeTableKey(table, route, occurrence);
+        migrateStoredOrder(key, makeLegacyTableKey(table, route, occurrence), route, heading, occurrence);
+        tableKeys.set(table, key);
+      }
       applyOrder(table, tableKeys.get(table)!);
     }
   };
