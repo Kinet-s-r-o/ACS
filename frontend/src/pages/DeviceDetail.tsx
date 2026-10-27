@@ -80,6 +80,20 @@ interface SnapshotTreeRow {
   hasChildren: boolean;
 }
 
+interface DeviceLogEntry {
+  timestamp: string;
+  severity: string;
+  message: string;
+  original: string;
+}
+
+const parseDeviceLog = (value: string): DeviceLogEntry[] => value.split(/\r?\n/).map(line => {
+  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s*(.*)$/);
+  return match
+    ? { timestamp: match[1], severity: match[2], message: match[3], original: line }
+    : { timestamp: '', severity: '', message: line, original: line };
+}).filter(entry => entry.original.trim().length > 0);
+
 const IPERF_CLIENT_ROOT = 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.';
 const NSLOOKUP_ROOTS = ['InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.'];
 const IPPING_ROOTS = ['InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.'];
@@ -569,6 +583,12 @@ const DeviceDetail: Component = () => {
   const [expandedWanPaths, setExpandedWanPaths] = createSignal<Set<string>>(new Set());
   const [message, setMessage] = createSignal<{ type: 'success' | 'error'; text: string; detail?: string } | null>(null);
   const [paramFilter, setParamFilter] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.parameters`);
+  const [deviceLogFilter, setDeviceLogFilter] = createSignal('');
+  const deviceLog = createMemo(() => parseDeviceLog(parameters()?.find(parameter => parameter.name === 'InternetGatewayDevice.DeviceInfo.DeviceLog')?.value || ''));
+  const filteredDeviceLog = createMemo(() => {
+    const query = deviceLogFilter().trim().toLowerCase();
+    return query ? deviceLog().filter(entry => entry.original.toLowerCase().includes(query)) : deviceLog();
+  });
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
   const [lanModalIndex, setLanModalIndex] = createSignal<number | null>(null);
   const [showLanNetworkModal, setShowLanNetworkModal] = createSignal(false);
@@ -3225,6 +3245,44 @@ const DeviceDetail: Component = () => {
             </Show>
 
             <Show when={activeTab() === 'overview'}>
+            <section class="card overflow-hidden" aria-labelledby="device-log-title">
+              <div class="p-5 border-b border-subtle flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 id="device-log-title" class="text-sm font-medium text-secondary">Device log</h2>
+                  <p class="mt-1 text-xs text-muted">{deviceLog().length} entries from InternetGatewayDevice.DeviceInfo.DeviceLog</p>
+                </div>
+                <Show when={deviceLog().length > 0}>
+                  <label class="sr-only" for="device-log-filter">Search device log</label>
+                  <input id="device-log-filter" type="search" class="input w-full sm:w-72 py-1.5 text-sm" placeholder="Search log entries…" value={deviceLogFilter()} onInput={event => setDeviceLogFilter(event.currentTarget.value)} />
+                </Show>
+              </div>
+              <Show when={deviceLog().length > 0} fallback={<div class="p-5 text-sm text-muted">This CPE has not reported a device log parameter.</div>}>
+                <Show when={filteredDeviceLog().length > 0} fallback={<div class="p-5 text-sm text-muted">No log entries match this search.</div>}>
+                  <div class="max-h-[28rem] overflow-auto">
+                    <table class="data-table w-full text-sm">
+                      <thead class="sticky top-0 z-10 bg-base">
+                        <tr>
+                          <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted">Time</th>
+                          <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted">Severity</th>
+                          <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted">Message</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={filteredDeviceLog()}>{entry => {
+                          const severity = entry.severity.toLowerCase();
+                          const badgeClass = severity === 'critical' || severity === 'error' ? 'badge-error' : severity === 'warning' ? 'badge-warning' : 'badge-info';
+                          return <tr class="border-t border-subtle/50 hover:bg-elevated/30">
+                            <td class="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted">{entry.timestamp || '—'}</td>
+                            <td class="px-4 py-2">{entry.severity ? <span class={`badge ${badgeClass}`}>{entry.severity}</span> : <span class="text-muted">—</span>}</td>
+                            <td class="px-4 py-2 font-mono text-xs text-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.message}</td>
+                          </tr>;
+                        }}</For>
+                      </tbody>
+                    </table>
+                  </div>
+                </Show>
+              </Show>
+            </section>
             {/* Row 6: All Parameters */}
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between gap-4">
