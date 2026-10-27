@@ -30,17 +30,21 @@ const groups = [
   ] },
 ];
 
-const retentionTables = [
-  { table: 'audit_logs', label: 'Audit logs' },
-  { table: 'faults', label: 'CWMP faults' },
-  { table: 'tasks', label: 'CWMP tasks' },
-  { table: 'device_snapshots', label: 'Configuration snapshots' },
-  { table: 'device_logs', label: 'Device logs' },
-  { table: 'metric_samples', label: 'Raw metric samples' },
-  { table: 'interface_metric_samples', label: 'Interface metric samples' },
-  { table: 'metric_samples_5min', label: '5-minute aggregates' },
-  { table: 'metric_samples_1h', label: 'Hourly aggregates' },
-  { table: 'metric_samples_1d', label: 'Daily aggregates' },
+const retentionTableGroups = [
+  { title: 'Operational history', tables: [
+    { table: 'audit_logs', label: 'Audit logs' },
+    { table: 'faults', label: 'CWMP faults' },
+    { table: 'tasks', label: 'CWMP tasks' },
+    { table: 'device_snapshots', label: 'Configuration snapshots' },
+    { table: 'device_logs', label: 'Device logs' },
+  ] },
+  { title: 'Metric history', tables: [
+    { table: 'metric_samples', label: 'Raw metric samples' },
+    { table: 'interface_metric_samples', label: 'Interface metric samples' },
+    { table: 'metric_samples_5min', label: '5-minute aggregates' },
+    { table: 'metric_samples_1h', label: 'Hourly aggregates' },
+    { table: 'metric_samples_1d', label: 'Daily aggregates' },
+  ] },
 ];
 
 const RetentionSettings: Component = () => {
@@ -91,7 +95,7 @@ const RetentionSettings: Component = () => {
           <p class="text-xs text-muted">Set a retention period to 0 to keep that history indefinitely. Shorter periods permanently remove older records on the next cleanup. Disabling housekeeping stops future cleanup runs.</p>
           <p class="text-xs text-muted">Metrics are removed in whole TimescaleDB chunks, so actual retention can exceed the configured period. Cleanup runs have a five-minute time limit.</p>
         </div>
-        <section class="card p-5" aria-busy={tableStats.loading}>
+        <section class="card p-5 space-y-6" aria-busy={tableStats.loading}>
           <div class="flex items-center justify-between gap-3 mb-4">
             <div>
               <h2 class="text-sm font-medium text-secondary">Current database usage</h2>
@@ -100,19 +104,24 @@ const RetentionSettings: Component = () => {
             <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchTableStats()} disabled={tableStats.loading}>Refresh</button>
           </div>
           <Show when={!tableStats.error} fallback={<ResourceError title="Database usage is unavailable" description="Retry to load current table sizes." onRetry={() => void refetchTableStats()} />}>
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px rounded border border-subtle bg-subtle overflow-hidden">
-              <For each={retentionTables}>{item => {
-                const stats = () => tableStats()?.find(table => table.table === item.table);
-                return <div class="bg-surface p-4 min-w-0">
-                  <h3 class="text-xs text-muted truncate" title={item.label}>{item.label}</h3>
-                  <Show when={stats()} fallback={<div class="text-xs text-muted mt-3">{tableStats.loading ? 'Loading…' : tableStats.error ? 'Unavailable' : 'No statistics available'}</div>}>
-                    {current => <>
-                      <div class="text-xl font-semibold font-mono text-primary mt-2 tabular-nums">{current().records.toLocaleString()}</div>
-                      <div class="text-xs text-muted mt-1">{(current().size_bytes / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB</div>
-                    </>}
-                  </Show>
-                </div>;
-              }}</For>
+            <div class="space-y-5">
+              <For each={retentionTableGroups}>{group => <section aria-label={group.title} class="space-y-3">
+                <h3 class="text-sm font-medium text-secondary">{group.title}</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px rounded border border-subtle bg-subtle overflow-hidden">
+                  <For each={group.tables}>{item => {
+                    const stats = () => tableStats()?.find(table => table.table === item.table);
+                    return <div class="bg-surface p-4 min-w-0">
+                      <h4 class="text-xs text-muted truncate" title={item.label}>{item.label}</h4>
+                      <Show when={stats()} fallback={<div class="text-xs text-muted mt-3">{tableStats.loading ? 'Loading…' : tableStats.error ? 'Unavailable' : 'No statistics available'}</div>}>
+                        {current => <>
+                          <div class="text-xl font-semibold font-mono text-primary mt-2 tabular-nums">{current().records.toLocaleString()}</div>
+                          <div class="text-xs text-muted mt-1">{(current().size_bytes / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB</div>
+                        </>}
+                      </Show>
+                    </div>;
+                  }}</For>
+                </div>
+              </section>}</For>
             </div>
           </Show>
         </section>

@@ -47,6 +47,16 @@ const Delivery: Component = () => {
     return formData()[key] ?? settings()?.[key] ?? '';
   };
 
+  const autoCredentialsEnabled = () => getValue('use_auto_conn_credentials') === 'true';
+  const masterSecretInvalid = () => {
+    if (!autoCredentialsEnabled()) return false;
+    const draft = formData();
+    if (Object.prototype.hasOwnProperty.call(draft, 'connection_request_password')) {
+      return draft.connection_request_password.length < 16;
+    }
+    return !settings()?.connection_request_password;
+  };
+
   const generatePassword = () => {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
     const limit = Math.floor(256 / alphabet.length) * alphabet.length;
@@ -165,16 +175,29 @@ const Delivery: Component = () => {
               <Show when={getValue('use_auto_conn_credentials') === 'true'}>
                 <div class="space-y-3 pt-3 border-t border-subtle">
                   <div>
-                    <label for="connection-request-secret" class="block text-xs text-muted mb-1.5">Connection-request master secret</label>
+                    <div class="flex items-center justify-between gap-3 mb-1.5">
+                      <label for="connection-request-secret" class="block text-xs text-muted">Connection-request master secret</label>
+                      <button type="button" class="btn btn-secondary text-xs" onClick={generatePassword} disabled={!isFullAccess()}>
+                        <RefreshCw size={13} /> Generate secret
+                      </button>
+                    </div>
                     <input
                       id="connection-request-secret"
                       type="password"
                       value={getValue('connection_request_password')}
                       onInput={(e) => handleChange('connection_request_password', e.currentTarget.value)}
                       placeholder="Minimum 16 characters"
-                      class="input"
+                      class={`input ${masterSecretInvalid() ? 'border-red-500' : ''}`}
+                      minLength={16}
+                      aria-invalid={masterSecretInvalid()}
+                      aria-describedby={masterSecretInvalid() ? 'connection-request-secret-error' : undefined}
                       disabled={!isFullAccess()}
                     />
+                    <Show when={masterSecretInvalid()}>
+                      <p id="connection-request-secret-error" class="field-error" role="alert">
+                        Auto mode requires a master secret with at least 16 characters.
+                      </p>
+                    </Show>
                   </div>
                   <div class="p-3 bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400">
                     <p><strong>Username:</strong> CPE serial number</p>
@@ -188,7 +211,7 @@ const Delivery: Component = () => {
           <div class="mt-6 pt-4 border-t border-subtle">
             <Show when={isFullAccess()}><button
               onClick={handleSave}
-              disabled={saving()}
+              disabled={saving() || masterSecretInvalid()}
               class="btn btn-primary"
             >
               <Save size={14} />
