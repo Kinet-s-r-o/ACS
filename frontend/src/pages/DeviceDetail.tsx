@@ -127,7 +127,7 @@ const DeviceDetail: Component = () => {
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' ? searchParams.tab : 'overview';
+  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' || searchParams.tab === 'log' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
   const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
@@ -585,9 +585,19 @@ const DeviceDetail: Component = () => {
   const [paramFilter, setParamFilter] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.parameters`);
   const [deviceLogFilter, setDeviceLogFilter] = createSignal('');
   const deviceLog = createMemo(() => parseDeviceLog(parameters()?.find(parameter => parameter.name === 'InternetGatewayDevice.DeviceInfo.DeviceLog')?.value || ''));
+  const [deviceLogColumnFilters, setDeviceLogColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.log`, {});
+  const { columns: deviceLogColumns, isVisible: isDeviceLogColumnVisible, toggle: toggleDeviceLogColumn } = useColumnVisibility('device_log', [
+    { id: 'time', label: 'Time', visible: true },
+    { id: 'severity', label: 'Severity', visible: true },
+    { id: 'message', label: 'Message', visible: true },
+  ]);
+  const [deviceLogSort, setDeviceLogSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'time', direction: 'desc' });
+  const toggleDeviceLogSort = (column: string) => setDeviceLogSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const filteredDeviceLog = createMemo(() => {
     const query = deviceLogFilter().trim().toLowerCase();
-    return query ? deviceLog().filter(entry => entry.original.toLowerCase().includes(query)) : deviceLog();
+    const searched = query ? deviceLog().filter(entry => entry.original.toLowerCase().includes(query)) : deviceLog();
+    const filtered = applyColumnFilters(searched, deviceLogColumnFilters(), (entry, column) => column === 'time' ? entry.timestamp : column === 'severity' ? entry.severity : entry.message);
+    return sortRows(filtered, deviceLogSort().column, deviceLogSort().direction, (entry, column) => column === 'time' ? entry.timestamp : column === 'severity' ? entry.severity : entry.message);
   });
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
   const [lanModalIndex, setLanModalIndex] = createSignal<number | null>(null);
@@ -1875,6 +1885,7 @@ const DeviceDetail: Component = () => {
 
       <nav role="tablist" class="tab-bar device-detail-tabs" aria-label="Device detail sections">
         <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
+        <button role="tab" class={`tab-btn ${activeTab() === 'log' ? 'is-active' : ''}`} aria-selected={activeTab() === 'log'} onClick={() => setSearchParams({ tab: 'log' })}>Device log</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>Connected Hosts</button>
         <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
         <Show when={(matchingProvisioningTemplate()?.features?.length || 0) > 0}><button role="tab" class={`tab-btn ${activeTab() === 'features' ? 'is-active' : ''}`} aria-selected={activeTab() === 'features'} onClick={() => setSearchParams({ tab: 'features' })}>Features</button></Show>
@@ -3244,45 +3255,47 @@ const DeviceDetail: Component = () => {
             <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={filteredDeviceFaults().length} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setDeviceFaultColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
             </Show>
 
-            <Show when={activeTab() === 'overview'}>
+            <Show when={activeTab() === 'log'}>
             <section class="card overflow-hidden" aria-labelledby="device-log-title">
               <div class="p-5 border-b border-subtle flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 id="device-log-title" class="text-sm font-medium text-secondary">Device log</h2>
-                  <p class="mt-1 text-xs text-muted">{deviceLog().length} entries from InternetGatewayDevice.DeviceInfo.DeviceLog</p>
+                  <p class="mt-1 text-xs text-muted">From InternetGatewayDevice.DeviceInfo.DeviceLog · {deviceLog().length} entries</p>
                 </div>
                 <Show when={deviceLog().length > 0}>
                   <label class="sr-only" for="device-log-filter">Search device log</label>
                   <input id="device-log-filter" type="search" class="input w-full sm:w-72 py-1.5 text-sm" placeholder="Search log entries…" value={deviceLogFilter()} onInput={event => setDeviceLogFilter(event.currentTarget.value)} />
                 </Show>
               </div>
-              <Show when={deviceLog().length > 0} fallback={<div class="p-5 text-sm text-muted">This CPE has not reported a device log parameter.</div>}>
-                <Show when={filteredDeviceLog().length > 0} fallback={<div class="p-5 text-sm text-muted">No log entries match this search.</div>}>
-                  <div class="max-h-[28rem] overflow-auto">
-                    <table class="data-table w-full text-sm">
-                      <thead class="sticky top-0 z-10 bg-base">
-                        <tr>
-                          <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted">Time</th>
-                          <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted">Severity</th>
-                          <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted">Message</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <For each={filteredDeviceLog()}>{entry => {
+              <Show when={parameters.loading && !parameters()} fallback={
+                <Show when={deviceLog().length > 0} fallback={<div class="p-5 text-sm text-muted">This CPE has not reported a device log parameter.</div>}>
+                  <Show when={filteredDeviceLog().length > 0} fallback={<div class="p-5 text-sm text-muted">No log entries match the current filters.</div>}>
+                    <div class="max-h-[36rem] overflow-auto">
+                      <table class="data-table w-full text-sm">
+                        <thead class="sticky top-0 z-10 bg-base"><tr>
+                          <Show when={isDeviceLogColumnVisible('time')}><th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="time" label="Time" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="time" label="Time" active={deviceLogColumnFilters().time || null} onApply={state => setDeviceLogColumnFilters(previous => { const next = { ...previous }; if (state) next.time = state; else delete next.time; return next; })} /></SortableHeader></th></Show>
+                          <Show when={isDeviceLogColumnVisible('severity')}><th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="severity" label="Severity" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="severity" label="Severity" active={deviceLogColumnFilters().severity || null} onApply={state => setDeviceLogColumnFilters(previous => { const next = { ...previous }; if (state) next.severity = state; else delete next.severity; return next; })} /></SortableHeader></th></Show>
+                          <Show when={isDeviceLogColumnVisible('message')}><th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="message" label="Message" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="message" label="Message" active={deviceLogColumnFilters().message || null} onApply={state => setDeviceLogColumnFilters(previous => { const next = { ...previous }; if (state) next.message = state; else delete next.message; return next; })} /></SortableHeader></th></Show>
+                          <th class="px-2 py-2"><ColumnVisibility columns={deviceLogColumns} onToggle={toggleDeviceLogColumn} /></th>
+                        </tr></thead>
+                        <tbody><For each={filteredDeviceLog()}>{entry => {
                           const severity = entry.severity.toLowerCase();
                           const badgeClass = severity === 'critical' || severity === 'error' ? 'badge-error' : severity === 'warning' ? 'badge-warning' : 'badge-info';
                           return <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <td class="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted">{entry.timestamp || '—'}</td>
-                            <td class="px-4 py-2">{entry.severity ? <span class={`badge ${badgeClass}`}>{entry.severity}</span> : <span class="text-muted">—</span>}</td>
-                            <td class="px-4 py-2 font-mono text-xs text-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.message}</td>
+                            <Show when={isDeviceLogColumnVisible('time')}><td class="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted">{entry.timestamp || '—'}</td></Show>
+                            <Show when={isDeviceLogColumnVisible('severity')}><td class="px-4 py-2">{entry.severity ? <span class={`badge ${badgeClass}`}>{entry.severity}</span> : <span class="text-muted">—</span>}</td></Show>
+                            <Show when={isDeviceLogColumnVisible('message')}><td class="px-4 py-2 font-mono text-xs text-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.message}</td></Show>
+                            <td class="px-2 py-2"></td>
                           </tr>;
-                        }}</For>
-                      </tbody>
-                    </table>
-                  </div>
+                        }}</For></tbody>
+                      </table>
+                    </div>
+                  </Show>
                 </Show>
-              </Show>
+              }><div class="p-5 space-y-2" aria-label="Loading device log"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /></div></Show>
             </section>
+            </Show>
+            <Show when={activeTab() === 'overview'}>
             {/* Row 6: All Parameters */}
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between gap-4">
