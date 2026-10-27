@@ -156,6 +156,9 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 		}
 		for index := range body.Templates {
 			item := &body.Templates[index]
+			if err := prepareProvisioningVariableSecrets(item.Variables, nil); err != nil {
+				return err
+			}
 			template := models.ProvisioningTemplate{
 				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
 				Description: item.Description, Variables: item.Variables, Features: item.Features,

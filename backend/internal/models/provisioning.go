@@ -57,8 +57,9 @@ type ProvisioningVariable struct {
 }
 
 type ProvisioningTransform struct {
-	Function string            `json:"function"`
-	Args     map[string]string `json:"args,omitempty"`
+	Function      string            `json:"function"`
+	Args          map[string]string `json:"args,omitempty"`
+	KeyConfigured bool              `json:"key_configured,omitempty"`
 }
 
 func (ProvisioningTemplate) TableName() string {

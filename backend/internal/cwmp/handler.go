@@ -327,7 +327,26 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			for _, parameter := range inform.ParameterList.Parameters {
 				parameterValues[parameter.Name] = parameter.Value
 			}
-			if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues); err != nil {
+			applicationSecret := ""
+			applicationSecretLoaded := false
+			for _, variable := range template.Variables {
+				for _, step := range variable.Steps {
+					if step.Function == "hmac_sha256" && step.Args["key_source"] == "application" && h.settingsRepo != nil && !applicationSecretLoaded {
+						applicationSecretLoaded = true
+						setting, settingErr := h.settingsRepo.Get(ctx, "connection_request_password")
+						if settingErr != nil {
+							log.Printf("Could not load application HMAC secret for device %s", inform.DeviceId.SerialNumber)
+						} else if setting != nil {
+							applicationSecret = setting.Value
+						}
+						break
+					}
+				}
+				if applicationSecretLoaded {
+					break
+				}
+			}
+			if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues, applicationSecret); err != nil {
 				log.Printf("Could not resolve provisioning variables for device %s: %v", inform.DeviceId.SerialNumber, err)
 			} else {
 				provisioningVariableValues = values

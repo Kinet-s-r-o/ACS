@@ -46,7 +46,7 @@ export interface FaultCounts { active: number; resolved: number; total: number }
 export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
 export interface TagDefinition { id: string; name: string; color: string; description?: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
-export interface ProvisioningTransform { function: string; args?: Record<string, string> }
+export interface ProvisioningTransform { function: string; args?: Record<string, string>; key_configured?: boolean }
 export interface ProvisioningVariable { name: string; source: string; value?: string; steps: ProvisioningTransform[] }
 export interface ProvisioningObjectField { name: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; help?: string; options?: string[]; option_labels?: Record<string, string>; enabled_value?: string; disabled_value?: string }
 export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt' | 'object'; parameter: string; options?: string[]; enabled_value?: string; disabled_value?: string; group?: string; description?: string; object_fields?: ProvisioningObjectField[] }

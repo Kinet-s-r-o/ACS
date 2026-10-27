@@ -151,6 +151,7 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		return
 	}
 	r.templateImageURL(&clone)
+	redactProvisioningVariableSecrets(clone.Variables)
 	respondJSON(w, http.StatusCreated, clone)
 }
 

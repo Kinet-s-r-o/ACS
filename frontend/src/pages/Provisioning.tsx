@@ -697,6 +697,13 @@ const Provisioning: Component = () => {
     }));
   };
 
+  const setVariableHmacKeySource = (variableIndex: number, stepIndex: number, keySource: string) => {
+    const step = templateVariables()[variableIndex]?.steps[stepIndex];
+    const args: Record<string, string> = { ...step?.args, key_source: keySource };
+    delete args.key_secret;
+    updateVariableTransform(variableIndex, stepIndex, { args, key_configured: keySource === 'custom' ? step?.key_configured : false });
+  };
+
   const addTemplateVariable = () => setTemplateVariables(previous => [...previous, { name: `variable_${previous.length + 1}`, source: '', steps: [] }]);
 
   const addVariableTransform = (variableIndex: number) => {
@@ -1287,7 +1294,7 @@ const Provisioning: Component = () => {
           <Show when={templateTab() === 'variables'}>
             <div class="space-y-4">
               <div class="rounded border border-subtle bg-base p-3 text-xs text-muted">
-                Define reusable values for this template. Sources may be device identity, a literal, or a parameter reported in Inform. Leave the source empty to start with an empty value, then use a transformation such as Random string. Use <code class="text-primary">{'{{variable_name}}'}</code> in provisioning rule values. Transformations run in order.
+                Define reusable values for this template. Sources may be device identity, a literal, or a parameter reported in Inform. Leave the source empty to start with an empty value, then use a transformation such as Random string. HMAC-SHA256 can use the application connection-request master secret or a custom secret. Use <code class="text-primary">{'{{variable_name}}'}</code> in provisioning rule values. Transformations run in order.
               </div>
               <Show when={templateVariables().length > 0} fallback={<p class="py-8 text-center text-sm text-muted">No template variables defined yet.</p>}>
                 <Index each={templateVariables()}>{(variable, variableIndex) => <section class="card p-4 space-y-3">
@@ -1317,10 +1324,18 @@ const Provisioning: Component = () => {
                         random_string: [['length', 'Length'], ['charset', 'Character set (alphanumeric, digits, lowercase, uppercase, hex)']],
                       };
                       return <div class="grid grid-cols-1 md:grid-cols-12 items-end gap-2 rounded bg-base p-3">
-                        <label class="block text-xs text-muted md:col-span-3">Transformation<select class="input mt-1 w-full" value={step().function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex, stepIndex, { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : {} }); }}>
-                          <option value="trim">Trim whitespace</option><option value="upper">Uppercase</option><option value="lower">Lowercase</option><option value="prefix">Add prefix</option><option value="suffix">Add suffix</option><option value="slice">Slice by indexes</option><option value="replace">Replace text</option><option value="regex_replace">Replace by regex</option><option value="pad_start">Pad at start</option><option value="pad_end">Pad at end</option><option value="default">Fallback if empty</option><option value="random_string">Generate random string</option><option value="sha256">SHA-256 hash</option><option value="base64_encode">Base64 encode</option><option value="base64_decode">Base64 decode</option><option value="hex_encode">Hex encode</option><option value="hex_decode">Hex decode</option>
+                        <label class="block text-xs text-muted md:col-span-3">Transformation<select class="input mt-1 w-full" value={step().function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex, stepIndex, { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : fn === 'hmac_sha256' ? { key_source: 'application', encoding: 'connection_request' } : {}, key_configured: false }); }}>
+                          <option value="trim">Trim whitespace</option><option value="upper">Uppercase</option><option value="lower">Lowercase</option><option value="prefix">Add prefix</option><option value="suffix">Add suffix</option><option value="slice">Slice by indexes</option><option value="replace">Replace text</option><option value="regex_replace">Replace by regex</option><option value="pad_start">Pad at start</option><option value="pad_end">Pad at end</option><option value="default">Fallback if empty</option><option value="random_string">Generate random string</option><option value="sha256">SHA-256 hash</option><option value="hmac_sha256">HMAC-SHA256</option><option value="base64_encode">Base64 encode</option><option value="base64_decode">Base64 decode</option><option value="hex_encode">Hex encode</option><option value="hex_decode">Hex decode</option>
                         </select></label>
                         <For each={argumentFields[step().function] || []}>{([key, label]) => <label class="block text-xs text-muted md:col-span-2">{label}<input class="input mt-1 w-full" value={step().args?.[key] || (step().function === 'random_string' && key === 'charset' ? 'alphanumeric' : '')} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, [key]: event.currentTarget.value } })} /></label>}</For>
+                        <Show when={step().function === 'hmac_sha256'}>
+                          <label class="block text-xs text-muted md:col-span-3">HMAC key source<select class="input mt-1 w-full" value={step().args?.key_source || 'application'} onChange={event => setVariableHmacKeySource(variableIndex, stepIndex, event.currentTarget.value)}><option value="application">Connection-request master secret</option><option value="custom">Custom secret</option></select></label>
+                          <Show when={step().args?.key_source === 'custom'}>
+                            <label class="block text-xs text-muted md:col-span-4">Custom HMAC secret<input type="password" class="input mt-1 w-full" value={step().args?.key_secret || ''} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, key_secret: event.currentTarget.value } })} placeholder={step().key_configured ? 'Saved secret — leave blank to keep it' : 'At least 16 characters'} />{step().key_configured && <span class="block mt-1 text-muted">A secret is saved; leave this blank to keep it unchanged.</span>}</label>
+                          </Show>
+                          <label class="block text-xs text-muted md:col-span-3">Output format<select class="input mt-1 w-full" value={step().args?.encoding || 'connection_request'} onChange={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, encoding: event.currentTarget.value } })}><option value="connection_request">Connection request (18-byte Base64URL)</option><option value="base64url">Full digest (Base64URL)</option><option value="hex">Full digest (hex)</option></select></label>
+                          <p class="text-xs text-muted md:col-span-12">The input variable is the HMAC message. Custom secrets are encrypted in the database and never returned by the API.</p>
+                        </Show>
                         <button type="button" class="btn btn-ghost text-rose-400 md:col-span-1" onClick={() => updateTemplateVariable(variableIndex, { steps: variable().steps.filter((_, index) => index !== stepIndex) })} aria-label="Remove transformation"><Trash2 size={13} /></button>
                       </div>;
                     }}</Index>

@@ -3612,6 +3612,7 @@ func (r *Router) handleListProvisioningTemplates(w http.ResponseWriter, req *htt
 	}
 	for _, template := range templates {
 		r.templateImageURL(template)
+		redactProvisioningVariableSecrets(template.Variables)
 	}
 	respondJSON(w, http.StatusOK, templates)
 }
@@ -3654,6 +3655,10 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Description:  strings.TrimSpace(body.Description),
 		Variables:    body.Variables,
 	}
+	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := validateProvisioningVariables(template.Variables); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -3663,6 +3668,7 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		return
 	}
 	r.templateImageURL(template)
+	redactProvisioningVariableSecrets(template.Variables)
 	respondJSON(w, http.StatusCreated, template)
 }
 
@@ -3703,6 +3709,11 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, "product_class exceeds 128 characters")
 		return
 	}
+	previous, err := r.provisioningRepo.GetTemplate(req.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Template not found")
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
 		ID:           id,
@@ -3711,6 +3722,10 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
 		Description:  strings.TrimSpace(body.Description),
 		Variables:    body.Variables,
+	}
+	if err := prepareProvisioningVariableSecrets(template.Variables, previous.Variables); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := validateProvisioningVariables(template.Variables); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -3730,6 +3745,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		return
 	}
 	r.templateImageURL(updated)
+	redactProvisioningVariableSecrets(updated.Variables)
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -3766,7 +3782,7 @@ func validateProvisioningVariables(variables []models.ProvisioningVariable) erro
 	}
 	namePattern := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,63}$`)
 	allowedSources := map[string]bool{"": true, "literal": true, "serial_number": true, "manufacturer": true, "product_class": true, "oui": true, "parameter": true}
-	allowedFunctions := map[string]bool{"trim": true, "upper": true, "lower": true, "prefix": true, "suffix": true, "slice": true, "replace": true, "regex_replace": true, "pad_start": true, "pad_end": true, "default": true, "random_string": true, "sha256": true, "base64_encode": true, "base64_decode": true, "hex_encode": true, "hex_decode": true}
+	allowedFunctions := map[string]bool{"trim": true, "upper": true, "lower": true, "prefix": true, "suffix": true, "slice": true, "replace": true, "regex_replace": true, "pad_start": true, "pad_end": true, "default": true, "random_string": true, "sha256": true, "hmac_sha256": true, "base64_encode": true, "base64_decode": true, "hex_encode": true, "hex_decode": true}
 	seen := make(map[string]bool, len(variables))
 	for _, variable := range variables {
 		if !namePattern.MatchString(variable.Name) || seen[variable.Name] {
@@ -3806,6 +3822,21 @@ func validateProvisioningVariables(variables []models.ProvisioningVariable) erro
 				charset := step.Args["charset"]
 				if err != nil || length < 1 || length > 256 || (charset != "alphanumeric" && charset != "digits" && charset != "lowercase" && charset != "uppercase" && charset != "hex") {
 					return fmt.Errorf("random_string in variable %s requires length 1–256 and a supported charset", variable.Name)
+				}
+			}
+			if step.Function == "hmac_sha256" {
+				if step.Args["key_source"] != "application" && step.Args["key_source"] != "custom" {
+					return fmt.Errorf("hmac_sha256 in variable %s requires an application or custom key source", variable.Name)
+				}
+				encoding := step.Args["encoding"]
+				if encoding != "" && encoding != "connection_request" && encoding != "base64url" && encoding != "hex" {
+					return fmt.Errorf("hmac_sha256 in variable %s has an unsupported output encoding", variable.Name)
+				}
+				if step.Args["key_source"] == "custom" {
+					secret := step.Args["key_secret"]
+					if secret != "" && !strings.HasPrefix(secret, "enc:v1:") && len(secret) < 16 {
+						return fmt.Errorf("hmac_sha256 in variable %s requires a custom key of at least 16 characters", variable.Name)
+					}
 				}
 			}
 		}

@@ -136,6 +136,7 @@ func (r *Router) handleUploadProvisioningTemplateImage(w http.ResponseWriter, re
 	}
 	template.ImagePath, template.ImageType = imagePath, contentType
 	r.templateImageURL(template)
+	redactProvisioningVariableSecrets(template.Variables)
 	respondJSON(w, http.StatusOK, template)
 }
 

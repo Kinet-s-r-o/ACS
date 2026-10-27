@@ -1,6 +1,7 @@
 package cwmp
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -11,12 +12,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/skydashnet/skyacs/internal/database"
 	"github.com/skydashnet/skyacs/internal/models"
 )
 
 var variableTokenPattern = regexp.MustCompile(`\{\{([A-Za-z][A-Za-z0-9_]*)\}\}`)
 
-func resolveProvisioningVariables(definitions []models.ProvisioningVariable, device DeviceId, parameters map[string]string) (map[string]string, error) {
+func resolveProvisioningVariables(definitions []models.ProvisioningVariable, device DeviceId, parameters map[string]string, applicationSecrets ...string) (map[string]string, error) {
+	applicationSecret := ""
+	if len(applicationSecrets) > 0 {
+		applicationSecret = applicationSecrets[0]
+	}
 	values := make(map[string]string, len(definitions))
 	for _, definition := range definitions {
 		value := definition.Value
@@ -44,12 +50,15 @@ func resolveProvisioningVariables(definitions []models.ProvisioningVariable, dev
 		}
 		for _, step := range definition.Steps {
 			for key, arg := range step.Args {
+				if step.Function == "hmac_sha256" && key == "key_secret" {
+					continue
+				}
 				step.Args[key], err = expandVariableTokens(arg, values)
 				if err != nil {
 					return nil, fmt.Errorf("variable %s argument %s: %w", definition.Name, key, err)
 				}
 			}
-			value, err = applyProvisioningTransform(value, step)
+			value, err = applyProvisioningTransform(value, step, applicationSecret)
 			if err != nil {
 				return nil, fmt.Errorf("variable %s transformation %s: %w", definition.Name, step.Function, err)
 			}
@@ -79,7 +88,7 @@ func expandVariableTokens(value string, variables map[string]string) (string, er
 	return result, nil
 }
 
-func applyProvisioningTransform(value string, step models.ProvisioningTransform) (string, error) {
+func applyProvisioningTransform(value string, step models.ProvisioningTransform, applicationSecrets ...string) (string, error) {
 	arg := func(key, fallback string) string {
 		if step.Args == nil || step.Args[key] == "" {
 			return fallback
@@ -199,6 +208,38 @@ func applyProvisioningTransform(value string, step models.ProvisioningTransform)
 	case "sha256":
 		digest := sha256.Sum256([]byte(value))
 		return hex.EncodeToString(digest[:]), nil
+	case "hmac_sha256":
+		key := ""
+		switch arg("key_source", "") {
+		case "application":
+			if len(applicationSecrets) > 0 {
+				key = applicationSecrets[0]
+			}
+		case "custom":
+			var err error
+			key, err = database.DecryptValue(arg("key_secret", ""))
+			if err != nil {
+				return "", fmt.Errorf("cannot decrypt custom HMAC key")
+			}
+		default:
+			return "", fmt.Errorf("HMAC key source must be application or custom")
+		}
+		if len(key) < 16 {
+			return "", fmt.Errorf("HMAC key must contain at least 16 characters")
+		}
+		mac := hmac.New(sha256.New, []byte(key))
+		_, _ = mac.Write([]byte(value))
+		digest := mac.Sum(nil)
+		switch arg("encoding", "connection_request") {
+		case "connection_request":
+			return base64.RawURLEncoding.EncodeToString(digest[:18]), nil
+		case "base64url":
+			return base64.RawURLEncoding.EncodeToString(digest), nil
+		case "hex":
+			return hex.EncodeToString(digest), nil
+		default:
+			return "", fmt.Errorf("unsupported HMAC output encoding")
+		}
 	case "base64_encode":
 		return base64.StdEncoding.EncodeToString([]byte(value)), nil
 	case "base64_decode":
