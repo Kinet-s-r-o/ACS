@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For } from 'solid-js';
-import { Save, Settings as SettingsIcon, Info, RefreshCw } from 'lucide-solid';
+import { Save, Settings as SettingsIcon, Info, RefreshCw, Eye, EyeOff } from 'lucide-solid';
 import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
@@ -24,6 +24,7 @@ const Delivery: Component = () => {
   const [settings, { refetch }] = createResource(() => api.getSettings());
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
+  const [showMasterSecret, setShowMasterSecret] = createSignal(false);
 
   const handleChange = (key: string, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -177,13 +178,18 @@ const Delivery: Component = () => {
                   <div>
                     <div class="flex items-center justify-between gap-3 mb-1.5">
                       <label for="connection-request-secret" class="block text-xs text-muted">Connection-request master secret</label>
-                      <button type="button" class="btn btn-secondary text-xs" onClick={generatePassword} disabled={!isFullAccess()}>
-                        <RefreshCw size={13} /> Generate secret
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <button type="button" class="btn btn-secondary text-xs" onClick={() => setShowMasterSecret((visible) => !visible)} aria-label={showMasterSecret() ? 'Hide master secret' : 'Show master secret'} aria-pressed={showMasterSecret()}>
+                          <Show when={showMasterSecret()} fallback={<Eye size={13} />}><EyeOff size={13} /></Show>
+                        </button>
+                        <button type="button" class="btn btn-secondary text-xs" onClick={generatePassword} disabled={!isFullAccess()}>
+                          <RefreshCw size={13} /> Generate secret
+                        </button>
+                      </div>
                     </div>
                     <input
                       id="connection-request-secret"
-                      type="password"
+                      type={showMasterSecret() ? 'text' : 'password'}
                       value={getValue('connection_request_password')}
                       onInput={(e) => handleChange('connection_request_password', e.currentTarget.value)}
                       placeholder="Minimum 16 characters"
