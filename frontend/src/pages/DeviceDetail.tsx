@@ -1946,7 +1946,6 @@ const DeviceDetail: Component = () => {
                     <h2 id="device-health-title"><HeartPulse size={14} />Device health</h2>
                     <p>Latest readings from this CPE</p>
                   </div>
-                  <span class="device-health-count"><Activity size={12} />{healthTileGroups().reduce((count, group) => count + group.tiles.length, 0)} indicators</span>
                 </div>
                 <div class="device-health-grid">
                   <For each={healthTileGroups()}>
