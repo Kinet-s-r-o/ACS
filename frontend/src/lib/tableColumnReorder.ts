@@ -6,6 +6,32 @@ interface ReorderableHeader {
   index: number;
 }
 
+interface DefaultColumnOrder {
+  route: string;
+  matches: string[];
+  order: string[];
+}
+
+const DEFAULT_COLUMN_ORDERS: DefaultColumnOrder[] = [
+  { route: '/settings/provisioning', matches: ['parameter pattern'], order: ['name', 'parameter pattern', 'source', 'group + color', 'active', 'type', 'unit scale', 'chart', 'transform', 'multiplier', 'actions'] },
+  { route: '/settings/provisioning', matches: ['group'], order: ['name', 'parameter', 'source', 'group', 'active', 'device match', 'unit', 'actions'] },
+  { route: '/settings/provisioning', matches: ['#'], order: ['#', 'cwmp path', 'active', 'phase', 'value type', 'value', 'tags', 'actions'] },
+  { route: '/settings/users', matches: ['username'], order: ['username', 'first name', 'last name', 'email', 'required 2fa', 'authenticator', 'role', 'last login', 'actions'] },
+  { route: '/settings/users', matches: ['permissions'], order: ['name', 'description', 'permissions', 'type', 'actions'] },
+  { route: '/settings/dictionaries', matches: ['tag'], order: ['tag', 'description', 'color', 'actions'] },
+  { route: '/security', matches: ['actor'], order: ['time', 'actor', 'action', 'resource', 'source', 'http status'] },
+  { route: '/tasks', matches: ['created by'], order: ['serial number', 'type', 'status', 'created', 'created by', 'completed', 'deleted by', 'error', 'actions'] },
+  { route: '/devices', matches: ['last inform'], order: ['serial number', 'manufacturer', 'model', 'product class', 'ip address', 'ppp username', 'rx power', 'uptime', 'status', 'last inform', 'tags'] },
+  { route: '/devices', matches: ['serial number', 'mac address', 'type'], order: ['serial number', 'name', 'type', 'status', 'ip address', 'mac address'] },
+  { route: '/device/:serial', matches: ['vlan'], order: ['name', 'adm. status', 'status', 'type', 'vlan', 'ip address', 'service', 'nat', 'l1', 'l2', 'l3', 'l4', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'actions'] },
+  { route: '/device/:serial', matches: ['duplex', 'speed', 'l3'], order: ['name', 'adm. status', 'status', 'mac address', 'duplex', 'speed', 'l3', 'actions'] },
+  { route: '/device/:serial', matches: ['ssid name', 'security', 'ch'], order: ['index', 'adm. status', 'status', 'ssid name', 'security', 'band', 'ch', 'max rate', 'password', 'actions'] },
+  { route: '/device/:serial', matches: ['writable'], order: ['name', 'writable', 'value type', 'value'] },
+  { route: '/device/:serial', matches: ['hostname'], order: ['hostname', 'ip address', 'mac address', 'interface', 'signal', 'neg. rate', 'uptime'] },
+  { route: '/device/:serial', matches: ['created by'], order: ['type', 'status', 'created', 'created by', 'completed', 'deleted by', 'error', 'actions'] },
+  { route: '/device/:serial', matches: ['severity'], order: ['time', 'severity', 'message'] },
+];
+
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 const stableHeading = (value: string) => normalize(value.replace(/\s*\(\s*[\d,.\s]+\s*\)\s*$/, ''));
 
@@ -46,11 +72,21 @@ const readOrder = (key: string): string[] => {
   }
 };
 
-const applyOrder = (table: HTMLTableElement, key: string) => {
+const defaultOrder = (route: string, headers: ReorderableHeader[]) => {
+  const normalizedRoute = route.replace(/^\/device\/[^/]+/, '/device/:serial');
+  const labels = headers.map((header) => header.id.split('#')[0]);
+  const config = DEFAULT_COLUMN_ORDERS.find((candidate) => candidate.route === normalizedRoute && candidate.matches.some((label) => labels.includes(label)));
+  if (!config) return [];
+  const preferred = config.order.flatMap((label) => headers.filter((header) => header.id.split('#')[0] === label).map((header) => header.id));
+  return [...preferred, ...headers.filter((header) => !preferred.includes(header.id)).map((header) => header.id)];
+};
+
+const applyOrder = (table: HTMLTableElement, key: string, route: string) => {
   const headers = getHeaders(table);
   const order = readOrder(key);
-  if (headers.length < 2 || order.length === 0) return;
-  const rank = new Map(order.map((id, index) => [id, index]));
+  const desiredOrder = order.length ? order : defaultOrder(route, headers);
+  if (headers.length < 2 || desiredOrder.length === 0) return;
+  const rank = new Map(desiredOrder.map((id, index) => [id, index]));
   const desired = [...headers].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   if (desired.every((header, index) => header.id === headers[index].id)) return;
 
@@ -76,7 +112,7 @@ const moveColumn = (table: HTMLTableElement, key: string, fromId: string, toId: 
   const previous = readOrder(key);
   const complete = [...next, ...previous.filter((id) => !next.includes(id))];
   try { localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(complete)); } catch { /* Browser storage can be unavailable. */ }
-  applyOrder(table, key);
+  applyOrder(table, key, window.location.pathname);
 };
 
 const tableHeading = (table: HTMLTableElement) => table.closest('.card')?.querySelector('h1, h2, h3, h4')?.textContent || '';
@@ -125,6 +161,7 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
 
   const refresh = () => {
     const occurrences = new Map<string, number>();
+    const route = getRoute();
     for (const table of Array.from(document.querySelectorAll<HTMLTableElement>('table.data-table'))) {
       const heading = stableHeading(tableHeading(table));
       const schema = tableSchema(table);
@@ -132,12 +169,11 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
       const occurrence = occurrences.get(signature) ?? 0;
       occurrences.set(signature, occurrence + 1);
       if (!tableKeys.has(table)) {
-        const route = getRoute();
         const key = makeTableKey(table, route, occurrence);
         migrateStoredOrder(key, makeLegacyTableKey(table, route, occurrence), route, heading, occurrence);
         tableKeys.set(table, key);
       }
-      applyOrder(table, tableKeys.get(table)!);
+      applyOrder(table, tableKeys.get(table)!, route);
     }
   };
 

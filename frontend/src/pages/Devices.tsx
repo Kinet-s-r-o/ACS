@@ -31,9 +31,9 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'model', label: 'Model', visible: true, order: 2 },
   { id: 'product_class', label: 'Product Class', visible: false, order: 3 },
   { id: 'ip_address', label: 'IP Address', visible: true, order: 4 },
-  { id: 'rx_power', label: 'RX Power', visible: true, order: 5 },
-  { id: 'uptime', label: 'Uptime', visible: true, order: 6 },
-  { id: 'ppp_username', label: 'PPP Username', visible: false, order: 7 },
+  { id: 'ppp_username', label: 'PPP Username', visible: false, order: 5 },
+  { id: 'rx_power', label: 'RX Power', visible: true, order: 6 },
+  { id: 'uptime', label: 'Uptime', visible: true, order: 7 },
   { id: 'status', label: 'Status', visible: true, order: 8 },
   { id: 'last_inform', label: 'Last Inform', visible: true, order: 9 },
   { id: 'tags', label: 'Tags', visible: true, order: 10 },
@@ -41,6 +41,7 @@ const defaultColumns: ColumnConfig[] = [
 
 const STORAGE_KEY = 'acs_device_columns';
 const LEGACY_STORAGE_KEY = 'skyacs_device_columns';
+const previousDefaultColumnOrder = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'rx_power', 'uptime', 'ppp_username', 'status', 'last_inform', 'tags'];
 
 const TableSkeleton: Component<{ cols: number }> = (props) => (
   <tr>
@@ -82,9 +83,11 @@ const Devices: Component = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        const savedOrder = [...parsed].sort((a: ColumnConfig, b: ColumnConfig) => a.order - b.order).map((column: ColumnConfig) => column.id);
+        const usesPreviousDefaultOrder = previousDefaultColumnOrder.every((id, index) => savedOrder[index] === id);
         const merged = defaultColumns.map(dc => {
           const saved = parsed.find((p: ColumnConfig) => p.id === dc.id);
-          return saved ? { ...dc, visible: saved.visible, order: saved.order } : dc;
+          return saved ? { ...dc, visible: saved.visible, order: usesPreviousDefaultOrder ? dc.order : saved.order } : dc;
         });
         setColumns(merged.sort((a, b) => a.order - b.order));
       } catch {

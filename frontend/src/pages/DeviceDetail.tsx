@@ -2479,7 +2479,7 @@ const DeviceDetail: Component = () => {
                         <th class="text-center px-2 py-2.5 font-semibold text-primary">S6</th>
                         <th class="text-center px-2 py-2.5 font-semibold text-primary">S7</th>
                         <th class="text-center px-2 py-2.5 font-semibold text-primary">S8</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary"></th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2669,7 +2669,7 @@ const DeviceDetail: Component = () => {
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Duplex</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Speed</th>
                         <th class="text-center px-2 py-2.5 font-semibold text-primary">L3</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary"></th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2783,7 +2783,7 @@ const DeviceDetail: Component = () => {
                         <th class="text-left px-2 py-2 font-medium text-secondary">Ch</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Max Rate</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Password</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary"></th>
+                        <th class="text-left px-2 py-2 font-medium text-secondary">Actions</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -209,7 +209,7 @@ const RolesTab: Component = () => {
                   <Show when={isVisible('description')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyRoleFilter('description', state)} /></SortableHeader></th></Show>
                   <Show when={isVisible('permissions')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="permissions" label="Permissions" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="permissions" label="Permissions" active={columnFilters().permissions || null} onApply={state => applyRoleFilter('permissions', state)} /></SortableHeader></th></Show>
                   <Show when={isVisible('type')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="type" label="Type" active={columnFilters().type || null} onApply={state => applyRoleFilter('type', state)} /></SortableHeader></th></Show>
-                  <th class="px-3 py-2"></th>
+                  <th class="px-3 py-2 text-right">Actions</th>
                   <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
