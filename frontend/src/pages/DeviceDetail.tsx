@@ -217,7 +217,7 @@ const DeviceDetail: Component = () => {
     { id: 'status', label: 'Status', visible: true },
     { id: 'created_at', label: 'Created', visible: true },
     { id: 'completed_at', label: 'Completed', visible: true },
-    { id: 'created_by', label: 'User', visible: true },
+    { id: 'created_by', label: 'Created by', visible: true },
     { id: 'deleted_by', label: 'Deleted by', visible: true },
     { id: 'error', label: 'Error', visible: true },
   ]);
@@ -2998,8 +2998,8 @@ const DeviceDetail: Component = () => {
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="User" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="created_by" label="User" active={taskColumnFilters()['created_by'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_by'] = s; else delete n['created_by']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="Created by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
+                            <ColumnFilter columnId="created_by" label="Created by" active={taskColumnFilters()['created_by'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_by'] = s; else delete n['created_by']; return n; }); }} />
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} /></th></Show>
@@ -3056,7 +3056,7 @@ const DeviceDetail: Component = () => {
                 <div class="space-y-4">
                   <div class="grid grid-cols-2 gap-3 text-sm">
                     <div><span class="text-muted text-xs">Status</span><div class="mt-0.5"><span class={`badge ${getStatusBadge(selectedTask()!.status)}`}>{selectedTask()!.status}</span></div></div>
-                    <div><span class="text-muted text-xs">User</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
+                    <div><span class="text-muted text-xs">Created by</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
                     <Show when={selectedTask()!.deleted_by}><div><span class="text-muted text-xs">Deleted by</span><div class="mt-0.5 text-primary">{selectedTask()!.deleted_by}</div></div></Show>
                     <div><span class="text-muted text-xs">Created</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.created_at)}</div></div>
                     <div><span class="text-muted text-xs">Completed</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.completed_at)}</div></div>

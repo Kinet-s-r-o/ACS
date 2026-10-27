@@ -48,7 +48,7 @@ const Tasks: Component = () => {
     { id: 'status', label: 'Status', visible: true },
     { id: 'created_at', label: 'Created', visible: true },
     { id: 'completed_at', label: 'Completed', visible: true },
-    { id: 'created_by', label: 'User', visible: true },
+    { id: 'created_by', label: 'Created by', visible: true },
     { id: 'deleted_by', label: 'Deleted by', visible: true },
     { id: 'error', label: 'Error', visible: true },
   ]);
@@ -180,7 +180,7 @@ const Tasks: Component = () => {
                       <Show when={isTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="status" label="Status" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('status', 'Status')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('created_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_at" label="Created" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_at', 'Created')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('completed_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="completed_at" label="Completed" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('completed_at', 'Completed')}</SortableHeader></th></Show>
-                      <Show when={isTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_by" label="User" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_by', 'User')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_by" label="Created by" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_by', 'Created by')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('deleted_by', 'Deleted by')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('error')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="error" label="Error" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('error', 'Error')}</SortableHeader></th></Show>
                       <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
@@ -219,7 +219,7 @@ const Tasks: Component = () => {
             <div class="grid grid-cols-2 gap-3 text-sm">
               <div><span class="text-muted text-xs">CPE</span><div class="mt-0.5"><A class="data-link font-mono" href={`/device/${encodeURIComponent(selectedTask()!.serial_number)}?tab=tasks`}>{selectedTask()!.serial_number}</A></div></div>
               <div><span class="text-muted text-xs">Status</span><div class="mt-0.5"><span class={`badge ${statusBadge(selectedTask()!.status)}`}>{selectedTask()!.status}</span></div></div>
-              <div><span class="text-muted text-xs">User</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
+              <div><span class="text-muted text-xs">Created by</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
               <Show when={selectedTask()!.deleted_by}><div><span class="text-muted text-xs">Deleted by</span><div class="mt-0.5 text-primary">{selectedTask()!.deleted_by}</div></div></Show>
               <div><span class="text-muted text-xs">Created</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.created_at)}</div></div>
               <div><span class="text-muted text-xs">Completed</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.completed_at)}</div></div>
