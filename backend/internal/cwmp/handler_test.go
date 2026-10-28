@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/database"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/database"
+	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

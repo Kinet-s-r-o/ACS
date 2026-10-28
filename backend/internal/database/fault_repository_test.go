@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 // TestListPopulatesSerialNumber verifies that List and GetByDeviceID populate

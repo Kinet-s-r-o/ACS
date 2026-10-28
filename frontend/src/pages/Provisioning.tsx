@@ -14,7 +14,7 @@ import { usePageSize } from '../lib/usePageSize';
 import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
-import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 interface ProvColumnConfig {
@@ -64,7 +64,6 @@ const featureTableColumns = [
 const defaultTemplateInventory = (): TemplateInventory => ({ primary_ip_mode: 'automatic', primary_ip_parameter: '', primary_ip_interface_name: '' });
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
-const LEGACY_PROV_STORAGE_KEY = 'skyacs-prov-columns';
 type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options' | 'object_fields'> & { optionsText: string; objectFieldsText: string };
 const featureSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 const parseObjectFieldOptions = (text: string): { options: string[]; option_labels?: Record<string, string> } => {
@@ -234,7 +233,7 @@ const Provisioning: Component = () => {
   // Provisioning column visibility
   const [provColumns, setProvColumns] = createSignal<ProvColumnConfig[]>((() => {
     try {
-      const stored = readMigratedStorageValue(localStorage, PROV_STORAGE_KEY, LEGACY_PROV_STORAGE_KEY);
+      const stored = localStorage.getItem(PROV_STORAGE_KEY);
       if (stored) {
         const saved = JSON.parse(stored) as Array<Partial<ProvColumnConfig>>;
         if (Array.isArray(saved)) {
@@ -454,7 +453,7 @@ const Provisioning: Component = () => {
 
   createEffect(() => {
     const cols = provColumns();
-    writeMigratedStorageValue(localStorage, PROV_STORAGE_KEY, LEGACY_PROV_STORAGE_KEY, JSON.stringify(cols));
+    localStorage.setItem(PROV_STORAGE_KEY, JSON.stringify(cols));
   });
 
   const visibleProvColumns = () => provColumns().filter(c => c.visible).sort((a, b) => a.order - b.order);

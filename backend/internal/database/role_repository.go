@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
 )
 
 var (
-	ErrRoleNotFound     = errors.New("role not found")
-	ErrRoleInUse        = errors.New("role is assigned to one or more users")
-	ErrSystemRole       = errors.New("cannot modify system role")
-	ErrDuplicateRole    = errors.New("role name already exists")
+	ErrRoleNotFound  = errors.New("role not found")
+	ErrRoleInUse     = errors.New("role is assigned to one or more users")
+	ErrSystemRole    = errors.New("cannot modify system role")
+	ErrDuplicateRole = errors.New("role name already exists")
 )
 
 type RoleRepository struct {

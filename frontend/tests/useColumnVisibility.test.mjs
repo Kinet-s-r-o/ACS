@@ -30,7 +30,7 @@ test('returns the default columns when nothing is stored', () => {
 
 test('restores stored visibility over the defaults', () => {
   const ls = createLocalStorageMock();
-  ls.setItem('skyacs_columns_faults', JSON.stringify([
+  ls.setItem('acs_columns_faults', JSON.stringify([
     { id: 'a', label: 'A', visible: false },
     { id: 'b', label: 'B', visible: true },
     { id: 'c', label: 'C', visible: true },
@@ -45,7 +45,7 @@ test('restores stored visibility over the defaults', () => {
 test('falls back to the default when a stored id is missing', () => {
   const ls = createLocalStorageMock();
   // Only "a" is stored; "b" and "c" fall back to their defaults.
-  ls.setItem('skyacs_columns_faults', JSON.stringify([{ id: 'a', label: 'A', visible: false }]));
+  ls.setItem('acs_columns_faults', JSON.stringify([{ id: 'a', label: 'A', visible: false }]));
   globalThis.localStorage = ls;
   const { isVisible } = useColumnVisibility('faults', DEFAULTS);
   assert.equal(isVisible('a'), false);
@@ -55,7 +55,7 @@ test('falls back to the default when a stored id is missing', () => {
 
 test('falls back to the defaults when the stored value is malformed', () => {
   const ls = createLocalStorageMock();
-  ls.setItem('skyacs_columns_faults', 'not-json');
+  ls.setItem('acs_columns_faults', 'not-json');
   globalThis.localStorage = ls;
   const { columns, isVisible } = useColumnVisibility('faults', DEFAULTS);
   assert.equal(columns().length, 3);

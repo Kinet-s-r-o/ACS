@@ -21,7 +21,7 @@ test('returns the default size when nothing is stored', () => {
 
 test('returns a stored size when it is a valid option', () => {
   const ls = createLocalStorageMock();
-  ls.setItem('skyacs_page_size_faults', '50');
+  ls.setItem('acs_page_size_faults', '50');
   globalThis.localStorage = ls;
   const { pageSize } = usePageSize('faults', 20);
   assert.equal(pageSize(), 50);
@@ -29,7 +29,7 @@ test('returns a stored size when it is a valid option', () => {
 
 test('falls back to the default when the stored value is not a valid option', () => {
   const ls = createLocalStorageMock();
-  ls.setItem('skyacs_page_size_faults', '7'); // 7 is not in PAGE_SIZE_OPTIONS
+  ls.setItem('acs_page_size_faults', '7'); // 7 is not in PAGE_SIZE_OPTIONS
   globalThis.localStorage = ls;
   const { pageSize } = usePageSize('faults', 20);
   assert.equal(pageSize(), 20);
@@ -37,7 +37,7 @@ test('falls back to the default when the stored value is not a valid option', ()
 
 test('falls back to the default when the stored value is not a number', () => {
   const ls = createLocalStorageMock();
-  ls.setItem('skyacs_page_size_faults', 'abc');
+  ls.setItem('acs_page_size_faults', 'abc');
   globalThis.localStorage = ls;
   const { pageSize } = usePageSize('faults', 20);
   assert.equal(pageSize(), 20);

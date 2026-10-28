@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/auth"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/auth"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 var colorHexRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -166,44 +166,6 @@ func (r *Router) handleCreateMetricDefinition(w http.ResponseWriter, req *http.R
 		return
 	}
 	respondError(w, http.StatusBadRequest, "Create metrics through a provisioning template")
-	return
-
-	var body models.MetricDefinition
-	decoder := json.NewDecoder(req.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-	defaultMetricHistory(&body)
-
-	if err := validateMetricDefinition(&body); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if body.Source == "" {
-		body.Source = "passive"
-	}
-	if body.DeviceTypeMatch == "" {
-		body.DeviceTypeMatch = "*"
-	}
-	if body.ThresholdDirection == "" {
-		body.ThresholdDirection = "higher_is_worse"
-	}
-	if body.DisplayFormat == "" {
-		body.DisplayFormat = "number"
-	}
-	if body.HealthSize == "" {
-		body.HealthSize = "small"
-	}
-
-	if err := r.metricRepo.Create(req.Context(), &body); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to create metric definition")
-		return
-	}
-
-	respondJSON(w, http.StatusCreated, body)
 }
 
 func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.Request) {
@@ -213,43 +175,6 @@ func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.R
 		return
 	}
 	respondError(w, http.StatusBadRequest, "Manage metrics through their provisioning template")
-	return
-
-	idStr := req.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid metric ID")
-		return
-	}
-	if current, err := r.metricRepo.GetByID(req.Context(), id); err == nil && current.TemplateID != nil {
-		respondError(w, http.StatusBadRequest, "Manage interface metrics through their provisioning template")
-		return
-	}
-
-	var body models.MetricDefinition
-	decoder := json.NewDecoder(req.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-	defaultMetricHistory(&body)
-
-	if err := validateMetricDefinition(&body); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if body.HealthSize == "" {
-		body.HealthSize = "small"
-	}
-	body.ID = id
-	if err := r.metricRepo.Update(req.Context(), &body); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to update metric definition")
-		return
-	}
-
-	respondJSON(w, http.StatusOK, body)
 }
 
 func (r *Router) handleDeleteMetricDefinition(w http.ResponseWriter, req *http.Request) {
@@ -259,25 +184,6 @@ func (r *Router) handleDeleteMetricDefinition(w http.ResponseWriter, req *http.R
 		return
 	}
 	respondError(w, http.StatusBadRequest, "Manage metrics through their provisioning template")
-	return
-
-	idStr := req.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid metric ID")
-		return
-	}
-	if def, err := r.metricRepo.GetByID(req.Context(), id); err == nil && def.TemplateID != nil {
-		respondError(w, http.StatusBadRequest, "Manage interface metrics through their provisioning template")
-		return
-	}
-
-	if err := r.metricRepo.Delete(req.Context(), id); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to delete metric definition")
-		return
-	}
-
-	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (r *Router) handleGetDeviceMetrics(w http.ResponseWriter, req *http.Request) {

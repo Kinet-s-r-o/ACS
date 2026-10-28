@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly SKYACS_REPOSITORY="skydashnet/SKYACS"
-readonly SKYACS_DEFAULT_REF="v2.0.0"
+readonly ACS_REPOSITORY="matrix8412/ACS"
+readonly ACS_DEFAULT_REF="v2.0.0"
 
-SOURCE_REF="${SKYACS_REF:-$SKYACS_DEFAULT_REF}"
-INSTALL_DIR="${SKYACS_INSTALL_DIR:-/opt/skyacs}"
-SERVICE_USER="${SKYACS_SERVICE_USER:-skyacs}"
-OS_RELEASE_FILE="${SKYACS_OS_RELEASE_FILE:-/etc/os-release}"
+SOURCE_REF="${ACS_REF:-$ACS_DEFAULT_REF}"
+INSTALL_DIR="${ACS_INSTALL_DIR:-/opt/acs}"
+SERVICE_USER="${ACS_SERVICE_USER:-acs}"
+OS_RELEASE_FILE="${ACS_OS_RELEASE_FILE:-/etc/os-release}"
 TEMP_DIR=""
 
 log() { printf '[ACS] %s\n' "$*"; }
@@ -46,7 +46,7 @@ validate_inputs() {
   [[ "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "Service account is not a valid Linux username."
 }
 
-if [[ "${SKYACS_INSTALLER_TEST:-0}" == "1" ]]; then
+if [[ "${ACS_INSTALLER_TEST:-0}" == "1" ]]; then
   validate_platform
   validate_inputs
   log "Installer validation passed."
@@ -70,38 +70,38 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
 fi
 [[ "$(id -u "$SERVICE_USER")" -ne 0 ]] || fail "Service account must not be root."
 
-TEMP_DIR="$(mktemp -d -t skyacs-install.XXXXXXXX)"
+TEMP_DIR="$(mktemp -d -t acs-install.XXXXXXXX)"
 archive="$TEMP_DIR/source.tar.gz"
 source_dir="$TEMP_DIR/source"
-archive_url="https://codeload.github.com/${SKYACS_REPOSITORY}/tar.gz/${SOURCE_REF}"
+archive_url="https://codeload.github.com/${ACS_REPOSITORY}/tar.gz/${SOURCE_REF}"
 
-log "Downloading ${SKYACS_REPOSITORY}@${SOURCE_REF}"
+log "Downloading ${ACS_REPOSITORY}@${SOURCE_REF}"
 curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 "$archive_url" -o "$archive"
 mkdir -p "$source_dir"
 tar -xzf "$archive" -C "$source_dir" --strip-components=1
 [[ -x "$source_dir/auto-setup.sh" || -f "$source_dir/auto-setup.sh" ]] || fail "Downloaded archive does not contain auto-setup.sh."
-grep -q '^module github.com/skydashnet/skyacs$' "$source_dir/backend/go.mod" || fail "Downloaded archive failed the repository identity check."
+grep -q '^module github.com/matrix8412/acs$' "$source_dir/backend/go.mod" || fail "Downloaded archive failed the repository identity check."
 
-marker="$INSTALL_DIR/.skyacs-managed-install"
+marker="$INSTALL_DIR/.acs-managed-install"
 if [[ -d "$INSTALL_DIR" && ! -f "$marker" ]] && [[ -n "$(find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
   fail "$INSTALL_DIR already exists and is not managed by the installer. Choose another install directory or move the existing directory."
 fi
 
 install -d -m 0755 "$INSTALL_DIR"
-printf 'status=installing\nrepository=%s\nref=%s\n' "$SKYACS_REPOSITORY" "$SOURCE_REF" >"$marker"
+printf 'status=installing\nrepository=%s\nref=%s\n' "$ACS_REPOSITORY" "$SOURCE_REF" >"$marker"
 rsync -a --delete \
-  --exclude '/.skyacs-managed-install' \
+  --exclude '/.acs-managed-install' \
   --exclude '/backend/.env' \
   --exclude '/backend/uploads/' \
   "$source_dir/" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/install.sh" "$INSTALL_DIR/setup.sh" "$INSTALL_DIR/auto-setup.sh"
 
 log "Running the production installer"
-SKYACS_SERVICE_USER="$SERVICE_USER" bash "$INSTALL_DIR/auto-setup.sh"
+ACS_SERVICE_USER="$SERVICE_USER" bash "$INSTALL_DIR/auto-setup.sh"
 
 printf 'status=installed\nrepository=%s\nref=%s\ninstalled_at=%s\n' \
-  "$SKYACS_REPOSITORY" "$SOURCE_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$marker"
+  "$ACS_REPOSITORY" "$SOURCE_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$marker"
 
 log "Installation finished successfully"
-log "Source: ${SKYACS_REPOSITORY}@${SOURCE_REF}"
+log "Source: ${ACS_REPOSITORY}@${SOURCE_REF}"
 log "Path:   $INSTALL_DIR"

@@ -7,12 +7,12 @@ if [[ ${EUID} -ne 0 ]]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVICE_USER="${SKYACS_SERVICE_USER:-skyacs}"
+SERVICE_USER="${ACS_SERVICE_USER:-acs}"
 GO_VERSION="${GO_VERSION:-1.25.0}"
 NODE_VERSION="${NODE_VERSION:-24.18.0}"
 MIN_POSTGRES_MAJOR=14
 MAX_TESTED_POSTGRES_MAJOR=18
-RUNTIME_TMP="$(mktemp -d -t skyacs-runtime.XXXXXXXX)"
+RUNTIME_TMP="$(mktemp -d -t acs-runtime.XXXXXXXX)"
 trap 'rm -rf "$RUNTIME_TMP"' EXIT
 
 if [[ ! -r /etc/os-release ]]; then
@@ -137,21 +137,21 @@ fi
 
 cd "$ROOT_DIR"
 chmod +x setup.sh
-export SKYACS_SERVICE_USER="$SERVICE_USER"
+export ACS_SERVICE_USER="$SERVICE_USER"
 ./setup.sh
 
 cd "$ROOT_DIR/backend"
-go build -trimpath -ldflags="-s -w" -o skyacs ./cmd/server
+go build -trimpath -ldflags="-s -w" -o acs ./cmd/server
 
 cd "$ROOT_DIR/frontend"
 npm ci --include=dev --no-audit --no-fund
-printf 'VITE_API_URL=/api\nVITE_APP_NAME=%s\n' "${SKYACS_APP_NAME:-}" >.env.production
+printf 'VITE_API_URL=/api\nVITE_APP_NAME=%s\n' "${ACS_APP_NAME:-}" >.env.production
 npm run build
 
 mkdir -p "$ROOT_DIR/backend/uploads/firmware"
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$ROOT_DIR/backend/uploads"
 
-cat >/etc/systemd/system/skyacs.service <<EOF
+cat >/etc/systemd/system/acs.service <<EOF
 [Unit]
 Description=ACS control plane and CWMP server
 After=network-online.target postgresql.service
@@ -162,7 +162,7 @@ Type=simple
 User=$SERVICE_USER
 WorkingDirectory="$ROOT_DIR/backend"
 EnvironmentFile="$ROOT_DIR/backend/.env"
-ExecStart="$ROOT_DIR/backend/skyacs"
+ExecStart="$ROOT_DIR/backend/acs"
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
@@ -186,7 +186,7 @@ ReadWritePaths="$ROOT_DIR/backend/uploads"
 WantedBy=multi-user.target
 EOF
 
-cat >/etc/nginx/conf.d/skyacs.conf <<EOF
+cat >/etc/nginx/conf.d/acs.conf <<EOF
 server {
     listen 8080 default_server;
     listen [::]:8080 default_server;
@@ -225,15 +225,15 @@ server {
 EOF
 
 # Releases before v2.0.0 used a standalone Node.js web service.
-if systemctl list-unit-files skyacs-web.service --no-legend 2>/dev/null | grep -q '^skyacs-web.service'; then
-  systemctl disable --now skyacs-web.service || true
+if systemctl list-unit-files acs-web.service --no-legend 2>/dev/null | grep -q '^acs-web.service'; then
+  systemctl disable --now acs-web.service || true
 fi
-rm -f /etc/systemd/system/skyacs-web.service
+rm -f /etc/systemd/system/acs-web.service
 
 systemctl daemon-reload
 nginx -t
-systemctl enable skyacs nginx
-systemctl restart skyacs nginx
+systemctl enable acs nginx
+systemctl restart acs nginx
 
 ready=false
 for _ in {1..30}; do
@@ -246,7 +246,7 @@ for _ in {1..30}; do
 done
 if [[ "$ready" != true ]]; then
   echo "ACS failed its startup health check. Recent logs:" >&2
-  journalctl -u skyacs -n 50 --no-pager >&2 || true
+  journalctl -u acs -n 50 --no-pager >&2 || true
   exit 1
 fi
 
@@ -255,4 +255,4 @@ echo "Installation complete"
 echo "Web UI: http://<server-address>:8080"
 echo "CWMP:   http://localhost:7547/"
 echo "API:    http://localhost:8080/api/health"
-echo "Run: journalctl -u skyacs -n 50 to retrieve the one-time bootstrap password."
+echo "Run: journalctl -u acs -n 50 to retrieve the one-time bootstrap password."

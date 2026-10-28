@@ -11,7 +11,7 @@ func TestParseSOAPAcceptsCWMP12AndDetectsTransferComplete(t *testing.T) {
 	payload := `<?xml version="1.0"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cwmp="urn:dslforum-org:cwmp-1-2">
   <soap:Header><cwmp:ID soap:mustUnderstand="1">request-42</cwmp:ID></soap:Header>
-  <soap:Body><cwmp:TransferComplete><CommandKey>skyacs-task-9</CommandKey><FaultStruct><FaultCode>0</FaultCode><FaultString></FaultString></FaultStruct><StartTime>2026-01-01T00:00:00Z</StartTime><CompleteTime>2026-01-01T00:01:00Z</CompleteTime></cwmp:TransferComplete></soap:Body>
+  <soap:Body><cwmp:TransferComplete><CommandKey>acs-task-9</CommandKey><FaultStruct><FaultCode>0</FaultCode><FaultString></FaultString></FaultStruct><StartTime>2026-01-01T00:00:00Z</StartTime><CompleteTime>2026-01-01T00:01:00Z</CompleteTime></cwmp:TransferComplete></soap:Body>
 </soap:Envelope>`
 	envelope, err := ParseSOAPEnvelope(strings.NewReader(payload))
 	if err != nil {
@@ -51,7 +51,7 @@ func TestSetParameterValuesIncludesSOAPTypesAndArrayMetadata(t *testing.T) {
 		ParameterList: ParameterList{Parameters: []ParameterValueStruct{
 			{Name: "Device.ManagementServer.PeriodicInformEnable", Value: "true", Type: "boolean"},
 		}},
-		ParameterKey: "skyacs-task-10",
+		ParameterKey: "acs-task-10",
 	}
 	encoded, err := GenerateSOAPEnvelopeWithContext(request, CWMPNamespace10, "command-10")
 	if err != nil {
@@ -137,46 +137,46 @@ func TestParseAddObjectFault(t *testing.T) {
 
 func TestParameterValueStructUnmarshalXML(t *testing.T) {
 	tests := []struct {
-		name       string
-		xml        string
-		wantName   string
-		wantValue  string
-		wantType   string
+		name      string
+		xml       string
+		wantName  string
+		wantValue string
+		wantType  string
 	}{
 		{
-			name:       "with xsi:type unsignedInt",
-			xml:        `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MaxDownloadRate</Name><Value xsi:type="xsd:unsignedInt">1500</Value></ParameterValueStruct>`,
-			wantName:   "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MaxDownloadRate",
-			wantValue:  "1500",
-			wantType:   "unsignedInt",
+			name:      "with xsi:type unsignedInt",
+			xml:       `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MaxDownloadRate</Name><Value xsi:type="xsd:unsignedInt">1500</Value></ParameterValueStruct>`,
+			wantName:  "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MaxDownloadRate",
+			wantValue: "1500",
+			wantType:  "unsignedInt",
 		},
 		{
-			name:       "with xsi:type string",
-			xml:        `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.DeviceInfo.Manufacturer</Name><Value xsi:type="xsd:string">Huawei</Value></ParameterValueStruct>`,
-			wantName:   "InternetGatewayDevice.DeviceInfo.Manufacturer",
-			wantValue:  "Huawei",
-			wantType:   "string",
+			name:      "with xsi:type string",
+			xml:       `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.DeviceInfo.Manufacturer</Name><Value xsi:type="xsd:string">Huawei</Value></ParameterValueStruct>`,
+			wantName:  "InternetGatewayDevice.DeviceInfo.Manufacturer",
+			wantValue: "Huawei",
+			wantType:  "string",
 		},
 		{
-			name:       "with xsi:type boolean",
-			xml:        `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.LANDevice.1.LANEnable</Name><Value xsi:type="xsd:boolean">true</Value></ParameterValueStruct>`,
-			wantName:   "InternetGatewayDevice.LANDevice.1.LANEnable",
-			wantValue:  "true",
-			wantType:   "boolean",
+			name:      "with xsi:type boolean",
+			xml:       `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.LANDevice.1.LANEnable</Name><Value xsi:type="xsd:boolean">true</Value></ParameterValueStruct>`,
+			wantName:  "InternetGatewayDevice.LANDevice.1.LANEnable",
+			wantValue: "true",
+			wantType:  "boolean",
 		},
 		{
-			name:       "without xsi:type",
-			xml:        `<ParameterValueStruct><Name>InternetGatewayDevice.DeviceInfo.SerialNumber</Name><Value>ABC123</Value></ParameterValueStruct>`,
-			wantName:   "InternetGatewayDevice.DeviceInfo.SerialNumber",
-			wantValue:  "ABC123",
-			wantType:   "",
+			name:      "without xsi:type",
+			xml:       `<ParameterValueStruct><Name>InternetGatewayDevice.DeviceInfo.SerialNumber</Name><Value>ABC123</Value></ParameterValueStruct>`,
+			wantName:  "InternetGatewayDevice.DeviceInfo.SerialNumber",
+			wantValue: "ABC123",
+			wantType:  "",
 		},
 		{
-			name:       "with xsi:type dateTime",
-			xml:        `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.Time.CurrentTime</Name><Value xsi:type="xsd:dateTime">2026-01-01T00:00:00Z</Value></ParameterValueStruct>`,
-			wantName:   "InternetGatewayDevice.Time.CurrentTime",
-			wantValue:  "2026-01-01T00:00:00Z",
-			wantType:   "dateTime",
+			name:      "with xsi:type dateTime",
+			xml:       `<ParameterValueStruct xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>InternetGatewayDevice.Time.CurrentTime</Name><Value xsi:type="xsd:dateTime">2026-01-01T00:00:00Z</Value></ParameterValueStruct>`,
+			wantName:  "InternetGatewayDevice.Time.CurrentTime",
+			wantValue: "2026-01-01T00:00:00Z",
+			wantType:  "dateTime",
 		},
 	}
 

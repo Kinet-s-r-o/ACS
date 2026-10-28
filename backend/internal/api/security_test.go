@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/auth"
+	"github.com/matrix8412/acs/internal/auth"
 )
 
 func TestRefreshIntervalSettingsRejectInvalidValues(t *testing.T) {

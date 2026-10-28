@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/skydashnet/skyacs/internal/api"
-	"github.com/skydashnet/skyacs/internal/auth"
-	"github.com/skydashnet/skyacs/internal/cwmp"
-	"github.com/skydashnet/skyacs/internal/database"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/api"
+	"github.com/matrix8412/acs/internal/auth"
+	"github.com/matrix8412/acs/internal/cwmp"
+	"github.com/matrix8412/acs/internal/database"
+	"github.com/matrix8412/acs/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -34,8 +34,8 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found; using process environment")
 	}
-	if err := godotenv.Load(".acs.env", ".skyacs.env"); err != nil {
-		log.Println("No .acs.env or legacy .skyacs.env file found")
+	if err := godotenv.Load(".acs.env"); err != nil {
+		log.Println("No .acs.env file found")
 	}
 	if err := auth.ConfigureJWT(os.Getenv("JWT_SECRET")); err != nil {
 		log.Fatalf("Security configuration error: %v", err)
@@ -410,9 +410,6 @@ func runAutoMigrate(db *gorm.DB) error {
 		if err := db.Where(database.Setting{Key: defaultSettings[index].Key}).FirstOrCreate(&defaultSettings[index]).Error; err != nil {
 			return fmt.Errorf("seed setting %s: %w", defaultSettings[index].Key, err)
 		}
-	}
-	if err := db.Model(&database.Setting{}).Where("key = ? AND value = ?", "app_name", "SKYACS").Update("value", "ACS").Error; err != nil {
-		return fmt.Errorf("migrate default application name: %w", err)
 	}
 	if err := db.Where("key IN ?", []string{"acs_url", "acs_username", "acs_password", "inform_interval", "default_refresh_interval"}).Delete(&database.Setting{}).Error; err != nil {
 		return fmt.Errorf("remove obsolete settings: %w", err)

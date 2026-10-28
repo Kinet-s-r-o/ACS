@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -102,7 +102,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64, t
 		now := time.Now()
 		commandKey := task.CommandKey
 		if commandKey == "" {
-			commandKey = fmt.Sprintf("skyacs-task-%d", task.ID)
+			commandKey = fmt.Sprintf("acs-task-%d", task.ID)
 		}
 		task.Status = models.TaskStatusSent
 		task.SentAt = &now

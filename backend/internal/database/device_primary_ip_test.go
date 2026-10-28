@@ -3,7 +3,7 @@ package database
 import (
 	"testing"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 func TestSelectPrimaryIPAddressByParameter(t *testing.T) {

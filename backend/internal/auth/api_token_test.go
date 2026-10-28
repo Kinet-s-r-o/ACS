@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 type apiTokenStub struct {
@@ -74,7 +74,7 @@ func TestAPITokenAuthenticationAndLivePermissions(t *testing.T) {
 		t.Fatalf("role lookup must fail closed: %d", code)
 	}
 	roles.err = nil
-	for _, header := range []string{"", "Basic " + secret, "Bearer bad", "Bearer " + secret + " extra", "Bearer " + secret[:46] + "!", "Bearer skyacs_" + strings.Repeat("A", 43)} {
+	for _, header := range []string{"", "Basic " + secret, "Bearer bad", "Bearer " + secret + " extra", "Bearer " + secret[:46] + "!", "Bearer acs_" + strings.Repeat("A", 43)} {
 		if code := call(header, lookup); code != 401 {
 			t.Errorf("malformed/unknown token accepted: %d", code)
 		}

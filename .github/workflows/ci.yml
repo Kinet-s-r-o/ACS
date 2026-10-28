@@ -60,13 +60,13 @@ jobs:
       postgres:
         image: postgres:${{ matrix.postgresql }}
         env:
-          POSTGRES_DB: skyacs
-          POSTGRES_USER: skyacs
-          POSTGRES_PASSWORD: skyacs-ci-password
+          POSTGRES_DB: acs
+          POSTGRES_USER: acs
+          POSTGRES_PASSWORD: acs-ci-password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U skyacs -d skyacs"
+          --health-cmd "pg_isready -U acs -d acs"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
@@ -83,16 +83,16 @@ jobs:
           CWMP_BIND_ADDR: 127.0.0.1
           DB_HOST: 127.0.0.1
           DB_PORT: 5432
-          DB_NAME: skyacs
-          DB_USER: skyacs
-          DB_PASSWORD: skyacs-ci-password
+          DB_NAME: acs
+          DB_USER: acs
+          DB_PASSWORD: acs-ci-password
           DB_SSLMODE: disable
           JWT_SECRET: 0123456789abcdef0123456789abcdef
           PARAMETER_ENCRYPTION_KEY: abcdef0123456789abcdef0123456789
           INITIAL_ADMIN_PASSWORD: ACS-CI-password-123
         run: |
           set -euo pipefail
-          go run ./cmd/server >/tmp/skyacs-postgres-${{ matrix.postgresql }}.log 2>&1 &
+          go run ./cmd/server >/tmp/acs-postgres-${{ matrix.postgresql }}.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for _ in {1..30}; do
@@ -104,10 +104,10 @@ jobs:
             fi
             sleep 1
           done
-          cat /tmp/skyacs-postgres-${{ matrix.postgresql }}.log
+          cat /tmp/acs-postgres-${{ matrix.postgresql }}.log
           exit 1
       - name: Run database integration tests against PostgreSQL ${{ matrix.postgresql }}
         working-directory: backend
         env:
-          TEST_DATABASE_URL: postgres://skyacs:skyacs-ci-password@127.0.0.1:5432/skyacs?sslmode=disable
+          TEST_DATABASE_URL: postgres://acs:acs-ci-password@127.0.0.1:5432/acs?sslmode=disable
         run: go test -race ./internal/database/ ./internal/api/

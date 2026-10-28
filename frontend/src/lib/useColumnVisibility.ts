@@ -1,6 +1,4 @@
 import { createSignal } from 'solid-js';
-import { readMigratedStorageValue, writeMigratedStorageValue } from './storage.ts';
-
 /** A single toggleable table column. */
 export interface ColumnDef {
   id: string;
@@ -14,7 +12,7 @@ export interface ColumnDef {
  */
 const readStored = (key: string, defaults: ColumnDef[]): ColumnDef[] => {
   try {
-    const stored = readMigratedStorageValue(localStorage, key, key.replace(/^acs_/, 'skyacs_'));
+    const stored = localStorage.getItem(key);
     if (stored) {
       const parsed = JSON.parse(stored) as ColumnDef[];
       if (Array.isArray(parsed)) {
@@ -35,13 +33,12 @@ const readStored = (key: string, defaults: ColumnDef[]): ColumnDef[] => {
  */
 export const useColumnVisibility = (storageKey: string, defaults: ColumnDef[]) => {
   const key = `acs_columns_${storageKey}`;
-  const legacyKey = `skyacs_columns_${storageKey}`;
   const [columns, setColumns] = createSignal<ColumnDef[]>(readStored(key, defaults));
 
   const toggle = (id: string) => {
     setColumns((cols) => {
       const next = cols.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c));
-      writeMigratedStorageValue(localStorage, key, legacyKey, JSON.stringify(next));
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Storage can be unavailable in private browsing. */ }
       return next;
     });
   };

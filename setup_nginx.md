@@ -12,7 +12,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     server_tokens off;
 
-    root /opt/skyacs/frontend/dist;
+    root /opt/acs/frontend/dist;
     index index.html;
     client_max_body_size 64m;
 
@@ -105,5 +105,5 @@ Validasi dan reload:
 sudo nginx -t
 sudo systemctl reload nginx
 curl https://acs.example.com/api/health
-sudo systemctl status skyacs nginx
+sudo systemctl status acs nginx
 ```

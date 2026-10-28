@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux \
     go build \
     -trimpath \
     -ldflags="-s -w" \
-    -o /out/skyacs \
+    -o /out/acs \
     ./cmd/server
 
 
@@ -50,23 +50,23 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata
 
-RUN addgroup -S -g 10001 skyacs && \
-    adduser -S -D -H -u 10001 -G skyacs skyacs
+RUN addgroup -S -g 10001 acs && \
+    adduser -S -D -H -u 10001 -G acs acs
 
 WORKDIR /app
 
-COPY --from=backend-builder /out/skyacs /app/skyacs
+COPY --from=backend-builder /out/acs /app/acs
 
-RUN mkdir -p /var/lib/skyacs/firmware /var/lib/skyacs/template-images && \
-    chown -R skyacs:skyacs /var/lib/skyacs
+RUN mkdir -p /var/lib/acs/firmware /var/lib/acs/template-images && \
+    chown -R acs:acs /var/lib/acs
 
-USER skyacs
+USER acs
 
 ENV PORT=7547 \
     API_PORT=7548 \
     CWMP_BIND_ADDR=0.0.0.0 \
     API_BIND_ADDR=0.0.0.0 \
-    FIRMWARE_UPLOAD_DIR=/var/lib/skyacs/firmware
+    FIRMWARE_UPLOAD_DIR=/var/lib/acs/firmware
 
 EXPOSE 7547 7548
 
@@ -77,7 +77,7 @@ HEALTHCHECK \
     --retries=5 \
     CMD wget -q -O /dev/null http://127.0.0.1:7548/health || exit 1
 
-ENTRYPOINT ["/app/skyacs"]
+ENTRYPOINT ["/app/acs"]
 
 
 # ------------------------------------------------------------

@@ -5,7 +5,6 @@ import { LineChart, BarChart, ScatterChart, EffectScatterChart, CandlestickChart
 import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { api, type MetricDefinition } from '../lib/api';
-import { readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
 import { thresholdLines, effectiveUnit } from '../lib/health';
 import { isTimeSeriesType } from '../lib/echartsTypes';
 
@@ -35,7 +34,7 @@ const BUCKET_OPTIONS: Array<{ label: string; value: string; hours: number }> = [
 
 const getStoredBucket = (serial: string): typeof BUCKET_OPTIONS[number] => {
   try {
-    const stored = readMigratedStorageValue(localStorage, `acs_metric_interval_${serial}`, `skyacs_metric_interval_${serial}`);
+    const stored = localStorage.getItem(`acs_metric_interval_${serial}`);
     if (stored) {
       const found = BUCKET_OPTIONS.find((o) => o.label === stored);
       if (found) return found;
@@ -378,7 +377,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
 
   const handleBucketChange = (opt: typeof BUCKET_OPTIONS[number]) => {
     setBucket(opt);
-    writeMigratedStorageValue(localStorage, `acs_metric_interval_${props.serial}`, `skyacs_metric_interval_${props.serial}`, opt.label);
+    localStorage.setItem(`acs_metric_interval_${props.serial}`, opt.label);
   };
 
   return (

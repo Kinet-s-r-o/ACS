@@ -13,7 +13,7 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
-import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime, formatRelativeTime } from '../lib/dateTime';
 import { formatUptime } from '../lib/health';
 import WANInterfaces from './WANInterfaces';
@@ -40,7 +40,6 @@ const defaultColumns: ColumnConfig[] = [
 ];
 
 const STORAGE_KEY = 'acs_device_columns';
-const LEGACY_STORAGE_KEY = 'skyacs_device_columns';
 const previousDefaultColumnOrder = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'rx_power', 'uptime', 'ppp_username', 'status', 'last_inform', 'tags'];
 
 const TableSkeleton: Component<{ cols: number }> = (props) => (
@@ -79,7 +78,7 @@ const Devices: Component = () => {
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
 
   onMount(() => {
-    const saved = readMigratedStorageValue(localStorage, STORAGE_KEY, LEGACY_STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -101,7 +100,7 @@ const Devices: Component = () => {
   createEffect(() => {
     const cols = columns();
     if (cols.length > 0) {
-      writeMigratedStorageValue(localStorage, STORAGE_KEY, LEGACY_STORAGE_KEY, JSON.stringify(cols));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cols));
     }
   });
 

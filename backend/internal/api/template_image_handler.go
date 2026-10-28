@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 func (r *Router) templateImageURL(template *models.ProvisioningTemplate) {

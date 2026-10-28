@@ -26,7 +26,7 @@ import LanSettingsModal from '../components/LanSettingsModal';
 import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
 import DeviceTagPicker from '../components/DeviceTagPicker';
-import { createPersistedJsonSignal, createPersistedSignal, readMigratedStorageValue, writeMigratedStorageValue } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { formatDateTime } from '../lib/dateTime';
@@ -39,7 +39,6 @@ interface HostColumnConfig {
 }
 
 const HOST_COLUMNS_STORAGE_KEY = 'acs_connected_hosts_columns';
-const LEGACY_HOST_COLUMNS_STORAGE_KEY = 'skyacs_connected_hosts_columns';
 const defaultHostColumns: HostColumnConfig[] = [
   { id: 'hostname', label: 'Hostname', visible: true },
   { id: 'ip', label: 'IP address', visible: true },
@@ -89,7 +88,6 @@ const IPPING_ROOTS = ['InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Dia
 const TRACEROUTE_ROOTS = ['InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'];
 
 const PARAM_COLUMNS_STORAGE_KEY = 'acs_all_params_columns';
-const LEGACY_PARAM_COLUMNS_STORAGE_KEY = 'skyacs_all_params_columns';
 const defaultParamColumns: ParamColumnConfig[] = [
   { id: 'object', label: 'Object', visible: false },
   { id: 'name', label: 'Name', visible: true },
@@ -666,7 +664,7 @@ const DeviceDetail: Component = () => {
   });
 
   onMount(() => {
-    const saved = readMigratedStorageValue(localStorage, HOST_COLUMNS_STORAGE_KEY, LEGACY_HOST_COLUMNS_STORAGE_KEY);
+    const saved = localStorage.getItem(HOST_COLUMNS_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as HostColumnConfig[];
@@ -715,12 +713,12 @@ const DeviceDetail: Component = () => {
   createEffect(() => {
     const columns = hostColumns();
     if (columns.length > 0) {
-      writeMigratedStorageValue(localStorage, HOST_COLUMNS_STORAGE_KEY, LEGACY_HOST_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
+      localStorage.setItem(HOST_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
     }
   });
 
   onMount(() => {
-    const saved = readMigratedStorageValue(localStorage, PARAM_COLUMNS_STORAGE_KEY, LEGACY_PARAM_COLUMNS_STORAGE_KEY);
+    const saved = localStorage.getItem(PARAM_COLUMNS_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ParamColumnConfig[];
@@ -739,7 +737,7 @@ const DeviceDetail: Component = () => {
   createEffect(() => {
     const columns = paramColumns();
     if (columns.length > 0) {
-      writeMigratedStorageValue(localStorage, PARAM_COLUMNS_STORAGE_KEY, LEGACY_PARAM_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
+      localStorage.setItem(PARAM_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
     }
   });
 

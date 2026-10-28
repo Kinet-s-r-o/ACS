@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/database"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/database"
+	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -1459,7 +1459,7 @@ func newSessionKey() string {
 func newMessageID() string {
 	value := make([]byte, 12)
 	if _, err := rand.Read(value); err != nil {
-		return fmt.Sprintf("skyacs-%d", time.Now().UnixNano())
+		return fmt.Sprintf("acs-%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(value)
 }

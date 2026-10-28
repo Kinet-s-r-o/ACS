@@ -4,7 +4,7 @@
 
 <p><strong>Independent TR-069/CWMP control plane for managed CPE fleets</strong></p>
 
-[![Version](https://img.shields.io/badge/version-2.0.0-0EA5E9?style=for-the-badge)](https://github.com/skydashnet/SKYACS)
+[![Version](https://img.shields.io/badge/version-2.0.0-0EA5E9?style=for-the-badge)](https://github.com/matrix8412/ACS)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-24%20LTS-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -75,15 +75,15 @@ Console changes follow the documented [ACS UI/UX standard](docs/ui-ux-standard.m
 ### One-command installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/skydashnet/SKYACS/v2.0.0/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/matrix8412/ACS/v2.0.0/install.sh | sudo bash
 ```
 
-The bootstrap installer downloads the immutable `v2.0.0` source archive into `/opt/skyacs`, creates a dedicated `skyacs` service account, installs verified Go and Node.js runtimes, provisions PostgreSQL, generates application secrets, builds the production artifacts, and configures the hardened `skyacs` systemd unit behind Nginx on port `8080`.
+The bootstrap installer downloads the immutable `v2.0.0` source archive into `/opt/acs`, creates a dedicated `acs` service account, installs verified Go and Node.js runtimes, provisions PostgreSQL, generates application secrets, builds the production artifacts, and configures the hardened `acs` systemd unit behind Nginx on port `8080`.
 
 To inspect the installer before running it:
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/skydashnet/SKYACS/v2.0.0/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/matrix8412/ACS/v2.0.0/install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -91,7 +91,7 @@ sudo bash install.sh
 The bootstrap password is printed once by the backend and can be retrieved from the initial service logs:
 
 ```bash
-sudo journalctl -u skyacs -n 50 --no-pager
+sudo journalctl -u acs -n 50 --no-pager
 ```
 
 Supported operating systems and their distribution-provided PostgreSQL versions:
@@ -131,7 +131,7 @@ For a deployment without Coolify, use the standalone Compose stack in
 `docker-compose.yml`. It runs PostgreSQL, the ACS backend, the web container, and a
 Traefik reverse proxy. Traefik publishes ports 80 and 443, obtains the web and
 CWMP certificates through the HTTP-01 Let's Encrypt challenge, and stores the
-renewable ACME state in the `skyacs-traefik-letsencrypt` volume.
+renewable ACME state in the `acs-traefik-letsencrypt` volume.
 
 Copy the dedicated deployment settings file and set public DNS names that point
 to the server:
@@ -173,8 +173,8 @@ PARAMETER_ENCRYPTION_KEY=<minimum-32-random-characters>
 
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=skyacs
-DB_USER=skyacs
+DB_NAME=acs
+DB_USER=acs
 DB_PASSWORD=<database-password>
 DB_MAX_OPEN_CONNS=50
 DB_MAX_IDLE_CONNS=10
@@ -187,8 +187,8 @@ CWMP_PASSWORD=
 CWMP_ALLOWED_CIDRS=10.0.0.0/8,192.0.2.0/24
 CWMP_TRUSTED_PROXY_CIDRS=127.0.0.1/32
 CONNECTION_REQUEST_ALLOWED_CIDRS=10.0.0.0/8,192.0.2.0/24
-FIRMWARE_UPLOAD_DIR=/var/lib/skyacs/firmware
-TEMPLATE_IMAGE_UPLOAD_DIR=/var/lib/skyacs/template-images
+FIRMWARE_UPLOAD_DIR=/var/lib/acs/firmware
+TEMPLATE_IMAGE_UPLOAD_DIR=/var/lib/acs/template-images
 ALLOW_INSECURE_FIRMWARE_URL=false
 ```
 
@@ -227,8 +227,8 @@ Before deploying the ACS into an operational network:
 Example single-node backup:
 
 ```bash
-sudo -u postgres pg_dump -Fc skyacs > skyacs-$(date +%F).dump
-sudo tar -C /var/lib/skyacs -czf skyacs-firmware-$(date +%F).tar.gz firmware
+sudo -u postgres pg_dump -Fc acs > acs-$(date +%F).dump
+sudo tar -C /var/lib/acs -czf acs-firmware-$(date +%F).tar.gz firmware
 ```
 
 ACS currently operates as a **single-node control plane**. Local firmware storage and the in-process scheduler are not designed for active-active or high-availability deployments. Run one backend instance per database. The project remains in beta until a public vendor interoperability matrix and fleet load-test results are available.

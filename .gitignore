@@ -3,10 +3,10 @@
 .env.local
 .env.*.local
 .env.docker
-.skyacs.env
+.acs.env
 
 # Backend
-backend/skyacs
+backend/acs
 backend/tmp/
 *.exe
 *.exe~

@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/skydashnet/skyacs/internal/database"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/database"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 var variableTokenPattern = regexp.MustCompile(`\{\{([A-Za-z][A-Za-z0-9_]*)\}\}`)

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 // SessionState track current state of a CWMP session

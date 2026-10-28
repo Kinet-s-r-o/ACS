@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/skydashnet/skyacs/internal/auth"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/auth"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 var featureKeyPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)

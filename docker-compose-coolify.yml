@@ -1,22 +1,22 @@
 services:
 
-  skyacs-postgres:
+  acs-postgres:
     image: timescale/timescaledb:latest-pg17
     restart: unless-stopped
     command: postgres -c shared_preload_libraries=timescaledb
 
     environment:
-      POSTGRES_DB: skyacs
-      POSTGRES_USER: skyacs
+      POSTGRES_DB: acs
+      POSTGRES_USER: acs
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
 
     volumes:
-      - skyacs-postgres:/var/lib/postgresql/data
+      - acs-postgres:/var/lib/postgresql/data
 
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U skyacs -d skyacs
+        - pg_isready -U acs -d acs
       interval: 10s
       timeout: 5s
       retries: 10
@@ -26,7 +26,7 @@ services:
       - backend
 
 
-  skyacs:
+  acs:
     build:
       context: .
       dockerfile: Dockerfile
@@ -43,10 +43,10 @@ services:
       CWMP_BIND_ADDR: 0.0.0.0
       API_BIND_ADDR: 0.0.0.0
 
-      DB_HOST: skyacs-postgres
+      DB_HOST: acs-postgres
       DB_PORT: "5432"
-      DB_NAME: skyacs
-      DB_USER: skyacs
+      DB_NAME: acs
+      DB_USER: acs
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
 
       # PostgreSQL runs inside the private Docker network.
@@ -55,12 +55,12 @@ services:
       DB_MAX_OPEN_CONNS: "50"
       DB_MAX_IDLE_CONNS: "10"
 
-      JWT_SECRET: ${JWT_SECRET}
-      PARAMETER_ENCRYPTION_KEY: ${PARAMETER_ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PARAMETER_ENCRYPTION_KEY: ${PARAMETER_ENCRYPTION_KEY:?PARAMETER_ENCRYPTION_KEY is required}
 
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
 
-      CORS_ALLOWED_ORIGINS: ${ACS_PUBLIC_URL:-${SKYACS_PUBLIC_URL:?Set ACS_PUBLIC_URL}}
+      CORS_ALLOWED_ORIGINS: ${ACS_PUBLIC_URL:?ACS_PUBLIC_URL is required}
 
       # The backend is reachable only through the internal
       # nginx container. Docker bridge networks normally use this range.
@@ -74,13 +74,13 @@ services:
 
       CONNECTION_REQUEST_ALLOWED_CIDRS: ${CONNECTION_REQUEST_ALLOWED_CIDRS:-}
 
-      FIRMWARE_UPLOAD_DIR: /var/lib/skyacs/firmware
-      TEMPLATE_IMAGE_UPLOAD_DIR: /var/lib/skyacs/template-images
+      FIRMWARE_UPLOAD_DIR: /var/lib/acs/firmware
+      TEMPLATE_IMAGE_UPLOAD_DIR: /var/lib/acs/template-images
       ALLOW_INSECURE_FIRMWARE_URL: "false"
 
     volumes:
-      - skyacs-firmware:/var/lib/skyacs/firmware
-      - skyacs-template-images:/var/lib/skyacs/template-images
+      - acs-firmware:/var/lib/acs/firmware
+      - acs-template-images:/var/lib/acs/template-images
 
     expose:
       - "7547"
@@ -99,7 +99,7 @@ services:
       start_period: 20s
 
     depends_on:
-      skyacs-postgres:
+      acs-postgres:
         condition: service_healthy
 
     networks:
@@ -119,7 +119,7 @@ services:
       - "7547"
 
     depends_on:
-      skyacs:
+      acs:
         condition: service_healthy
 
     networks:
@@ -129,11 +129,11 @@ services:
 
 volumes:
 
-  skyacs-postgres:
+  acs-postgres:
 
-  skyacs-firmware:
+  acs-firmware:
 
-  skyacs-template-images:
+  acs-template-images:
 
 
 networks:

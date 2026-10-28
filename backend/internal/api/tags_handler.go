@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/skydashnet/skyacs/internal/database"
-	"github.com/skydashnet/skyacs/internal/models"
+	"github.com/matrix8412/acs/internal/database"
+	"github.com/matrix8412/acs/internal/models"
 )
 
 var tagColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
