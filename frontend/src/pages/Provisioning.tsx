@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
+import { Activity, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -142,6 +142,7 @@ const Provisioning: Component = () => {
   const [editingFeatureID, setEditingFeatureID] = createSignal<string | null>(null);
   const [featureDraft, setFeatureDraft] = createSignal<ProvisioningFeature>({ id: '', name: '', description: '', controls: [] });
   const [featureInitialSnapshot, setFeatureInitialSnapshot] = createSignal('');
+  const [featureDraggedSection, setFeatureDraggedSection] = createSignal<string | null>(null);
   const [featureDraggedControl, setFeatureDraggedControl] = createSignal<string | null>(null);
   const [featureEditorDraggedControl, setFeatureEditorDraggedControl] = createSignal<string | null>(null);
   const emptyControlDraft = (): FeatureControlDraft => ({ key: '', label: '', type: 'string', parameter: '', optionsText: '', objectFieldsText: '', enabled_value: '1', disabled_value: '0', group: '', description: '' });
@@ -763,6 +764,37 @@ const Provisioning: Component = () => {
     }
   };
 
+  const reorderFeatureSection = async (targetID: string) => {
+    const sourceID = featureDraggedSection();
+    setFeatureDraggedSection(null);
+    if (!sourceID || sourceID === targetID || featuresSaving()) return;
+    const features = [...(selectedTemplate()?.features || [])];
+    const sourceIndex = features.findIndex(feature => feature.id === sourceID);
+    const targetIndex = features.findIndex(feature => feature.id === targetID);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const [moved] = features.splice(sourceIndex, 1);
+    features.splice(targetIndex, 0, moved);
+    if (await saveTemplateFeatures(features)) {
+      setActiveFeatureID(sourceID);
+      notify({ tone: 'success', title: 'Feature sections reordered' });
+    }
+  };
+
+  const moveActiveFeatureSection = async (direction: -1 | 1) => {
+    if (featuresSaving()) return;
+    const features = [...(selectedTemplate()?.features || [])];
+    const sourceID = activeFeature()?.id;
+    if (!sourceID) return;
+    const sourceIndex = features.findIndex(feature => feature.id === sourceID);
+    const targetIndex = sourceIndex + direction;
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= features.length) return;
+    [features[sourceIndex], features[targetIndex]] = [features[targetIndex], features[sourceIndex]];
+    if (await saveTemplateFeatures(features)) {
+      setActiveFeatureID(sourceID);
+      notify({ tone: 'success', title: 'Feature sections reordered' });
+    }
+  };
+
   const reorderFeatureDraftControl = (targetKey: string) => {
     const sourceKey = featureEditorDraggedControl();
     setFeatureEditorDraggedControl(null);
@@ -1149,11 +1181,19 @@ const Provisioning: Component = () => {
             <div class="space-y-4">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
-                <button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
+                <div class="flex items-center gap-2">
+                  <Show when={(selectedTemplate()?.features?.length || 0) > 1}>
+                    <div class="inline-flex items-center gap-1" role="group" aria-label="Reorder active feature section">
+                      <button type="button" class="icon-button" aria-label="Move active feature section left" title="Move section left" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[0]?.id} onClick={() => void moveActiveFeatureSection(-1)}><ChevronLeft size={14} /></button>
+                      <button type="button" class="icon-button" aria-label="Move active feature section right" title="Move section right" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[(selectedTemplate()?.features?.length || 1) - 1]?.id} onClick={() => void moveActiveFeatureSection(1)}><ChevronRight size={14} /></button>
+                    </div>
+                  </Show>
+                  <button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
+                </div>
               </div>
               <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No feature sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." />}>
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Feature sections">
-                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For>
+                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" draggable={!featuresSaving()} aria-label={`Feature section ${feature.name}. Drag to reorder.`} aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} onDragStart={event => { setFeatureDraggedSection(feature.id); event.dataTransfer?.setData('text/plain', feature.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureSection(feature.id); }} onDragEnd={() => setFeatureDraggedSection(null)} class={`flex shrink-0 items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'} ${featureDraggedSection() === feature.id ? 'opacity-50' : ''}`}><GripVertical size={12} aria-hidden="true" />{feature.name}</button>}</For>
                 </div>
                 <Show when={activeFeature()}>{feature => <section class="card p-4 space-y-4">
                   <div class="flex flex-wrap items-start justify-between gap-3">
