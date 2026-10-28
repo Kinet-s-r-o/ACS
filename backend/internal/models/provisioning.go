@@ -8,6 +8,7 @@ type ProvisioningTemplate struct {
 	Manufacturer string                 `json:"manufacturer" gorm:"size:128;default:''"`
 	ProductClass string                 `json:"product_class" gorm:"size:128;default:''"`
 	Description  string                 `json:"description,omitempty"`
+	Inventory    TemplateInventory      `json:"inventory" gorm:"type:jsonb;serializer:json"`
 	Variables    []ProvisioningVariable `json:"variables" gorm:"type:jsonb;serializer:json"`
 	Features     []ProvisioningFeature  `json:"features" gorm:"type:jsonb;serializer:json"`
 	ImagePath    string                 `json:"-" gorm:"size:512;default:''"`
@@ -15,6 +16,14 @@ type ProvisioningTemplate struct {
 	ImageURL     string                 `json:"image_url,omitempty" gorm:"-"`
 	CreatedAt    time.Time              `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt    time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+// TemplateInventory controls how device-level values are presented in the
+// operator console. It does not change CWMP connection or provisioning.
+type TemplateInventory struct {
+	PrimaryIPMode          string `json:"primary_ip_mode,omitempty"`
+	PrimaryIPParameter     string `json:"primary_ip_parameter,omitempty"`
+	PrimaryIPInterfaceName string `json:"primary_ip_interface_name,omitempty"`
 }
 
 type ProvisioningFeature struct {
@@ -122,6 +131,7 @@ type CreateProvisioningTemplateRequest struct {
 	Manufacturer string                 `json:"manufacturer"`
 	ProductClass string                 `json:"product_class"`
 	Description  string                 `json:"description"`
+	Inventory    *TemplateInventory     `json:"inventory,omitempty"`
 	Variables    []ProvisioningVariable `json:"variables"`
 }
 

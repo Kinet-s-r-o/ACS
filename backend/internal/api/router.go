@@ -374,11 +374,44 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	templates, templateErr := r.provisioningRepo.ListTemplates(req.Context())
+	if templateErr != nil {
+		log.Printf("Error loading provisioning templates for device IP selection: %v", templateErr)
+		templates = nil
+	}
 	devices, total, err := r.deviceRepo.List(req.Context(), limit, offset)
 	if err != nil {
 		log.Printf("Error listing devices: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list devices")
 		return
+	}
+	if templateErr == nil {
+		for _, device := range devices {
+			manufacturer, productClass := "", ""
+			if device.Manufacturer != nil {
+				manufacturer = *device.Manufacturer
+			}
+			if device.ProductClass != nil {
+				productClass = *device.ProductClass
+			}
+			if template := database.SelectProvisioningTemplate(templates, manufacturer, productClass); template != nil {
+				fallback := ""
+				if device.IPAddress != nil {
+					fallback = *device.IPAddress
+				}
+				selected := database.SelectPrimaryIPAddress(device.Parameters, template.Inventory, fallback)
+				if selected == "" {
+					device.IPAddress = nil
+				} else {
+					device.IPAddress = &selected
+				}
+			}
+		}
+	}
+	for _, device := range devices {
+		// Keep the list response limited to the overview fields. WAN
+		// parameters are only loaded server-side to resolve the selected IP.
+		device.Parameters = filterOverviewParameters(device.Parameters)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -387,6 +420,16 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		"limit":   limit,
 		"offset":  offset,
 	})
+}
+
+func filterOverviewParameters(parameters []models.DeviceParameter) []models.DeviceParameter {
+	filtered := make([]models.DeviceParameter, 0, len(parameters))
+	for _, parameter := range parameters {
+		if strings.Contains(parameter.Name, "RXPower") || parameter.Name == "InternetGatewayDevice.DeviceInfo.UpTime" {
+			filtered = append(filtered, parameter)
+		}
+	}
+	return filtered
 }
 
 func (r *Router) handleListWANInterfaces(w http.ResponseWriter, req *http.Request) {
@@ -3662,12 +3705,21 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, "product_class exceeds 128 characters")
 		return
 	}
+	inventory := models.TemplateInventory{}
+	if body.Inventory != nil {
+		inventory = *body.Inventory
+	}
+	if err := validateTemplateInventory(&inventory); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
 		Name:         strings.TrimSpace(body.Name),
 		Manufacturer: strings.ToLower(strings.TrimSpace(body.Manufacturer)),
 		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
 		Description:  strings.TrimSpace(body.Description),
+		Inventory:    inventory,
 		Variables:    body.Variables,
 	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
@@ -3729,6 +3781,14 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusNotFound, "Template not found")
 		return
 	}
+	inventory := previous.Inventory
+	if body.Inventory != nil {
+		inventory = *body.Inventory
+	}
+	if err := validateTemplateInventory(&inventory); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
 		ID:           id,
@@ -3736,6 +3796,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Manufacturer: strings.ToLower(strings.TrimSpace(body.Manufacturer)),
 		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
 		Description:  strings.TrimSpace(body.Description),
+		Inventory:    inventory,
 		Variables:    body.Variables,
 	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, previous.Variables); err != nil {
@@ -3789,6 +3850,36 @@ func (r *Router) handleDeleteProvisioningTemplate(w http.ResponseWriter, req *ht
 		}
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func validateTemplateInventory(settings *models.TemplateInventory) error {
+	if settings == nil {
+		return nil
+	}
+	settings.PrimaryIPMode = strings.TrimSpace(settings.PrimaryIPMode)
+	settings.PrimaryIPParameter = strings.TrimSpace(settings.PrimaryIPParameter)
+	settings.PrimaryIPInterfaceName = strings.TrimSpace(settings.PrimaryIPInterfaceName)
+	if settings.PrimaryIPMode == "" {
+		settings.PrimaryIPMode = "automatic"
+	}
+	switch settings.PrimaryIPMode {
+	case "automatic":
+		settings.PrimaryIPParameter = ""
+		settings.PrimaryIPInterfaceName = ""
+	case "parameter":
+		if err := validateParameterNames([]string{settings.PrimaryIPParameter}); err != nil {
+			return fmt.Errorf("primary IP parameter is invalid: %w", err)
+		}
+		settings.PrimaryIPInterfaceName = ""
+	case "interface_name":
+		if settings.PrimaryIPInterfaceName == "" || len(settings.PrimaryIPInterfaceName) > 256 || strings.ContainsAny(settings.PrimaryIPInterfaceName, "\r\n\x00") {
+			return errors.New("primary IP interface name is required and must be under 256 characters")
+		}
+		settings.PrimaryIPParameter = ""
+	default:
+		return fmt.Errorf("unsupported primary IP mode %q", settings.PrimaryIPMode)
+	}
+	return nil
 }
 
 func validateProvisioningVariables(variables []models.ProvisioningVariable) error {

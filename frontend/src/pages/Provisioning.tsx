@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
 import { Activity, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X, ChevronLeft } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform } from '../lib/api';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -61,6 +61,7 @@ const featureTableColumns = [
   { id: 'input', label: 'Input', visible: true },
   { id: 'group', label: 'Collapsible box', visible: true },
 ];
+const defaultTemplateInventory = (): TemplateInventory => ({ primary_ip_mode: 'automatic', primary_ip_parameter: '', primary_ip_interface_name: '' });
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
 const LEGACY_PROV_STORAGE_KEY = 'skyacs-prov-columns';
@@ -127,7 +128,7 @@ const Provisioning: Component = () => {
   const [showTemplateModal, setShowTemplateModal] = createSignal(false);
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
-  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '' });
+  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory() });
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
@@ -611,7 +612,7 @@ const Provisioning: Component = () => {
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setCloningTemplate(null);
-    const next = { name: '', manufacturer: '', product_class: '', description: '' };
+    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory() };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -621,7 +622,7 @@ const Provisioning: Component = () => {
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setCloningTemplate(null);
     setEditingTemplate(t);
-    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '' };
+    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) } };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     void loadTemplateImage(t);
@@ -631,7 +632,7 @@ const Provisioning: Component = () => {
   const openCloneTemplate = (template: ProvisioningTemplate) => {
     setEditingTemplate(null);
     setCloningTemplate(template);
-    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '' };
+    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) } };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -644,7 +645,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('create-template');
     try {
-      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim() });
+      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
       notify({ tone: 'success', title: 'Template created', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -659,7 +660,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('clone-template');
     try {
-      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim() });
+      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
       notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, features, variables, and device photo.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
@@ -678,7 +679,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('update-template');
     try {
-      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim() });
+      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
       notify({ tone: 'success', title: 'Template updated', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -1602,6 +1603,30 @@ const Provisioning: Component = () => {
               <label for="template-product-class" class="block text-xs text-muted mb-1.5">Product class (optional)</label>
               <input id="template-product-class" type="text" value={templateForm().product_class} onInput={(e) => setTemplateForm(f => ({ ...f, product_class: e.currentTarget.value }))} class="input w-full" placeholder="Leave empty to match all product classes" />
             </div>
+            <fieldset class="space-y-3 rounded border border-subtle p-3">
+              <legend class="px-1 text-xs font-medium text-secondary">Inventory display</legend>
+              <p class="text-xs text-muted">Choose which IP address appears in the CPE inventory. This does not change CWMP or connection-request settings.</p>
+              <div>
+                <label for="template-primary-ip-mode" class="block text-xs text-muted mb-1.5">Primary IP selection</label>
+                <select id="template-primary-ip-mode" class="input w-full" value={templateForm().inventory.primary_ip_mode || 'automatic'} onChange={(e) => setTemplateForm(f => ({ ...f, inventory: { ...f.inventory, primary_ip_mode: e.currentTarget.value as TemplateInventory['primary_ip_mode'], primary_ip_parameter: '', primary_ip_interface_name: '' } }))}>
+                  <option value="automatic">Automatic fallback</option>
+                  <option value="parameter">Exact CWMP parameter</option>
+                  <option value="interface_name">WAN interface Name</option>
+                </select>
+              </div>
+              <Show when={templateForm().inventory.primary_ip_mode === 'parameter'}>
+                <div>
+                  <label for="template-primary-ip-parameter" class="block text-xs text-muted mb-1.5">CWMP parameter path</label>
+                  <input id="template-primary-ip-parameter" type="text" value={templateForm().inventory.primary_ip_parameter || ''} onInput={(e) => setTemplateForm(f => ({ ...f, inventory: { ...f.inventory, primary_ip_parameter: e.currentTarget.value } }))} class="input w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress" />
+                </div>
+              </Show>
+              <Show when={templateForm().inventory.primary_ip_mode === 'interface_name'}>
+                <div>
+                  <label for="template-primary-ip-interface-name" class="block text-xs text-muted mb-1.5">WAN interface Name value</label>
+                  <input id="template-primary-ip-interface-name" type="text" value={templateForm().inventory.primary_ip_interface_name || ''} onInput={(e) => setTemplateForm(f => ({ ...f, inventory: { ...f.inventory, primary_ip_interface_name: e.currentTarget.value } }))} class="input w-full" placeholder="Internet" />
+                </div>
+              </Show>
+            </fieldset>
             <div>
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
               <input id="template-description" type="text" value={templateForm().description} onInput={(e) => setTemplateForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="e.g. Rules for SkyDash AC1000 devices" />

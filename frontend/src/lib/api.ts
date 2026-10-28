@@ -48,10 +48,11 @@ export interface TagDefinition { id: string; name: string; color: string; descri
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string>; key_configured?: boolean }
 export interface ProvisioningVariable { name: string; source: string; value?: string; steps: ProvisioningTransform[] }
+export interface TemplateInventory { primary_ip_mode?: 'automatic' | 'parameter' | 'interface_name'; primary_ip_parameter?: string; primary_ip_interface_name?: string }
 export interface ProvisioningObjectField { name: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; help?: string; options?: string[]; option_labels?: Record<string, string>; enabled_value?: string; disabled_value?: string }
 export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt' | 'object'; parameter: string; options?: string[]; enabled_value?: string; disabled_value?: string; group?: string; description?: string; object_fields?: ProvisioningObjectField[] }
 export interface ProvisioningFeature { id: string; name: string; description?: string; controls: ProvisioningFeatureControl[] }
-export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }
+export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; inventory?: TemplateInventory; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; excluded_tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
@@ -210,9 +211,9 @@ export const api = {
   toggleProvisioningRule: (id: number, enabled: boolean) => request<{ status: string }>(`/provisioning/${id}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) }),
   reorderProvisioningRules: (templateId: number, ids: number[]) => request<{ status: string }>('/provisioning/reorder', { method: 'POST', body: JSON.stringify({ template_id: templateId, ids }) }),
   getProvisioningTemplates: () => request<ProvisioningTemplate[]>('/provisioning/templates'),
-  createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
-  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
-  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
+  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
+  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
   getProvisioningTemplateImage: (id: number) => requestBlob(`/provisioning/templates/${id}/image`),
   uploadProvisioningTemplateImage: (id: number, file: File) => {

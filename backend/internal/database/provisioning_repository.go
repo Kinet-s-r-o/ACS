@@ -105,6 +105,24 @@ func (r *ProvisioningRepository) ResolveTemplateForDevice(ctx context.Context, m
 	return &template, nil
 }
 
+// SelectProvisioningTemplate resolves the most specific matching template
+// from an already loaded list, using the same precedence as the database
+// resolver while avoiding one query per device in inventory responses.
+func SelectProvisioningTemplate(templates []*models.ProvisioningTemplate, manufacturer, productClass string) *models.ProvisioningTemplate {
+	manufacturer = strings.ToLower(strings.TrimSpace(manufacturer))
+	productClass = strings.ToLower(strings.TrimSpace(productClass))
+	var selected *models.ProvisioningTemplate
+	for _, template := range templates {
+		if template == nil || (template.Manufacturer != "" && !strings.EqualFold(template.Manufacturer, manufacturer)) || (template.ProductClass != "" && !strings.EqualFold(template.ProductClass, productClass)) {
+			continue
+		}
+		if selected == nil || template.SpecificityScore() > selected.SpecificityScore() || (template.SpecificityScore() == selected.SpecificityScore() && template.ID < selected.ID) {
+			selected = template
+		}
+	}
+	return selected
+}
+
 // ── Rule CRUD ────────────────────────────────────────────────────────────────
 
 func (r *ProvisioningRepository) Create(ctx context.Context, rule *models.ProvisioningRule) error {

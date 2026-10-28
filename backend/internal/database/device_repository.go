@@ -106,7 +106,7 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 
 	var devices []*models.Device
 	err := r.db.WithContext(ctx).
-		Preload("Parameters", "name LIKE ? OR name = ?", "%RXPower%", "InternetGatewayDevice.DeviceInfo.UpTime").
+		Preload("Parameters", "name LIKE ? OR name LIKE ? OR name LIKE ? OR name = ?", "%RXPower%", "InternetGatewayDevice.WANDevice.%", "Device.IP.%", "InternetGatewayDevice.DeviceInfo.UpTime").
 		Order("last_inform DESC NULLS LAST").
 		Limit(limit).
 		Offset(offset).
@@ -116,6 +116,44 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 	}
 
 	return devices, int(total), nil
+}
+
+// SelectPrimaryIPAddress applies the per-template inventory preference. The
+// fallback is the legacy device-level IP stored from the most recent CWMP
+// exchange, so existing templates remain backwards compatible.
+func SelectPrimaryIPAddress(parameters []models.DeviceParameter, settings models.TemplateInventory, fallback string) string {
+	values := make(map[string]string, len(parameters))
+	for _, parameter := range parameters {
+		if parameter.Value != "" {
+			values[parameter.Name] = parameter.Value
+		}
+	}
+
+	switch settings.PrimaryIPMode {
+	case "parameter":
+		if value := values[settings.PrimaryIPParameter]; value != "" {
+			return value
+		}
+	case "interface_name":
+		paths := make([]string, 0)
+		for name, value := range values {
+			match := wanInterfacePathPattern.FindStringSubmatch(name)
+			if len(match) == 0 || value != settings.PrimaryIPInterfaceName || !strings.HasSuffix(name, ".Name") {
+				continue
+			}
+			paths = append(paths, fmt.Sprintf("InternetGatewayDevice.WANDevice.%s.WANConnectionDevice.%s.%s.%s.", match[1], match[2], match[3], match[4]))
+		}
+		sort.Strings(paths)
+		for _, path := range paths {
+			for _, suffix := range []string{"ExternalIPAddress", "IPAddress"} {
+				if value := values[path+suffix]; value != "" {
+					return value
+				}
+			}
+		}
+	}
+
+	return fallback
 }
 
 var wanInterfacePathPattern = regexp.MustCompile(`^InternetGatewayDevice\.WANDevice\.(\d+)\.WANConnectionDevice\.(\d+)\.(WANPPPConnection|WANIPConnection)\.(\d+)(?:\.|$)`)

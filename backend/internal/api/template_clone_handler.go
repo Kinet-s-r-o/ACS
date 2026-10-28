@@ -27,10 +27,11 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		return
 	}
 	var body struct {
-		Name         string `json:"name"`
-		Manufacturer string `json:"manufacturer"`
-		ProductClass string `json:"product_class"`
-		Description  string `json:"description"`
+		Name         string                    `json:"name"`
+		Manufacturer string                    `json:"manufacturer"`
+		ProductClass string                    `json:"product_class"`
+		Description  string                    `json:"description"`
+		Inventory    *models.TemplateInventory `json:"inventory,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -55,9 +56,17 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		}
 		return
 	}
+	inventory := source.Inventory
+	if body.Inventory != nil {
+		inventory = *body.Inventory
+	}
+	if err := validateTemplateInventory(&inventory); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	clone := models.ProvisioningTemplate{
 		Name: body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
-		Description: body.Description, Variables: source.Variables, Features: source.Features,
+		Description: body.Description, Inventory: inventory, Variables: source.Variables, Features: source.Features,
 	}
 	targetMetricScope := templateMetricScope(clone.Manufacturer, clone.ProductClass)
 	imageCopyPath := ""

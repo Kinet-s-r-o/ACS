@@ -29,6 +29,7 @@ type provisioningTransferTemplate struct {
 	Manufacturer string                        `json:"manufacturer"`
 	ProductClass string                        `json:"product_class"`
 	Description  string                        `json:"description,omitempty"`
+	Inventory    models.TemplateInventory      `json:"inventory,omitempty"`
 	Variables    []models.ProvisioningVariable `json:"variables,omitempty"`
 	Features     []models.ProvisioningFeature  `json:"features,omitempty"`
 	Rules        []models.ProvisioningRule     `json:"rules,omitempty"`
@@ -61,7 +62,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 	for _, template := range templates {
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
-			Description: template.Description, Variables: template.Variables, Features: template.Features,
+			Description: template.Description, Inventory: template.Inventory, Variables: template.Variables, Features: template.Features,
 		}
 		rules, err := r.provisioningRepo.ListForTemplate(req.Context(), template.ID)
 		if err != nil {
@@ -161,7 +162,7 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 			}
 			template := models.ProvisioningTemplate{
 				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
-				Description: item.Description, Variables: item.Variables, Features: item.Features,
+				Description: item.Description, Inventory: item.Inventory, Variables: item.Variables, Features: item.Features,
 			}
 			if err := tx.Create(&template).Error; err != nil {
 				return err
@@ -209,6 +210,9 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 	item.Description = strings.TrimSpace(item.Description)
 	if item.Name == "" || len(item.Name) > 256 || len(item.Manufacturer) > 128 || len(item.ProductClass) > 128 || len(item.Description) > 512 {
 		return errors.New("invalid template identity or description")
+	}
+	if err := validateTemplateInventory(&item.Inventory); err != nil {
+		return err
 	}
 	if err := validateProvisioningVariables(item.Variables); err != nil {
 		return err
