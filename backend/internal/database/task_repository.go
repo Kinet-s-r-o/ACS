@@ -22,17 +22,18 @@ type TaskWithDevice struct {
 }
 
 type TaskListItem struct {
-	ID           int64             `json:"id"`
-	DeviceID     int64             `json:"device_id"`
-	Type         models.TaskType   `json:"type"`
-	Status       models.TaskStatus `json:"status"`
-	ErrorMessage string            `json:"error_message,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
-	SentAt       *time.Time        `json:"sent_at,omitempty"`
-	CompletedAt  *time.Time        `json:"completed_at,omitempty"`
-	CreatedBy    string            `json:"created_by,omitempty"`
-	DeletedBy    string            `json:"deleted_by,omitempty"`
-	SerialNumber string            `json:"serial_number"`
+	ID            int64             `json:"id"`
+	DeviceID      int64             `json:"device_id"`
+	Type          models.TaskType   `json:"type"`
+	TriggerEvents []string          `json:"trigger_events,omitempty" gorm:"serializer:json"`
+	Status        models.TaskStatus `json:"status"`
+	ErrorMessage  string            `json:"error_message,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
+	SentAt        *time.Time        `json:"sent_at,omitempty"`
+	CompletedAt   *time.Time        `json:"completed_at,omitempty"`
+	CreatedBy     string            `json:"created_by,omitempty"`
+	DeletedBy     string            `json:"deleted_by,omitempty"`
+	SerialNumber  string            `json:"serial_number"`
 }
 
 func NewTaskRepository(db *gorm.DB) *TaskRepository {
@@ -43,7 +44,7 @@ func (r *TaskRepository) ListWithDevices(ctx context.Context) ([]TaskListItem, e
 	var tasks []TaskListItem
 	err := r.db.WithContext(ctx).
 		Table("tasks").
-		Select("tasks.id, tasks.device_id, tasks.type, tasks.status, tasks.error_message, tasks.created_at, tasks.sent_at, tasks.completed_at, tasks.created_by, tasks.deleted_by, devices.serial_number").
+		Select("tasks.id, tasks.device_id, tasks.type, tasks.trigger_events, tasks.status, tasks.error_message, tasks.created_at, tasks.sent_at, tasks.completed_at, tasks.created_by, tasks.deleted_by, devices.serial_number").
 		Joins("JOIN devices ON devices.id = tasks.device_id").
 		Order("tasks.created_at DESC, tasks.id DESC").
 		Find(&tasks).Error
@@ -83,7 +84,7 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) error {
 // ClaimNextPending atomically reserves the oldest pending task for one CWMP
 // session. SKIP LOCKED prevents concurrent sessions from dispatching the same
 // command while keeping other devices independent.
-func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64) (*models.Task, error) {
+func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64, triggerEvents []string) (*models.Task, error) {
 	var claimed *models.Task
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var task models.Task
@@ -106,9 +107,10 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64) (
 		result := tx.Model(&models.Task{}).
 			Where("id = ? AND status = ?", task.ID, models.TaskStatusPending).
 			Updates(map[string]interface{}{
-				"status":      models.TaskStatusSent,
-				"sent_at":     &now,
-				"command_key": commandKey,
+				"status":         models.TaskStatusSent,
+				"sent_at":        &now,
+				"command_key":    commandKey,
+				"trigger_events": triggerEvents,
 			})
 		if result.Error != nil {
 			return result.Error
@@ -119,6 +121,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64) (
 		task.Status = models.TaskStatusSent
 		task.SentAt = &now
 		task.CommandKey = commandKey
+		task.TriggerEvents = append([]string(nil), triggerEvents...)
 		if err := decryptSetTaskPayload(&task); err != nil {
 			return err
 		}

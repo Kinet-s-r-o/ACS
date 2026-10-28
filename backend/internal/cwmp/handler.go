@@ -459,6 +459,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DataModelRoot = DetectDataModelRoot(inform.ParameterList.Parameters)
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
+	session.InformEvents = informEventCodes(inform)
 	session.ProvisioningRules = provisioningRules
 	session.ProvisioningVariables = provisioningVariableValues
 	session.AddObjectInstances = nil
@@ -1262,7 +1263,7 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 	}
 
 	for {
-		task, err := h.taskRepo.ClaimNextPending(ctx, session.DeviceID)
+		task, err := h.taskRepo.ClaimNextPending(ctx, session.DeviceID, session.InformEvents)
 		if err != nil {
 			return nil, fmt.Errorf("claim next task: %w", err)
 		}

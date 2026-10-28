@@ -68,6 +68,8 @@ interface IperfForm {
 }
 
 interface IperfRunResult { mode: 'UPLOAD' | 'DOWNLOAD'; values: Record<string, string> }
+
+const formatTaskTriggerEvents = (events?: string[]) => events?.length ? events.join(', ') : '-';
 interface FeatureObjectEditor { featureID: string; key: string; label: string; instance: string; fields: { name: string; label: string; value: string; writable: boolean; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; help?: string; options?: string[]; option_labels?: Record<string, string>; enabled_value?: string; disabled_value?: string }[] }
 
 interface SnapshotTreeRow {
@@ -214,6 +216,7 @@ const DeviceDetail: Component = () => {
   const [taskColumnFilters, setTaskColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.tasks`, {});
   const { columns: deviceTaskColumns, isVisible: isDeviceTaskColumnVisible, toggle: toggleDeviceTaskColumn } = useColumnVisibility('device_tasks', [
     { id: 'type', label: 'Type', visible: true },
+    { id: 'trigger_event', label: 'Trigger event', visible: true },
     { id: 'status', label: 'Status', visible: true },
     { id: 'created_at', label: 'Created', visible: true },
     { id: 'completed_at', label: 'Completed', visible: true },
@@ -234,6 +237,7 @@ const DeviceDetail: Component = () => {
     if (query) {
       all = all.filter(t =>
         t.type?.toLowerCase().includes(query) ||
+        formatTaskTriggerEvents(t.trigger_events).toLowerCase().includes(query) ||
         t.status?.toLowerCase().includes(query) ||
         t.created_by?.toLowerCase().includes(query) ||
         t.error_message?.toLowerCase().includes(query)
@@ -242,6 +246,7 @@ const DeviceDetail: Component = () => {
     const filtered = applyColumnFilters(all, taskColumnFilters(), (t, colId) => {
       switch (colId) {
         case 'type': return t.type || '';
+        case 'trigger_event': return formatTaskTriggerEvents(t.trigger_events);
         case 'status': return t.status || '';
         case 'created_at': return t.created_at || '';
         case 'completed_at': return t.completed_at || '';
@@ -250,7 +255,7 @@ const DeviceDetail: Component = () => {
         default: return '';
       }
     });
-    return sortRows(filtered, taskSort().column, taskSort().direction, (t, key) => key === 'type' ? t.type : key === 'status' ? t.status : key === 'created_at' ? t.created_at : key === 'completed_at' ? t.completed_at || '' : key === 'created_by' ? t.created_by || '' : key === 'error' ? t.error_message || '' : t.deleted_by || '');
+    return sortRows(filtered, taskSort().column, taskSort().direction, (t, key) => key === 'type' ? t.type : key === 'trigger_event' ? formatTaskTriggerEvents(t.trigger_events) : key === 'status' ? t.status : key === 'created_at' ? t.created_at : key === 'completed_at' ? t.completed_at || '' : key === 'created_by' ? t.created_by || '' : key === 'error' ? t.error_message || '' : t.deleted_by || '');
   });
   const pagedTasks = createMemo(() => {
     const all = filteredTasks();
@@ -2982,6 +2987,11 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="type" label="Type" active={taskColumnFilters()['type'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['type'] = s; else delete n['type']; return n; }); }} />
                           </div>
                         </th></Show>
+                        <Show when={isDeviceTaskColumnVisible('trigger_event')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                          <div class="flex items-center gap-1.5"><SortableHeader column="trigger_event" label="Trigger event" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
+                            <ColumnFilter columnId="trigger_event" label="Trigger event" active={taskColumnFilters()['trigger_event'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['trigger_event'] = s; else delete n['trigger_event']; return n; }); }} />
+                          </div>
+                        </th></Show>
                         <Show when={isDeviceTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
                             <ColumnFilter columnId="status" label="Status" active={taskColumnFilters()['status'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} />
@@ -3017,6 +3027,7 @@ const DeviceDetail: Component = () => {
                         {(task) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
                             <Show when={isDeviceTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('trigger_event')}><td class="px-4 py-2 text-secondary text-xs">{formatTaskTriggerEvents(task.trigger_events)}</td></Show>
                             <Show when={isDeviceTaskColumnVisible('status')}><td class="px-4 py-2"><span class={`badge ${getStatusBadge(task.status)}`}>{task.status}</span></td></Show>
                             <Show when={isDeviceTaskColumnVisible('created_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>
                             <Show when={isDeviceTaskColumnVisible('completed_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
@@ -3056,6 +3067,7 @@ const DeviceDetail: Component = () => {
                 <div class="space-y-4">
                   <div class="grid grid-cols-2 gap-3 text-sm">
                     <div><span class="text-muted text-xs">Status</span><div class="mt-0.5"><span class={`badge ${getStatusBadge(selectedTask()!.status)}`}>{selectedTask()!.status}</span></div></div>
+                    <div><span class="text-muted text-xs">Trigger event</span><div class="mt-0.5 text-primary">{formatTaskTriggerEvents(selectedTask()!.trigger_events)}</div></div>
                     <div><span class="text-muted text-xs">Created by</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
                     <Show when={selectedTask()!.deleted_by}><div><span class="text-muted text-xs">Deleted by</span><div class="mt-0.5 text-primary">{selectedTask()!.deleted_by}</div></div></Show>
                     <div><span class="text-muted text-xs">Created</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.created_at)}</div></div>

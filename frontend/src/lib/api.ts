@@ -35,7 +35,7 @@ export interface DeviceParameter { id: number; device_id: number; name: string; 
 export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
 export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number }
 export interface WANInterface { serial_number: string; name: string; type: string; status: string; ip_address: string; mac_address: string }
-export interface Task { id: number; device_id: number; type: string; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
+export interface Task { id: number; device_id: number; type: string; trigger_events?: string[]; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
 export interface GlobalTask extends Task { serial_number: string }
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }

@@ -31,6 +31,7 @@ const statusBadge = (status: string) => {
 };
 
 const formatDate = (value?: string | null) => formatDateTime(value);
+const formatTriggerEvents = (events?: string[]) => events?.length ? events.join(', ') : '-';
 
 const Tasks: Component = () => {
   const { isFullAccess } = useAuth();
@@ -45,6 +46,7 @@ const Tasks: Component = () => {
   const { columns: taskColumns, isVisible: isTaskColumnVisible, toggle: toggleTaskColumn } = useColumnVisibility('global_tasks', [
     { id: 'serial_number', label: 'Serial number', visible: true },
     { id: 'type', label: 'Type', visible: true },
+    { id: 'trigger_event', label: 'Trigger event', visible: true },
     { id: 'status', label: 'Status', visible: true },
     { id: 'created_at', label: 'Created', visible: true },
     { id: 'completed_at', label: 'Completed', visible: true },
@@ -69,13 +71,14 @@ const Tasks: Component = () => {
     let all = tasks() || [];
     const query = searchQuery().toLowerCase().trim();
     if (query) {
-      all = all.filter(task => [task.serial_number, task.type, task.status, task.created_by || '', task.deleted_by || '', task.error_message || '']
+      all = all.filter(task => [task.serial_number, task.type, formatTriggerEvents(task.trigger_events), task.status, task.created_by || '', task.deleted_by || '', task.error_message || '']
         .some(value => value.toLowerCase().includes(query)));
     }
     const filtered = applyColumnFilters(all, columnFilters(), (task, column) => {
       switch (column) {
         case 'serial_number': return task.serial_number;
         case 'type': return task.type;
+        case 'trigger_event': return formatTriggerEvents(task.trigger_events);
         case 'status': return task.status;
         case 'created_at': return task.created_at;
         case 'completed_at': return task.completed_at || '';
@@ -89,6 +92,7 @@ const Tasks: Component = () => {
       switch (column) {
         case 'serial_number': return task.serial_number;
         case 'type': return task.type;
+        case 'trigger_event': return formatTriggerEvents(task.trigger_events);
         case 'status': return task.status;
         case 'created_at': return task.created_at;
         case 'completed_at': return task.completed_at || '';
@@ -177,6 +181,7 @@ const Tasks: Component = () => {
                     <tr class="bg-base">
                       <Show when={isTaskColumnVisible('serial_number')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="serial_number" label="Serial number" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('serial_number', 'Serial number')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('type')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('type', 'Type')}</SortableHeader></th></Show>
+                      <Show when={isTaskColumnVisible('trigger_event')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="trigger_event" label="Trigger event" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('trigger_event', 'Trigger event')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="status" label="Status" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('status', 'Status')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('created_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="created_at" label="Created" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('created_at', 'Created')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('completed_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="completed_at" label="Completed" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('completed_at', 'Completed')}</SortableHeader></th></Show>
@@ -193,6 +198,7 @@ const Tasks: Component = () => {
                         <tr class="border-t border-subtle/50 hover:bg-elevated/30">
                           <Show when={isTaskColumnVisible('serial_number')}><td class="px-4 py-2"><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(task.serial_number)}?tab=tasks`} aria-label={`Open tasks for CPE ${task.serial_number}`}>{task.serial_number}</A></td></Show>
                           <Show when={isTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}</td></Show>
+                          <Show when={isTaskColumnVisible('trigger_event')}><td class="px-4 py-2 text-secondary text-xs">{formatTriggerEvents(task.trigger_events)}</td></Show>
                           <Show when={isTaskColumnVisible('status')}><td class="px-4 py-2"><span class={`badge ${statusBadge(task.status)}`}>{task.status}</span></td></Show>
                           <Show when={isTaskColumnVisible('created_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>
                           <Show when={isTaskColumnVisible('completed_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
@@ -219,6 +225,7 @@ const Tasks: Component = () => {
             <div class="grid grid-cols-2 gap-3 text-sm">
               <div><span class="text-muted text-xs">CPE</span><div class="mt-0.5"><A class="data-link font-mono" href={`/device/${encodeURIComponent(selectedTask()!.serial_number)}?tab=tasks`}>{selectedTask()!.serial_number}</A></div></div>
               <div><span class="text-muted text-xs">Status</span><div class="mt-0.5"><span class={`badge ${statusBadge(selectedTask()!.status)}`}>{selectedTask()!.status}</span></div></div>
+              <div><span class="text-muted text-xs">Trigger event</span><div class="mt-0.5 text-primary">{formatTriggerEvents(selectedTask()!.trigger_events)}</div></div>
               <div><span class="text-muted text-xs">Created by</span><div class="mt-0.5 text-primary">{selectedTask()!.created_by || '-'}</div></div>
               <Show when={selectedTask()!.deleted_by}><div><span class="text-muted text-xs">Deleted by</span><div class="mt-0.5 text-primary">{selectedTask()!.deleted_by}</div></div></Show>
               <div><span class="text-muted text-xs">Created</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.created_at)}</div></div>

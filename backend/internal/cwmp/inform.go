@@ -35,6 +35,26 @@ func ProcessInform(inform *Inform) (*InformResponse, error) {
 	}, nil
 }
 
+func informEventCodes(inform *Inform) []string {
+	if inform == nil || len(inform.Event.Events) == 0 {
+		return nil
+	}
+	events := make([]string, 0, len(inform.Event.Events))
+	seen := make(map[string]struct{}, len(inform.Event.Events))
+	for _, event := range inform.Event.Events {
+		code := strings.TrimSpace(event.EventCode)
+		if code == "" {
+			continue
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		events = append(events, code)
+	}
+	return events
+}
+
 func validateInform(inform *Inform) error {
 	if inform == nil {
 		return errors.New("missing Inform payload")

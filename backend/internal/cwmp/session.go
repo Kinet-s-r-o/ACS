@@ -37,6 +37,7 @@ type Session struct {
 	OverviewFetchReady      bool
 	OverviewFetchActive     bool
 	OverviewFetchParams     []string
+	InformEvents            []string
 	Provisioning            *SetParameterValues
 	ProvisioningRules       []models.ProvisioningApplication
 	ProvisioningVariables   map[string]string
