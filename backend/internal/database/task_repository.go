@@ -104,24 +104,20 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64, t
 		if commandKey == "" {
 			commandKey = fmt.Sprintf("skyacs-task-%d", task.ID)
 		}
-		result := tx.Model(&models.Task{}).
+		task.Status = models.TaskStatusSent
+		task.SentAt = &now
+		task.CommandKey = commandKey
+		task.TriggerEvents = append([]string(nil), triggerEvents...)
+		result := tx.Model(&task).
 			Where("id = ? AND status = ?", task.ID, models.TaskStatusPending).
-			Updates(map[string]interface{}{
-				"status":         models.TaskStatusSent,
-				"sent_at":        &now,
-				"command_key":    commandKey,
-				"trigger_events": triggerEvents,
-			})
+			Select("status", "sent_at", "command_key", "trigger_events").
+			Updates(&task)
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
 			return nil
 		}
-		task.Status = models.TaskStatusSent
-		task.SentAt = &now
-		task.CommandKey = commandKey
-		task.TriggerEvents = append([]string(nil), triggerEvents...)
 		if err := decryptSetTaskPayload(&task); err != nil {
 			return err
 		}
