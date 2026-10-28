@@ -29,7 +29,7 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
   { label: 'Devices', permissions: [
     { key: 'devices.read', label: 'Read', description: 'View devices and their operational data.' },
     { key: 'devices.write', label: 'Write (legacy bundle)', description: 'All device changes, including every focused permission below.' },
-    { key: 'devices.configure', label: 'Configure', description: 'Change parameters, tags, and device features.' },
+    { key: 'devices.configure', label: 'Configure', description: 'Change parameters, tags, and device advanced settings.' },
     { key: 'devices.command', label: 'Run commands', description: 'Read parameters remotely, reboot, and request a CWMP session.' },
     { key: 'devices.reset', label: 'Factory reset', description: 'Queue a factory reset.' },
     { key: 'devices.delete', label: 'Delete devices and tasks', description: 'Delete devices or pending tasks.' },
@@ -50,7 +50,7 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
     { key: 'provisioning.read', label: 'Read', description: 'View provisioning rules and templates.' },
     { key: 'provisioning.write', label: 'Write (legacy bundle)', description: 'Manage both rules and templates.' },
     { key: 'provisioning.rules.write', label: 'Manage rules', description: 'Create, edit, import, reorder, and enable rules.' },
-    { key: 'provisioning.templates.write', label: 'Manage templates', description: 'Create and edit templates, features, and metrics.' },
+    { key: 'provisioning.templates.write', label: 'Manage templates', description: 'Create and edit templates, advanced settings, and metrics.' },
   ] },
   { label: 'Settings', permissions: [
     { key: 'settings.read', label: 'Read', description: 'View system settings.' },

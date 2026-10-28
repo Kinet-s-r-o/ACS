@@ -661,7 +661,7 @@ const Provisioning: Component = () => {
     setPendingAction('clone-template');
     try {
       const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
-      notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, features, variables, and device photo.` });
+      notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, and device photo.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
       await loadProvTemplates();
@@ -744,7 +744,7 @@ const Provisioning: Component = () => {
       setProvTemplates(current => current?.map(item => item.id === template.id ? { ...item, features: result.features } : item) || null);
       return true;
     } catch (error) {
-      notify({ tone: 'error', title: 'Could not save Features', detail: (error as Error).message, persistent: true });
+      notify({ tone: 'error', title: 'Could not save Advanced settings', detail: (error as Error).message, persistent: true });
       return false;
     } finally { setFeaturesSaving(false); }
   };
@@ -776,7 +776,7 @@ const Provisioning: Component = () => {
     features.splice(targetIndex, 0, moved);
     if (await saveTemplateFeatures(features)) {
       setActiveFeatureID(sourceID);
-      notify({ tone: 'success', title: 'Feature sections reordered' });
+      notify({ tone: 'success', title: 'Advanced settings sections reordered' });
     }
   };
 
@@ -791,7 +791,7 @@ const Provisioning: Component = () => {
     [features[sourceIndex], features[targetIndex]] = [features[targetIndex], features[sourceIndex]];
     if (await saveTemplateFeatures(features)) {
       setActiveFeatureID(sourceID);
-      notify({ tone: 'success', title: 'Feature sections reordered' });
+      notify({ tone: 'success', title: 'Advanced settings sections reordered' });
     }
   };
 
@@ -897,7 +897,7 @@ const Provisioning: Component = () => {
     if (await saveTemplateFeatures(features)) {
       setActiveFeatureID(id);
       setFeatureEditorOpen(false);
-      notify({ tone: 'success', title: editingFeatureID() ? 'Feature section updated' : 'Feature section added' });
+      notify({ tone: 'success', title: editingFeatureID() ? 'Advanced settings section updated' : 'Advanced settings section added' });
     }
   };
 
@@ -944,7 +944,7 @@ const Provisioning: Component = () => {
     try {
       if (await saveTemplateFeatures(template.features!.filter(item => item.id !== featureID))) {
         setActiveFeatureID(template.features!.find(item => item.id !== featureID)?.id || '');
-        notify({ tone: 'success', title: 'Feature section deleted' });
+        notify({ tone: 'success', title: 'Advanced settings section deleted' });
       }
     } catch (error) {
       notify({ tone: 'error', title: 'Could not delete feature', detail: (error as Error).message, persistent: true });
@@ -1152,7 +1152,7 @@ const Provisioning: Component = () => {
               <button type="button" onClick={() => setTemplateTab('metrics')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'metrics' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
-              <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Features</span></button>
+              <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Advanced settings</span></button>
             </div>
 
             <Show when={templateTab() === 'rules'}>
@@ -1183,22 +1183,22 @@ const Provisioning: Component = () => {
                 <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
                 <div class="flex items-center gap-2">
                   <Show when={(selectedTemplate()?.features?.length || 0) > 1}>
-                    <div class="inline-flex items-center gap-1" role="group" aria-label="Reorder active feature section">
-                      <button type="button" class="icon-button" aria-label="Move active feature section left" title="Move section left" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[0]?.id} onClick={() => void moveActiveFeatureSection(-1)}><ChevronLeft size={14} /></button>
-                      <button type="button" class="icon-button" aria-label="Move active feature section right" title="Move section right" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[(selectedTemplate()?.features?.length || 1) - 1]?.id} onClick={() => void moveActiveFeatureSection(1)}><ChevronRight size={14} /></button>
+                    <div class="inline-flex items-center gap-1" role="group" aria-label="Reorder active Advanced settings section">
+                      <button type="button" class="icon-button" aria-label="Move active Advanced settings section left" title="Move section left" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[0]?.id} onClick={() => void moveActiveFeatureSection(-1)}><ChevronLeft size={14} /></button>
+                      <button type="button" class="icon-button" aria-label="Move active Advanced settings section right" title="Move section right" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[(selectedTemplate()?.features?.length || 1) - 1]?.id} onClick={() => void moveActiveFeatureSection(1)}><ChevronRight size={14} /></button>
                     </div>
                   </Show>
                   <button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
                 </div>
               </div>
-              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No feature sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." />}>
-                <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Feature sections">
-                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" draggable={!featuresSaving()} aria-label={`Feature section ${feature.name}. Drag to reorder.`} aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} onDragStart={event => { setFeatureDraggedSection(feature.id); event.dataTransfer?.setData('text/plain', feature.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureSection(feature.id); }} onDragEnd={() => setFeatureDraggedSection(null)} class={`flex shrink-0 items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'} ${featureDraggedSection() === feature.id ? 'opacity-50' : ''}`}><GripVertical size={12} aria-hidden="true" />{feature.name}</button>}</For>
+              <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No Advanced settings sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." />}>
+                <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Advanced settings sections">
+                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" draggable={!featuresSaving()} aria-label={`Advanced settings section ${feature.name}. Drag to reorder.`} aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} onDragStart={event => { setFeatureDraggedSection(feature.id); event.dataTransfer?.setData('text/plain', feature.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureSection(feature.id); }} onDragEnd={() => setFeatureDraggedSection(null)} class={`flex shrink-0 items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'} ${featureDraggedSection() === feature.id ? 'opacity-50' : ''}`}><GripVertical size={12} aria-hidden="true" />{feature.name}</button>}</For>
                 </div>
                 <Show when={activeFeature()}>{feature => <section class="card p-4 space-y-4">
                   <div class="flex flex-wrap items-start justify-between gap-3">
                     <div><h3 class="text-sm font-medium text-primary">{feature().name}</h3><p class="mt-1 text-xs text-muted">{feature().description || `${feature().controls.length} fields`}</p></div>
-                    <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><div class="relative" ref={featureMenu}><button type="button" class="icon-button" aria-label={`Actions for feature section ${feature().name}`} aria-haspopup="menu" aria-expanded={showFeatureMenu()} onClick={() => setShowFeatureMenu(value => !value)}><MoreVertical size={18} /></button><Show when={showFeatureMenu()}><div class="absolute right-0 top-full z-50 mt-2 min-w-40 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu"><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowFeatureMenu(false); openFeatureEditor(feature()); }}><Edit2 size={14} />Edit section</button><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-base" onClick={() => { setShowFeatureMenu(false); void deleteTemplateFeature(feature().id); }}><Trash2 size={14} />Delete</button></div></Show></div></div>
+                    <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><div class="relative" ref={featureMenu}><button type="button" class="icon-button" aria-label={`Actions for Advanced settings section ${feature().name}`} aria-haspopup="menu" aria-expanded={showFeatureMenu()} onClick={() => setShowFeatureMenu(value => !value)}><MoreVertical size={18} /></button><Show when={showFeatureMenu()}><div class="absolute right-0 top-full z-50 mt-2 min-w-40 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu"><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowFeatureMenu(false); openFeatureEditor(feature()); }}><Edit2 size={14} />Edit section</button><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-base" onClick={() => { setShowFeatureMenu(false); void deleteTemplateFeature(feature().id); }}><Trash2 size={14} />Delete</button></div></Show></div></div>
                   </div>
                   <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
                     <div class="overflow-x-auto"><table class="data-table w-full min-w-[820px] text-xs"><thead><tr><th class="w-8 whitespace-nowrap"><input type="checkbox" aria-label="Select all fields" checked={feature().controls.length > 0 && feature().controls.every(control => selectedFeatureControlKeys().includes(control.key))} onChange={event => selectAllFeatureControls(feature(), event.currentTarget.checked)} /></th><th class="w-8 whitespace-nowrap"></th><For each={featureTableColumns}>{column => <Show when={featureColumns.isVisible(column.id)}><th class="text-left whitespace-nowrap">{column.label}</th></Show>}</For><th class="text-right whitespace-nowrap">Actions</th><th class="py-2 pr-2 whitespace-nowrap"><ColumnVisibility columns={featureColumns.columns} onToggle={featureColumns.toggle} /></th></tr></thead><tbody>
@@ -1581,7 +1581,7 @@ const Provisioning: Component = () => {
         </Dialog>
       </Show>
       <Show when={featureEditorOpen()}>
-        <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit feature field' : 'Add feature field') : (editingFeatureID() ? 'Edit feature section' : 'Add feature section')} size="large" onClose={closeFeatureEditor}>
+        <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit advanced settings field' : 'Add advanced settings field') : (editingFeatureID() ? 'Edit advanced settings section' : 'Add advanced settings section')} size="large" onClose={closeFeatureEditor}>
           <form class="space-y-4" onSubmit={saveFeatureDraft}>
             <Show when={featureEditorPage() === 'section'} fallback={
               <div class="space-y-4">
@@ -1670,7 +1670,7 @@ const Provisioning: Component = () => {
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
               <input id="template-description" type="text" value={templateForm().description} onInput={(e) => setTemplateForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="e.g. Rules for SkyDash AC1000 devices" />
             </div>
-            <Show when={cloningTemplate()}><p class="text-xs text-muted">All rules, matching metrics, interface metrics, variables, features, and the device photo will be copied. Set the identity for the new device type.</p></Show>
+            <Show when={cloningTemplate()}><p class="text-xs text-muted">All rules, matching metrics, interface metrics, variables, advanced settings, and the device photo will be copied. Set the identity for the new device type.</p></Show>
             <Show when={editingTemplate()}>
               <div class="space-y-2">
                 <span class="block text-xs text-muted">Device photo (optional)</span>
