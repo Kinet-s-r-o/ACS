@@ -71,6 +71,26 @@ func (r *SettingsRepository) Get(ctx context.Context, key string) (*Setting, err
 	return &s, nil
 }
 
+func (r *SettingsRepository) GetSensitive(ctx context.Context, key string) (*Setting, error) {
+	if !isSensitiveSettingKey(key) {
+		return nil, fmt.Errorf("setting %s is not sensitive", key)
+	}
+	var setting Setting
+	err := r.db.WithContext(ctx).Where("key = ?", key).First(&setting).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	value, err := decryptParameterValue(setting.Value)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt setting %s: %w", key, err)
+	}
+	setting.Value = value
+	return &setting, nil
+}
+
 func (r *SettingsRepository) GetValues(ctx context.Context, keys ...string) (map[string]string, error) {
 	var settings []Setting
 	if err := r.db.WithContext(ctx).Where("key IN ?", keys).Find(&settings).Error; err != nil {

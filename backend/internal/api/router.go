@@ -230,6 +230,7 @@ func (r *Router) Handler() http.Handler {
 
 	// Settings endpoints
 	apiMux.HandleFunc("GET /settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetSettings))
+	apiMux.HandleFunc("GET /settings/connection-request-secret", auth.RequireFullAccess(auth.RequirePermission(models.PermSettingsRead)(r.handleGetConnectionRequestSecret)))
 	apiMux.HandleFunc("GET /settings/retention/stats", auth.RequirePermission(models.PermSettingsRead)(r.handleRetentionStats))
 	apiMux.HandleFunc("PUT /settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleUpdateSettings))
 
@@ -1057,6 +1058,20 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, result)
+}
+
+func (r *Router) handleGetConnectionRequestSecret(w http.ResponseWriter, req *http.Request) {
+	setting, err := r.settingsRepo.GetSensitive(req.Context(), "connection_request_password")
+	if err != nil {
+		log.Printf("Error getting connection request secret: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get connection request secret")
+		return
+	}
+	if setting == nil {
+		respondJSON(w, http.StatusOK, map[string]string{"value": ""})
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"value": setting.Value})
 }
 
 func (r *Router) handleRetentionStats(w http.ResponseWriter, req *http.Request) {

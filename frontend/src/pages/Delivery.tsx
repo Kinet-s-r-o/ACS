@@ -25,6 +25,8 @@ const Delivery: Component = () => {
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
   const [showMasterSecret, setShowMasterSecret] = createSignal(false);
+  const [revealedMasterSecret, setRevealedMasterSecret] = createSignal<string | null>(null);
+  const [loadingMasterSecret, setLoadingMasterSecret] = createSignal(false);
 
   const handleChange = (key: string, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -37,11 +39,34 @@ const Delivery: Component = () => {
       notify({ tone: 'success', title: 'Settings saved', message: 'Connection and delivery settings saved.' });
       refetch();
       setFormData({});
+      setShowMasterSecret(false);
+      setRevealedMasterSecret(null);
     } catch (err) {
       notify({ tone: 'error', title: 'Settings were not saved', message: 'The previous connection and delivery configuration remains active. Review the fields and retry.', detail: (err as Error).message, persistent: true });
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleMasterSecret = async () => {
+    if (showMasterSecret()) {
+      setShowMasterSecret(false);
+      setRevealedMasterSecret(null);
+      return;
+    }
+    if (getValue('connection_request_password') === '••••••••') {
+      setLoadingMasterSecret(true);
+      try {
+        const { value } = await api.getConnectionRequestSecret();
+        setRevealedMasterSecret(value);
+      } catch (err) {
+        notify({ tone: 'error', title: 'Could not reveal master secret', message: 'The stored connection-request secret could not be loaded.', detail: (err as Error).message, persistent: true });
+        return;
+      } finally {
+        setLoadingMasterSecret(false);
+      }
+    }
+    setShowMasterSecret(true);
   };
 
   const getValue = (key: string) => {
@@ -179,7 +204,7 @@ const Delivery: Component = () => {
                     <div class="flex items-center justify-between gap-3 mb-1.5">
                       <label for="connection-request-secret" class="block text-xs text-muted">Connection-request master secret</label>
                       <div class="flex items-center gap-2">
-                        <button type="button" class="btn btn-secondary text-xs" onClick={() => setShowMasterSecret((visible) => !visible)} aria-label={showMasterSecret() ? 'Hide master secret' : 'Show master secret'} aria-pressed={showMasterSecret()}>
+                        <button type="button" class="btn btn-secondary text-xs" onClick={() => void toggleMasterSecret()} disabled={!isFullAccess() || loadingMasterSecret()} aria-label={showMasterSecret() ? 'Hide master secret' : 'Show master secret'} aria-pressed={showMasterSecret()}>
                           <Show when={showMasterSecret()} fallback={<Eye size={13} />}><EyeOff size={13} /></Show>
                         </button>
                         <button type="button" class="btn btn-secondary text-xs" onClick={generatePassword} disabled={!isFullAccess()}>
@@ -190,8 +215,8 @@ const Delivery: Component = () => {
                     <input
                       id="connection-request-secret"
                       type={showMasterSecret() ? 'text' : 'password'}
-                      value={getValue('connection_request_password')}
-                      onInput={(e) => handleChange('connection_request_password', e.currentTarget.value)}
+                      value={showMasterSecret() ? (revealedMasterSecret() ?? getValue('connection_request_password')) : getValue('connection_request_password')}
+                      onInput={(e) => { setRevealedMasterSecret(e.currentTarget.value); handleChange('connection_request_password', e.currentTarget.value); }}
                       placeholder="Minimum 16 characters"
                       class={`input ${masterSecretInvalid() ? 'border-red-500' : ''}`}
                       minLength={16}
