@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -462,6 +463,16 @@ func runAutoMigrate(db *gorm.DB) error {
 			} else {
 				return fmt.Errorf("check role %s: %w", role.Name, err)
 			}
+		} else if role.Name == "admin" && (!slices.Equal(existing.Permissions, models.AllPermissions) || existing.Description != role.Description || !existing.IsSystem) {
+			// Keep the built-in administrator role in sync with the complete permission catalog.
+			// New permissions added to AllPermissions are granted automatically at startup.
+			existing.Permissions = append([]string(nil), models.AllPermissions...)
+			existing.Description = role.Description
+			existing.IsSystem = true
+			if err := db.Save(&existing).Error; err != nil {
+				return fmt.Errorf("update built-in admin role: %w", err)
+			}
+			log.Printf("Updated built-in admin role to %d permissions", len(models.AllPermissions))
 		}
 	}
 

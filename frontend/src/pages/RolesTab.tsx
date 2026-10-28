@@ -134,12 +134,24 @@ const RolesTab: Component = () => {
   const [showRoleModal, setShowRoleModal] = createSignal(false);
   const [editingRole, setEditingRole] = createSignal<Role | null>(null);
   const [roleForm, setRoleForm] = createSignal({ name: '', description: '', permissions: [] as string[] });
+  const [activePermissionGroup, setActivePermissionGroup] = createSignal('Devices');
+  const selectedInGroup = (group: typeof PERMISSION_GROUPS[number]) => group.permissions.filter(permission => roleForm().permissions.includes(permission.key)).length;
+  const selectGroupPermissions = (group: typeof PERMISSION_GROUPS[number], selected: boolean) => {
+    const keys = group.permissions.map(permission => permission.key);
+    setRoleForm(form => ({
+      ...form,
+      permissions: selected
+        ? [...new Set([...form.permissions, ...keys])]
+        : form.permissions.filter(permission => !keys.includes(permission)),
+    }));
+  };
 
   const canWrite = () => hasPermission('roles.write');
 
   const openCreateRole = () => {
     setEditingRole(null);
     setRoleForm({ name: '', description: '', permissions: [] });
+    setActivePermissionGroup('Devices');
     setShowRoleModal(true);
   };
 
@@ -147,6 +159,7 @@ const RolesTab: Component = () => {
     if (role.is_system) return;
     setEditingRole(role);
     setRoleForm({ name: role.name, description: role.description, permissions: [...role.permissions] });
+    setActivePermissionGroup('Devices');
     setShowRoleModal(true);
   };
 
@@ -287,7 +300,7 @@ const RolesTab: Component = () => {
       </Show>
 
       <Show when={showRoleModal()}>
-        <Dialog title={editingRole() ? 'Edit role' : 'New role'} description="Select the permissions this role grants." size="medium" onClose={() => { if (!pendingAction()) setShowRoleModal(false); }}>
+        <Dialog title={editingRole() ? 'Edit role' : 'New role'} description="Select the permissions this role grants." size="large" onClose={() => { if (!pendingAction()) setShowRoleModal(false); }}>
           <form class="space-y-4" onSubmit={(event) => { event.preventDefault(); void (editingRole() ? handleUpdateRole() : handleCreateRole()); }}>
             <div>
               <label for="role-name" class="block text-xs text-muted mb-1.5">Name</label>
@@ -298,21 +311,41 @@ const RolesTab: Component = () => {
               <input id="role-description" type="text" value={roleForm().description} onInput={(e) => setRoleForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="Optional description" maxlength={256} />
             </div>
             <div>
-              <div class="block text-xs text-muted mb-2">Permissions</div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto">
-                <For each={PERMISSION_GROUPS}>
-                  {(group) => (
-                    <div class="space-y-1">
-                      <p class="text-xs font-medium text-muted">{group.label}</p>
-                      <For each={group.permissions}>{permission => (
-                        <label class="flex items-start gap-2 text-sm cursor-pointer" title={permission.description}>
-                          <input type="checkbox" checked={roleForm().permissions.includes(permission.key)} onChange={() => togglePermission(permission.key)} class="checkbox mt-0.5" />
-                          <span><span class="block">{permission.label}</span><span class="block text-xs text-muted">{permission.description}</span></span>
-                        </label>
-                      )}</For>
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <div>
+                  <div class="text-sm font-medium text-primary">Permissions</div>
+                  <p class="text-xs text-muted mt-0.5">{roleForm().permissions.length} of {PERMISSION_COUNT} selected</p>
+                </div>
+                <span class="text-xs text-muted">Choose a section, then select its access</span>
+              </div>
+              <div class="flex flex-wrap gap-2 border-b border-subtle pb-3 mb-3" role="tablist" aria-label="Permission sections">
+                <For each={PERMISSION_GROUPS}>{group => (
+                  <button type="button" role="tab" aria-selected={activePermissionGroup() === group.label} onClick={() => setActivePermissionGroup(group.label)} class={`px-3 py-2 text-xs border rounded transition-colors ${activePermissionGroup() === group.label ? 'border-sky-500 bg-sky-500/10 text-primary' : 'border-subtle text-muted hover:text-primary hover:bg-base'}`}>
+                    {group.label}<span class="ml-2 tabular-nums">{selectedInGroup(group)}/{group.permissions.length}</span>
+                  </button>
+                )}</For>
+              </div>
+              <For each={PERMISSION_GROUPS.filter(group => group.label === activePermissionGroup())}>{group => (
+                <section role="tabpanel" aria-label={`${group.label} permissions`} class="rounded border border-subtle bg-base p-3 sm:p-4">
+                  <div class="flex items-center justify-between gap-3 mb-3">
+                    <div><h3 class="text-sm font-medium text-primary">{group.label}</h3><p class="text-xs text-muted mt-0.5">{selectedInGroup(group)} of {group.permissions.length} selected</p></div>
+                    <div class="flex gap-2">
+                      <button type="button" class="btn btn-ghost btn-sm" onClick={() => selectGroupPermissions(group, true)}>Select all</button>
+                      <button type="button" class="btn btn-ghost btn-sm" onClick={() => selectGroupPermissions(group, false)}>Clear</button>
                     </div>
-                  )}
-                </For>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <For each={group.permissions}>{permission => (
+                      <label class="flex items-start gap-3 rounded border border-subtle bg-elevated/40 p-3 text-sm cursor-pointer hover:bg-elevated">
+                        <input type="checkbox" checked={roleForm().permissions.includes(permission.key)} onChange={() => togglePermission(permission.key)} class="checkbox mt-0.5 shrink-0" />
+                        <span class="min-w-0"><span class="block font-medium text-primary">{permission.label}</span><span class="block text-xs text-muted mt-0.5 leading-relaxed">{permission.description}</span></span>
+                      </label>
+                    )}</For>
+                  </div>
+                </section>
+              )}</For>
+              <div class="mt-3 rounded border border-subtle px-3 py-2 text-xs text-muted">
+                Legacy <span class="font-medium text-secondary">Write</span> bundles preserve broad access. Use focused permissions when a role should have only selected actions.
               </div>
             </div>
             <div class="flex gap-2 pt-2">
