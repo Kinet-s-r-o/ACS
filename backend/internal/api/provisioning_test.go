@@ -86,6 +86,20 @@ func TestValidateProvisioningRuleAddObjectDoesNotRequireParameter(t *testing.T) 
 	}
 }
 
+func TestValidateTransferTemplateAcceptsInterfaceMetricWithoutParameterName(t *testing.T) {
+	template := provisioningTransferTemplate{
+		Name: "Huawei", Manufacturer: "huawei", ProductClass: "eg8145",
+		Metrics: []models.MetricDefinition{{
+			Name: "WAN bytes received", InterfaceType: "wan",
+			ParameterPattern: "Device.WANDevice.*.Stats.BytesReceived",
+			Source:           "active", ChartType: "line", Multiplier: 1,
+		}},
+	}
+	if err := validateTransferTemplate(&template); err != nil {
+		t.Fatalf("interface metric without parameter_name was rejected: %v", err)
+	}
+}
+
 func TestValidatePrevReferenceInList(t *testing.T) {
 	addObject := &models.ProvisioningRule{ID: 1, AddObjectPath: "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.1.Hosts.1.Host", Order: 0}
 	plainRule := &models.ProvisioningRule{ID: 2, ParameterValue: "static", Order: 1}

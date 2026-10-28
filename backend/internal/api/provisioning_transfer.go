@@ -248,7 +248,19 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 		if metric.Multiplier == 0 {
 			metric.Multiplier = 1
 		}
-		if err := validateMetricDefinition(metric); err != nil {
+		var err error
+		if metric.ParameterPattern != "" {
+			if metric.Source == "" {
+				metric.Source = "active"
+			}
+			if metric.ChartType == "" {
+				metric.ChartType = "line"
+			}
+			err = validateInterfaceMetricDefinition(metric)
+		} else {
+			err = validateMetricDefinition(metric)
+		}
+		if err != nil {
 			return fmt.Errorf("metric %d: %w", index+1, err)
 		}
 	}

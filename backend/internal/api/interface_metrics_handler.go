@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -112,41 +113,15 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if def.Name == "" || len(def.Name) > 128 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) || len(def.Group) > 64 {
-		respondError(w, http.StatusBadRequest, "Invalid interface metric definition")
-		return
-	}
 	if def.Source == "" {
 		def.Source = "active"
-	}
-	switch def.Source {
-	case "passive", "active", "universal":
-	default:
-		respondError(w, http.StatusBadRequest, "source must be 'passive', 'active', or 'universal'")
-		return
 	}
 	if def.ChartType == "" {
 		def.ChartType = "line"
 	}
-	switch def.UnitScale {
-	case "", "auto", "bytes", "bits", "pps":
-	default:
-		respondError(w, http.StatusBadRequest, "unit_scale must be '', 'auto', 'bytes', 'bits', or 'pps'")
+	if err := validateInterfaceMetricDefinition(&def); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	switch def.ChartType {
-	case "line", "bar", "pictorialBar", "scatter", "effectScatter", "candlestick", "boxplot", "heatmap":
-	default:
-		respondError(w, http.StatusBadRequest, "chart_type must be a supported time-series type")
-		return
-	}
-	if strings.Contains(def.ParameterPattern, "*") {
-		for _, segment := range strings.Split(def.ParameterPattern, ".") {
-			if strings.Contains(segment, "*") && segment != "*" {
-				respondError(w, http.StatusBadRequest, "Use * as a complete path segment")
-				return
-			}
-		}
 	}
 	var template models.ProvisioningTemplate
 	if err := r.db.WithContext(req.Context()).First(&template, templateID).Error; err != nil {
@@ -182,6 +157,35 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	respondJSON(w, http.StatusOK, def)
+}
+
+func validateInterfaceMetricDefinition(def *models.MetricDefinition) error {
+	if def.Name == "" || len(def.Name) > 128 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) || len(def.Group) > 64 {
+		return errors.New("Invalid interface metric definition")
+	}
+	switch def.Source {
+	case "passive", "active", "universal":
+	default:
+		return errors.New("source must be 'passive', 'active', or 'universal'")
+	}
+	switch def.UnitScale {
+	case "", "auto", "bytes", "bits", "pps":
+	default:
+		return errors.New("unit_scale must be '', 'auto', 'bytes', 'bits', or 'pps'")
+	}
+	switch def.ChartType {
+	case "line", "bar", "pictorialBar", "scatter", "effectScatter", "candlestick", "boxplot", "heatmap":
+	default:
+		return errors.New("chart_type must be a supported time-series type")
+	}
+	if strings.Contains(def.ParameterPattern, "*") {
+		for _, segment := range strings.Split(def.ParameterPattern, ".") {
+			if strings.Contains(segment, "*") && segment != "*" {
+				return errors.New("Use * as a complete path segment")
+			}
+		}
+	}
+	return nil
 }
 
 func (r *Router) handleDeleteInterfaceMetric(w http.ResponseWriter, req *http.Request) {
