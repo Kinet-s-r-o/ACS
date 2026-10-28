@@ -16,17 +16,56 @@ import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { usePageSize } from '../lib/usePageSize';
 
-const PERMISSION_GROUPS: { label: string; read: string; write: string }[] = [
-  { label: 'Users', read: 'users.read', write: 'users.write' },
-  { label: 'Roles', read: 'roles.read', write: 'roles.write' },
-  { label: 'Devices', read: 'devices.read', write: 'devices.write' },
-  { label: 'Firmwares', read: 'firmwares.read', write: 'firmwares.write' },
-  { label: 'Faults', read: 'faults.read', write: 'faults.write' },
-  { label: 'Provisioning', read: 'provisioning.read', write: 'provisioning.write' },
-  { label: 'Settings', read: 'settings.read', write: 'settings.write' },
-  { label: 'Metrics', read: 'metrics.read', write: 'metrics.write' },
-  { label: 'Security', read: 'security.read', write: 'security.write' },
+const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; description: string }[] }[] = [
+  { label: 'Users', permissions: [
+    { key: 'users.read', label: 'Read', description: 'View user accounts.' },
+    { key: 'users.write', label: 'Write', description: 'Create, edit, and delete users.' },
+    { key: 'users.tokens', label: 'Manage API tokens', description: 'Create and revoke user API tokens.' },
+  ] },
+  { label: 'Roles', permissions: [
+    { key: 'roles.read', label: 'Read', description: 'View role definitions.' },
+    { key: 'roles.write', label: 'Write', description: 'Create, edit, and delete roles.' },
+  ] },
+  { label: 'Devices', permissions: [
+    { key: 'devices.read', label: 'Read', description: 'View devices and their operational data.' },
+    { key: 'devices.write', label: 'Write (legacy bundle)', description: 'All device changes, including every focused permission below.' },
+    { key: 'devices.configure', label: 'Configure', description: 'Change parameters, tags, and device features.' },
+    { key: 'devices.command', label: 'Run commands', description: 'Read parameters remotely, reboot, and request a CWMP session.' },
+    { key: 'devices.reset', label: 'Factory reset', description: 'Queue a factory reset.' },
+    { key: 'devices.delete', label: 'Delete devices and tasks', description: 'Delete devices or pending tasks.' },
+    { key: 'devices.credentials', label: 'Manage credentials', description: 'Change connection-request credentials.' },
+    { key: 'devices.snapshots.write', label: 'Manage snapshots', description: 'Create, restore, and delete device snapshots.' },
+    { key: 'devices.firmware', label: 'Deliver firmware', description: 'Queue firmware delivery to a device.' },
+  ] },
+  { label: 'Firmwares', permissions: [
+    { key: 'firmwares.read', label: 'Read', description: 'View the firmware library.' },
+    { key: 'firmwares.write', label: 'Write (legacy bundle)', description: 'Manage the firmware library.' },
+    { key: 'firmwares.manage', label: 'Manage library', description: 'Upload and delete firmware images.' },
+  ] },
+  { label: 'Faults', permissions: [
+    { key: 'faults.read', label: 'Read', description: 'View faults and statistics.' },
+    { key: 'faults.write', label: 'Write', description: 'Resolve or delete faults.' },
+  ] },
+  { label: 'Provisioning', permissions: [
+    { key: 'provisioning.read', label: 'Read', description: 'View provisioning rules and templates.' },
+    { key: 'provisioning.write', label: 'Write (legacy bundle)', description: 'Manage both rules and templates.' },
+    { key: 'provisioning.rules.write', label: 'Manage rules', description: 'Create, edit, import, reorder, and enable rules.' },
+    { key: 'provisioning.templates.write', label: 'Manage templates', description: 'Create and edit templates, features, and metrics.' },
+  ] },
+  { label: 'Settings', permissions: [
+    { key: 'settings.read', label: 'Read', description: 'View system settings.' },
+    { key: 'settings.write', label: 'Write', description: 'Change system settings.' },
+  ] },
+  { label: 'Metrics', permissions: [
+    { key: 'metrics.read', label: 'Read', description: 'View device metrics.' },
+    { key: 'metrics.write', label: 'Write', description: 'Manage metric definitions.' },
+  ] },
+  { label: 'Security', permissions: [
+    { key: 'security.read', label: 'Read', description: 'View security events and blocked devices.' },
+    { key: 'security.write', label: 'Write', description: 'Manage blocked devices.' },
+  ] },
 ];
+const PERMISSION_COUNT = PERMISSION_GROUPS.reduce((count, group) => count + group.permissions.length, 0);
 
 const RolesTab: Component = () => {
   const { hasPermission } = useAuth();
@@ -56,7 +95,7 @@ const RolesTab: Component = () => {
     switch (column) {
       case 'name': return role.name;
       case 'description': return role.description || '';
-      case 'permissions': return `${role.permissions.length} / 18`;
+      case 'permissions': return `${role.permissions.length} / ${PERMISSION_COUNT}`;
       case 'type': return role.is_system ? 'System' : 'Custom';
       default: return '';
     }
@@ -219,7 +258,7 @@ const RolesTab: Component = () => {
                     <tr class="border-b border-border/50 hover:bg-muted/20">
                       <Show when={isVisible('name')}><td class="px-3 py-2 font-medium">{role.name}</td></Show>
                       <Show when={isVisible('description')}><td class="px-3 py-2 text-muted">{role.description || '—'}</td></Show>
-                      <Show when={isVisible('permissions')}><td class="px-3 py-2"><span class="badge">{role.permissions.length} / 18</span></td></Show>
+                      <Show when={isVisible('permissions')}><td class="px-3 py-2"><span class="badge">{role.permissions.length} / {PERMISSION_COUNT}</span></td></Show>
                       <Show when={isVisible('type')}><td class="px-3 py-2">
                         <Show when={role.is_system}><span class="badge badge-info">System</span></Show>
                         <Show when={!role.is_system}><span class="badge">Custom</span></Show>
@@ -260,19 +299,17 @@ const RolesTab: Component = () => {
             </div>
             <div>
               <div class="block text-xs text-muted mb-2">Permissions</div>
-              <div class="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto">
                 <For each={PERMISSION_GROUPS}>
                   {(group) => (
                     <div class="space-y-1">
                       <p class="text-xs font-medium text-muted">{group.label}</p>
-                      <label class="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" checked={roleForm().permissions.includes(group.read)} onChange={() => togglePermission(group.read)} class="checkbox" />
-                        <span>Read</span>
-                      </label>
-                      <label class="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" checked={roleForm().permissions.includes(group.write)} onChange={() => togglePermission(group.write)} class="checkbox" />
-                        <span>Write</span>
-                      </label>
+                      <For each={group.permissions}>{permission => (
+                        <label class="flex items-start gap-2 text-sm cursor-pointer" title={permission.description}>
+                          <input type="checkbox" checked={roleForm().permissions.includes(permission.key)} onChange={() => togglePermission(permission.key)} class="checkbox mt-0.5" />
+                          <span><span class="block">{permission.label}</span><span class="block text-xs text-muted">{permission.description}</span></span>
+                        </label>
+                      )}</For>
                     </div>
                   )}
                 </For>

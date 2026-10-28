@@ -73,7 +73,7 @@ const Devices: Component = () => {
   const [summoningAll, setSummoningAll] = createSignal(false);
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
-  const { isFullAccess, hasPermission } = useAuth();
+  const { isFullAccess, hasAnyPermission } = useAuth();
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
@@ -211,7 +211,7 @@ const Devices: Component = () => {
       case 'last_inform':
         return <span class="text-muted text-xs" title={formatDateTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
       case 'tags':
-        return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasPermission('devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
+        return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasAnyPermission('devices.configure', 'devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
       default:
         return '-';
     }

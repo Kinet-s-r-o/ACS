@@ -8,6 +8,7 @@ interface AuthContextType {
   isFullAccess: Accessor<boolean>;
   permissions: Accessor<string[]>;
   hasPermission: (perm: string) => boolean;
+  hasAnyPermission: (...perms: string[]) => boolean;
   login: (username: string, password: string) => Promise<{ stage: 'complete' | 'setup' | 'verify'; secret?: string; otpauthURL?: string }>;
   completeTwoFactor: (code: string, setup: boolean) => Promise<void>;
   cancelTwoFactor: () => Promise<void>;
@@ -24,6 +25,7 @@ export const AuthProvider: ParentComponent = (props) => {
 
   const isFullAccess = () => user()?.role === 'full';
   const hasPermission = (perm: string) => permissions().includes(perm);
+  const hasAnyPermission = (...perms: string[]) => perms.some(perm => permissions().includes(perm));
 
   onMount(async () => {
     // Remove legacy persistent tokens: authentication should not survive a closed browser session.
@@ -98,7 +100,7 @@ export const AuthProvider: ParentComponent = (props) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, ready, isAuthenticated, isFullAccess, permissions, hasPermission, login, completeTwoFactor, cancelTwoFactor, logout }}>
+    <AuthContext.Provider value={{ user, ready, isAuthenticated, isFullAccess, permissions, hasPermission, hasAnyPermission, login, completeTwoFactor, cancelTwoFactor, logout }}>
       {props.children}
     </AuthContext.Provider>
   );

@@ -12,6 +12,7 @@ ACS is a beta TR-069/CWMP control plane: Go backend, SolidJS/TypeScript console,
 
 - Never read, copy, log, or commit `.env` files, credentials, firmware, tokens, or customer/device exports.
 - Preserve security boundaries: TLS at the proxy, explicit CORS and proxy CIDRs, protected CWMP, encrypted sensitive parameters, and signed firmware URLs.
+- For every new console section or feature, define its required permissions before implementation; enforce them in backend routes and reflect them in UI visibility and role configuration.
 - Do not expose API/CWMP/PostgreSQL ports directly in production.
 - Preserve existing working-tree changes. Do not commit, push, deploy, or change application behavior unless requested.
 - UI changes must follow [docs/ui-ux-standard.md](docs/ui-ux-standard.md) and pass the UI check.

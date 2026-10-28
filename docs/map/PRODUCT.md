@@ -10,5 +10,6 @@
 | Console routes and screens | [frontend/README.md](../../frontend/README.md) → `frontend/src/pages/` | SolidJS routes are registered in `frontend/src/App.tsx` |
 | Shared UI and interaction | [frontend/README.md](../../frontend/README.md) → `frontend/src/components/` | Layout, dialogs, charts, forms, feedback, pagination |
 | API client and browser state | [frontend/README.md](../../frontend/README.md) → `frontend/src/lib/` | Typed API calls, auth/session, theme, storage, field definitions |
+| Role permissions | [Permission expansion plan](../permission-expansion-plan.md) | Existing permission catalog, finer-grained role configuration, migration and verification |
 | UI standards | [docs/ui-ux-standard.md](../ui-ux-standard.md) | Required for console changes |
 | Installer checks | [scripts/README.md](../../scripts/README.md) | Shell validation and platform matrix |

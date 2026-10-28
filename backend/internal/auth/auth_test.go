@@ -76,3 +76,29 @@ func TestAuthMiddlewareRejectsRevokedToken(t *testing.T) {
 		t.Fatalf("revoked token returned status %d", recorder.Code)
 	}
 }
+
+func TestRequireAnyPermissionAcceptsFocusedGrantAndRejectsMissingGrant(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	protected := RequireAnyPermission(models.PermDevicesReset, models.PermDevicesWrite)(next)
+
+	for _, tc := range []struct {
+		name        string
+		permissions []string
+		wantStatus  int
+	}{
+		{name: "focused permission", permissions: []string{models.PermDevicesReset}, wantStatus: http.StatusNoContent},
+		{name: "legacy bundle", permissions: []string{models.PermDevicesWrite}, wantStatus: http.StatusNoContent},
+		{name: "unrelated permission", permissions: []string{models.PermDevicesRead}, wantStatus: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", nil)
+			ctx := context.WithValue(req.Context(), UserContextKey, &Claims{Role: models.RoleFull})
+			ctx = context.WithValue(ctx, PermissionsContextKey, tc.permissions)
+			recorder := httptest.NewRecorder()
+			protected.ServeHTTP(recorder, req.WithContext(ctx))
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, tc.wantStatus)
+			}
+		})
+	}
+}

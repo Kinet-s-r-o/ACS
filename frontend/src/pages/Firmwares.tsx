@@ -18,7 +18,8 @@ import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage
 import { formatDateTime } from '../lib/dateTime';
 
 const Firmwares: Component = () => {
-  const { isFullAccess } = useAuth();
+  const { hasAnyPermission } = useAuth();
+  const canManageLibrary = () => hasAnyPermission('firmwares.manage', 'firmwares.write');
   const { confirm, notify } = useFeedback();
   const [firmwares, { refetch }] = createResource(() => api.getFirmwares());
   const [uploading, setUploading] = createSignal(false);
@@ -131,7 +132,7 @@ const Firmwares: Component = () => {
     <div class="space-y-6">
       <PageHeader title="Firmware library" description="Validated artifacts ready for controlled CPE deployment." />
 
-      <Show when={isFullAccess()}><div class="card p-5">
+      <Show when={canManageLibrary()}><div class="card p-5">
         <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
           <Upload size={14} />
           Upload firmware artifact
@@ -223,7 +224,7 @@ const Firmwares: Component = () => {
         <Show when={firmwares.loading}><div class="p-4 space-y-3" aria-label="Loading firmware library"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
         <Show when={firmwares.error}><ResourceError title="Firmware library is unavailable" description="ACS could not retrieve the artifact inventory. No firmware data was changed." onRetry={() => refetch()} /></Show>
         <Show when={!firmwares.loading && !firmwares.error && (firmwares()?.length || 0) > 0} fallback={!firmwares.loading && !firmwares.error ?
-          <EmptyState icon={<HardDrive size={22} />} title="No firmware artifacts are stored" description={isFullAccess() ? 'Upload a vendor firmware file with an exact version and compatibility scope before creating a deployment task.' : 'A full-access operator must upload and validate an artifact before it can be selected for deployment.'} /> : undefined
+          <EmptyState icon={<HardDrive size={22} />} title="No firmware artifacts are stored" description={canManageLibrary() ? 'Upload a vendor firmware file with an exact version and compatibility scope before creating a deployment task.' : 'An operator with firmware library permission must upload and validate an artifact before it can be selected for deployment.'} /> : undefined
         }>
           <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[720px]">
             <thead>
@@ -277,7 +278,7 @@ const Firmwares: Component = () => {
                     <Show when={isVisible('file_size')}><td class="px-4 py-3 text-secondary text-sm">{formatSize(fw.file_size)}</td></Show>
                     <Show when={isVisible('created_at')}><td class="px-4 py-3 text-muted text-xs">{formatDate(fw.created_at)}</td></Show>
                     <td class="px-4 py-3">
-                      <Show when={isFullAccess()}><button
+                      <Show when={canManageLibrary()}><button
                         onClick={() => handleDelete(fw.id, fw.filename)}
                         class="text-rose-400 hover:text-rose-300 text-sm flex items-center gap-1 transition-fast"
                       >
