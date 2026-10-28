@@ -4,10 +4,17 @@ import 'swagger-ui-dist/swagger-ui.css';
 import { api, API_BASE } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { ResourceError } from '../components/ResourceState';
+import { useTheme } from '../lib/theme';
 
 const APIDocs: Component = () => {
+  const { isDark } = useTheme();
   const [spec, { refetch }] = createResource(api.getIntegrationSpec);
   let host!: HTMLDivElement;
+  createEffect(() => {
+    const dark = isDark();
+    document.documentElement.classList.toggle('dark-mode', dark);
+    onCleanup(() => document.documentElement.classList.remove('dark-mode'));
+  });
   createEffect(() => {
     const document = spec();
     if (!document) return;
@@ -26,7 +33,7 @@ const APIDocs: Component = () => {
       <p class="text-sm text-muted">Generate tokens in Users and Roles using the key button. Use Authorize below to test the integration API. Authorization is kept only in memory. Token administration requires a console session and CSRF protection; use the Users and Roles screen.</p>
       <Show when={spec.loading}><p class="text-sm text-muted" role="status">Loading API documentation…</p></Show>
       <Show when={spec.error}><ResourceError title="Could not load API documentation" description="Retry when the API is available." onRetry={() => void refetch()} /></Show>
-      <div ref={host} data-theme="light" class="api-documentation card p-4 overflow-x-auto" />
+      <div ref={host} class="api-documentation card p-4 overflow-x-auto" />
     </div>
   );
 };

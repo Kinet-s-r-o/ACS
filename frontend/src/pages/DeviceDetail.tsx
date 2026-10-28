@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight } from 'lucide-solid';
+import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight, ClipboardList, ScrollText } from 'lucide-solid';
 import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
@@ -2962,7 +2962,7 @@ const DeviceDetail: Component = () => {
             </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
-                <h2 class="text-sm font-medium text-secondary">CWMP tasks ({tasks()?.length || 0})</h2>
+                <h2 class="flex items-center gap-2 text-sm font-medium text-secondary"><ClipboardList size={16} class="text-muted" />CWMP tasks ({tasks()?.length || 0})</h2>
                 <div class="relative">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                   <input type="text" value={taskSearch()} onInput={(e) => setTaskSearch(e.currentTarget.value)} placeholder="Search tasks…" class="input pl-9! w-48 text-sm" />
@@ -3273,7 +3273,7 @@ const DeviceDetail: Component = () => {
             <section class="card overflow-hidden" aria-labelledby="device-log-title">
               <div class="p-5 border-b border-subtle flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 id="device-log-title" class="text-sm font-medium text-secondary">Device log</h2>
+                  <h2 id="device-log-title" class="flex items-center gap-2 text-sm font-medium text-secondary"><ScrollText size={16} class="text-muted" />Device log</h2>
                   <p class="mt-1 text-xs text-muted">From InternetGatewayDevice.DeviceInfo.DeviceLog · {deviceLogPageData()?.total ?? 0} entries</p>
                 </div>
                 <div class="flex w-full sm:w-auto items-center gap-2">
