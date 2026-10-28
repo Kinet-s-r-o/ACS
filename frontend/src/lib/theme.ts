@@ -16,6 +16,7 @@ const [theme, setThemeSignal] = createSignal<Theme>(getInitialTheme());
 
 const applyTheme = (currentTheme: Theme) => {
   document.documentElement.setAttribute('data-theme', currentTheme);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', currentTheme === 'light' ? '#ebf2f9' : '#080f1a');
   writeMigratedStorageValue(localStorage, 'acs-theme', 'skyacs-theme', currentTheme);
 };
 
