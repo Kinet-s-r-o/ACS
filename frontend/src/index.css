@@ -12,6 +12,7 @@
   --text-primary: 232 240 248;
   --text-secondary: 154 174 196;
   --text-muted: 126 148 171;
+  --text-table: 154 174 196;
   --border-subtle: 28 48 70;
   --border-default: 43 67 92;
   --accent: 14 165 233;
@@ -45,6 +46,7 @@
   --text-primary: 22 43 67;
   --text-secondary: 54 78 106;
   --text-muted: 73 96 124;
+  --text-table: 0 0 0;
   --border-subtle: 202 216 232;
   --border-default: 176 198 222;
   --accent: 15 98 168;
@@ -304,7 +306,7 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .data-table thead th.column-reorderable:active { cursor: grabbing; }
 .data-table thead th.column-reorderable:hover { color: rgb(var(--text-primary)); }
 .data-table thead th.is-column-dragging { opacity: .45; }
-.data-table td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
+.data-table td:not([class*="text-"]) { color: rgb(var(--text-table)); }
 .data-table tbody td { padding: 10px 14px; border-top: 1px solid rgb(var(--border-subtle)); line-height: 1.35; vertical-align: middle; }
 .data-table tbody tr:first-child td { border-top: 0; }
 .data-table tbody tr:hover { background: rgb(var(--bg-elevated) / .42); }
@@ -313,7 +315,14 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .data-table th.text-right, .data-table td.text-right { text-align: right; }
 .data-table th.text-center, .data-table td.text-center { text-align: center; }
 .table-scroll table:not(.data-table) { font-size: 13px; }
-.table-scroll table:not(.data-table) td:not([class*="text-"]) { color: rgb(var(--text-secondary)); }
+.table-scroll table:not(.data-table) td:not([class*="text-"]) { color: rgb(var(--text-table)); }
+
+/* Light mode: keep ordinary table copy black while status indicators and controls retain their colors. */
+[data-theme="light"] table thead th { color: rgb(var(--text-table)); }
+[data-theme="light"] table tbody td.text-primary,
+[data-theme="light"] table tbody td.text-secondary,
+[data-theme="light"] table tbody td.text-muted { color: rgb(var(--text-table)); }
+[data-theme="light"] table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(.btn):not(button):not(a) { color: rgb(var(--text-table)); }
 .table-panel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; padding: 13px 16px; border-bottom: 1px solid rgb(var(--border-subtle)); }
 .table-panel-toolbar h2, .table-panel-toolbar h3 { margin: 0; color: rgb(var(--text-secondary)); font-size: 13px; font-weight: 600; }
 .table-panel-toolbar p { margin: 3px 0 0; color: rgb(var(--text-muted)); font-size: 10px; }
