@@ -5,10 +5,11 @@ import { RefreshCw, Router, Settings2, Plus, Trash2 } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
-import { api, type DashboardPanelConfig, type DashboardThreshold, type DashboardThresholdColor, type User } from '../lib/api';
+import { api, type DashboardPanelConfig, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
 import { useFeedback } from '../components/Feedback';
 import { formatDateTime } from '../lib/dateTime';
 import { useAuth } from '../lib/auth';
+import DeviceGrowthChart from '../components/DeviceGrowthChart';
 
 interface DistributionListProps {
   data: Record<string, number>;
@@ -24,6 +25,11 @@ interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
 const thresholdColors: Array<{ id: DashboardThresholdColor; label: string }> = [
   { id: 'blue', label: 'Blue' }, { id: 'green', label: 'Green' }, { id: 'amber', label: 'Amber' },
   { id: 'orange', label: 'Orange' }, { id: 'red', label: 'Red' }, { id: 'gray', label: 'Gray' },
+];
+
+const growthIntervals: Array<{ id: DeviceGrowthInterval; label: string }> = [
+  { id: 'hourly', label: 'Hourly' }, { id: 'daily', label: 'Daily' }, { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' }, { id: 'yearly', label: 'Yearly' },
 ];
 
 const defaultDashboardPanels: DashboardPanelConfig[] = [
@@ -115,6 +121,8 @@ const Dashboard: Component = () => {
   const [showCopyUsers, setShowCopyUsers] = createSignal(false);
   const [selectedRecipientIDs, setSelectedRecipientIDs] = createSignal<number[]>([]);
   const [savingPanel, setSavingPanel] = createSignal(false);
+  const [growthInterval, setGrowthInterval] = createSignal<DeviceGrowthInterval>('daily');
+  const [refreshKey, setRefreshKey] = createSignal(0);
   const canCopyPanels = () => isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(async () => {
@@ -163,6 +171,7 @@ const Dashboard: Component = () => {
       thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
     });
   };
+  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); };
   const closePanelSettings = () => { setPanelDraft(null); setShowCopyUsers(false); setSelectedRecipientIDs([]); };
   const updatePanelDraft = (update: (draft: DashboardPanelDraft) => DashboardPanelDraft) => setPanelDraft((draft) => draft ? update(draft) : draft);
   const updateThreshold = (index: number, field: 'label' | 'max', value: string) => updatePanelDraft((draft) => ({
@@ -273,7 +282,7 @@ const Dashboard: Component = () => {
         description="Current fleet reachability, contact recency, health thresholds, and hardware mix."
         status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
-        <button type="button" class="btn btn-secondary" onClick={() => refetch()} disabled={dashboard.loading}><RefreshCw size={14} />Refresh fleet data</button>
+        <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading}><RefreshCw size={14} />Refresh fleet data</button>
       </PageHeader>
 
       <Show when={!dashboard.loading && !dashboard.error && (stats()?.total ?? 0) === 0}>
@@ -325,6 +334,23 @@ const Dashboard: Component = () => {
             <small>Online share of inventory</small>
           </div>
         </dl>
+
+        <section class="data-panel">
+          <div class="data-panel-header">
+            <div><h2>Device growth</h2><p>Cumulative number of CPEs added to ACS, based on their registration time.</p></div>
+            <div class="flex flex-wrap justify-end gap-1" role="group" aria-label="Device growth interval">
+              <For each={growthIntervals}>{(option) => (
+                <button
+                  type="button"
+                  class={`btn text-xs ${growthInterval() === option.id ? 'btn-primary' : 'btn-secondary'}`}
+                  aria-pressed={growthInterval() === option.id}
+                  onClick={() => setGrowthInterval(option.id)}
+                >{option.label}</button>
+              )}</For>
+            </div>
+          </div>
+          <div class="data-panel-body"><DeviceGrowthChart interval={growthInterval()} refreshKey={refreshKey()} /></div>
+        </section>
 
         <section class="data-panel">
           <div class="data-panel-header">

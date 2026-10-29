@@ -186,6 +186,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /tasks/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetTask))
 	apiMux.HandleFunc("DELETE /tasks/{id}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeletePendingTask))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
+	apiMux.HandleFunc("GET /devices/growth", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceGrowth))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
 	apiMux.HandleFunc("POST /devices/analytics/distribution", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceParameterDistribution))
 	apiMux.HandleFunc("GET /devices/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDevice))
@@ -558,6 +559,19 @@ func (r *Router) handleDeviceStats(w http.ResponseWriter, req *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, stats)
+}
+
+func (r *Router) handleDeviceGrowth(w http.ResponseWriter, req *http.Request) {
+	interval := req.URL.Query().Get("interval")
+	if interval == "" {
+		interval = "daily"
+	}
+	points, err := r.deviceRepo.GetGrowth(req.Context(), interval)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid device growth interval")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"interval": interval, "points": points})
 }
 
 func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request) {

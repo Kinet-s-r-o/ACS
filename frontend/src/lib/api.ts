@@ -31,6 +31,9 @@ export interface Device {
 }
 
 export interface DeviceStats { total: number; online: number; offline: number }
+export type DeviceGrowthInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+export interface DeviceGrowthPoint { timestamp: string; count: number }
+export interface DeviceGrowth { interval: DeviceGrowthInterval; points: DeviceGrowthPoint[] }
 export interface DeviceListResponse { devices: Device[]; total: number; limit: number; offset: number }
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
 export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
@@ -140,6 +143,7 @@ export const api = {
   updateTag: (id: string, body: { name: string; color: string; description?: string }) => request<TagDefinition>(`/tags/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTag: (id: string) => request<{ status: string }>(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getDeviceStats: () => request<DeviceStats>('/devices/stats'),
+  getDeviceGrowth: (interval: DeviceGrowthInterval) => request<DeviceGrowth>(`/devices/growth?interval=${interval}`),
   getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics'),
   getDeviceParameterDistribution: (body: DashboardParameterDistributionRequest) => request<DashboardParameterDistribution>('/devices/analytics/distribution', { method: 'POST', body: JSON.stringify(body) }),
   getDashboardPanels: () => request<DashboardPanelConfig[]>('/dashboard/panels'),

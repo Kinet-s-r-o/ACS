@@ -17,6 +17,25 @@ type DeviceRepository struct {
 	db *gorm.DB
 }
 
+type DeviceGrowthPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Count     int64     `json:"count"`
+}
+
+type deviceGrowthSpec struct {
+	SQLBucket string
+	Step      time.Duration
+	Buckets   int
+}
+
+var deviceGrowthSpecs = map[string]deviceGrowthSpec{
+	"hourly":  {SQLBucket: "hour", Step: time.Hour, Buckets: 48},
+	"daily":   {SQLBucket: "day", Step: 24 * time.Hour, Buckets: 30},
+	"weekly":  {SQLBucket: "week", Step: 7 * 24 * time.Hour, Buckets: 26},
+	"monthly": {SQLBucket: "month", Step: 0, Buckets: 24},
+	"yearly":  {SQLBucket: "year", Step: 0, Buckets: 10},
+}
+
 func NewDeviceRepository(db *gorm.DB) *DeviceRepository {
 	return &DeviceRepository{db: db}
 }
@@ -260,6 +279,82 @@ func (r *DeviceRepository) GetStats(ctx context.Context) (*models.DeviceStats, e
 	stats.Offline = int(offline)
 
 	return stats, nil
+}
+
+func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]DeviceGrowthPoint, error) {
+	spec, ok := deviceGrowthSpecs[interval]
+	if !ok {
+		return nil, fmt.Errorf("unsupported device growth interval %q", interval)
+	}
+
+	now := time.Now().UTC()
+	start := growthBucketStart(now, interval)
+	if interval == "monthly" {
+		start = start.AddDate(0, -spec.Buckets, 0)
+	} else if interval == "yearly" {
+		start = start.AddDate(-spec.Buckets, 0, 0)
+	} else {
+		start = start.Add(-time.Duration(spec.Buckets) * spec.Step)
+	}
+	end := growthBucketStart(now, interval)
+
+	var countBefore int64
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).Where("created_at < ?", start).Count(&countBefore).Error; err != nil {
+		return nil, err
+	}
+	var additions []struct {
+		Bucket time.Time `gorm:"column:bucket"`
+		Count  int64     `gorm:"column:count"`
+	}
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).
+		Select(fmt.Sprintf("date_trunc('%s', created_at) AS bucket, COUNT(*) AS count", spec.SQLBucket)).
+		Where("created_at >= ? AND created_at < ?", start, growthNextBucket(end, interval)).
+		Group("bucket").Order("bucket ASC").Scan(&additions).Error; err != nil {
+		return nil, err
+	}
+	addedByBucket := make(map[int64]int64, len(additions))
+	for _, addition := range additions {
+		addedByBucket[growthBucketStart(addition.Bucket, interval).UnixNano()] = addition.Count
+	}
+
+	points := make([]DeviceGrowthPoint, 0, spec.Buckets+1)
+	count := countBefore
+	for bucket := start; !bucket.After(end); bucket = growthNextBucket(bucket, interval) {
+		count += addedByBucket[growthBucketStart(bucket, interval).UnixNano()]
+		points = append(points, DeviceGrowthPoint{Timestamp: bucket, Count: count})
+	}
+	return points, nil
+}
+
+func growthBucketStart(value time.Time, interval string) time.Time {
+	value = value.UTC()
+	switch interval {
+	case "hourly":
+		return value.Truncate(time.Hour)
+	case "daily":
+		return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, time.UTC)
+	case "weekly":
+		day := time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, time.UTC)
+		daysSinceMonday := (int(day.Weekday()) + 6) % 7
+		return day.AddDate(0, 0, -daysSinceMonday)
+	case "monthly":
+		return time.Date(value.Year(), value.Month(), 1, 0, 0, 0, 0, time.UTC)
+	case "yearly":
+		return time.Date(value.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+	default:
+		return value
+	}
+}
+
+func growthNextBucket(value time.Time, interval string) time.Time {
+	switch interval {
+	case "monthly":
+		return value.AddDate(0, 1, 0)
+	case "yearly":
+		return value.AddDate(1, 0, 0)
+	default:
+		return value.Add(deviceGrowthSpecs[interval].Step)
+	}
 }
 
 func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int) ([]*models.Device, int, error) {
