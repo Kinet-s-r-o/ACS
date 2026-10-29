@@ -52,6 +52,37 @@ func TestMetricGPVPollIntervalPersistsAcrossSessions(t *testing.T) {
 	}
 }
 
+func TestParameterPollNowRequestsOnEveryInform(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.AutoMigrate(&models.ParameterPollDefinition{}, &models.ParameterPollState{}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	scope := fmt.Sprintf("ParameterPollNowTest%d", time.Now().UnixNano())
+	template := models.ProvisioningTemplate{Name: scope, Manufacturer: scope, ProductClass: "ONT"}
+	if err := db.Create(&template).Error; err != nil {
+		t.Fatal(err)
+	}
+	definition := models.ParameterPollDefinition{TemplateID: template.ID, ParameterPattern: "Device.WiFi.RadioEnabled", IntervalSeconds: 3600, Now: true, Active: true}
+	if err := db.Create(&definition).Error; err != nil {
+		t.Fatal(err)
+	}
+	deviceID := time.Now().UnixNano()
+	t.Cleanup(func() {
+		db.Where("device_id = ?", deviceID).Delete(&models.ParameterPollState{})
+		db.Delete(&definition)
+		db.Delete(&template)
+	})
+
+	repo := NewMetricRepository(db)
+	for inform := 1; inform <= 2; inform++ {
+		params, err := repo.ReserveDueParameterPolls(ctx, deviceID, scope+"/ONT")
+		if err != nil || len(params) != 1 || params[0] != definition.ParameterPattern {
+			t.Fatalf("Inform %d GPV paths: %v, err=%v", inform, params, err)
+		}
+	}
+}
+
 func TestSampleIntervalBoundary(t *testing.T) {
 	previous := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
 	if sampleIntervalElapsed(previous.Add(299*time.Second), previous, 300) {

@@ -674,7 +674,7 @@ func (r *MetricRepository) ReserveDueParameterPolls(ctx context.Context, deviceI
 		var due []models.ParameterPollDefinition
 		needsDiscovery := false
 		for _, def := range defs {
-			if now.Sub(lastRequest[def.ID]) < time.Duration(def.IntervalSeconds)*time.Second {
+			if !def.Now && now.Sub(lastRequest[def.ID]) < time.Duration(def.IntervalSeconds)*time.Second {
 				continue
 			}
 			due = append(due, def)

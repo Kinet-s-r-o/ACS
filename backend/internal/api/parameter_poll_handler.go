@@ -12,6 +12,7 @@ import (
 type parameterPollRequest struct {
 	ParameterPattern string `json:"parameter_pattern"`
 	IntervalSeconds  int    `json:"interval_seconds"`
+	Now              bool   `json:"now"`
 	Active           *bool  `json:"active"`
 }
 
@@ -60,7 +61,7 @@ func (r *Router) handleSaveParameterPoll(w http.ResponseWriter, req *http.Reques
 	if body.Active != nil {
 		active = *body.Active
 	}
-	definition := models.ParameterPollDefinition{TemplateID: templateID, ParameterPattern: body.ParameterPattern, IntervalSeconds: body.IntervalSeconds, Active: active}
+	definition := models.ParameterPollDefinition{TemplateID: templateID, ParameterPattern: body.ParameterPattern, IntervalSeconds: body.IntervalSeconds, Now: body.Now, Active: active}
 	if req.Method == http.MethodPost {
 		if err := r.db.WithContext(req.Context()).Create(&definition).Error; err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to create parameter polling rule")
@@ -74,7 +75,7 @@ func (r *Router) handleSaveParameterPoll(w http.ResponseWriter, req *http.Reques
 		respondError(w, http.StatusBadRequest, "Invalid polling rule ID")
 		return
 	}
-	result := r.db.WithContext(req.Context()).Model(&models.ParameterPollDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Select("parameter_pattern", "interval_seconds", "active").Updates(&definition)
+	result := r.db.WithContext(req.Context()).Model(&models.ParameterPollDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Select("parameter_pattern", "interval_seconds", "now", "active").Updates(&definition)
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update parameter polling rule")
 		return

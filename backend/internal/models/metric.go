@@ -92,6 +92,7 @@ type ParameterPollDefinition struct {
 	TemplateID       int64     `json:"template_id" gorm:"not null;index"`
 	ParameterPattern string    `json:"parameter_pattern" gorm:"not null;size:512"`
 	IntervalSeconds  int       `json:"interval_seconds" gorm:"not null"`
+	Now              bool      `json:"now" gorm:"not null;default:false"`
 	Active           bool      `json:"active" gorm:"not null;default:true"`
 	CreatedAt        time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt        time.Time `json:"updated_at" gorm:"autoUpdateTime"`
