@@ -106,6 +106,8 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 
 	var devices []*models.Device
 	err := r.db.WithContext(ctx).
+		Model(&models.Device{}).
+		Select("devices.*, (SELECT COUNT(*) FROM faults WHERE faults.device_id = devices.id AND faults.resolved = FALSE) AS active_faults").
 		Preload("Parameters", "name LIKE ? OR name LIKE ? OR name LIKE ? OR name = ? OR name = ? OR name = ? OR name = ?", "%RXPower%", "InternetGatewayDevice.WANDevice.%", "Device.IP.%", "InternetGatewayDevice.DeviceInfo.UpTime", "InternetGatewayDevice.DeviceInfo.SoftwareVersion", "InternetGatewayDevice.DeviceInfo.HardwareVersion", "InternetGatewayDevice.DeviceInfo.ManufacturerOUI").
 		Order("last_inform DESC NULLS LAST").
 		Limit(limit).

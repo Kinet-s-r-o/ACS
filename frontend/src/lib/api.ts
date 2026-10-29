@@ -24,6 +24,7 @@ export interface Device {
   last_overview_refresh: string | null;
   last_full_refresh: string | null;
   online: boolean;
+  active_faults: number;
   created_at: string;
   updated_at: string;
   parameters?: DeviceParameter[];

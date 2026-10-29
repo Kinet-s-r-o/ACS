@@ -40,6 +40,7 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'software_version', label: 'Software Version', visible: true, order: 11 },
   { id: 'hardware_version', label: 'Hardware Version', visible: true, order: 12 },
   { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true, order: 13 },
+  { id: 'active_faults', label: 'CWMP faults', visible: true, order: 14 },
 ];
 
 const STORAGE_KEY = 'acs_device_columns';
@@ -225,6 +226,8 @@ const Devices: Component = () => {
         return <span class="text-secondary text-sm">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion')}</span>;
       case 'manufacturer_oui':
         return <span class="text-secondary font-mono text-xs">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI')}</span>;
+      case 'active_faults':
+        return <span class={`font-mono text-sm ${device.active_faults > 0 ? 'text-rose-400' : 'text-muted'}`}>{device.active_faults ?? 0}</span>;
       default:
         return '-';
     }
@@ -252,6 +255,7 @@ const Devices: Component = () => {
       case 'software_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
       case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
       case 'manufacturer_oui': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
+      case 'active_faults': return String(device.active_faults ?? 0);
       default: return '';
     }
   };
@@ -269,7 +273,8 @@ const Devices: Component = () => {
           d.ip_address?.toLowerCase().includes(query) ||
           getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion').toLowerCase().includes(query) ||
           getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.HardwareVersion').toLowerCase().includes(query) ||
-          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI').toLowerCase().includes(query)
+          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI').toLowerCase().includes(query) ||
+          String(d.active_faults ?? 0).includes(query)
         );
       });
     }
@@ -334,6 +339,10 @@ const Devices: Component = () => {
           aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
           bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
           break;
+        case 'active_faults':
+          aVal = a.active_faults ?? 0;
+          bVal = b.active_faults ?? 0;
+          break;
         default:
           return 0;
       }
@@ -378,6 +387,7 @@ const Devices: Component = () => {
           case 'software_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
           case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
           case 'manufacturer_oui': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
+          case 'active_faults': return String(device.active_faults ?? 0);
           default: return '';
         }
       };
@@ -524,7 +534,7 @@ const Devices: Component = () => {
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults'].includes(col.id);
                     const currentSort = sortBy();
                     const isSorted = currentSort?.column === col.id;
                     
