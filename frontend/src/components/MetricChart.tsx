@@ -144,6 +144,29 @@ const MetricChart: Component<MetricChartProps> = (props) => {
 
   const hasRightAxis = createMemo(() => props.metrics.some((m) => m.axis === 'right'));
 
+  const metricScales = createMemo(() => {
+    const results = data();
+    const axisValues = new Map<'left' | 'right', number[]>();
+    const axisModes = new Map<'left' | 'right', string>();
+    if (results) {
+      for (let i = 0; i < results.length; i++) {
+        const metric = props.metrics[i];
+        if (!metric?.unit_scale) continue;
+        const values = axisValues.get(metric.axis) || [];
+        values.push(...metricChartPoints(results[i], bucket().value).map((point) => point.value));
+        axisValues.set(metric.axis, values);
+        if (!axisModes.has(metric.axis)) axisModes.set(metric.axis, metric.unit_scale);
+      }
+    }
+    const axisScales = new Map<'left' | 'right', UnitScale>();
+    for (const [axis, values] of axisValues) {
+      axisScales.set(axis, computeUnitScale(values, axisModes.get(axis) || ''));
+    }
+    return props.metrics.map((metric) => metric.unit_scale
+      ? axisScales.get(metric.axis) || { divisor: 1, suffix: '' }
+      : { divisor: 1, suffix: '' });
+  });
+
   const chartType = createMemo(() => {
     const t = props.metrics[0]?.chart_type || 'line';
     return isTimeSeriesType(t) ? t : 'line';
@@ -170,12 +193,8 @@ const MetricChart: Component<MetricChartProps> = (props) => {
 
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
-      const m = props.metrics[i];
       const points = metricChartPoints(r, bucket().value);
-      const scale = m.unit_scale ? computeUnitScale(
-        points.map((point) => point.value),
-        m.unit_scale
-      ) : { divisor: 1, suffix: '' };
+      const scale = metricScales()[i];
       suffixes.push(scale.suffix);
 
       if (points.length > 0) {
@@ -208,7 +227,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
       const color = m.color || DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
       const points = metricChartPoints(r, bucket().value);
       const values = points.map((point) => point.value);
-      const scale = m.unit_scale ? computeUnitScale(values, m.unit_scale) : { divisor: 1, suffix: '' };
+      const scale = metricScales()[i];
       const unit = effectiveUnit(m.unit, m.unit_scale, scale.suffix);
       let min: number | null = null;
       let max: number | null = null;
@@ -280,7 +299,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
         lineStyle: { type: 'dashed' as const, width: 1 },
         label: { show: false },
         data: tLines.map((tl) => ({
-          yAxis: tl.value,
+          yAxis: tl.value / (metricScales()[i]?.divisor || 1),
           lineStyle: { color: tl.color, type: 'dashed' as const },
         })),
       } : undefined;
