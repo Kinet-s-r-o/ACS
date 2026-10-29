@@ -117,10 +117,8 @@ const DeviceDetail: Component = () => {
   const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' || searchParams.tab === 'log' ? searchParams.tab : 'overview';
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
-  const [parameters, { refetch: refetchParams }] = createResource(serial, api.getDeviceParameters);
   const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
   const taskSource = () => activeTab() === 'tasks' || featureRefreshTaskID() !== null ? serial() : false;
-  const initialOverviewLoading = () => activeTab() === 'overview' && parameters.loading && !parameters();
   const [systemSettings] = createResource(api.getSettings);
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
@@ -138,6 +136,42 @@ const DeviceDetail: Component = () => {
     return faultRows;
   };
   const [metricDefs] = createResource(serial, api.getDeviceMetricDefinitions);
+  const parameterViewFilters = (tab: string): { prefixes?: string[]; names?: string[]; contains?: string[] } => {
+    const names = metricDefs()?.filter(def => def.active).map(def => def.parameter_name).filter(Boolean) || [];
+    if (tab === 'overview') return { names };
+    if (tab === 'hosts') return { prefixes: ['InternetGatewayDevice.LANDevice.1.Hosts.Host.', 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.', 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.'] };
+    if (tab === 'diagnostic') return { prefixes: ['InternetGatewayDevice.WANDevice.', 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.', 'InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.', 'InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.', 'InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'] };
+    if (tab === 'metrics') return { names };
+    if (tab === 'features') {
+      const current = device();
+      const manufacturer = (current?.manufacturer || '').toLowerCase();
+      const productClass = (current?.product_class || '').toLowerCase();
+      const template = (provisioningTemplates() || []).filter(item => (!item.manufacturer || item.manufacturer.toLowerCase() === manufacturer) && (!item.product_class || item.product_class.toLowerCase() === productClass)).sort((a, b) => (Number(Boolean(b.manufacturer)) + Number(Boolean(b.product_class))) - (Number(Boolean(a.manufacturer)) + Number(Boolean(a.product_class))) || a.id - b.id)[0];
+      const controls = template?.features?.flatMap(feature => feature.controls) || [];
+      return { names: controls.filter(control => control.type !== 'object').map(control => control.parameter), prefixes: controls.filter(control => control.type === 'object').map(control => control.parameter.endsWith('.') ? control.parameter : `${control.parameter}.`) };
+    }
+    return { names: [] };
+  };
+  const parameterViewSource = () => JSON.stringify({ serial: serial(), tab: activeTab(), names: metricDefs()?.filter(def => def.active).map(def => def.parameter_name) || [], templateReady: activeTab() === 'features' ? Boolean(provisioningTemplates()) : true, manufacturer: device()?.manufacturer, productClass: device()?.product_class });
+  const [parameters, { refetch: refetchParams }] = createResource(parameterViewSource, async key => {
+    const source = JSON.parse(key) as { serial: string; tab: string; templateReady: boolean };
+    if (!source.serial || !['overview', 'hosts', 'diagnostic', 'metrics', 'features'].includes(source.tab)) return [];
+    if (source.tab === 'features' && !source.templateReady) return [];
+    const filters = parameterViewFilters(source.tab);
+    if (source.tab === 'overview') return api.getDeviceOverviewParameters(source.serial, filters.names);
+    if (!filters.prefixes?.length && !filters.names?.length && !filters.contains?.length) return [];
+    return api.getDeviceParameterView(source.serial, filters);
+  });
+  const loadDeviceParameters = () => refetchParams();
+  const [allParametersRequested, setAllParametersRequested] = createSignal(false);
+  const [allParameters, { refetch: refetchAllParameters }] = createResource(() => allParametersRequested() ? serial() : false, api.getDeviceParameters);
+  const loadAllParameters = () => {
+    if (!allParametersRequested()) {
+      setAllParametersRequested(true);
+      return;
+    }
+    return refetchAllParameters();
+  };
   const [featureAction, setFeatureAction] = createSignal<string | null>(null);
   const [featureObjectEditor, setFeatureObjectEditor] = createSignal<FeatureObjectEditor | null>(null);
   const [featureObjectDraft, setFeatureObjectDraft] = createSignal<Record<string, string>>({});
@@ -184,7 +218,7 @@ const DeviceDetail: Component = () => {
     const taskID = featureRefreshTaskID();
     if (taskID === null) return;
     const refresh = async () => {
-      const [rows] = await Promise.all([refetchTasks(), refetchParams()]);
+      const [rows] = await Promise.all([refetchTasks(), loadDeviceParameters()]);
       const status = rows?.find(task => task.id === taskID)?.status;
       if (status === 'completed' || status === 'failed') setFeatureRefreshTaskID(null);
     };
@@ -749,7 +783,7 @@ const DeviceDetail: Component = () => {
     const visibleCols = paramColumns().filter(c => c.visible);
     if (visibleCols.length === 0) return;
     const headers = visibleCols.map(c => c.label);
-    const rows = filteredParams().map(param => {
+    const rows = filteredAllParams().map(param => {
       const objPath = param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : '';
       return visibleCols.map(col => {
         switch (col.id) {
@@ -1016,7 +1050,7 @@ const DeviceDetail: Component = () => {
       const hasError = results.some(result => result.values[prefix + 'ErrorDescription']);
       if (hasError) showMessage('error', 'iPerf test completed with a CPE error.');
       else showMessage('success', form.testMode === 'BOTH' ? 'Upload and download tests completed.' : 'iPerf test completed.');
-      await refetchParams();
+      await loadDeviceParameters();
       await refetchTasks();
     } catch (err) {
       showMessage('error', 'iPerf test was not completed.', (err as Error).message);
@@ -1076,7 +1110,7 @@ const DeviceDetail: Component = () => {
       if (state.includes('error')) showMessage('error', 'NS lookup completed with a CPE error.', state);
       else if (state.includes('complete')) showMessage('success', 'NS lookup completed.');
       else showMessage('error', 'NS lookup timed out before the CPE completed it.');
-      await refetchParams();
+      await loadDeviceParameters();
       await refetchTasks();
     } catch (error) {
       showMessage('error', 'NS lookup was not completed.', (error as Error).message);
@@ -1139,7 +1173,7 @@ const DeviceDetail: Component = () => {
       if (state.startsWith('error')) showMessage('error', 'IP ping completed with a CPE error.', state);
       else if (state.includes('complete')) showMessage('success', 'IP ping completed.');
       else showMessage('error', 'IP ping timed out before the CPE completed it.');
-      await refetchParams();
+      await loadDeviceParameters();
       await refetchTasks();
     } catch (error) {
       showMessage('error', 'IP ping was not completed.', (error as Error).message);
@@ -1204,7 +1238,7 @@ const DeviceDetail: Component = () => {
       if (state.startsWith('error')) showMessage('error', 'Traceroute completed with a CPE error.', state);
       else if (state.includes('complete')) showMessage('success', 'Traceroute completed.');
       else showMessage('error', 'Traceroute timed out before the CPE completed it.');
-      await refetchParams();
+      await loadDeviceParameters();
       await refetchTasks();
     } catch (error) {
       showMessage('error', 'Traceroute was not completed.', (error as Error).message);
@@ -1359,7 +1393,7 @@ const DeviceDetail: Component = () => {
     setActionLoading(null);
   };
 
-  const refreshAll = () => { refetchDevice(); refetchParams(); refetchTasks(); refetchSnapshots(); if (activeTab() === 'log') void refetchDeviceLog(); };
+  const refreshAll = () => { refetchDevice(); loadDeviceParameters(); refetchTasks(); refetchSnapshots(); if (activeTab() === 'log') void refetchDeviceLog(); };
 
   createEffect(() => {
     if (autoRefreshEnabled() !== 'true') return;
@@ -1375,7 +1409,7 @@ const DeviceDetail: Component = () => {
         case 'hosts':
         case 'credentials':
         case 'diagnostic':
-          requests.push(Promise.resolve(refetchParams()));
+          requests.push(Promise.resolve(loadDeviceParameters()));
           break;
         case 'tasks':
           requests.push(Promise.resolve(refetchTaskRows()));
@@ -1384,7 +1418,7 @@ const DeviceDetail: Component = () => {
           requests.push(Promise.resolve(refetchFaultRows()));
           break;
         case 'snapshots':
-          requests.push(Promise.resolve(refetchSnapshots()), Promise.resolve(refetchParams()));
+          requests.push(Promise.resolve(refetchSnapshots()), Promise.resolve(loadDeviceParameters()));
           break;
         case 'metrics':
           setAutoRefreshTick(value => value + 1);
@@ -1729,8 +1763,8 @@ const DeviceDetail: Component = () => {
     return hosts;
   };
 
-  const filteredParams = () => {
-    let params = parameters() || [];
+  const filteredAllParams = () => {
+    let params = allParameters() || [];
     const filter = paramFilter().toLowerCase();
     if (filter) {
       params = params.filter(p => 
@@ -1941,7 +1975,7 @@ const DeviceDetail: Component = () => {
       <Show when={!device.error && (parameters.error || tasks.error)}>
         <div class="card"><ResourceError title="CPE detail is incomplete" description="The device record loaded, but parameters or task history are unavailable. Retry before issuing a configuration action." onRetry={refreshAll} /></div>
       </Show>
-      <Show when={(device.loading && !device()) || initialOverviewLoading()}>
+      <Show when={device.loading && !device()}>
         <div class="card p-6" role="status" aria-label="Loading device details" aria-busy="true">
           <div class="skeleton h-6 w-48 mb-4" />
           <div class="grid grid-cols-2 gap-4">
@@ -1950,7 +1984,7 @@ const DeviceDetail: Component = () => {
           </div>
         </div>
       </Show>
-      <Show when={!device.error && !initialOverviewLoading() && device()}>
+      <Show when={!device.error && device()}>
         {(d) => (
           <>
             <Show when={activeTab() === 'overview'}>
@@ -2339,7 +2373,7 @@ const DeviceDetail: Component = () => {
 
             <Show when={activeTab() === 'features' && (matchingProvisioningTemplate()?.features?.length || 0) > 0}>
               <div class="space-y-4">
-                <div class="flex justify-end"><button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchParams()} disabled={parameters.loading}><RefreshCw size={13} class={parameters.loading ? 'animate-spin' : ''} />Refresh device parameters</button></div>
+                <div class="flex justify-end"><button type="button" class="btn btn-secondary text-xs" onClick={() => void loadDeviceParameters()} disabled={parameters.loading}><RefreshCw size={13} class={parameters.loading ? 'animate-spin' : ''} />Refresh device parameters</button></div>
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Device Advanced settings sections"><For each={matchingProvisioningTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeDeviceFeature()?.id === feature.id} onClick={() => setActiveDeviceFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeDeviceFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For></div>
                 <Show when={activeDeviceFeature()} keyed>{feature => <section class="card p-5 space-y-4">
                   <div><h2 class="text-sm font-medium text-secondary">{feature.name}</h2><p class="mt-1 text-xs text-muted">Advanced settings from template {matchingProvisioningTemplate()?.name}. Changes are sent to the device as CWMP tasks.</p></div>
@@ -3328,7 +3362,7 @@ const DeviceDetail: Component = () => {
             {/* Row 6: All Parameters */}
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between gap-4">
-                <h2 class="text-sm font-medium text-secondary whitespace-nowrap">All Parameters ({filteredParams().length})</h2>
+                <h2 class="text-sm font-medium text-secondary whitespace-nowrap">All Parameters ({filteredAllParams().length})</h2>
                 <div class="flex items-center gap-2">
                   <input
                     id="parameter-filter"
@@ -3341,8 +3375,18 @@ const DeviceDetail: Component = () => {
                   <button
                     type="button"
                     class="icon-button"
+                    onClick={() => void loadAllParameters()}
+                    disabled={allParameters.loading}
+                    title="Load or refresh parameters"
+                    aria-label="Load or refresh parameters"
+                  >
+                    <RefreshCw size={14} class={allParameters.loading ? 'animate-spin' : ''} />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-button"
                     onClick={exportParamsCSV}
-                    disabled={filteredParams().length === 0}
+                    disabled={filteredAllParams().length === 0}
                     title="Export CSV"
                     aria-label="Export parameters as CSV"
                   >
@@ -3350,9 +3394,9 @@ const DeviceDetail: Component = () => {
                   </button>
                 </div>
               </div>
-              <Show when={filteredParams().length > 0} fallback={
+              <Show when={filteredAllParams().length > 0} fallback={
                 <div class="p-8 text-center">
-                  <p class="text-muted text-sm">No parameters loaded yet. Click Summon to fetch.</p>
+                  <p class="text-muted text-sm">{allParameters.loading ? 'Loading all parameters from the database…' : allParameters.error ? 'Could not load parameters. Use refresh to retry.' : allParametersRequested() ? 'No parameters are stored for this CPE.' : 'Click refresh to load all parameters from the database.'}</p>
                 </div>
               }>
                 <div class="max-h-96 overflow-auto">
@@ -3388,7 +3432,7 @@ const DeviceDetail: Component = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      <For each={filteredParams()}>
+                      <For each={filteredAllParams()}>
                         {(param) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
                             <Show when={paramColumns().find(c => c.id === 'object')?.visible}><td class="px-4 py-2 text-muted font-mono text-xs truncate" title={param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}>{param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}</td></Show>
@@ -3541,7 +3585,7 @@ const DeviceDetail: Component = () => {
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setWifiModalIndex(null)}
-          onSaved={() => { refetchParams(); refetchTasks(); }}
+          onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
         />
       </Show>
 
@@ -3552,7 +3596,7 @@ const DeviceDetail: Component = () => {
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setLanModalIndex(null)}
-          onSaved={() => { refetchParams(); refetchTasks(); }}
+          onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
         />
       </Show>
 
@@ -3561,7 +3605,7 @@ const DeviceDetail: Component = () => {
           parameters={parameters()!}
           serial={serial()}
           onClose={() => setShowLanNetworkModal(false)}
-          onSaved={() => { refetchParams(); refetchTasks(); }}
+          onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
         />
       </Show>
 
@@ -3572,7 +3616,7 @@ const DeviceDetail: Component = () => {
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setWanModalPath(null)}
-          onSaved={() => { refetchParams(); refetchTasks(); }}
+          onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
         />
       </Show>
 

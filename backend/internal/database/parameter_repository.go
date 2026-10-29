@@ -226,10 +226,55 @@ func deleteStale(db *gorm.DB, deviceID int64, currentNames []string) error {
 }
 
 func (r *ParameterRepository) GetByDeviceID(ctx context.Context, deviceID int64) ([]models.DeviceParameter, error) {
+	return r.getByDeviceID(ctx, deviceID, nil, nil, nil)
+}
+
+func (r *ParameterRepository) GetByDeviceIDMatching(ctx context.Context, deviceID int64, prefixes, names, contains []string) ([]models.DeviceParameter, error) {
+	return r.getByDeviceID(ctx, deviceID, prefixes, names, contains)
+}
+
+func (r *ParameterRepository) GetOverviewByDeviceID(ctx context.Context, deviceID int64, additionalNames []string) ([]models.DeviceParameter, error) {
+	names, err := r.OverviewNames(ctx, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(names)+len(additionalNames))
+	for _, name := range names {
+		seen[name] = true
+	}
+	for _, name := range additionalNames {
+		if name != "" && !seen[name] {
+			names = append(names, name)
+			seen[name] = true
+		}
+	}
+	if len(names) == 0 {
+		return []models.DeviceParameter{}, nil
+	}
+	return r.getByDeviceID(ctx, deviceID, nil, names, nil)
+}
+
+func (r *ParameterRepository) getByDeviceID(ctx context.Context, deviceID int64, prefixes, names, contains []string) ([]models.DeviceParameter, error) {
 	var params []models.DeviceParameter
-	err := r.db.WithContext(ctx).Where("device_id = ?", deviceID).
-		Order("name").
-		Find(&params).Error
+	query := r.db.WithContext(ctx).Where("device_id = ?", deviceID)
+	conditions := make([]string, 0, len(prefixes)+len(contains)+1)
+	args := make([]interface{}, 0, len(prefixes)+len(contains)+1)
+	if len(names) > 0 {
+		conditions = append(conditions, "name IN ?")
+		args = append(args, names)
+	}
+	for _, prefix := range prefixes {
+		conditions = append(conditions, "name LIKE ?")
+		args = append(args, prefix+"%")
+	}
+	for _, value := range contains {
+		conditions = append(conditions, "LOWER(name) LIKE ?")
+		args = append(args, "%"+strings.ToLower(value)+"%")
+	}
+	if len(conditions) > 0 {
+		query = query.Where("("+strings.Join(conditions, " OR ")+")", args...)
+	}
+	err := query.Order("name").Find(&params).Error
 	if err != nil {
 		return nil, err
 	}
