@@ -437,7 +437,7 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 func filterOverviewParameters(parameters []models.DeviceParameter) []models.DeviceParameter {
 	filtered := make([]models.DeviceParameter, 0, len(parameters))
 	for _, parameter := range parameters {
-		if strings.Contains(parameter.Name, "RXPower") || parameter.Name == "InternetGatewayDevice.DeviceInfo.UpTime" {
+		if strings.Contains(parameter.Name, "RXPower") || parameter.Name == "InternetGatewayDevice.DeviceInfo.UpTime" || parameter.Name == "InternetGatewayDevice.DeviceInfo.SoftwareVersion" || parameter.Name == "InternetGatewayDevice.DeviceInfo.HardwareVersion" || parameter.Name == "InternetGatewayDevice.DeviceInfo.ManufacturerOUI" {
 			filtered = append(filtered, parameter)
 		}
 	}

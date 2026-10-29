@@ -37,6 +37,9 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'status', label: 'Status', visible: true, order: 8 },
   { id: 'last_inform', label: 'Last Inform', visible: true, order: 9 },
   { id: 'tags', label: 'Tags', visible: true, order: 10 },
+  { id: 'software_version', label: 'Software Version', visible: true, order: 11 },
+  { id: 'hardware_version', label: 'Hardware Version', visible: true, order: 12 },
+  { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true, order: 13 },
 ];
 
 const STORAGE_KEY = 'acs_device_columns';
@@ -174,6 +177,10 @@ const Devices: Component = () => {
     return seconds === null ? '-' : formatUptime(seconds);
   };
 
+  const getDeviceInfoParameter = (device: Device, parameterName: string) => {
+    return device.parameters?.find(parameter => parameter.name === parameterName)?.value || '-';
+  };
+
   const getCellValue = (device: Device, columnId: string) => {
     switch (columnId) {
       case 'serial_number':
@@ -212,6 +219,12 @@ const Devices: Component = () => {
         return <span class="text-muted text-xs" title={formatDateTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
       case 'tags':
         return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasAnyPermission('devices.configure', 'devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
+      case 'software_version':
+        return <span class="text-secondary text-sm">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion')}</span>;
+      case 'hardware_version':
+        return <span class="text-secondary text-sm">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion')}</span>;
+      case 'manufacturer_oui':
+        return <span class="text-secondary font-mono text-xs">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI')}</span>;
       default:
         return '-';
     }
@@ -236,6 +249,9 @@ const Devices: Component = () => {
       case 'status': return device.online ? 'Online' : 'Offline';
       case 'last_inform': return device.last_inform || '';
       case 'tags': return getDeviceTagLabels(device);
+      case 'software_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
+      case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
+      case 'manufacturer_oui': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
       default: return '';
     }
   };
@@ -250,7 +266,10 @@ const Devices: Component = () => {
           d.manufacturer?.toLowerCase().includes(query) ||
           d.model_name?.toLowerCase().includes(query) ||
           d.product_class?.toLowerCase().includes(query) ||
-          d.ip_address?.toLowerCase().includes(query)
+          d.ip_address?.toLowerCase().includes(query) ||
+          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion').toLowerCase().includes(query) ||
+          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.HardwareVersion').toLowerCase().includes(query) ||
+          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI').toLowerCase().includes(query)
         );
       });
     }
@@ -303,6 +322,18 @@ const Devices: Component = () => {
           aVal = getDeviceTagLabels(a);
           bVal = getDeviceTagLabels(b);
           break;
+        case 'software_version':
+          aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
+          bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
+          break;
+        case 'hardware_version':
+          aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
+          bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
+          break;
+        case 'manufacturer_oui':
+          aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
+          bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
+          break;
         default:
           return 0;
       }
@@ -344,6 +375,9 @@ const Devices: Component = () => {
           case 'status': return device.online ? 'Online' : 'Offline';
           case 'last_inform': return device.last_inform || '';
           case 'tags': return getDeviceTagLabels(device);
+          case 'software_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
+          case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
+          case 'manufacturer_oui': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
           default: return '';
         }
       };
@@ -485,12 +519,12 @@ const Devices: Component = () => {
           </div>
         </div>
         <div class="overflow-x-auto table-scroll">
-          <table class="data-table w-full">
+          <table data-column-order-key="cpe-inventory" data-column-order-legacy-schema="table::ip address|last inform|manufacturer|model|rx power|serial number|status|tags|uptime" class="data-table w-full">
             <thead class="sticky top-0 z-10 opaque-table-header">
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'uptime', 'status', 'last_inform', 'tags'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui'].includes(col.id);
                     const currentSort = sortBy();
                     const isSorted = currentSort?.column === col.id;
                     
@@ -564,7 +598,7 @@ const Devices: Component = () => {
                       <tr class={`border-t border-subtle hover:bg-elevated transition-fast ${idx() % 2 === 1 ? 'bg-base/50' : ''}`}>
                         <For each={visibleColumns()}>
                           {(col) => (
-                            <td class="px-4 py-3 whitespace-nowrap">
+                            <td data-column-order-id={`${col.label.toLowerCase()}#0`} class="px-4 py-3 whitespace-nowrap">
                               {getCellValue(device, col.id)}
                             </td>
                           )}

@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Network, Search } from 'lucide-solid';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, ExternalLink, Network, Search } from 'lucide-solid';
 import { A } from '@solidjs/router';
 import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
@@ -80,6 +80,24 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
   const pagedInterfaces = createMemo(() => sortedInterfaces().slice(page() * pageSize(), (page() + 1) * pageSize()));
   const totalPages = createMemo(() => Math.ceil(sortedInterfaces().length / pageSize()));
 
+  const exportInterfacesCSV = () => {
+    const exportColumns = columns().filter(column => column.visible);
+    const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = sortedInterfaces().map(row => exportColumns.map(column => row[column.id as keyof typeof row] || ''));
+    const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...rows]
+      .map(row => row.map(escapeCsvValue).join(','))
+      .join('\r\n') + '\r\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'wan-interfaces.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div class="space-y-5">
       <Show when={!props.embedded}>
@@ -101,6 +119,16 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => { setPage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
             </label>
+            <button
+              type="button"
+              class="icon-button"
+              onClick={exportInterfacesCSV}
+              disabled={interfaces.loading || sortedInterfaces().length === 0}
+              title="Export filtered WAN interfaces as CSV"
+              aria-label={`Export ${sortedInterfaces().length} filtered WAN interfaces as CSV`}
+            >
+              <Download size={15} aria-hidden="true" />
+            </button>
           </div>
         </div>
       </div>
