@@ -43,12 +43,15 @@ const Faults: Component = () => {
     { id: 'parameter_name', label: 'Parameter', visible: true },
     { id: 'created_at', label: 'Time', visible: true },
     { id: 'resolved', label: 'Status', visible: true },
+    { id: 'software_version', label: 'Software Version', visible: true },
+    { id: 'hardware_version', label: 'Hardware Version', visible: true },
+    { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true },
   ]);
   const [faultPage, setFaultPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('faults', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFaultPage(0); };
 
-  const getFilterValue = (fault: { serial_number: string; model_name?: string; fault_code: string; fault_string: string; parameter_name: string; created_at: string; resolved: boolean }, colId: string): string => {
+  const getFilterValue = (fault: { serial_number: string; model_name?: string; software_version?: string; hardware_version?: string; manufacturer_oui?: string; fault_code: string; fault_string: string; parameter_name: string; created_at: string; resolved: boolean }, colId: string): string => {
     switch (colId) {
       case 'serial_number': return fault.serial_number || '';
       case 'model_name': return fault.model_name || '';
@@ -57,6 +60,9 @@ const Faults: Component = () => {
       case 'parameter_name': return fault.parameter_name || '';
       case 'created_at': return fault.created_at || '';
       case 'resolved': return fault.resolved ? 'Resolved' : 'Active';
+      case 'software_version': return fault.software_version || '';
+      case 'hardware_version': return fault.hardware_version || '';
+      case 'manufacturer_oui': return fault.manufacturer_oui || '';
       default: return '';
     }
   };
@@ -71,6 +77,9 @@ const Faults: Component = () => {
       fault.parameter_name || '',
       fault.created_at,
       fault.resolved ? 'Resolved' : 'Active',
+      fault.software_version || '',
+      fault.hardware_version || '',
+      fault.manufacturer_oui || '',
     ].some(value => value.toLowerCase().includes(query)));
     return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), sortState().column, sortState().direction, getFilterValue);
   });
@@ -82,7 +91,7 @@ const Faults: Component = () => {
   const faultTotalPages = createMemo(() => Math.ceil(filteredFaults().length / pageSize()));
 
   const exportFaultsCSV = () => {
-    const headers = ['Device', 'Model', 'Code', 'Message', 'Parameter', 'Time', 'Status'];
+    const headers = ['Device', 'Model', 'Code', 'Message', 'Parameter', 'Time', 'Status', 'Software Version', 'Hardware Version', 'Manufacturer OUI'];
     const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = filteredFaults().map(fault => [
       fault.serial_number,
@@ -92,6 +101,9 @@ const Faults: Component = () => {
       fault.parameter_name || '',
       fault.created_at,
       fault.resolved ? 'Resolved' : 'Active',
+      fault.software_version || '',
+      fault.hardware_version || '',
+      fault.manufacturer_oui || '',
     ]);
     const csv = '\uFEFF' + [headers, ...rows]
       .map(row => row.map(escapeCsvValue).join(','))
@@ -341,6 +353,27 @@ const Faults: Component = () => {
                         </div>
                       </th>
                     </Show>
+                    <Show when={isVisible('software_version')}>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted">
+                        <div class="flex items-center gap-1.5"><SortableHeader column="software_version" label="Software Version" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
+                          <ColumnFilter columnId="software_version" label="Software Version" active={columnFilters()['software_version'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['software_version'] = s; else delete n['software_version']; return n; }); }} />
+                        </div>
+                      </th>
+                    </Show>
+                    <Show when={isVisible('hardware_version')}>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted">
+                        <div class="flex items-center gap-1.5"><SortableHeader column="hardware_version" label="Hardware Version" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
+                          <ColumnFilter columnId="hardware_version" label="Hardware Version" active={columnFilters()['hardware_version'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['hardware_version'] = s; else delete n['hardware_version']; return n; }); }} />
+                        </div>
+                      </th>
+                    </Show>
+                    <Show when={isVisible('manufacturer_oui')}>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted">
+                        <div class="flex items-center gap-1.5"><SortableHeader column="manufacturer_oui" label="Manufacturer OUI" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
+                          <ColumnFilter columnId="manufacturer_oui" label="Manufacturer OUI" active={columnFilters()['manufacturer_oui'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['manufacturer_oui'] = s; else delete n['manufacturer_oui']; return n; }); }} />
+                        </div>
+                      </th>
+                    </Show>
                     <th class="text-right px-4 py-3 text-xs font-medium text-muted">Actions</th>
                     <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                   </tr>
@@ -392,6 +425,15 @@ const Faults: Component = () => {
                               {fault.resolved ? 'Resolved' : 'Active'}
                             </span>
                           </td>
+                        </Show>
+                        <Show when={isVisible('software_version')}>
+                          <td data-column-order-id="software version#0" class="px-4 py-3 text-secondary whitespace-nowrap">{fault.software_version || '-'}</td>
+                        </Show>
+                        <Show when={isVisible('hardware_version')}>
+                          <td data-column-order-id="hardware version#0" class="px-4 py-3 text-secondary whitespace-nowrap">{fault.hardware_version || '-'}</td>
+                        </Show>
+                        <Show when={isVisible('manufacturer_oui')}>
+                          <td data-column-order-id="manufacturer oui#0" class="px-4 py-3 text-secondary font-mono text-xs whitespace-nowrap">{fault.manufacturer_oui || '-'}</td>
                         </Show>
                         <td data-column-order-id="actions#0" class="px-4 py-3 text-right">
                           <div class="flex items-center justify-end gap-2">
