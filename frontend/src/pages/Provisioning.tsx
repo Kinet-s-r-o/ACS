@@ -134,6 +134,7 @@ const Provisioning: Component = () => {
   let templateImageInput: HTMLInputElement | undefined;
   let templateImageObjectUrl: string | null = null;
   const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features'>('rules');
+  const [metricSubTab, setMetricSubTab] = createSignal<'general' | 'interface' | 'polling'>('general');
   const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
   const [variablesSaving, setVariablesSaving] = createSignal(false);
   const [activeFeatureID, setActiveFeatureID] = createSignal('');
@@ -170,6 +171,8 @@ const Provisioning: Component = () => {
   const [parameterPolls, { refetch: refetchParameterPolls }] = createResource(() => selectedTemplate()?.id, (id) => api.getParameterPolls(id!));
   const [editingParameterPoll, setEditingParameterPoll] = createSignal<ParameterPollDefinition | null>(null);
   const [parameterPollForm, setParameterPollForm] = createSignal({ parameter_pattern: '', interval_seconds: 300, active: true });
+  const [parameterPollInitialSnapshot, setParameterPollInitialSnapshot] = createSignal('');
+  const [showParameterPollModal, setShowParameterPollModal] = createSignal(false);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [copyingMetric, setCopyingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -186,6 +189,7 @@ const Provisioning: Component = () => {
   const controlDraftDirty = () => controlInitialSnapshot() !== '' && JSON.stringify(controlDraft()) !== controlInitialSnapshot();
   const featureEditorDirty = () => featureDraftDirty() || controlDraftDirty();
   const interfaceMetricDirty = () => interfaceMetricInitialSnapshot() !== '' && JSON.stringify(interfaceMetricForm()) !== interfaceMetricInitialSnapshot();
+  const parameterPollDirty = () => parameterPollInitialSnapshot() !== '' && JSON.stringify(parameterPollForm()) !== parameterPollInitialSnapshot();
 
   const closeWithDirtyCheck = async (dirty: () => boolean, close: () => void, subject: string) => {
     if (dirty() && !await confirm({ title: `Discard unsaved ${subject} changes?`, description: 'The entered values have not been saved.', confirmLabel: 'Discard changes', tone: 'primary' })) return;
@@ -965,9 +969,16 @@ const Provisioning: Component = () => {
 
   const templateMetrics = createMemo(() => metrics() || []);
 
-  const editParameterPoll = (definition?: ParameterPollDefinition) => {
+  const openParameterPollModal = (definition?: ParameterPollDefinition) => {
     setEditingParameterPoll(definition || null);
-    setParameterPollForm(definition ? { parameter_pattern: definition.parameter_pattern, interval_seconds: definition.interval_seconds, active: definition.active } : { parameter_pattern: '', interval_seconds: 300, active: true });
+    const next = definition ? { parameter_pattern: definition.parameter_pattern, interval_seconds: definition.interval_seconds, active: definition.active } : { parameter_pattern: '', interval_seconds: 300, active: true };
+    setParameterPollForm(next);
+    setParameterPollInitialSnapshot(JSON.stringify(next));
+    setShowParameterPollModal(true);
+  };
+
+  const closeParameterPollModal = () => {
+    void closeWithDirtyCheck(parameterPollDirty, () => { setShowParameterPollModal(false); setParameterPollInitialSnapshot(''); }, 'parameter polling rule');
   };
 
   const saveParameterPoll = async (event: SubmitEvent) => {
@@ -979,7 +990,9 @@ const Provisioning: Component = () => {
       const editing = editingParameterPoll();
       if (editing) await api.updateParameterPoll(template.id, editing.id, form);
       else await api.createParameterPoll(template.id, form);
-      editParameterPoll();
+      setEditingParameterPoll(null);
+      setShowParameterPollModal(false);
+      setParameterPollInitialSnapshot('');
       refetchParameterPolls();
       notify({ tone: 'success', title: editing ? 'Parameter polling rule updated' : 'Parameter polling rule created' });
     } catch (error) { notify({ tone: 'error', title: 'Could not save parameter polling rule', message: (error as Error).message, persistent: true }); }
@@ -988,7 +1001,15 @@ const Provisioning: Component = () => {
   const deleteParameterPoll = async (definition: ParameterPollDefinition) => {
     const template = selectedTemplate();
     if (!template || !await confirm({ title: 'Delete parameter polling rule?', description: definition.parameter_pattern, confirmLabel: 'Delete rule', tone: 'danger' })) return;
-    try { await api.deleteParameterPoll(template.id, definition.id); if (editingParameterPoll()?.id === definition.id) editParameterPoll(); refetchParameterPolls(); }
+    try {
+      await api.deleteParameterPoll(template.id, definition.id);
+      if (editingParameterPoll()?.id === definition.id) {
+        setEditingParameterPoll(null);
+        setShowParameterPollModal(false);
+        setParameterPollInitialSnapshot('');
+      }
+      refetchParameterPolls();
+    }
     catch (error) { notify({ tone: 'error', title: 'Could not delete parameter polling rule', message: (error as Error).message, persistent: true }); }
   };
 
@@ -1418,21 +1439,21 @@ const Provisioning: Component = () => {
           </Show>
 
           <Show when={templateTab() === 'metrics'}>
-            <section class="mb-6 border-b border-subtle pb-5">
+            <div class="mb-4 flex flex-wrap gap-1 border-b border-subtle" aria-label="Metric configuration sections">
+              <button type="button" aria-pressed={metricSubTab() === 'general'} onClick={() => setMetricSubTab('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General Metrics</button>
+              <button type="button" aria-pressed={metricSubTab() === 'interface'} onClick={() => setMetricSubTab('interface')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'interface' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Per-interface metrics</button>
+              <button type="button" aria-pressed={metricSubTab() === 'polling'} onClick={() => setMetricSubTab('polling')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'polling' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Additional polling</button>
+            </div>
+            <Show when={metricSubTab() === 'polling'}><section class="mb-6">
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div><h3 class="text-sm font-semibold text-primary">Additional parameter polling</h3><p class="mt-1 text-xs text-muted">GPV requests run when the CPE opens a CWMP session. Wildcards match paths already known for the device.</p></div>
+                <Show when={isFullAccess()}><button type="button" class="btn btn-primary text-xs py-1.5" onClick={() => openParameterPollModal()}><Plus size={12} />Add parameter</button></Show>
               </div>
-              <Show when={isFullAccess()}><form class="mb-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(20rem,1fr)_10rem_auto_auto]" onSubmit={(event) => void saveParameterPoll(event)}>
-                <input aria-label="CWMP parameter path" class="input" required maxlength="512" placeholder="InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.RadioEnabled" value={parameterPollForm().parameter_pattern} onInput={event => setParameterPollForm(form => ({ ...form, parameter_pattern: event.currentTarget.value }))} />
-                <label class="flex items-center gap-2"><span class="text-xs text-muted">Interval (seconds)</span><input aria-label="Polling interval in seconds" class="input w-24" type="number" min="1" max="31536000" required value={parameterPollForm().interval_seconds} onInput={event => setParameterPollForm(form => ({ ...form, interval_seconds: Number(event.currentTarget.value) }))} /></label>
-                <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().active} onChange={event => setParameterPollForm(form => ({ ...form, active: event.currentTarget.checked }))} />Active</label>
-                <div class="flex gap-1"><button type="submit" class="btn btn-primary text-xs"><Save size={12} />{editingParameterPoll() ? 'Save' : 'Add'}</button><Show when={editingParameterPoll()}><button type="button" class="btn btn-secondary text-xs" onClick={() => editParameterPoll()}>Cancel</button></Show></div>
-              </form></Show>
-              <Show when={(parameterPolls()?.length ?? 0) > 0} fallback={<p class="text-xs text-muted">No additional parameter polling rules configured.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[48rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3 w-[65%]">CWMP parameter path</th><th class="py-2 pr-3">Interval</th><th class="py-2 pr-3">Active</th><th class="py-2 text-right">Actions</th></tr></thead><tbody><For each={parameterPolls() || []}>{definition => <tr class="border-t border-subtle/50 text-xs"><td class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td><td class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td><td class="py-2 pr-3"><span class={`badge ${definition.active ? 'badge-success' : 'badge-muted'}`}>{definition.active ? 'Yes' : 'No'}</span></td><td class="py-2 text-right"><Show when={isFullAccess()}><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => editParameterPoll(definition)} title="Edit polling rule" aria-label="Edit polling rule"><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label="Delete polling rule"><Trash2 size={14} /></button></div></Show></td></tr>}</For></tbody></table></div>
+              <Show when={parameterPolls()?.length} fallback={<p class="py-3 text-xs text-muted">No additional parameter polling rules configured.</p>}>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[48rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3 w-[65%]">CWMP parameter path</th><th class="py-2 pr-3">Interval</th><th class="py-2 pr-3">Active</th><th class="py-2 text-right">Actions</th></tr></thead><tbody><For each={parameterPolls() || []}>{definition => <tr class="border-t border-subtle/50 text-xs"><td class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td><td class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td><td class="py-2 pr-3"><span class={`badge ${definition.active ? 'badge-success' : 'badge-muted'}`}>{definition.active ? 'Yes' : 'No'}</span></td><td class="py-2 text-right"><Show when={isFullAccess()}><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openParameterPollModal(definition)} title="Edit polling rule" aria-label={`Edit ${definition.parameter_pattern}`}><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label={`Delete ${definition.parameter_pattern}`}><Trash2 size={14} /></button></div></Show></td></tr>}</For></tbody></table></div>
               </Show>
-            </section>
-            <Show when={metrics() !== undefined}>
+            </section></Show>
+            <Show when={metricSubTab() === 'general'}><Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
                 <table class="data-table w-full min-w-[95rem] table-fixed text-left">
                   <thead>
@@ -1489,8 +1510,8 @@ const Provisioning: Component = () => {
               <Show when={(templateMetrics()?.length ?? 0) === 0}>
                 <EmptyState compact title="No metrics match this template" description="Add a metric to start collecting time-series data for this device type." action={<button type="button" class="btn btn-primary" onClick={openCreateMetric}>Add metric</button>} />
               </Show>
-            </Show>
-            <section class="mt-6 border-t border-subtle pt-4">
+            </Show></Show>
+            <Show when={metricSubTab() === 'interface'}><section>
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 class="text-sm font-semibold text-primary">Per-interface WAN/LAN metrics</h3>
                 <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
@@ -1498,7 +1519,7 @@ const Provisioning: Component = () => {
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
                 <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[95rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[45%]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
-            </section>
+            </section></Show>
           </Show>
           </div>
         </Show>
@@ -1750,6 +1771,21 @@ const Provisioning: Component = () => {
       </Show>
 
       {/* Metric Modal */}
+      <Show when={showParameterPollModal()}>
+        <Dialog title={editingParameterPoll() ? 'Edit parameter polling rule' : 'Add parameter polling rule'} description="Set which CWMP parameter to refresh and how often to request it." headerBadge={<Show when={parameterPollDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeParameterPollModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeParameterPollModal}>Cancel</button><button type="submit" form="parameter-poll-form" class="btn btn-primary">{editingParameterPoll() ? 'Save rule' : 'Add rule'}</button></>}>
+          <form id="parameter-poll-form" class="space-y-4" onSubmit={(event) => void saveParameterPoll(event)}>
+            <label class="block text-xs text-muted">CWMP parameter path
+              <input class="input mt-1 w-full font-mono text-xs" required maxlength="512" placeholder="InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.RadioEnabled" value={parameterPollForm().parameter_pattern} onInput={event => setParameterPollForm(form => ({ ...form, parameter_pattern: event.currentTarget.value }))} />
+            </label>
+            <p class="-mt-2 text-xs text-muted">Use * for a dynamic path segment. Wildcards match paths already known for the device.</p>
+            <label class="block text-xs text-muted">GPV interval (seconds)
+              <input class="input mt-1 w-full" type="number" min="1" max="31536000" step="1" required value={parameterPollForm().interval_seconds} onInput={event => setParameterPollForm(form => ({ ...form, interval_seconds: Number(event.currentTarget.value) }))} />
+            </label>
+            <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().active} onChange={event => setParameterPollForm(form => ({ ...form, active: event.currentTarget.checked }))} />Active</label>
+            <p class="text-xs text-muted">The request is sent when the CPE opens a CWMP session after the interval expires.</p>
+          </form>
+        </Dialog>
+      </Show>
       <Show when={showInterfaceMetricModal()}>
         <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." headerBadge={<Show when={interfaceMetricDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" class="btn btn-primary">Save metric</button></>}>
           <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}>
