@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
-import { Eye, RefreshCw, Search, Trash2, X } from 'lucide-solid';
+import { Download, Eye, RefreshCw, Search, Trash2, X } from 'lucide-solid';
 import { A } from '@solidjs/router';
 import { api, type GlobalTask } from '../lib/api';
 import PageHeader from '../components/PageHeader';
@@ -111,6 +111,35 @@ const Tasks: Component = () => {
   });
 
   const totalPages = createMemo(() => Math.ceil(filteredTasks().length / taskPageSize()));
+
+  const exportTasksCSV = () => {
+    const headers = ['Serial number', 'Type', 'Trigger event', 'Status', 'Created', 'Completed', 'Created by', 'Deleted by', 'Error'];
+    const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = filteredTasks().map(task => [
+      task.serial_number,
+      task.type,
+      formatTriggerEvents(task.trigger_events),
+      task.status,
+      task.created_at,
+      task.completed_at || '',
+      task.created_by || '',
+      task.deleted_by || '',
+      task.error_message || '',
+    ]);
+    const csv = '\uFEFF' + [headers, ...rows]
+      .map(row => row.map(escapeCsvValue).join(','))
+      .join('\r\n') + '\r\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cwmp-tasks.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const applyFilter = (column: string, state: ColumnFilterState | null) => {
     setColumnFilters(previous => {
       const next = { ...previous };
@@ -163,12 +192,24 @@ const Tasks: Component = () => {
       <div class="card overflow-hidden">
         <div class="table-panel-toolbar">
             <span><strong>{pagedTasks().length}</strong> visible on this page · <strong>{taskCounts().total}</strong> total CWMP tasks</span>
-          <div class="relative">
-            <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <input type="text" value={searchQuery()} onInput={(event) => { setSearchQuery(event.currentTarget.value); setTaskPage(0); }} placeholder="Search tasks…" class="input pl-9! w-56 text-sm" />
-            <Show when={searchQuery()}>
-              <button type="button" onClick={() => { setSearchQuery(''); setTaskPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button>
-            </Show>
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <input type="text" value={searchQuery()} onInput={(event) => { setSearchQuery(event.currentTarget.value); setTaskPage(0); }} placeholder="Search tasks…" class="input pl-9! w-56 text-sm" />
+              <Show when={searchQuery()}>
+                <button type="button" onClick={() => { setSearchQuery(''); setTaskPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button>
+              </Show>
+            </div>
+            <button
+              type="button"
+              class="icon-button"
+              onClick={exportTasksCSV}
+              disabled={tasks.loading || filteredTasks().length === 0}
+              title="Export filtered tasks as CSV"
+              aria-label={`Export ${filteredTasks().length} filtered CWMP tasks as CSV`}
+            >
+              <Download size={15} aria-hidden="true" />
+            </button>
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
-import { Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
+import { Download, Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -70,6 +70,7 @@ const Devices: Component = () => {
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.devices');
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [summoningAll, setSummoningAll] = createSignal(false);
+  const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
   const { isFullAccess, hasAnyPermission } = useAuth();
@@ -239,8 +240,8 @@ const Devices: Component = () => {
     }
   };
 
-  const filteredDevices = createMemo(() => {
-    let devices = deviceList()?.devices || [];
+  const filterDevices = (source: Device[]) => {
+    let devices = source;
     const query = searchQuery().toLowerCase().trim();
     if (query) {
       devices = devices.filter(d => {
@@ -254,13 +255,15 @@ const Devices: Component = () => {
       });
     }
     return applyColumnFilters(devices, columnFilters(), getFilterValue);
-  });
+  };
+
+  const filteredDevices = createMemo(() => filterDevices(deviceList()?.devices || []));
 
   const activeFilterCount = createMemo(() => Object.keys(columnFilters()).length);
   const hasInventoryFilter = createMemo(() => Boolean(searchQuery().trim()) || activeFilterCount() > 0);
 
-  const sortedDevices = createMemo(() => {
-    const devices = [...filteredDevices()];
+  const sortDevices = (source: Device[]) => {
+    const devices = [...source];
     const sort = sortBy();
     if (!sort) return devices;
     
@@ -311,7 +314,59 @@ const Devices: Component = () => {
       
       return sort.direction === 'asc' ? aVal - bVal : bVal - aVal;
     });
-  });
+  };
+
+  const sortedDevices = createMemo(() => sortDevices(filteredDevices()));
+
+  const exportDevicesCSV = async () => {
+    if (exportingDevices() || !deviceList()) return;
+    setExportingDevices(true);
+    try {
+      const total = deviceList()?.total ?? 0;
+      const allDevices: Device[] = [];
+      for (let offset = 0; offset < total; offset += 100) {
+        const response = await api.getDevices(100, offset);
+        allDevices.push(...response.devices);
+        if (response.devices.length === 0) break;
+      }
+
+      const exportColumns = visibleColumns();
+      const getExportValue = (device: Device, columnId: string): string => {
+        switch (columnId) {
+          case 'serial_number': return device.serial_number || '';
+          case 'manufacturer': return device.manufacturer || '';
+          case 'model': return device.model_name || device.product_class || '';
+          case 'product_class': return device.product_class || '';
+          case 'ip_address': return device.ip_address || '';
+          case 'ppp_username': return getPppUsername(device) === '-' ? '' : getPppUsername(device);
+          case 'rx_power': return getRxPower(device).value;
+          case 'uptime': return getUptime(device);
+          case 'status': return device.online ? 'Online' : 'Offline';
+          case 'last_inform': return device.last_inform || '';
+          case 'tags': return getDeviceTagLabels(device);
+          default: return '';
+        }
+      };
+      const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const rows = sortDevices(filterDevices(allDevices)).map(device => exportColumns.map(column => getExportValue(device, column.id)));
+      const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...rows]
+        .map(row => row.map(escapeCsvValue).join(','))
+        .join('\r\n') + '\r\n';
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'cpe-inventory.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not export CPE inventory', message: 'No file was created. Retry after checking the API service.', detail: (error as Error).message, persistent: true });
+    } finally {
+      setExportingDevices(false);
+    }
+  };
 
   const handleSort = (columnId: string) => {
     const current = sortBy();
@@ -417,6 +472,16 @@ const Devices: Component = () => {
                 </button>
               </Show>
             </div>
+            <button
+              type="button"
+              class="icon-button"
+              onClick={() => void exportDevicesCSV()}
+              disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0}
+              title="Export filtered CPE inventory as CSV"
+              aria-label="Export filtered CPE inventory as CSV"
+            >
+              <Download size={15} aria-hidden="true" />
+            </button>
           </div>
         </div>
         <div class="overflow-x-auto table-scroll">

@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { A } from '@solidjs/router';
-import { AlertTriangle, CheckCircle, Trash2, RefreshCw } from 'lucide-solid';
+import { AlertTriangle, CheckCircle, Trash2, RefreshCw, Download } from 'lucide-solid';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -70,6 +70,32 @@ const Faults: Component = () => {
     return all.slice(start, start + pageSize());
   });
   const faultTotalPages = createMemo(() => Math.ceil(filteredFaults().length / pageSize()));
+
+  const exportFaultsCSV = () => {
+    const headers = ['Device', 'Model', 'Code', 'Message', 'Parameter', 'Time', 'Status'];
+    const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = filteredFaults().map(fault => [
+      fault.serial_number,
+      fault.model_name || '',
+      fault.fault_code,
+      fault.fault_string,
+      fault.parameter_name || '',
+      fault.created_at,
+      fault.resolved ? 'Resolved' : 'Active',
+    ]);
+    const csv = '\uFEFF' + [headers, ...rows]
+      .map(row => row.map(escapeCsvValue).join(','))
+      .join('\r\n') + '\r\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cwmp-faults-${filter()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const handleResolve = async (id: number) => {
     setPendingFault(id);
@@ -209,15 +235,25 @@ const Faults: Component = () => {
       <Show when={!faults.error}><div class="card p-0 overflow-hidden">
         <div class="table-panel-toolbar">
           <span><strong>{pagedFaults().length}</strong> visible on this page · <strong>{stats()?.total ?? 0}</strong> total CWMP faults</span>
+          <button
+            type="button"
+            class="icon-button"
+            onClick={exportFaultsCSV}
+            disabled={faults.loading || filteredFaults().length === 0}
+            title="Export filtered faults as CSV"
+            aria-label={`Export ${filteredFaults().length} filtered CWMP faults as CSV`}
+          >
+            <Download size={15} aria-hidden="true" />
+          </button>
         </div>
         <Show when={!faults.loading} fallback={
           <div class="p-4 space-y-3" aria-label="Loading fault records"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div>
         }>
-          <Show when={(faults()?.faults?.length ?? 0) > 0} fallback={
+          <Show when={filteredFaults().length > 0} fallback={
             <EmptyState
               icon={<AlertTriangle size={22} />}
-              title={filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
-              description={filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
+              title={(faults()?.faults?.length ?? 0) > 0 ? 'No CWMP faults match the current filters' : filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
+              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear a column filter to inspect more fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
               action={filter() !== 'all' ? <button type="button" class="btn btn-secondary" onClick={() => setFilter('all')}>Show all fault records</button> : undefined}
             />
           }>
