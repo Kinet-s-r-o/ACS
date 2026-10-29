@@ -1134,11 +1134,11 @@ const Provisioning: Component = () => {
               </div>
               <div class="flex flex-wrap gap-2">
                 <input ref={(element) => { provisioningImportInput = element; }} type="file" accept="application/json,.json" class="sr-only" onChange={(event) => void importProvisioningBackup(event)} />
-                <button type="button" onClick={() => provisioningImportInput?.click()} class="btn btn-secondary text-xs py-1.5" disabled={pendingAction() === 'import-provisioning'}>
-                  <Upload size={12} />Import JSON
+                <button type="button" onClick={() => provisioningImportInput?.click()} class="icon-button" disabled={pendingAction() === 'import-provisioning'} title="Import JSON backup" aria-label="Import JSON backup">
+                  <Upload size={15} aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => void exportProvisioningBackup()} class="btn btn-secondary text-xs py-1.5">
-                  <Download size={12} />Export JSON
+                <button type="button" onClick={() => void exportProvisioningBackup()} class="icon-button" title="Export JSON backup" aria-label="Export JSON backup">
+                  <Download size={15} aria-hidden="true" />
                 </button>
                 <button onClick={openCreateTemplate} class="btn btn-primary text-xs py-1.5">
                   <Plus size={12} />Add template
