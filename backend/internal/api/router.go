@@ -203,6 +203,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /device/{serial}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceBySerial))
 	apiMux.HandleFunc("DELETE /device/{serial}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeleteDeviceBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParametersBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/detail-parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceDetailParametersBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameter-view", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParameterViewBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/logs", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceLogsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
@@ -1713,6 +1714,69 @@ func (r *Router) handleGetDeviceParametersBySerial(w http.ResponseWriter, req *h
 	respondJSON(w, http.StatusOK, params)
 }
 
+func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	prefixes := []string{"DeviceInfo.", "Device.DeviceInfo.", "InternetGatewayDevice.DeviceInfo.", "InternetGatewayDevice.LANDevice.", "InternetGatewayDevice.WANDevice."}
+	var names []string
+	manufacturer, productClass := "", ""
+	if device.Manufacturer != nil {
+		manufacturer = *device.Manufacturer
+	}
+	if device.ProductClass != nil {
+		productClass = *device.ProductClass
+	}
+	template, err := r.metricRepo.TemplateForDeviceType(req.Context(), manufacturer+"/"+productClass)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		respondError(w, http.StatusInternalServerError, "Failed to load device template")
+		return
+	}
+	if err == nil {
+		var defs []models.MetricDefinition
+		if err := r.db.WithContext(req.Context()).Where("template_id = ? AND active = ? AND parameter_pattern = ''", template.ID, true).Find(&defs).Error; err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to load metric parameters")
+			return
+		}
+		for _, def := range defs {
+			if def.ParameterName != "" {
+				names = append(names, def.ParameterName)
+			}
+		}
+		interfaceNames, err := r.metricRepo.InterfaceMetricParamNamesForTemplate(req.Context(), device.ID, template.ID)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to load interface metric parameters")
+			return
+		}
+		names = append(names, interfaceNames...)
+		for _, feature := range template.Features {
+			for _, control := range feature.Controls {
+				if control.Parameter == "" {
+					continue
+				}
+				if control.Type == "object" {
+					prefix := control.Parameter
+					if !strings.HasSuffix(prefix, ".") {
+						prefix += "."
+					}
+					prefixes = append(prefixes, prefix)
+				} else {
+					names = append(names, control.Parameter)
+				}
+			}
+		}
+	}
+	params, err := r.parameterRepo.GetByDeviceIDMatching(req.Context(), device.ID, prefixes, names)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get detail parameters")
+		return
+	}
+	redactSensitiveParameters(req, params)
+	respondJSON(w, http.StatusOK, params)
+}
+
 func (r *Router) handleGetDeviceParameterViewBySerial(w http.ResponseWriter, req *http.Request) {
 	device, err := r.parseDeviceBySerial(req)
 	if err != nil || device == nil {
@@ -1720,18 +1784,18 @@ func (r *Router) handleGetDeviceParameterViewBySerial(w http.ResponseWriter, req
 		return
 	}
 	query := req.URL.Query()
-	prefixes, names, contains := query["prefix"], query["name"], query["contains"]
-	if len(prefixes)+len(names)+len(contains) == 0 || len(prefixes) > 64 || len(names) > 256 || len(contains) > 16 {
+	prefixes, names := query["prefix"], query["name"]
+	if len(prefixes)+len(names) == 0 || len(prefixes) > 64 || len(names) > 256 {
 		respondError(w, http.StatusBadRequest, "Parameter view filters are missing or exceed limits")
 		return
 	}
-	for _, value := range append(append(append([]string{}, prefixes...), names...), contains...) {
-		if value == "" || len(value) > 512 || strings.ContainsAny(value, "%_") {
+	for _, value := range append(append([]string{}, prefixes...), names...) {
+		if value == "" || len(value) > 512 {
 			respondError(w, http.StatusBadRequest, "Invalid parameter view filter")
 			return
 		}
 	}
-	params, err := r.parameterRepo.GetByDeviceIDMatching(req.Context(), device.ID, prefixes, names, contains)
+	params, err := r.parameterRepo.GetByDeviceIDMatching(req.Context(), device.ID, prefixes, names)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to get parameters")
 		return

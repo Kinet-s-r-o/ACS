@@ -58,6 +58,76 @@ func integrationTestDatabase(t *testing.T) *gorm.DB {
 	return db
 }
 
+func TestDeviceDetailParametersPostgres(t *testing.T) {
+	db := integrationTestDatabase(t)
+	if err := db.AutoMigrate(&models.ProvisioningTemplate{}, &models.MetricDefinition{}); err != nil {
+		t.Fatal(err)
+	}
+	manufacturer, productClass := "Huawei", "Model"
+	device := &models.Device{SerialNumber: "DETAIL-TEST", OUI: "000000", Manufacturer: &manufacturer, ProductClass: &productClass}
+	if err := db.Create(device).Error; err != nil {
+		t.Fatal(err)
+	}
+	template := &models.ProvisioningTemplate{Manufacturer: manufacturer, ProductClass: productClass, Name: "Detail template", Features: []models.ProvisioningFeature{{ID: "feature", Name: "Feature", Controls: []models.ProvisioningFeatureControl{{Key: "mode", Type: "string", Parameter: "Device.X_HW_Feature.Mode"}, {Key: "object", Type: "object", Parameter: "Device.X_HW_Feature.Object."}}}}}
+	if err := db.Create(template).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, def := range []models.MetricDefinition{
+		{TemplateID: &template.ID, Name: "Optical", ParameterName: "Device.X_HW_Optical.RXPower", Active: true},
+		{TemplateID: &template.ID, Name: "Interface", ParameterPattern: "Device.X_HW_Interface.*.Bytes", Active: true},
+	} {
+		if err := db.Create(&def).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	expected := []string{
+		"InternetGatewayDevice.DeviceInfo.UpTime",
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID",
+		"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ConnectionStatus",
+		"Device.X_HW_Optical.RXPower",
+		"Device.X_HW_Interface.1.Bytes",
+		"Device.X_HW_Feature.Mode",
+		"Device.X_HW_Feature.Object.1.Status",
+	}
+	for _, name := range append(expected, "Device.Unused.Value") {
+		if err := db.Create(&models.DeviceParameter{DeviceID: device.ID, Name: name, Value: "sample"}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := NewRouter(db)
+	request := httptest.NewRequest(http.MethodGet, "/device/DETAIL-TEST/detail-parameters", nil)
+	request.SetPathValue("serial", device.SerialNumber)
+	response := httptest.NewRecorder()
+	r.handleGetDeviceDetailParametersBySerial(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("detail parameter status: %d: %s", response.Code, response.Body.String())
+	}
+	var params []models.DeviceParameter
+	if err := json.Unmarshal(response.Body.Bytes(), &params); err != nil {
+		t.Fatal(err)
+	}
+	got := make(map[string]bool, len(params))
+	for _, param := range params {
+		got[param.Name] = true
+	}
+	for _, name := range expected {
+		if !got[name] {
+			t.Errorf("missing detail parameter %s", name)
+		}
+	}
+	if got["Device.Unused.Value"] {
+		t.Error("unrelated parameter was loaded")
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/device/DETAIL-TEST/parameter-view?prefix=Device.X_HW_Feature.", nil)
+	request.SetPathValue("serial", device.SerialNumber)
+	response = httptest.NewRecorder()
+	r.handleGetDeviceParameterViewBySerial(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("underscore prefix status: %d: %s", response.Code, response.Body.String())
+	}
+}
+
 func TestIntegrationAPIPostgres(t *testing.T) {
 	db := integrationTestDatabase(t)
 	t.Setenv("FIRMWARE_UPLOAD_DIR", t.TempDir())

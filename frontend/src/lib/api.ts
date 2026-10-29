@@ -136,11 +136,11 @@ export const api = {
   getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics'),
   getDeviceTypes: () => request<string[]>('/devices/device-types'),
   getDeviceParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameters`),
-  getDeviceParameterView: (serial: string, filters: { prefixes?: string[]; names?: string[]; contains?: string[] }) => {
+  getDeviceDetailParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/detail-parameters`),
+  getDeviceParameterView: (serial: string, filters: { prefixes?: string[]; names?: string[] }) => {
     const query = new URLSearchParams();
     filters.prefixes?.forEach(value => query.append('prefix', value));
     filters.names?.forEach(value => query.append('name', value));
-    filters.contains?.forEach(value => query.append('contains', value));
     return request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameter-view?${query.toString()}`);
   },
   getDeviceLogs: (query: { serial: string; limit: number; offset: number; search: string; filters: Record<string, { logic: string; rules: { operator: string; value: string }[] }>; sort: string; direction: string }) => {

@@ -198,7 +198,7 @@ func (r *MetricRepository) ListTemplateMetrics(ctx context.Context, templateID i
 }
 
 func (r *MetricRepository) TemplateMetricsForDevice(ctx context.Context, deviceType string, activeOnly bool) ([]models.MetricDefinition, error) {
-	template, err := r.templateForDeviceType(ctx, deviceType)
+	template, err := r.TemplateForDeviceType(ctx, deviceType)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func (r *MetricRepository) TemplateMetricsForDevice(ctx context.Context, deviceT
 	return defs, err
 }
 
-func (r *MetricRepository) templateForDeviceType(ctx context.Context, deviceType string) (*models.ProvisioningTemplate, error) {
+func (r *MetricRepository) TemplateForDeviceType(ctx context.Context, deviceType string) (*models.ProvisioningTemplate, error) {
 	parts := strings.SplitN(deviceType, "/", 2)
 	manufacturer, productClass := "", ""
 	if len(parts) > 0 {
@@ -275,6 +275,27 @@ func (r *MetricRepository) InterfaceActiveParamNames(ctx context.Context, device
 	return names, nil
 }
 
+func (r *MetricRepository) InterfaceMetricParamNamesForTemplate(ctx context.Context, deviceID, templateID int64) ([]string, error) {
+	var defs []models.MetricDefinition
+	if err := r.db.WithContext(ctx).Where("template_id = ? AND active = ? AND parameter_pattern <> ''", templateID, true).Find(&defs).Error; err != nil || len(defs) == 0 {
+		return nil, err
+	}
+	var names []string
+	if err := r.db.WithContext(ctx).Model(&models.DeviceParameter{}).Where("device_id = ?", deviceID).Pluck("name", &names).Error; err != nil {
+		return nil, err
+	}
+	matched := make([]string, 0)
+	for _, name := range names {
+		for _, def := range defs {
+			if interfacePathMatches(def.ParameterPattern, name) {
+				matched = append(matched, name)
+				break
+			}
+		}
+	}
+	return matched, nil
+}
+
 func (r *MetricRepository) InterfaceMetricDefinitionsForDevice(ctx context.Context, deviceType string) ([]models.MetricDefinition, error) {
 	return r.interfaceMetricDefinitions(ctx, deviceType, true)
 }
@@ -315,7 +336,7 @@ func (r *MetricRepository) QueryInterfaceMetric(ctx context.Context, deviceID, m
 }
 
 func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, deviceType string, activeOnly bool) ([]models.MetricDefinition, error) {
-	template, err := r.templateForDeviceType(ctx, deviceType)
+	template, err := r.TemplateForDeviceType(ctx, deviceType)
 	if err != nil {
 		return nil, err
 	}

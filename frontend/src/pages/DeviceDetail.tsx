@@ -136,46 +136,18 @@ const DeviceDetail: Component = () => {
     return faultRows;
   };
   const [metricDefs] = createResource(serial, api.getDeviceMetricDefinitions);
-  const parameterViewFilters = (tab: string): { prefixes?: string[]; names?: string[]; contains?: string[] } => {
-    const names = metricDefs()?.filter(def => def.active).map(def => def.parameter_name).filter(Boolean) || [];
-    if (tab === 'overview') return {
-      prefixes: ['InternetGatewayDevice.DeviceInfo.', 'InternetGatewayDevice.WANDevice.', 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.', 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.', 'InternetGatewayDevice.LANDevice.1.WiFi.Radio.', 'InternetGatewayDevice.LANDevice.1.Hosts.Host.', 'InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.'],
-      names,
-      contains: ['rxpower', 'opticalpower', 'transceivertemperature', 'temperature'],
-    };
-    if (tab === 'hosts') return { prefixes: ['InternetGatewayDevice.LANDevice.1.Hosts.Host.', 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.', 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.'] };
-    if (tab === 'diagnostic') return { prefixes: ['InternetGatewayDevice.WANDevice.', 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.', 'InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.', 'InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.', 'InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'] };
-    if (tab === 'metrics') return { names };
-    if (tab === 'features') {
-      const current = device();
-      const manufacturer = (current?.manufacturer || '').toLowerCase();
-      const productClass = (current?.product_class || '').toLowerCase();
-      const template = (provisioningTemplates() || []).filter(item => (!item.manufacturer || item.manufacturer.toLowerCase() === manufacturer) && (!item.product_class || item.product_class.toLowerCase() === productClass)).sort((a, b) => (Number(Boolean(b.manufacturer)) + Number(Boolean(b.product_class))) - (Number(Boolean(a.manufacturer)) + Number(Boolean(a.product_class))) || a.id - b.id)[0];
-      const controls = template?.features?.flatMap(feature => feature.controls) || [];
-      return { names: controls.filter(control => control.type !== 'object').map(control => control.parameter), prefixes: controls.filter(control => control.type === 'object').map(control => control.parameter.endsWith('.') ? control.parameter : `${control.parameter}.`) };
-    }
-    return { names: [] };
-  };
-  const parameterViewSource = () => {
-    const tab = activeTab();
-    const current = tab === 'features' ? device() : undefined;
-    return JSON.stringify({
-      serial: serial(),
-      tab,
-      names: tab === 'overview' || tab === 'metrics' ? metricDefs()?.filter(def => def.active).map(def => def.parameter_name) || [] : [],
-      templateReady: tab === 'features' ? Boolean(provisioningTemplates()) : true,
-      manufacturer: current?.manufacturer,
-      productClass: current?.product_class,
-    });
-  };
-  const [parameters, { refetch: refetchParams }] = createResource(parameterViewSource, async key => {
-    const source = JSON.parse(key) as { serial: string; tab: string; templateReady: boolean };
-    if (!source.serial || !['overview', 'hosts', 'diagnostic', 'metrics', 'features'].includes(source.tab)) return [];
-    if (source.tab === 'features' && !source.templateReady) return [];
-    const filters = parameterViewFilters(source.tab);
-    if (!filters.prefixes?.length && !filters.names?.length && !filters.contains?.length) return [];
-    return api.getDeviceParameterView(source.serial, filters);
+  const parameterSource = () => `${serial()}|${activeTab() === 'diagnostic' ? 'diagnostic' : 'detail'}`;
+  const [parameters, { refetch: refetchParams }] = createResource(parameterSource, async key => {
+    const [deviceSerial, mode] = key.split('|');
+    if (!deviceSerial) return [];
+    if (mode !== 'diagnostic') return api.getDeviceDetailParameters(deviceSerial);
+    const [detail, diagnostic] = await Promise.all([
+      api.getDeviceDetailParameters(deviceSerial),
+      api.getDeviceParameterView(deviceSerial, { prefixes: ['InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.', 'InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.', 'InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.', 'InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'] }),
+    ]);
+    return [...new Map([...detail, ...diagnostic].map(parameter => [parameter.name, parameter])).values()];
   });
+  const initialOverviewLoading = () => activeTab() === 'overview' && parameters.loading && !parameters();
   const loadDeviceParameters = () => refetchParams();
   const [allParametersRequested, setAllParametersRequested] = createSignal(false);
   const [allParameters, { refetch: refetchAllParameters }] = createResource(() => allParametersRequested() ? serial() : false, api.getDeviceParameters);
@@ -1989,7 +1961,7 @@ const DeviceDetail: Component = () => {
       <Show when={!device.error && (parameters.error || tasks.error)}>
         <div class="card"><ResourceError title="CPE detail is incomplete" description="The device record loaded, but parameters or task history are unavailable. Retry before issuing a configuration action." onRetry={refreshAll} /></div>
       </Show>
-      <Show when={device.loading && !device()}>
+      <Show when={(device.loading && !device()) || initialOverviewLoading()}>
         <div class="card p-6" role="status" aria-label="Loading device details" aria-busy="true">
           <div class="skeleton h-6 w-48 mb-4" />
           <div class="grid grid-cols-2 gap-4">
@@ -1998,7 +1970,7 @@ const DeviceDetail: Component = () => {
           </div>
         </div>
       </Show>
-      <Show when={!device.error && device()}>
+      <Show when={!device.error && !initialOverviewLoading() && device()}>
         {(d) => (
           <>
             <Show when={activeTab() === 'overview'}>
