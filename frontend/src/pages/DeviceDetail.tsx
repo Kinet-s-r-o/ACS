@@ -138,7 +138,11 @@ const DeviceDetail: Component = () => {
   const [metricDefs] = createResource(serial, api.getDeviceMetricDefinitions);
   const parameterViewFilters = (tab: string): { prefixes?: string[]; names?: string[]; contains?: string[] } => {
     const names = metricDefs()?.filter(def => def.active).map(def => def.parameter_name).filter(Boolean) || [];
-    if (tab === 'overview') return { names };
+    if (tab === 'overview') return {
+      prefixes: ['InternetGatewayDevice.DeviceInfo.', 'InternetGatewayDevice.WANDevice.', 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.', 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.', 'InternetGatewayDevice.LANDevice.1.WiFi.Radio.', 'InternetGatewayDevice.LANDevice.1.Hosts.Host.', 'InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.'],
+      names,
+      contains: ['rxpower', 'opticalpower', 'transceivertemperature', 'temperature'],
+    };
     if (tab === 'hosts') return { prefixes: ['InternetGatewayDevice.LANDevice.1.Hosts.Host.', 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.', 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.'] };
     if (tab === 'diagnostic') return { prefixes: ['InternetGatewayDevice.WANDevice.', 'InternetGatewayDevice.X_HW_IperfSpeedTest.IperfClient.', 'InternetGatewayDevice.DNS.Diagnostics.NSLookupDiagnostics.', 'Device.DNS.Diagnostics.NSLookupDiagnostics.', 'InternetGatewayDevice.IPPingDiagnostics.', 'Device.IP.Diagnostics.IPPing.', 'InternetGatewayDevice.TraceRouteDiagnostics.', 'Device.IP.Diagnostics.TraceRoute.'] };
     if (tab === 'metrics') return { names };
@@ -152,13 +156,23 @@ const DeviceDetail: Component = () => {
     }
     return { names: [] };
   };
-  const parameterViewSource = () => JSON.stringify({ serial: serial(), tab: activeTab(), names: metricDefs()?.filter(def => def.active).map(def => def.parameter_name) || [], templateReady: activeTab() === 'features' ? Boolean(provisioningTemplates()) : true, manufacturer: device()?.manufacturer, productClass: device()?.product_class });
+  const parameterViewSource = () => {
+    const tab = activeTab();
+    const current = tab === 'features' ? device() : undefined;
+    return JSON.stringify({
+      serial: serial(),
+      tab,
+      names: tab === 'overview' || tab === 'metrics' ? metricDefs()?.filter(def => def.active).map(def => def.parameter_name) || [] : [],
+      templateReady: tab === 'features' ? Boolean(provisioningTemplates()) : true,
+      manufacturer: current?.manufacturer,
+      productClass: current?.product_class,
+    });
+  };
   const [parameters, { refetch: refetchParams }] = createResource(parameterViewSource, async key => {
     const source = JSON.parse(key) as { serial: string; tab: string; templateReady: boolean };
     if (!source.serial || !['overview', 'hosts', 'diagnostic', 'metrics', 'features'].includes(source.tab)) return [];
     if (source.tab === 'features' && !source.templateReady) return [];
     const filters = parameterViewFilters(source.tab);
-    if (source.tab === 'overview') return api.getDeviceOverviewParameters(source.serial, filters.names);
     if (!filters.prefixes?.length && !filters.names?.length && !filters.contains?.length) return [];
     return api.getDeviceParameterView(source.serial, filters);
   });

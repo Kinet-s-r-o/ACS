@@ -233,27 +233,6 @@ func (r *ParameterRepository) GetByDeviceIDMatching(ctx context.Context, deviceI
 	return r.getByDeviceID(ctx, deviceID, prefixes, names, contains)
 }
 
-func (r *ParameterRepository) GetOverviewByDeviceID(ctx context.Context, deviceID int64, additionalNames []string) ([]models.DeviceParameter, error) {
-	names, err := r.OverviewNames(ctx, deviceID)
-	if err != nil {
-		return nil, err
-	}
-	seen := make(map[string]bool, len(names)+len(additionalNames))
-	for _, name := range names {
-		seen[name] = true
-	}
-	for _, name := range additionalNames {
-		if name != "" && !seen[name] {
-			names = append(names, name)
-			seen[name] = true
-		}
-	}
-	if len(names) == 0 {
-		return []models.DeviceParameter{}, nil
-	}
-	return r.getByDeviceID(ctx, deviceID, nil, names, nil)
-}
-
 func (r *ParameterRepository) getByDeviceID(ctx context.Context, deviceID int64, prefixes, names, contains []string) ([]models.DeviceParameter, error) {
 	var params []models.DeviceParameter
 	query := r.db.WithContext(ctx).Where("device_id = ?", deviceID)

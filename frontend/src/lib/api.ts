@@ -143,11 +143,6 @@ export const api = {
     filters.contains?.forEach(value => query.append('contains', value));
     return request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameter-view?${query.toString()}`);
   },
-  getDeviceOverviewParameters: (serial: string, names: string[] = []) => {
-    const query = new URLSearchParams();
-    names.forEach(value => query.append('name', value));
-    return request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/overview-parameters?${query.toString()}`);
-  },
   getDeviceLogs: (query: { serial: string; limit: number; offset: number; search: string; filters: Record<string, { logic: string; rules: { operator: string; value: string }[] }>; sort: string; direction: string }) => {
     const params = new URLSearchParams({ limit: String(query.limit), offset: String(query.offset), sort: query.sort, direction: query.direction });
     if (query.search) params.set('search', query.search);

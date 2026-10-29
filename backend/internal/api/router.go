@@ -204,7 +204,6 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /device/{serial}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeleteDeviceBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParametersBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/parameter-view", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParameterViewBySerial))
-	apiMux.HandleFunc("GET /device/{serial}/overview-parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceOverviewParametersBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/logs", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceLogsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/task-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTaskCountsBySerial))
@@ -1735,32 +1734,6 @@ func (r *Router) handleGetDeviceParameterViewBySerial(w http.ResponseWriter, req
 	params, err := r.parameterRepo.GetByDeviceIDMatching(req.Context(), device.ID, prefixes, names, contains)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to get parameters")
-		return
-	}
-	redactSensitiveParameters(req, params)
-	respondJSON(w, http.StatusOK, params)
-}
-
-func (r *Router) handleGetDeviceOverviewParametersBySerial(w http.ResponseWriter, req *http.Request) {
-	device, err := r.parseDeviceBySerial(req)
-	if err != nil || device == nil {
-		respondError(w, http.StatusNotFound, "Device not found")
-		return
-	}
-	names := req.URL.Query()["name"]
-	if len(names) > 256 {
-		respondError(w, http.StatusBadRequest, "Too many additional parameter names")
-		return
-	}
-	for _, name := range names {
-		if name == "" || len(name) > 512 || strings.ContainsAny(name, "%_") {
-			respondError(w, http.StatusBadRequest, "Invalid parameter name")
-			return
-		}
-	}
-	params, err := r.parameterRepo.GetOverviewByDeviceID(req.Context(), device.ID, names)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to get overview parameters")
 		return
 	}
 	redactSensitiveParameters(req, params)
