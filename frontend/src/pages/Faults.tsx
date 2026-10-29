@@ -147,12 +147,6 @@ const Faults: Component = () => {
   return (
     <div class="space-y-6">
       <PageHeader title="Fault center" description="Investigate and resolve device-side protocol failures.">
-        <Show when={isFullAccess() && selectedFaults().size > 0}>
-          <button onClick={handleBulkDelete} class="btn btn-danger" disabled={bulkDeleting()}>
-            <Trash2 size={14} />
-            Delete selected ({selectedFaults().size})
-          </button>
-        </Show>
         <button onClick={() => { refetch(); refetchStats(); }} class="btn btn-secondary" disabled={faults.loading || stats.loading}>
           <RefreshCw size={14} />
           Refresh
@@ -199,6 +193,15 @@ const Faults: Component = () => {
           All
         </button>
       </div>
+
+      <Show when={isFullAccess() && selectedFaults().size > 0}>
+        <div class="flex justify-end">
+          <button onClick={handleBulkDelete} class="btn btn-danger" disabled={bulkDeleting()}>
+            <Trash2 size={14} />
+            Delete selected ({selectedFaults().size})
+          </button>
+        </div>
+      </Show>
 
       {/* Faults List */}
       <Show when={!faults.error}><div class="card p-0 overflow-hidden">

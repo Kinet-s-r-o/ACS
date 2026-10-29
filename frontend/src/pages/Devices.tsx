@@ -421,7 +421,7 @@ const Devices: Component = () => {
         </div>
         <div class="overflow-x-auto table-scroll">
           <table class="data-table w-full">
-            <thead>
+            <thead class="sticky top-0 z-10 opaque-table-header">
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {

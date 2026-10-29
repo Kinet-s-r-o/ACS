@@ -111,8 +111,8 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
             <div class="card overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="data-table w-full min-w-[760px] text-sm">
-                  <thead>
-                    <tr class="border-b-2 border-subtle bg-base">
+                  <thead class="opaque-table-header">
+                    <tr class="border-b border-subtle">
                       <For each={columns()}>
                         {(column) => {
                           const isSorted = () => sortBy()?.column === column.id;
