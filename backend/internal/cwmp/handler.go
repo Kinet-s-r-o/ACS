@@ -320,6 +320,25 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	var sessionCondFetchActive bool
 	var sessionImmediateEval bool
 	provisioningVariableValues := map[string]string{}
+	var informStagger *informStaggerPlan
+
+	if deviceID > 0 && h.deviceRepo != nil && h.parameterRepo != nil {
+		stored, err := h.deviceRepo.GetBySerial(ctx, inform.DeviceId.SerialNumber)
+		if err != nil {
+			log.Printf("Error loading Inform stagger state for %s: %v", inform.DeviceId.SerialNumber, err)
+		} else if stored != nil {
+			cached, err := h.parameterRepo.GetByDeviceIDMatching(ctx, deviceID, nil, []string{
+				"InternetGatewayDevice.ManagementServer.PeriodicInformInterval",
+				"Device.ManagementServer.PeriodicInformInterval",
+			})
+			if err != nil {
+				log.Printf("Error loading Inform interval for %s: %v", inform.DeviceId.SerialNumber, err)
+			} else if plan, ok := planInformStagger(inform, cached, time.Now()); ok &&
+				(!stored.InformStaggered || stored.InformStaggerInterval != plan.Interval) {
+				informStagger = &plan
+			}
+		}
+	}
 
 	if deviceID > 0 && h.provisioningRepo != nil {
 		if template, err := h.provisioningRepo.ResolveTemplateForDevice(ctx, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass); err == nil {
@@ -449,6 +468,18 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 		}
 	}
 
+	if informStagger != nil && !hasSetParameter(provisioning, informStagger.ParameterName) {
+		if provisioning == nil {
+			provisioning = &SetParameterValues{ParameterKey: "auto-inform-stagger"}
+		}
+		provisioning.ParameterList.Parameters = append(provisioning.ParameterList.Parameters, ParameterValueStruct{
+			Name:  informStagger.ParameterName,
+			Value: informStagger.Value,
+			Type:  "dateTime",
+		})
+		log.Printf("Scheduling Inform phase for device %s at %s (interval %ds)", inform.DeviceId.SerialNumber, informStagger.Value, informStagger.Interval)
+	}
+
 	session := h.sessions.GetOrCreate(remoteAddr, inform.DeviceId.SerialNumber)
 	overviewInterval, fullInterval := h.refreshIntervals(ctx)
 	session.mu.Lock()
@@ -459,6 +490,12 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DataModelRoot = DetectDataModelRoot(inform.ParameterList.Parameters)
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
+	session.InformStaggerPending = informStagger != nil && hasSetParameter(provisioning, informStagger.ParameterName)
+	if informStagger != nil {
+		session.InformStaggerInterval = informStagger.Interval
+	} else {
+		session.InformStaggerInterval = 0
+	}
 	session.InformEvents = informEventCodes(inform)
 	session.ProvisioningRules = provisioningRules
 	session.ProvisioningVariables = provisioningVariableValues
@@ -505,6 +542,18 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.mu.Unlock()
 
 	return response, nil
+}
+
+func hasSetParameter(request *SetParameterValues, name string) bool {
+	if request == nil {
+		return false
+	}
+	for _, parameter := range request.ParameterList.Parameters {
+		if parameter.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func hasEvent(inform *Inform, code string) bool {
@@ -846,6 +895,13 @@ func (h *Handler) handleSetParameterValuesResponse(ctx context.Context, resp *Se
 		if err := h.parameterRepo.UpsertMany(ctx, session.DeviceID, params); err != nil {
 			return nil, fmt.Errorf("update cached parameters after set-parameter task: %w", err)
 		}
+	}
+	if resp.Status == 0 && session.InformStaggerPending && h.deviceRepo != nil && session.DeviceID > 0 {
+		if err := h.deviceRepo.MarkInformStaggered(ctx, session.DeviceID, session.InformStaggerInterval); err != nil {
+			return nil, fmt.Errorf("mark Inform staggering applied: %w", err)
+		}
+		session.InformStaggerPending = false
+		session.InformStaggerInterval = 0
 	}
 
 	if session.State == StateProcessingTasks && session.CurrentTaskID > 0 {

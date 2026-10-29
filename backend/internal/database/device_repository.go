@@ -106,6 +106,15 @@ func (r *DeviceRepository) MarkFullRefresh(ctx context.Context, deviceID int64) 
 		Updates(map[string]interface{}{"last_overview_refresh": now, "last_full_refresh": now}).Error
 }
 
+func (r *DeviceRepository) MarkInformStaggered(ctx context.Context, deviceID, interval int64) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).Model(&models.Device{}).Where("id = ?", deviceID).Updates(map[string]interface{}{
+		"inform_staggered":        true,
+		"inform_stagger_interval": interval,
+		"inform_staggered_at":     now,
+	}).Error
+}
+
 func (r *DeviceRepository) UpdateFromParameters(ctx context.Context, deviceID int64, params map[string]string) error {
 	columns := map[string]string{
 		"ModelName": "model_name", "HardwareVersion": "hardware_version",

@@ -44,7 +44,9 @@ type Session struct {
 	// PendingSetParameters mirrors the last SetParameterValues request. A
 	// successful response confirms these values on the CPE even when the next
 	// periodic Inform does not include the affected parameters.
-	PendingSetParameters []ParameterValueStruct
+	PendingSetParameters  []ParameterValueStruct
+	InformStaggerPending  bool
+	InformStaggerInterval int64
 
 	// AddObject queue for creating new objects before SetParameterValues
 	AddObjectQueue     []*AddObject
