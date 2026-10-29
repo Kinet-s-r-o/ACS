@@ -379,6 +379,19 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 		}
 		deltas[key] = delta
 	}
+	var untrackedOnline int64
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).
+		Where("online = ?", true).
+		Where("NOT EXISTS (SELECT 1 FROM device_lifecycle_events WHERE device_lifecycle_events.device_id = devices.id AND event_type IN ?)", []string{models.DeviceLifecycleOnline, models.DeviceLifecycleOffline}).
+		Count(&untrackedOnline).Error; err != nil {
+		return nil, err
+	}
+	if untrackedOnline > 0 {
+		key := end.UnixNano()
+		delta := deltas[key]
+		delta.online += untrackedOnline
+		deltas[key] = delta
+	}
 
 	points := make([]DeviceGrowthPoint, 0, spec.Buckets+1)
 	buckets := make([]time.Time, 0, spec.Buckets+1)
@@ -386,6 +399,15 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 		buckets = append(buckets, bucket)
 	}
 	for index := len(buckets) - 1; index >= 0; index-- {
+		if count < 0 {
+			count = 0
+		}
+		if online < 0 {
+			online = 0
+		}
+		if online > count {
+			online = count
+		}
 		points = append([]DeviceGrowthPoint{{Timestamp: buckets[index], Count: count, Online: online}}, points...)
 		if index > 0 {
 			delta := deltas[buckets[index].UnixNano()]

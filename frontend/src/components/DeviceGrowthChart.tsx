@@ -91,6 +91,7 @@ const DeviceGrowthChart: Component<Props> = (props) => {
           itemStyle: { color: seriesColor },
           lineStyle: { color: seriesColor, width: 2 },
           areaStyle: { color: seriesColor, opacity: 0.08 },
+          emphasis: { disabled: true },
           data: points.map((point) => [new Date(point.timestamp).getTime(), point.count]),
         },
         {
@@ -101,6 +102,7 @@ const DeviceGrowthChart: Component<Props> = (props) => {
           symbolSize: 6,
           itemStyle: { color: onlineColor },
           lineStyle: { color: onlineColor, width: 2 },
+          emphasis: { disabled: true },
           data: points.map((point) => [new Date(point.timestamp).getTime(), point.online]),
         },
       ],
