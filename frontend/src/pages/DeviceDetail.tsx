@@ -1429,6 +1429,19 @@ const DeviceDetail: Component = () => {
     return formatDateTime(dateStr);
   };
 
+  const formatDateWithSeconds = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'medium' }).format(date);
+  };
+
+  const getPeriodicInformInterval = () => {
+    const params = parameters() || [];
+    const value = params.find(parameter => parameter.name === 'InternetGatewayDevice.ManagementServer.PeriodicInformInterval')?.value
+      || params.find(parameter => parameter.name === 'Device.ManagementServer.PeriodicInformInterval')?.value;
+    return value ? `${value} s` : '-';
+  };
+
   const getDeviceUptime = () => {
     const params = parameters() || [];
     const uptimeParam = params.find(p => p.name.endsWith('DeviceInfo.UpTime'));
@@ -1999,9 +2012,10 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
                     <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
                     <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
-                    <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDate(d().last_full_refresh)}</span></div>
-                    <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDate(d().last_overview_refresh)}</span></div>
-                    <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDate(d().last_inform)}</span></div>
+                    <div><span class="text-muted">Periodic Inform Interval:</span> <span class="text-primary">{getPeriodicInformInterval()}</span></div>
+                    <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDateWithSeconds(d().last_full_refresh)}</span></div>
+                    <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDateWithSeconds(d().last_overview_refresh)}</span></div>
+                    <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDateWithSeconds(d().last_inform)}</span></div>
                   </div>
                   <div class="space-y-2 lg:-mt-8">
                     <div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>

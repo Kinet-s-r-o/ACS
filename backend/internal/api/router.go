@@ -1845,7 +1845,7 @@ func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, 
 		return
 	}
 	prefixes := []string{"DeviceInfo.", "Device.DeviceInfo.", "InternetGatewayDevice.DeviceInfo.", "InternetGatewayDevice.LANDevice.", "InternetGatewayDevice.WANDevice."}
-	var names []string
+	names := []string{"InternetGatewayDevice.ManagementServer.PeriodicInformInterval", "Device.ManagementServer.PeriodicInformInterval"}
 	manufacturer, productClass := "", ""
 	if device.Manufacturer != nil {
 		manufacturer = *device.Manufacturer

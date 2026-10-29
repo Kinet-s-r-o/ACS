@@ -274,10 +274,10 @@ func (r *ParameterRepository) DeleteObjectParameters(ctx context.Context, device
 func (r *ParameterRepository) OverviewNames(ctx context.Context, deviceID int64) ([]string, error) {
 	var names []string
 	err := r.db.WithContext(ctx).Model(&models.DeviceParameter{}).
-		Where("device_id = ? AND (name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ?)",
+		Where("device_id = ? AND (name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ?)",
 			deviceID, "InternetGatewayDevice.DeviceInfo.%", "InternetGatewayDevice.WANDevice.%",
 			"InternetGatewayDevice.LANDevice.%", "Device.DeviceInfo.%", "Device.WiFi.%", "Device.IP.%",
-			"%RXPower%", "%RxPower%", "%OpticalPower%", "%Temperature%").
+			"%RXPower%", "%RxPower%", "%OpticalPower%", "%Temperature%", "%ManagementServer.PeriodicInformInterval").
 		Order("name").Pluck("name", &names).Error
 	if err != nil {
 		return nil, err
@@ -327,7 +327,7 @@ func isOverviewName(name string) bool {
 			return true
 		}
 	}
-	for _, suffix := range []string{"UpTime", "Uptime", "SoftwareVersion", "HardwareVersion", "ModelName", "ExternalIPAddress", "ConnectionStatus", "Status", "Enable", "Name", "SSID", "NATEnabled", "ConnectionType", "MACAddress", "IPAddress", "IPv6Address", "HostName", "Layer2Interface", "InterfaceType", "Channel", "Standard", "BeaconType", "WPAEncryptionModes", "OperatingFrequencyBand", "MaxBitRate", "X_HW_Speed", "X_HW_DuplexMode", "X_HW_L3Enable", "X_HW_RSSI"} {
+	for _, suffix := range []string{"UpTime", "Uptime", "SoftwareVersion", "HardwareVersion", "ModelName", "ExternalIPAddress", "ConnectionStatus", "Status", "Enable", "Name", "SSID", "NATEnabled", "ConnectionType", "MACAddress", "IPAddress", "IPv6Address", "HostName", "Layer2Interface", "InterfaceType", "Channel", "Standard", "BeaconType", "WPAEncryptionModes", "OperatingFrequencyBand", "MaxBitRate", "X_HW_Speed", "X_HW_DuplexMode", "X_HW_L3Enable", "X_HW_RSSI", "PeriodicInformInterval"} {
 		if strings.HasSuffix(name, "."+suffix) {
 			return true
 		}
