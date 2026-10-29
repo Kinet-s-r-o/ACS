@@ -27,7 +27,7 @@ type Device struct {
 	InformStaggeredAt     *time.Time        `json:"-"`
 	Online                bool              `json:"online" gorm:"default:false;index:idx_devices_online_last_inform,priority:1"`
 	ActiveFaults          int               `json:"active_faults" gorm:"->;-:migration"`
-	CreatedAt             time.Time         `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt             time.Time         `json:"created_at" gorm:"autoCreateTime;index:idx_devices_created_at"`
 	UpdatedAt             time.Time         `json:"updated_at" gorm:"autoUpdateTime"`
 	Parameters            []DeviceParameter `json:"parameters,omitempty" gorm:"foreignKey:DeviceID"`
 }

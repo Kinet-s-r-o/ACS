@@ -338,13 +338,16 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 	}
 	end := growthBucketStart(now, interval)
 
-	var count, online int64
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&count).Error; err != nil {
+	var current struct {
+		Count  int64 `gorm:"column:count"`
+		Online int64 `gorm:"column:online"`
+	}
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).
+		Select("COUNT(*) AS count, COALESCE(SUM(CASE WHEN online THEN 1 ELSE 0 END), 0) AS online").
+		Scan(&current).Error; err != nil {
 		return nil, err
 	}
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Where("online = ?", true).Count(&online).Error; err != nil {
-		return nil, err
-	}
+	count, online := current.Count, current.Online
 	type growthDelta struct{ active, online int64 }
 	deltas := make(map[int64]growthDelta)
 	var additions []struct {
