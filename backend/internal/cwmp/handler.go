@@ -38,6 +38,7 @@ type Handler struct {
 	cwmpPassword         string
 	allowedNetworks      []*net.IPNet
 	trustedProxies       []*net.IPNet
+	diagnosticSlots      chan struct{}
 }
 
 func NewHandler(db *gorm.DB) *Handler {
@@ -84,6 +85,7 @@ func NewHandler(db *gorm.DB) *Handler {
 		cwmpPassword:         os.Getenv("CWMP_PASSWORD"),
 		allowedNetworks:      parseAllowedNetworks(os.Getenv("CWMP_ALLOWED_CIDRS")),
 		trustedProxies:       parseAllowedNetworks(os.Getenv("CWMP_TRUSTED_PROXY_CIDRS")),
+		diagnosticSlots:      make(chan struct{}, 2),
 	}
 }
 
@@ -613,6 +615,7 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 		nextObj.ObjectName = resolveAddObjectReferences(nextObj.ObjectName, session.AddObjectInstances)
 		session.State = StateProcessingTasks
 		session.LastSentContext = nextObj.ObjectName
+		session.LastSentParameters = nil
 		log.Printf("Sending AddObject: %s to %s", nextObj.ObjectName, sessionID)
 		return nextObj, namespace, nil
 	}
@@ -621,6 +624,7 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 		session.ConditionalFetchActive = false
 		session.State = StateProcessingTasks
 		session.LastSentContext = strings.Join(session.PendingConditionalParams, ", ")
+		session.LastSentParameters = append([]string(nil), session.PendingConditionalParams...)
 		log.Printf("Sending GPV for %d conditional params to %s", len(session.PendingConditionalParams), sessionID)
 		return &GetParameterValues{ParameterNames: session.PendingConditionalParams}, namespace, nil
 	}
@@ -630,6 +634,7 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 			paramNames = append(paramNames, p.Name)
 		}
 		session.LastSentContext = strings.Join(paramNames, ", ")
+		session.LastSentParameters = nil
 		provisioningRequest := takeProvisioning(session)
 		session.PendingSetParameters = append([]ParameterValueStruct(nil), provisioningRequest.ParameterList.Parameters...)
 		session.State = StateProcessingTasks
@@ -642,6 +647,7 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 		session.AutoFetchPhase = 1
 		session.State = StateProcessingTasks
 		session.LastSentContext = session.DataModelRoot
+		session.LastSentParameters = []string{session.DataModelRoot}
 		return &GetParameterValues{ParameterNames: []string{session.DataModelRoot}}, namespace, nil
 	}
 	if session.OverviewFetchReady {
@@ -649,6 +655,7 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 		session.OverviewFetchActive = true
 		session.State = StateProcessingTasks
 		session.LastSentContext = strings.Join(session.OverviewFetchParams, ", ")
+		session.LastSentParameters = append([]string(nil), session.OverviewFetchParams...)
 		return &GetParameterValues{ParameterNames: session.OverviewFetchParams}, namespace, nil
 	}
 	if session.MetricFetchReady {
@@ -682,6 +689,7 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 		if len(params) > 0 {
 			session.State = StateProcessingTasks
 			session.LastSentContext = strings.Join(params, ", ")
+			session.LastSentParameters = append([]string(nil), params...)
 			return &GetParameterValues{ParameterNames: params}, namespace, nil
 		}
 	}
@@ -699,6 +707,9 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.Diagnostic9005Active {
+		return h.handle9005DiagnosticResponse(ctx, session, resp)
+	}
 
 	if session.State != StateProcessingTasks {
 		log.Printf("Session for %s not in processing state", remoteAddr)
@@ -860,6 +871,7 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 		session.FeatureObjectNames = names
 		session.FeatureObjectStage = 2
 		session.LastSentContext = strings.Join(names, ", ")
+		session.LastSentParameters = append([]string(nil), names...)
 		return &GetParameterValues{ParameterNames: names}, nil
 	}
 	session.AutoFetchPhase = 0
@@ -1251,6 +1263,17 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 	defer session.mu.Unlock()
 
 	if session.State == StateProcessingTasks {
+		if faultCode == "9005" {
+			if session.Diagnostic9005Active {
+				return h.handle9005DiagnosticFault(ctx, session, faultMessage)
+			}
+			if request, started, err := h.start9005Diagnostic(ctx, session); err != nil {
+				return nil, err
+			} else if started {
+				log.Printf("Starting tagged 9005 parameter diagnosis for device %s (%d candidates)", session.SerialNumber, len(session.Diagnostic9005Original))
+				return request, nil
+			}
+		}
 		if h.faultRepo != nil && session.DeviceID > 0 && session.AutoFetchPhase == 0 && !(faultCode == "9005" && session.CurrentDeleteObjectPath != "") {
 			deviceFault := &models.Fault{
 				DeviceID:      session.DeviceID,
@@ -1263,6 +1286,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 			}
 		}
 		session.LastSentContext = ""
+		session.LastSentParameters = nil
 		if session.CurrentTaskID == 0 && len(session.AddObjectQueue) > 0 {
 			log.Printf("Aborting provisioning after AddObject fault: %s - %s", faultCode, faultMessage)
 			session.AddObjectQueue = nil
@@ -1344,8 +1368,13 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 		session.State = StateProcessingTasks
 		request, err := h.buildTaskRequest(task)
 		if err == nil {
-			if values, ok := request.(*GetParameterValues); ok && len(values.ParameterNames) == 1 && values.ParameterNames[0] == session.DataModelRoot {
-				session.CurrentFullTreeFetch = true
+			if values, ok := request.(*GetParameterValues); ok {
+				session.LastSentParameters = append([]string(nil), values.ParameterNames...)
+				if len(values.ParameterNames) == 1 && values.ParameterNames[0] == session.DataModelRoot {
+					session.CurrentFullTreeFetch = true
+				}
+			} else {
+				session.LastSentParameters = nil
 			}
 			if object, ok := request.(*DeleteObject); ok {
 				session.CurrentDeleteObjectPath = object.ObjectName
@@ -1363,6 +1392,7 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 				}
 				session.PendingSetParameters = append([]ParameterValueStruct(nil), spv.ParameterList.Parameters...)
 				session.LastSentContext = strings.Join(names, ", ")
+				session.LastSentParameters = nil
 			}
 			return request, nil
 		}

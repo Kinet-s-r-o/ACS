@@ -167,6 +167,16 @@ func (r *TaskRepository) MarkPendingDeleted(ctx context.Context, id int64, usern
 	return result.RowsAffected > 0, result.Error
 }
 
+func (r *TaskRepository) MarkPendingDeletedMany(ctx context.Context, ids []int64, username string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := r.db.WithContext(ctx).Model(&models.Task{}).
+		Where("id IN ? AND status = ?", ids, models.TaskStatusPending).
+		Updates(map[string]interface{}{"status": models.TaskStatusDeleted, "deleted_by": username})
+	return result.RowsAffected, result.Error
+}
+
 func (r *TaskRepository) GetByDeviceID(ctx context.Context, deviceID int64, limit int) ([]*models.Task, error) {
 	var tasks []*models.Task
 	err := r.db.WithContext(ctx).Where("device_id = ?", deviceID).

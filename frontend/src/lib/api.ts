@@ -136,6 +136,7 @@ export const api = {
   getTasks: () => request<GlobalTask[]>('/tasks'),
   getTask: (id: number) => request<GlobalTask>(`/tasks/${id}`),
   deletePendingTask: (id: number) => request<{ status: string }>(`/tasks/${id}`, { method: 'DELETE' }),
+  deletePendingTasks: (ids: number[]) => request<{ deleted: number }>('/tasks/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   getDevice: (serial: string) => request<Device>(`/device/${encodeURIComponent(serial)}`),
   setDeviceTags: (serial: string, tags: string[]) => request<{ status: string; tags: string[] }>(`/device/${encodeURIComponent(serial)}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }),
   getTags: () => request<TagDefinition[]>('/tags'),

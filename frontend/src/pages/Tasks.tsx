@@ -38,6 +38,8 @@ const Tasks: Component = () => {
   const { confirm, notify } = useFeedback();
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.tasks');
   const [selectedTask, setSelectedTask] = createSignal<GlobalTask | null>(null);
+  const [selectedTasks, setSelectedTasks] = createSignal<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = createSignal(false);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tasks', {});
   const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.tasks', { column: 'created_at', direction: 'desc' });
@@ -111,6 +113,11 @@ const Tasks: Component = () => {
   });
 
   const totalPages = createMemo(() => Math.ceil(filteredTasks().length / taskPageSize()));
+  const selectableTasks = createMemo(() => pagedTasks().filter(task => task.status === 'pending'));
+  const allPageSelected = createMemo(() => {
+    const page = selectableTasks();
+    return page.length > 0 && page.every(task => selectedTasks().has(task.id));
+  });
 
   const exportTasksCSV = () => {
     const headers = ['Serial number', 'Type', 'Trigger event', 'Status', 'Created', 'Completed', 'Created by', 'Deleted by', 'Error'];
@@ -171,6 +178,42 @@ const Tasks: Component = () => {
     }
   };
 
+  const toggleTaskSelection = (id: number) => {
+    setSelectedTasks(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePageTaskSelection = () => {
+    setSelectedTasks(previous => {
+      const next = new Set(previous);
+      const page = selectableTasks();
+      if (page.every(task => next.has(task.id))) page.forEach(task => next.delete(task.id));
+      else page.forEach(task => next.add(task.id));
+      return next;
+    });
+  };
+
+  const deleteSelectedTasks = async () => {
+    const ids = [...selectedTasks()];
+    if (ids.length === 0) return;
+    if (!await confirm({ title: `Delete ${ids.length} pending task${ids.length > 1 ? 's' : ''}?`, description: 'The selected tasks will be marked deleted and will not be sent to the CPE. Tasks already sent or completed are not affected.', confirmLabel: 'Delete tasks', tone: 'danger' })) return;
+    setBulkDeleting(true);
+    try {
+      const result = await api.deletePendingTasks(ids);
+      setSelectedTasks(new Set<number>());
+      notify({ tone: 'success', title: `${result.deleted} pending task${result.deleted === 1 ? '' : 's'} deleted` });
+      await refetch();
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not delete tasks', message: 'Some tasks may already have been sent to the CPE.', detail: (error as Error).message, persistent: true });
+      await refetch();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <div class="space-y-5">
       <PageHeader title="CWMP tasks" description="Task history across all CPE devices.">
@@ -188,6 +231,15 @@ const Tasks: Component = () => {
         <div class="ops-register-cell"><dt>Deleted</dt><dd>{taskCounts().deleted}</dd><small>Cancelled before dispatch</small></div>
         <div class="ops-register-cell"><dt>Total tasks</dt><dd>{taskCounts().total}</dd><small>All CWMP tasks</small></div>
       </dl>
+
+      <Show when={isFullAccess() && selectedTasks().size > 0}>
+        <div class="flex justify-end">
+          <button type="button" onClick={() => void deleteSelectedTasks()} class="btn btn-danger" disabled={bulkDeleting()}>
+            <Trash2 size={14} />
+            Delete selected ({selectedTasks().size})
+          </button>
+        </div>
+      </Show>
 
       <div class="card overflow-hidden">
         <div class="table-panel-toolbar">
@@ -220,6 +272,7 @@ const Tasks: Component = () => {
                 <table class="data-table w-full text-sm min-w-[1240px]">
                   <thead class="bg-base sticky top-0 z-10">
                     <tr class="bg-base">
+                      <Show when={isFullAccess()}><th class="px-3 py-2 w-8"><input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={togglePageTaskSelection} aria-label="Select all pending tasks on this page" /></th></Show>
                       <Show when={isTaskColumnVisible('serial_number')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="serial_number" label="Serial number" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('serial_number', 'Serial number')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('type')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('type', 'Type')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('trigger_event')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="trigger_event" label="Trigger event" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('trigger_event', 'Trigger event')}</SortableHeader></th></Show>
@@ -237,6 +290,7 @@ const Tasks: Component = () => {
                     <For each={pagedTasks()}>
                       {(task) => (
                         <tr class="border-t border-subtle/50 hover:bg-elevated/30">
+                          <Show when={isFullAccess()}><td class="px-3 py-2">{task.status === 'pending' ? <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedTasks().has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select pending task ${task.id}`} /> : null}</td></Show>
                           <Show when={isTaskColumnVisible('serial_number')}><td class="px-4 py-2"><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(task.serial_number)}?tab=tasks`} aria-label={`Open tasks for CPE ${task.serial_number}`}>{task.serial_number}</A></td></Show>
                           <Show when={isTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}</td></Show>
                           <Show when={isTaskColumnVisible('trigger_event')}><td class="px-4 py-2 text-secondary text-xs">{formatTriggerEvents(task.trigger_events)}</td></Show>

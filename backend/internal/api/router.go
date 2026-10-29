@@ -185,6 +185,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListTasks))
 	apiMux.HandleFunc("GET /tasks/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetTask))
 	apiMux.HandleFunc("DELETE /tasks/{id}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeletePendingTask))
+	apiMux.HandleFunc("POST /tasks/bulk-delete", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleBulkDeletePendingTasks))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/growth", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceGrowth))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
@@ -509,6 +510,37 @@ func (r *Router) handleDeletePendingTask(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted", "deleted_by": claims.Username})
+}
+
+func (r *Router) handleBulkDeletePendingTasks(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(body.IDs) == 0 {
+		respondError(w, http.StatusBadRequest, "No task IDs provided")
+		return
+	}
+	if len(body.IDs) > 500 {
+		respondError(w, http.StatusBadRequest, "Too many task IDs provided")
+		return
+	}
+
+	deleted, err := r.taskRepo.MarkPendingDeletedMany(req.Context(), body.IDs, claims.Username)
+	if err != nil {
+		log.Printf("Error bulk-deleting pending tasks: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to mark pending tasks as deleted")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"deleted": deleted, "deleted_by": claims.Username})
 }
 
 func (r *Router) handleGetDevice(w http.ResponseWriter, req *http.Request) {

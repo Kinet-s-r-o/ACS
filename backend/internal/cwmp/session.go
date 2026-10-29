@@ -67,7 +67,18 @@ type Session struct {
 	// LastSentContext holds a human-readable description of the last CWMP
 	// operation sent to the CPE (parameter names, object name, etc.).
 	// Used to populate Fault.ParameterName when a SOAP Fault arrives.
-	LastSentContext string
+	LastSentContext    string
+	LastSentParameters []string
+
+	// Diagnostic9005 isolates an invalid parameter from a multi-parameter GPV
+	// request. It is activated only for devices carrying the diagnostic tag.
+	Diagnostic9005Active    bool
+	Diagnostic9005Queue     [][]string
+	Diagnostic9005Current   []string
+	Diagnostic9005Invalid   []string
+	Diagnostic9005Original  []string
+	Diagnostic9005Requests  int
+	Diagnostic9005StartedAt time.Time
 
 	State        SessionState
 	CreatedAt    time.Time

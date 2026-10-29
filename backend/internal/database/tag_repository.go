@@ -87,6 +87,8 @@ func (r *TagRepository) SeedLegacyDefinitions(ctx context.Context) error {
 		return err
 	}
 	legacy := make(map[string]struct{})
+	// Reserved opt-in tag for bounded 9005 invalid-parameter diagnosis.
+	legacy["cwmp-9005-diagnostics"] = struct{}{}
 	for _, device := range devices {
 		for _, tag := range device.Tags {
 			if id := strings.ToLower(strings.TrimSpace(tag)); id != "" {
