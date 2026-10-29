@@ -31,7 +31,7 @@ func (r *FaultRepository) List(ctx context.Context, limit, offset int, resolved 
 
 	var faults []*models.Fault
 	q := r.db.WithContext(ctx).Table("faults f").
-		Select("f.id, f.device_id, d.serial_number, f.fault_code, f.fault_string, f.parameter_name, f.resolved, f.created_at, f.resolved_at").
+		Select("f.id, f.device_id, d.serial_number, COALESCE(NULLIF(d.model_name, ''), d.product_class, '') AS model_name, f.fault_code, f.fault_string, f.parameter_name, f.resolved, f.created_at, f.resolved_at").
 		Joins("JOIN devices d ON f.device_id = d.id")
 
 	if resolved != nil {
@@ -52,7 +52,7 @@ func (r *FaultRepository) List(ctx context.Context, limit, offset int, resolved 
 func (r *FaultRepository) GetByDeviceID(ctx context.Context, deviceID int64) ([]*models.Fault, error) {
 	var faults []*models.Fault
 	err := r.db.WithContext(ctx).Table("faults f").
-		Select("f.id, f.device_id, d.serial_number, f.fault_code, f.fault_string, f.parameter_name, f.resolved, f.created_at, f.resolved_at").
+		Select("f.id, f.device_id, d.serial_number, COALESCE(NULLIF(d.model_name, ''), d.product_class, '') AS model_name, f.fault_code, f.fault_string, f.parameter_name, f.resolved, f.created_at, f.resolved_at").
 		Joins("JOIN devices d ON f.device_id = d.id").
 		Where("f.device_id = ?", deviceID).
 		Order("f.created_at DESC").

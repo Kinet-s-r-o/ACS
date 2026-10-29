@@ -171,7 +171,11 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
       occurrences.set(signature, occurrence + 1);
       if (!tableKeys.has(table)) {
         const key = makeTableKey(table, route, occurrence);
-        migrateStoredOrder(key, makeLegacyTableKey(table, route, occurrence), route, heading, occurrence);
+        const legacySchema = table.dataset.columnOrderLegacySchema;
+        const legacyKey = legacySchema
+          ? `${route.replace(/^\/device\/[^/]+/, '/device/:serial')}::${legacySchema}::${occurrence}`
+          : makeLegacyTableKey(table, route, occurrence);
+        migrateStoredOrder(key, legacyKey, route, heading, occurrence);
         tableKeys.set(table, key);
       }
       applyOrder(table, tableKeys.get(table)!, route);

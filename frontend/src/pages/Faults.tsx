@@ -36,6 +36,7 @@ const Faults: Component = () => {
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const { columns, isVisible, toggle } = useColumnVisibility('faults', [
     { id: 'serial_number', label: 'Device', visible: true },
+    { id: 'model_name', label: 'Model', visible: true },
     { id: 'fault_code', label: 'Code', visible: true },
     { id: 'fault_string', label: 'Message', visible: true },
     { id: 'parameter_name', label: 'Parameter', visible: true },
@@ -46,9 +47,10 @@ const Faults: Component = () => {
   const { pageSize, changePageSize } = usePageSize('faults', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFaultPage(0); };
 
-  const getFilterValue = (fault: { serial_number: string; fault_code: string; fault_string: string; parameter_name: string; created_at: string; resolved: boolean }, colId: string): string => {
+  const getFilterValue = (fault: { serial_number: string; model_name?: string; fault_code: string; fault_string: string; parameter_name: string; created_at: string; resolved: boolean }, colId: string): string => {
     switch (colId) {
       case 'serial_number': return fault.serial_number || '';
+      case 'model_name': return fault.model_name || '';
       case 'fault_code': return fault.fault_code || '';
       case 'fault_string': return fault.fault_string || '';
       case 'parameter_name': return fault.parameter_name || '';
@@ -220,7 +222,7 @@ const Faults: Component = () => {
             />
           }>
             <div class="overflow-x-auto table-scroll">
-              <table class="data-table w-full text-sm min-w-[700px]">
+              <table data-column-order-key="cwmp-fault-center" data-column-order-legacy-schema="actions|code|device|message|parameter|status|time" class="data-table w-full text-sm min-w-[700px]">
                 <thead>
                   <tr class="border-b border-subtle bg-surface/50">
                     <Show when={isFullAccess()}>
@@ -232,6 +234,13 @@ const Faults: Component = () => {
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted">
                         <div class="flex items-center gap-1.5"><SortableHeader column="serial_number" label="Device" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                           <ColumnFilter columnId="serial_number" label="Device" active={columnFilters()['serial_number'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['serial_number'] = s; else delete n['serial_number']; return n; }); }} />
+                        </div>
+                      </th>
+                    </Show>
+                    <Show when={isVisible('model_name')}>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted">
+                        <div class="flex items-center gap-1.5"><SortableHeader column="model_name" label="Model" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
+                          <ColumnFilter columnId="model_name" label="Model" active={columnFilters()['model_name'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['model_name'] = s; else delete n['model_name']; return n; }); }} />
                         </div>
                       </th>
                     </Show>
@@ -284,42 +293,45 @@ const Faults: Component = () => {
                           </td>
                         </Show>
                         <Show when={isVisible('serial_number')}>
-                          <td class="px-4 py-3">
+                          <td data-column-order-id="device#0" class="px-4 py-3">
                             <A href={`/device/${fault.serial_number}?tab=faults`} class="text-sky-400 hover:underline font-mono text-xs">
                               {fault.serial_number}
                             </A>
                           </td>
                         </Show>
+                        <Show when={isVisible('model_name')}>
+                          <td data-column-order-id="model#0" class="px-4 py-3 text-secondary whitespace-nowrap">{fault.model_name || '-'}</td>
+                        </Show>
                         <Show when={isVisible('fault_code')}>
-                          <td class="px-4 py-3">
+                          <td data-column-order-id="code#0" class="px-4 py-3">
                             <span class={`font-mono font-semibold ${getFaultColor(fault.fault_code)}`}>
                               {fault.fault_code}
                             </span>
                           </td>
                         </Show>
                         <Show when={isVisible('fault_string')}>
-                          <td class="px-4 py-3 text-secondary max-w-xs truncate" title={fault.fault_string}>
+                          <td data-column-order-id="message#0" class="px-4 py-3 text-secondary max-w-xs truncate" title={fault.fault_string}>
                             {fault.fault_string.length > 40 ? fault.fault_string.slice(0, 40) + '...' : fault.fault_string}
                           </td>
                         </Show>
                         <Show when={isVisible('parameter_name')}>
-                          <td class="px-4 py-3 text-muted font-mono text-xs max-w-xs truncate hidden lg:table-cell" title={fault.parameter_name}>
+                          <td data-column-order-id="parameter#0" class="px-4 py-3 text-muted font-mono text-xs max-w-xs truncate hidden lg:table-cell" title={fault.parameter_name}>
                             {fault.parameter_name || '-'}
                           </td>
                         </Show>
                         <Show when={isVisible('created_at')}>
-                          <td class="px-4 py-3 text-muted text-xs hidden md:table-cell">
+                          <td data-column-order-id="time#0" class="px-4 py-3 text-muted text-xs hidden md:table-cell">
                             {formatDate(fault.created_at)}
                           </td>
                         </Show>
                         <Show when={isVisible('resolved')}>
-                          <td class="px-4 py-3">
+                          <td data-column-order-id="status#0" class="px-4 py-3">
                             <span class={`badge ${fault.resolved ? 'badge-success' : 'badge-error'}`}>
                               {fault.resolved ? 'Resolved' : 'Active'}
                             </span>
                           </td>
                         </Show>
-                        <td class="px-4 py-3 text-right">
+                        <td data-column-order-id="actions#0" class="px-4 py-3 text-right">
                           <div class="flex items-center justify-end gap-2">
                             <Show when={!fault.resolved && isFullAccess()}>
                               <button 
