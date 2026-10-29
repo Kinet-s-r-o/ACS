@@ -498,28 +498,9 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			}
 		}
 	}
-	// Active metric polling: schedule a GPV fetch if the interval has elapsed.
+	// Check metric-specific polling intervals when this session can send a GPV.
 	if h.metricRepo != nil && deviceID > 0 && h.metricPollInterval > 0 {
-		if time.Since(session.LastMetricFetch) >= h.metricPollInterval {
-			if params, err := h.metricRepo.ActiveParamNames(ctx, session.DeviceType); err == nil {
-				if interfaceParams, interfaceErr := h.metricRepo.InterfaceActiveParamNames(ctx, deviceID, session.DeviceType); interfaceErr == nil {
-					seen := make(map[string]bool, len(params))
-					for _, name := range params {
-						seen[name] = true
-					}
-					for _, name := range interfaceParams {
-						if !seen[name] {
-							params = append(params, name)
-							seen[name] = true
-						}
-					}
-				}
-				if len(params) > 0 {
-					session.MetricFetchReady = true
-					session.MetricFetchParams = params
-				}
-			}
-		}
+		session.MetricFetchReady = true
 	}
 	session.mu.Unlock()
 
@@ -623,9 +604,37 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 	}
 	if session.MetricFetchReady {
 		session.MetricFetchReady = false
-		session.State = StateProcessingTasks
-		session.LastSentContext = strings.Join(session.MetricFetchParams, ", ")
-		return &GetParameterValues{ParameterNames: session.MetricFetchParams}, namespace, nil
+		params := make([]string, 0)
+		seen := make(map[string]bool)
+		if h.metricPollInterval > 0 {
+			metricParams, err := h.metricRepo.ReserveDueActiveMetricParams(ctx, session.DeviceID, session.DeviceType, h.metricPollInterval)
+			if err != nil {
+				log.Printf("Error scheduling metric GPV for device %d: %v", session.DeviceID, err)
+			} else {
+				for _, name := range metricParams {
+					if !seen[name] {
+						params = append(params, name)
+						seen[name] = true
+					}
+				}
+			}
+		}
+		pollParams, err := h.metricRepo.ReserveDueParameterPolls(ctx, session.DeviceID, session.DeviceType)
+		if err != nil {
+			log.Printf("Error scheduling parameter GPV for device %d: %v", session.DeviceID, err)
+		} else {
+			for _, name := range pollParams {
+				if !seen[name] {
+					params = append(params, name)
+					seen[name] = true
+				}
+			}
+		}
+		if len(params) > 0 {
+			session.State = StateProcessingTasks
+			session.LastSentContext = strings.Join(params, ", ")
+			return &GetParameterValues{ParameterNames: params}, namespace, nil
+		}
 	}
 	session.State = StateIdle
 	return nil, namespace, nil
@@ -694,7 +703,6 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		if err := h.metricRepo.ExtractAndStore(ctx, session.DeviceID, session.DeviceType, paramMap); err != nil {
 			log.Printf("Error extracting metrics from GPV response: %v", err)
 		}
-		session.LastMetricFetch = time.Now()
 	}
 
 	// Conditional provisioning: evaluate conditions against fetched params

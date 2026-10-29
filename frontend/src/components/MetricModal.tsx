@@ -25,6 +25,8 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   unit: '',
   source: 'passive',
   active: true,
+  min_sample_interval_seconds: 0,
+  gpv_poll_interval_seconds: 0,
   store_history: true,
   group: '',
   color: '',
@@ -80,6 +82,8 @@ const MetricModal: Component<MetricModalProps> = (props) => {
       unit: m.unit,
       source: m.source,
       active: m.active,
+      min_sample_interval_seconds: m.min_sample_interval_seconds ?? 0,
+      gpv_poll_interval_seconds: m.gpv_poll_interval_seconds ?? 0,
       store_history: m.store_history !== false,
       group: m.group,
       color: m.color,
@@ -195,6 +199,16 @@ const MetricModal: Component<MetricModalProps> = (props) => {
               <option value="true">Yes — collect this metric</option>
               <option value="false">No — paused</option>
             </select>
+          </div>
+          <div>
+            <label for="metric-min-sample-interval" class="block text-xs text-muted mb-1.5">Minimum sample interval (seconds)</label>
+            <input id="metric-min-sample-interval" type="number" min="0" max="31536000" step="1" value={metricForm().min_sample_interval_seconds} onInput={(e) => setMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} class="input w-full" />
+            <p class="text-xs text-muted mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per CPE.</p>
+          </div>
+          <div>
+            <label for="metric-gpv-poll-interval" class="block text-xs text-muted mb-1.5">GPV poll interval (seconds)</label>
+            <input id="metric-gpv-poll-interval" type="number" min="0" max="31536000" step="1" value={metricForm().gpv_poll_interval_seconds} onInput={(e) => setMetricForm(f => ({ ...f, gpv_poll_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} class="input w-full" />
+            <p class="text-xs text-muted mt-1">Active and Universal only. 0 uses the server interval (15 minutes by default); GPV waits for a CWMP session.</p>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>

@@ -130,6 +130,22 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 			}
 		}
 
+		var parameterPolls []models.ParameterPollDefinition
+		if err := tx.Where("template_id = ?", sourceID).Find(&parameterPolls).Error; err != nil {
+			return err
+		}
+		for index := range parameterPolls {
+			parameterPolls[index].ID = 0
+			parameterPolls[index].TemplateID = clone.ID
+			parameterPolls[index].CreatedAt = time.Time{}
+			parameterPolls[index].UpdatedAt = time.Time{}
+		}
+		if len(parameterPolls) > 0 {
+			if err := tx.Create(&parameterPolls).Error; err != nil {
+				return err
+			}
+		}
+
 		if source.ImagePath != "" {
 			sourcePath, err := secureTemplateImagePath(r.templateImageDir, source.ImagePath)
 			if err != nil {

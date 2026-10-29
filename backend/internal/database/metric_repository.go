@@ -2,16 +2,19 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type MetricRepository struct {
@@ -249,6 +252,39 @@ func (r *MetricRepository) BatchInsert(ctx context.Context, samples []models.Met
 	return r.db.WithContext(ctx).CreateInBatches(&samples, 500).Error
 }
 
+// storeThrottledSample checks the latest stored sample across CWMP sessions and
+// serializes writes for the same device and metric on PostgreSQL.
+func (r *MetricRepository) storeThrottledSample(ctx context.Context, deviceID, metricID int64, parameterName string, intervalSeconds int, now time.Time, sample any) error {
+	table := "metric_samples"
+	if parameterName != "" {
+		table = "interface_metric_samples"
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?, ?)", int32(deviceID), int32(metricID)).Error; err != nil {
+				return err
+			}
+		}
+		query := tx.Table(table).Select("timestamp").Where("device_id = ? AND metric_id = ?", deviceID, metricID)
+		if parameterName != "" {
+			query = query.Where("parameter_name = ?", parameterName)
+		}
+		var latest struct{ Timestamp time.Time }
+		err := query.Order("timestamp DESC").Take(&latest).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		if err == nil && !sampleIntervalElapsed(now, latest.Timestamp, intervalSeconds) {
+			return nil
+		}
+		return tx.Create(sample).Error
+	})
+}
+
+func sampleIntervalElapsed(now, previous time.Time, intervalSeconds int) bool {
+	return now.Sub(previous) >= time.Duration(intervalSeconds)*time.Second
+}
+
 func (r *MetricRepository) InterfaceActiveParamNames(ctx context.Context, deviceID int64, deviceType string) ([]string, error) {
 	defs, err := r.interfaceMetricDefinitions(ctx, deviceType, true)
 	if err != nil || len(defs) == 0 {
@@ -316,7 +352,14 @@ func (r *MetricRepository) ExtractAndStoreInterface(ctx context.Context, deviceI
 			if parseErr != nil || math.IsNaN(fv) || math.IsInf(fv, 0) {
 				continue
 			}
-			samples = append(samples, models.InterfaceMetricSample{DeviceID: deviceID, MetricID: def.ID, ParameterName: name, Value: fv, Timestamp: now})
+			sample := models.InterfaceMetricSample{DeviceID: deviceID, MetricID: def.ID, ParameterName: name, Value: fv, Timestamp: now}
+			if def.MinSampleIntervalSeconds > 0 {
+				if err := r.storeThrottledSample(ctx, deviceID, def.ID, name, def.MinSampleIntervalSeconds, now, &sample); err != nil {
+					return err
+				}
+				continue
+			}
+			samples = append(samples, sample)
 		}
 	}
 	if len(samples) == 0 {
@@ -456,6 +499,7 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 
 	now := time.Now()
 	var samples []models.MetricSample
+	throttled := 0
 	matched := 0
 	missed := 0
 
@@ -477,16 +521,24 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 		if !def.StoresHistory() {
 			continue
 		}
-		samples = append(samples, models.MetricSample{
+		sample := models.MetricSample{
 			DeviceID:  deviceID,
 			MetricID:  def.ID,
 			Value:     fv,
 			Timestamp: now,
-		})
+		}
+		if def.MinSampleIntervalSeconds > 0 {
+			if err := r.storeThrottledSample(ctx, deviceID, def.ID, "", def.MinSampleIntervalSeconds, now, &sample); err != nil {
+				return err
+			}
+			throttled++
+			continue
+		}
+		samples = append(samples, sample)
 	}
 
 	if len(samples) == 0 {
-		if matched > 0 {
+		if matched > 0 && throttled == 0 {
 			log.Printf("No metric samples stored for device %d (%s): %d defs matched device type, %d params available, %d missed",
 				deviceID, deviceType, matched, len(paramMap), missed)
 		}
@@ -497,6 +549,189 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 	}
 	log.Printf("Stored %d metric samples for device %d", len(samples), deviceID)
 	return nil
+}
+
+// ReserveDueActiveMetricParams returns due GPV paths and persists their request
+// time before the CWMP request is sent. A device lock prevents overlapping
+// sessions from reserving the same metric concurrently.
+func (r *MetricRepository) ReserveDueActiveMetricParams(ctx context.Context, deviceID int64, deviceType string, defaultInterval time.Duration) ([]string, error) {
+	template, err := r.TemplateForDeviceType(ctx, deviceType)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var defs []models.MetricDefinition
+	if err := r.db.WithContext(ctx).Where("template_id = ? AND active = ? AND source IN ?", template.ID, true, []string{"active", "universal"}).Order("id ASC").Find(&defs).Error; err != nil || len(defs) == 0 {
+		return nil, err
+	}
+	var names []string
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", deviceID).Error; err != nil {
+				return err
+			}
+		}
+		ids := make([]int64, 0, len(defs))
+		for _, def := range defs {
+			ids = append(ids, def.ID)
+		}
+		var states []models.MetricPollState
+		if err := tx.Where("device_id = ? AND metric_id IN ?", deviceID, ids).Find(&states).Error; err != nil {
+			return err
+		}
+		lastRequest := make(map[int64]time.Time, len(states))
+		for _, state := range states {
+			lastRequest[state.MetricID] = state.LastRequestedAt
+		}
+		now := time.Now()
+		var due []models.MetricDefinition
+		needsInterfaceNames := false
+		for _, def := range defs {
+			if !metricPollDue(now, lastRequest[def.ID], def.GPVPollIntervalSeconds, defaultInterval) {
+				continue
+			}
+			due = append(due, def)
+			needsInterfaceNames = needsInterfaceNames || def.ParameterPattern != ""
+		}
+		var interfaceNames []string
+		if needsInterfaceNames {
+			if err := tx.Model(&models.DeviceParameter{}).Where("device_id = ?", deviceID).Pluck("name", &interfaceNames).Error; err != nil {
+				return err
+			}
+		}
+		seen := make(map[string]bool)
+		var reserved []models.MetricPollState
+		for _, def := range due {
+			var matched []string
+			if def.ParameterPattern == "" && def.ParameterName != "" {
+				matched = []string{def.ParameterName}
+			} else if def.ParameterPattern != "" {
+				for _, name := range interfaceNames {
+					if interfacePathMatches(def.ParameterPattern, name) {
+						matched = append(matched, name)
+					}
+				}
+			}
+			if len(matched) == 0 {
+				continue
+			}
+			for _, name := range matched {
+				if !seen[name] {
+					names = append(names, name)
+					seen[name] = true
+				}
+			}
+			reserved = append(reserved, models.MetricPollState{DeviceID: deviceID, MetricID: def.ID, LastRequestedAt: now})
+		}
+		if len(reserved) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "device_id"}, {Name: "metric_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"last_requested_at"}),
+		}).Create(&reserved).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+func (r *MetricRepository) ReserveDueParameterPolls(ctx context.Context, deviceID int64, deviceType string) ([]string, error) {
+	template, err := r.TemplateForDeviceType(ctx, deviceType)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var defs []models.ParameterPollDefinition
+	if err := r.db.WithContext(ctx).Where("template_id = ? AND active = ?", template.ID, true).Order("id ASC").Find(&defs).Error; err != nil || len(defs) == 0 {
+		return nil, err
+	}
+	var parameterNames []string
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", deviceID).Error; err != nil {
+				return err
+			}
+		}
+		ids := make([]int64, 0, len(defs))
+		for _, def := range defs {
+			ids = append(ids, def.ID)
+		}
+		var states []models.ParameterPollState
+		if err := tx.Where("device_id = ? AND definition_id IN ?", deviceID, ids).Find(&states).Error; err != nil {
+			return err
+		}
+		lastRequest := make(map[int64]time.Time, len(states))
+		for _, state := range states {
+			lastRequest[state.DefinitionID] = state.LastRequestedAt
+		}
+		now := time.Now()
+		var due []models.ParameterPollDefinition
+		needsDiscovery := false
+		for _, def := range defs {
+			if now.Sub(lastRequest[def.ID]) < time.Duration(def.IntervalSeconds)*time.Second {
+				continue
+			}
+			due = append(due, def)
+			needsDiscovery = needsDiscovery || strings.Contains(def.ParameterPattern, "*")
+		}
+		if needsDiscovery {
+			if err := tx.Model(&models.DeviceParameter{}).Where("device_id = ?", deviceID).Pluck("name", &parameterNames).Error; err != nil {
+				return err
+			}
+		}
+		requested := make(map[string]bool)
+		var reserved []models.ParameterPollState
+		for _, def := range due {
+			matched := false
+			if !strings.Contains(def.ParameterPattern, "*") {
+				requested[def.ParameterPattern] = true
+				matched = true
+			} else {
+				for _, name := range parameterNames {
+					if interfacePathMatches(def.ParameterPattern, name) {
+						requested[name] = true
+						matched = true
+					}
+				}
+			}
+			if matched {
+				reserved = append(reserved, models.ParameterPollState{DeviceID: deviceID, DefinitionID: def.ID, LastRequestedAt: now})
+			}
+		}
+		if len(reserved) == 0 {
+			return nil
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "device_id"}, {Name: "definition_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"last_requested_at"}),
+		}).Create(&reserved).Error; err != nil {
+			return err
+		}
+		parameterNames = parameterNames[:0]
+		for name := range requested {
+			parameterNames = append(parameterNames, name)
+		}
+		sort.Strings(parameterNames)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parameterNames, nil
+}
+
+func metricPollDue(now, lastRequest time.Time, intervalSeconds int, defaultInterval time.Duration) bool {
+	interval := defaultInterval
+	if intervalSeconds > 0 {
+		interval = time.Duration(intervalSeconds) * time.Second
+	}
+	return now.Sub(lastRequest) >= interval
 }
 
 // ActiveParamNames returns the parameter names needed for active metric collection

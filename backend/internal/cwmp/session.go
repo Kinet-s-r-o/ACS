@@ -59,10 +59,8 @@ type Session struct {
 	PendingConditionalData   []*models.ProvisioningRule
 
 	// Metric collection state
-	DeviceType        string
-	MetricFetchReady  bool
-	MetricFetchParams []string
-	LastMetricFetch   time.Time
+	DeviceType       string
+	MetricFetchReady bool
 
 	// LastSentContext holds a human-readable description of the last CWMP
 	// operation sent to the CPE (parameter names, object name, etc.).

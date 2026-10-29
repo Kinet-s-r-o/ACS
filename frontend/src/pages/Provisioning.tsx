@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
 import { Activity, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -167,13 +167,16 @@ const Provisioning: Component = () => {
   const toggleFeatureControlSelection = (key: string) => setSelectedFeatureControlKeys(keys => keys.includes(key) ? keys.filter(item => item !== key) : [...keys, key]);
   const selectAllFeatureControls = (feature: ProvisioningFeature, checked: boolean) => setSelectedFeatureControlKeys(checked ? feature.controls.map(control => control.key) : []);
   const [metrics, { refetch: refetchMetrics }] = createResource(() => selectedTemplate()?.id, (id) => api.getTemplateMetrics(id!));
+  const [parameterPolls, { refetch: refetchParameterPolls }] = createResource(() => selectedTemplate()?.id, (id) => api.getParameterPolls(id!));
+  const [editingParameterPoll, setEditingParameterPoll] = createSignal<ParameterPollDefinition | null>(null);
+  const [parameterPollForm, setParameterPollForm] = createSignal({ parameter_pattern: '', interval_seconds: 300, active: true });
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [copyingMetric, setCopyingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
   const [interfaceMetrics, { refetch: refetchInterfaceMetrics }] = createResource(() => selectedTemplate()?.id, (id) => api.getInterfaceMetrics(id!));
   const [editingInterfaceMetric, setEditingInterfaceMetric] = createSignal<InterfaceMetricDefinition | null>(null);
   const [showInterfaceMetricModal, setShowInterfaceMetricModal] = createSignal(false);
-  const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true });
+  const [interfaceMetricForm, setInterfaceMetricForm] = createSignal({ name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', min_sample_interval_seconds: 0, gpv_poll_interval_seconds: 0, unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true });
   const [interfaceMetricInitialSnapshot, setInterfaceMetricInitialSnapshot] = createSignal('');
 
   const settingsDirty = () => settingsInitialSnapshot() !== '' && JSON.stringify(refreshSettings()) !== settingsInitialSnapshot();
@@ -962,6 +965,33 @@ const Provisioning: Component = () => {
 
   const templateMetrics = createMemo(() => metrics() || []);
 
+  const editParameterPoll = (definition?: ParameterPollDefinition) => {
+    setEditingParameterPoll(definition || null);
+    setParameterPollForm(definition ? { parameter_pattern: definition.parameter_pattern, interval_seconds: definition.interval_seconds, active: definition.active } : { parameter_pattern: '', interval_seconds: 300, active: true });
+  };
+
+  const saveParameterPoll = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const template = selectedTemplate();
+    if (!template) return;
+    try {
+      const form = { ...parameterPollForm(), parameter_pattern: parameterPollForm().parameter_pattern.trim() };
+      const editing = editingParameterPoll();
+      if (editing) await api.updateParameterPoll(template.id, editing.id, form);
+      else await api.createParameterPoll(template.id, form);
+      editParameterPoll();
+      refetchParameterPolls();
+      notify({ tone: 'success', title: editing ? 'Parameter polling rule updated' : 'Parameter polling rule created' });
+    } catch (error) { notify({ tone: 'error', title: 'Could not save parameter polling rule', message: (error as Error).message, persistent: true }); }
+  };
+
+  const deleteParameterPoll = async (definition: ParameterPollDefinition) => {
+    const template = selectedTemplate();
+    if (!template || !await confirm({ title: 'Delete parameter polling rule?', description: definition.parameter_pattern, confirmLabel: 'Delete rule', tone: 'danger' })) return;
+    try { await api.deleteParameterPoll(template.id, definition.id); if (editingParameterPoll()?.id === definition.id) editParameterPoll(); refetchParameterPolls(); }
+    catch (error) { notify({ tone: 'error', title: 'Could not delete parameter polling rule', message: (error as Error).message, persistent: true }); }
+  };
+
   const openCreateMetric = () => {
     setEditingMetric(null);
     setCopyingMetric(null);
@@ -982,7 +1012,7 @@ const Provisioning: Component = () => {
 
   const openInterfaceMetric = (def: InterfaceMetricDefinition | null = null) => {
     setEditingInterfaceMetric(def);
-    const next = def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true };
+    const next = def ? { name: def.name, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', min_sample_interval_seconds: def.min_sample_interval_seconds ?? 0, gpv_poll_interval_seconds: def.gpv_poll_interval_seconds ?? 0, unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active } : { name: '', description: '', interface_type: 'wan' as 'wan' | 'lan', parameter_pattern: '', unit: 'bytes', source: 'active' as 'passive' | 'active' | 'universal', min_sample_interval_seconds: 0, gpv_poll_interval_seconds: 0, unit_scale: '', color: '', group: '', chart_type: 'line', transform: '', multiplier: 1, active: true };
     setInterfaceMetricForm(next);
     setInterfaceMetricInitialSnapshot(JSON.stringify(next));
     setShowInterfaceMetricModal(true);
@@ -990,7 +1020,7 @@ const Provisioning: Component = () => {
 
   const copyInterfaceMetric = (def: InterfaceMetricDefinition) => {
     setEditingInterfaceMetric(null);
-    const next = { name: `${def.name} copy`, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active };
+    const next = { name: `${def.name} copy`, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', min_sample_interval_seconds: def.min_sample_interval_seconds ?? 0, gpv_poll_interval_seconds: def.gpv_poll_interval_seconds ?? 0, unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active };
     setInterfaceMetricForm(next);
     setInterfaceMetricInitialSnapshot(JSON.stringify(next));
     setShowInterfaceMetricModal(true);
@@ -1388,6 +1418,20 @@ const Provisioning: Component = () => {
           </Show>
 
           <Show when={templateTab() === 'metrics'}>
+            <section class="mb-6 border-b border-subtle pb-5">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div><h3 class="text-sm font-semibold text-primary">Additional parameter polling</h3><p class="mt-1 text-xs text-muted">GPV requests run when the CPE opens a CWMP session. Wildcards match paths already known for the device.</p></div>
+              </div>
+              <Show when={isFullAccess()}><form class="mb-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(20rem,1fr)_10rem_auto_auto]" onSubmit={(event) => void saveParameterPoll(event)}>
+                <input aria-label="CWMP parameter path" class="input" required maxlength="512" placeholder="InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.RadioEnabled" value={parameterPollForm().parameter_pattern} onInput={event => setParameterPollForm(form => ({ ...form, parameter_pattern: event.currentTarget.value }))} />
+                <label class="flex items-center gap-2"><span class="text-xs text-muted">Interval (seconds)</span><input aria-label="Polling interval in seconds" class="input w-24" type="number" min="1" max="31536000" required value={parameterPollForm().interval_seconds} onInput={event => setParameterPollForm(form => ({ ...form, interval_seconds: Number(event.currentTarget.value) }))} /></label>
+                <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().active} onChange={event => setParameterPollForm(form => ({ ...form, active: event.currentTarget.checked }))} />Active</label>
+                <div class="flex gap-1"><button type="submit" class="btn btn-primary text-xs"><Save size={12} />{editingParameterPoll() ? 'Save' : 'Add'}</button><Show when={editingParameterPoll()}><button type="button" class="btn btn-secondary text-xs" onClick={() => editParameterPoll()}>Cancel</button></Show></div>
+              </form></Show>
+              <Show when={(parameterPolls()?.length ?? 0) > 0} fallback={<p class="text-xs text-muted">No additional parameter polling rules configured.</p>}>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[48rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3 w-[65%]">CWMP parameter path</th><th class="py-2 pr-3">Interval</th><th class="py-2 pr-3">Active</th><th class="py-2 text-right">Actions</th></tr></thead><tbody><For each={parameterPolls() || []}>{definition => <tr class="border-t border-subtle/50 text-xs"><td class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td><td class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td><td class="py-2 pr-3"><span class={`badge ${definition.active ? 'badge-success' : 'badge-muted'}`}>{definition.active ? 'Yes' : 'No'}</span></td><td class="py-2 text-right"><Show when={isFullAccess()}><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => editParameterPoll(definition)} title="Edit polling rule" aria-label="Edit polling rule"><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label="Delete polling rule"><Trash2 size={14} /></button></div></Show></td></tr>}</For></tbody></table></div>
+              </Show>
+            </section>
             <Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
                 <table class="data-table w-full min-w-[95rem] table-fixed text-left">
@@ -1712,6 +1756,8 @@ const Provisioning: Component = () => {
             <label class="block text-xs text-muted">Name<input required class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
             <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
             <label for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></label>
+            <label class="block text-xs text-muted">Minimum sample interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().min_sample_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per interface.</span></label>
+            <label class="block text-xs text-muted">GPV poll interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().gpv_poll_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, gpv_poll_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">Active and Universal only. 0 uses the server interval (15 minutes by default).</span></label>
             <label class="block text-xs text-muted">Parameter path pattern<input required class="input mt-1 w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Stats.EthernetBytesReceived" value={interfaceMetricForm().parameter_pattern} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, parameter_pattern: e.currentTarget.value }))} /></label>
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4"><label class="block text-xs text-muted">Unit<input class="input mt-1 w-full" value={interfaceMetricForm().unit} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} /></label><label class="block text-xs text-muted">Transform<select class="input mt-1 w-full" value={interfaceMetricForm().transform} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, transform: e.currentTarget.value }))}><option value="">Raw value</option><option value="rate">Rate</option></select></label><label class="block text-xs text-muted">Multiplier<input type="number" min="0" step="any" class="input mt-1 w-full" value={interfaceMetricForm().multiplier} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, multiplier: Number(e.currentTarget.value) }))} /></label><label class="block text-xs text-muted">Unit Scale<select class="input mt-1 w-full" value={interfaceMetricForm().unit_scale} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, unit_scale: e.currentTarget.value }))}><option value="">None</option><option value="bytes">Bytes (KB/MB/GB/TB)</option><option value="bits">Bits (Kb/Mb/Gb/Tb)</option><option value="pps">Packets per second (pps/Kpps/Mpps/Gpps)</option></select></label></div>
             <div class="block text-xs text-muted">Line color<ColorSwatch value={interfaceMetricForm().color} onChange={(color) => setInterfaceMetricForm(f => ({ ...f, color }))} /></div>

@@ -147,7 +147,7 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	def.ID = id
-	result := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "device_type_match": def.DeviceTypeMatch, "source": def.Source, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "unit_scale": def.UnitScale, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active})
+	result := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("id = ? AND template_id = ?", id, templateID).Updates(map[string]any{"name": def.Name, "description": def.Description, "device_type_match": def.DeviceTypeMatch, "source": def.Source, "interface_type": def.InterfaceType, "parameter_pattern": def.ParameterPattern, "unit": def.Unit, "unit_scale": def.UnitScale, "color": def.Color, "group": def.Group, "chart_type": def.ChartType, "transform": def.Transform, "multiplier": def.Multiplier, "active": def.Active, "min_sample_interval_seconds": def.MinSampleIntervalSeconds, "gpv_poll_interval_seconds": def.GPVPollIntervalSeconds})
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update interface metric")
 		return
@@ -160,6 +160,12 @@ func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Requ
 }
 
 func validateInterfaceMetricDefinition(def *models.MetricDefinition) error {
+	if def.MinSampleIntervalSeconds < 0 || def.MinSampleIntervalSeconds > 31536000 {
+		return errors.New("min_sample_interval_seconds must be between 0 and 31536000")
+	}
+	if def.GPVPollIntervalSeconds < 0 || def.GPVPollIntervalSeconds > 31536000 {
+		return errors.New("gpv_poll_interval_seconds must be between 0 and 31536000")
+	}
 	if def.Name == "" || len(def.Name) > 128 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) || len(def.Group) > 64 {
 		return errors.New("Invalid interface metric definition")
 	}

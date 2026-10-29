@@ -83,6 +83,18 @@ func (r *ProvisioningRepository) DeleteTemplate(ctx context.Context, id int64) e
 		if err := tx.Where("template_id = ?", id).Delete(&models.InterfaceMetricDefinition{}).Error; err != nil {
 			return err
 		}
+		var pollIDs []int64
+		if err := tx.Model(&models.ParameterPollDefinition{}).Where("template_id = ?", id).Pluck("id", &pollIDs).Error; err != nil {
+			return err
+		}
+		if len(pollIDs) > 0 {
+			if err := tx.Where("definition_id IN ?", pollIDs).Delete(&models.ParameterPollState{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("template_id = ?", id).Delete(&models.ParameterPollDefinition{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("template_id = ?", id).Delete(&models.ProvisioningRule{}).Error; err != nil {
 			return err
 		}

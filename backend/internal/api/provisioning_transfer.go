@@ -25,15 +25,16 @@ type provisioningTransfer struct {
 }
 
 type provisioningTransferTemplate struct {
-	Name         string                        `json:"name"`
-	Manufacturer string                        `json:"manufacturer"`
-	ProductClass string                        `json:"product_class"`
-	Description  string                        `json:"description,omitempty"`
-	Inventory    models.TemplateInventory      `json:"inventory,omitempty"`
-	Variables    []models.ProvisioningVariable `json:"variables,omitempty"`
-	Features     []models.ProvisioningFeature  `json:"features,omitempty"`
-	Rules        []models.ProvisioningRule     `json:"rules,omitempty"`
-	Metrics      []models.MetricDefinition     `json:"metrics,omitempty"`
+	Name           string                           `json:"name"`
+	Manufacturer   string                           `json:"manufacturer"`
+	ProductClass   string                           `json:"product_class"`
+	Description    string                           `json:"description,omitempty"`
+	Inventory      models.TemplateInventory         `json:"inventory,omitempty"`
+	Variables      []models.ProvisioningVariable    `json:"variables,omitempty"`
+	Features       []models.ProvisioningFeature     `json:"features,omitempty"`
+	Rules          []models.ProvisioningRule        `json:"rules,omitempty"`
+	Metrics        []models.MetricDefinition        `json:"metrics,omitempty"`
+	ParameterPolls []models.ParameterPollDefinition `json:"parameter_polls,omitempty"`
 }
 
 func requireFullProvisioningAccess(w http.ResponseWriter, req *http.Request) bool {
@@ -79,6 +80,10 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 			respondError(w, http.StatusInternalServerError, "Failed to load metric definitions")
 			return
 		}
+		if err := r.db.WithContext(req.Context()).Where("template_id = ?", template.ID).Order("id ASC").Find(&item.ParameterPolls).Error; err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to load parameter polling rules")
+			return
+		}
 		// IDs and timestamps are database identity, not portable configuration.
 		for index := range item.Rules {
 			item.Rules[index].ID = 0
@@ -93,6 +98,12 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 			item.Metrics[index].LegacyInterfaceID = nil
 			item.Metrics[index].CreatedAt = time.Time{}
 			item.Metrics[index].UpdatedAt = time.Time{}
+		}
+		for index := range item.ParameterPolls {
+			item.ParameterPolls[index].ID = 0
+			item.ParameterPolls[index].TemplateID = 0
+			item.ParameterPolls[index].CreatedAt = time.Time{}
+			item.ParameterPolls[index].UpdatedAt = time.Time{}
 		}
 		backup.Templates = append(backup.Templates, item)
 	}
@@ -149,7 +160,7 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 			if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Where("1 = 1").Delete(&models.ProvisioningApplication{}).Error; err != nil {
 				return err
 			}
-			for _, model := range []interface{}{&models.ProvisioningRule{}, &models.MetricDefinition{}, &models.ProvisioningTemplate{}} {
+			for _, model := range []interface{}{&models.ProvisioningRule{}, &models.MetricDefinition{}, &models.ParameterPollState{}, &models.ParameterPollDefinition{}, &models.ProvisioningTemplate{}} {
 				if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Where("1 = 1").Delete(model).Error; err != nil {
 					return err
 				}
@@ -189,6 +200,17 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 				metric.DeviceTypeMatch = templateMetricScope(template.Manufacturer, template.ProductClass)
 				metric.CreatedAt, metric.UpdatedAt = time.Time{}, time.Time{}
 				if err := tx.Create(&metric).Error; err != nil {
+					return err
+				}
+			}
+			for pollIndex := range item.ParameterPolls {
+				poll := item.ParameterPolls[pollIndex]
+				poll.ID, poll.TemplateID = 0, template.ID
+				poll.CreatedAt, poll.UpdatedAt = time.Time{}, time.Time{}
+				if !validParameterPollPattern(poll.ParameterPattern) || poll.IntervalSeconds < 1 || poll.IntervalSeconds > 31536000 {
+					return fmt.Errorf("invalid parameter polling rule %d", pollIndex+1)
+				}
+				if err := tx.Create(&poll).Error; err != nil {
 					return err
 				}
 			}
@@ -262,6 +284,14 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 		}
 		if err != nil {
 			return fmt.Errorf("metric %d: %w", index+1, err)
+		}
+	}
+	for index := range item.ParameterPolls {
+		poll := &item.ParameterPolls[index]
+		poll.ID, poll.TemplateID = 0, 0
+		poll.CreatedAt, poll.UpdatedAt = time.Time{}, time.Time{}
+		if !validParameterPollPattern(poll.ParameterPattern) || poll.IntervalSeconds < 1 || poll.IntervalSeconds > 31536000 {
+			return fmt.Errorf("parameter polling rule %d is invalid", index+1)
 		}
 	}
 	return nil
