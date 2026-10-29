@@ -27,11 +27,12 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		return
 	}
 	var body struct {
-		Name         string                    `json:"name"`
-		Manufacturer string                    `json:"manufacturer"`
-		ProductClass string                    `json:"product_class"`
-		Description  string                    `json:"description"`
-		Inventory    *models.TemplateInventory `json:"inventory,omitempty"`
+		Name                     string                    `json:"name"`
+		Manufacturer             string                    `json:"manufacturer"`
+		ProductClass             string                    `json:"product_class"`
+		Description              string                    `json:"description"`
+		Inventory                *models.TemplateInventory `json:"inventory,omitempty"`
+		DynamicParameterBranches []string                  `json:"dynamic_parameter_branches,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -64,9 +65,16 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := validateDynamicParameterBranches(body.DynamicParameterBranches); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.DynamicParameterBranches == nil {
+		body.DynamicParameterBranches = append([]string(nil), source.DynamicParameterBranches...)
+	}
 	clone := models.ProvisioningTemplate{
 		Name: body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
-		Description: body.Description, Inventory: inventory, Variables: source.Variables, Features: source.Features,
+		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), Variables: source.Variables, Features: source.Features,
 	}
 	targetMetricScope := templateMetricScope(clone.Manufacturer, clone.ProductClass)
 	imageCopyPath := ""

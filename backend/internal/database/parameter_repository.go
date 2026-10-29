@@ -285,6 +285,39 @@ func (r *ParameterRepository) OverviewNames(ctx context.Context, deviceID int64)
 	return selectOverviewNames(names), nil
 }
 
+// ReplaceDynamicParameters refreshes only the values below configured dynamic
+// branches and removes names that were discovered previously but are no longer
+// present on the CPE.
+func (r *ParameterRepository) ReplaceDynamicParameters(ctx context.Context, deviceID int64, branches []string, params []models.DeviceParameter) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var names []string
+		if err := tx.Model(&models.DeviceParameter{}).Where("device_id = ?", deviceID).Pluck("name", &names).Error; err != nil {
+			return err
+		}
+		current := make(map[string]struct{}, len(params))
+		for _, param := range params {
+			current[param.Name] = struct{}{}
+		}
+		for _, name := range names {
+			matched := false
+			for _, branch := range branches {
+				if DynamicParameterBranchMatches(branch, name) {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				if _, exists := current[name]; !exists {
+					if err := tx.Where("device_id = ? AND name = ?", deviceID, name).Delete(&models.DeviceParameter{}).Error; err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return upsertMany(tx, deviceID, params)
+	})
+}
+
 func selectOverviewNames(names []string) []string {
 	var buckets [4][]string
 	for _, name := range names {

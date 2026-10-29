@@ -342,8 +342,10 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 		}
 	}
 
+	dynamicBranches := []string(nil)
 	if deviceID > 0 && h.provisioningRepo != nil {
 		if template, err := h.provisioningRepo.ResolveTemplateForDevice(ctx, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass); err == nil {
+			dynamicBranches = append(dynamicBranches, template.DynamicParameterBranches...)
 			parameterValues := make(map[string]string, len(inform.ParameterList.Parameters))
 			for _, parameter := range inform.ParameterList.Parameters {
 				parameterValues[parameter.Name] = parameter.Value
@@ -490,6 +492,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DeviceID = deviceID
 	session.DeviceType = inform.DeviceId.Manufacturer + "/" + inform.DeviceId.ProductClass
 	session.DataModelRoot = DetectDataModelRoot(inform.ParameterList.Parameters)
+	session.DynamicParameterBranches = dynamicBranches
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
 	session.InformStaggerPending = informStagger != nil && hasSetParameter(provisioning, informStagger.ParameterName)
@@ -519,6 +522,10 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.OverviewFetchReady = false
 	session.OverviewFetchActive = false
 	session.OverviewFetchParams = nil
+	session.DynamicDiscoveryActive = false
+	session.DynamicDiscoveryQueue = nil
+	session.DynamicDiscoveryCurrent = nil
+	session.DynamicDiscoveryNames = nil
 	if h.deviceRepo == nil {
 		session.AutoFetchReady = session.AutoFetchReady || isNewSession
 	} else if deviceID > 0 {
@@ -530,9 +537,12 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			if !session.AutoFetchReady && refreshDue(stored.LastOverviewRefresh, overviewInterval) && h.parameterRepo != nil {
 				if names, err := h.parameterRepo.OverviewNames(ctx, deviceID); err != nil {
 					log.Printf("Error loading overview parameters for %s: %v", inform.DeviceId.SerialNumber, err)
-				} else if len(names) > 0 {
-					session.OverviewFetchReady = true
-					session.OverviewFetchParams = names
+				} else {
+					names = database.FilterDynamicParameterNames(names, session.DynamicParameterBranches)
+					if len(names) > 0 || len(session.DynamicParameterBranches) > 0 {
+						session.OverviewFetchReady = true
+						session.OverviewFetchParams = names
+					}
 				}
 			}
 		}
@@ -653,6 +663,12 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 	if session.OverviewFetchReady {
 		session.OverviewFetchReady = false
 		session.OverviewFetchActive = true
+		if len(session.DynamicParameterBranches) > 0 {
+			session.DynamicDiscoveryActive = true
+			session.DynamicDiscoveryQueue = dynamicDiscoverySteps(session.DynamicParameterBranches)
+			session.DynamicDiscoveryNames = nil
+			return nextDynamicDiscoveryRequest(session), namespace, nil
+		}
 		session.State = StateProcessingTasks
 		session.LastSentContext = strings.Join(session.OverviewFetchParams, ", ")
 		session.LastSentParameters = append([]string(nil), session.OverviewFetchParams...)
@@ -729,7 +745,18 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		fullTree := len(params) > 0 && ((session.AutoFetchPhase == 1 && session.CurrentTaskID == 0) || session.CurrentFullTreeFetch)
 		session.CurrentFullTreeFetch = false
 		var saveErr error
-		if fullTree {
+		if session.DynamicDiscoveryActive {
+			dynamicParams := make([]models.DeviceParameter, 0, len(params))
+			for _, param := range params {
+				for _, branch := range session.DynamicParameterBranches {
+					if database.DynamicParameterBranchMatches(branch, param.Name) {
+						dynamicParams = append(dynamicParams, param)
+						break
+					}
+				}
+			}
+			saveErr = h.parameterRepo.ReplaceDynamicParameters(ctx, session.DeviceID, session.DynamicParameterBranches, dynamicParams)
+		} else if fullTree {
 			saveErr = h.parameterRepo.SaveFullTreeParameters(ctx, session.DeviceID, params)
 		} else {
 			saveErr = h.parameterRepo.UpsertMany(ctx, session.DeviceID, params)
@@ -843,6 +870,48 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.DynamicDiscoveryActive {
+		if current := session.DynamicDiscoveryCurrent; current != nil {
+			for _, parameter := range resp.ParameterList {
+				if current.Leaf {
+					if !strings.HasSuffix(parameter.Name, ".") && database.DynamicParameterBranchMatches(current.Path, parameter.Name) {
+						session.DynamicDiscoveryNames = append(session.DynamicDiscoveryNames, parameter.Name)
+					}
+					continue
+				}
+				if !strings.HasSuffix(parameter.Name, ".") || current.Index >= len(current.Segments) {
+					continue
+				}
+				segment := current.Segments[current.Index]
+				if segment != "*" && !strings.EqualFold(strings.TrimSuffix(parameter.Name, "."), strings.TrimSuffix(current.Path+segment, ".")) {
+					continue
+				}
+				next := DynamicDiscoveryStep{Path: parameter.Name, Segments: current.Segments, Index: current.Index + 1}
+				if next.Index >= len(next.Segments) {
+					next.Leaf = true
+				}
+				session.DynamicDiscoveryQueue = append(session.DynamicDiscoveryQueue, next)
+			}
+		}
+		session.DynamicDiscoveryCurrent = nil
+		if len(session.DynamicDiscoveryQueue) > 0 {
+			return nextDynamicDiscoveryRequest(session), nil
+		}
+		seen := make(map[string]bool, len(session.OverviewFetchParams)+len(session.DynamicDiscoveryNames))
+		for _, name := range session.OverviewFetchParams {
+			seen[name] = true
+		}
+		for _, name := range session.DynamicDiscoveryNames {
+			if !seen[name] {
+				session.OverviewFetchParams = append(session.OverviewFetchParams, name)
+				seen[name] = true
+			}
+		}
+		session.State = StateProcessingTasks
+		session.LastSentContext = strings.Join(session.OverviewFetchParams, ", ")
+		session.LastSentParameters = append([]string(nil), session.OverviewFetchParams...)
+		return &GetParameterValues{ParameterNames: session.OverviewFetchParams}, nil
+	}
 	if h.parameterRepo != nil && session.DeviceID > 0 {
 		params := make([]models.DeviceParameter, 0, len(resp.ParameterList))
 		for _, parameter := range resp.ParameterList {
@@ -877,6 +946,46 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	session.AutoFetchPhase = 0
 	session.State = StateIdle
 	return h.getNextTask(ctx, session)
+}
+
+func dynamicDiscoverySteps(branches []string) []DynamicDiscoveryStep {
+	steps := make([]DynamicDiscoveryStep, 0, len(branches))
+	for _, branch := range branches {
+		parts := strings.Split(strings.TrimSuffix(strings.TrimSpace(branch), "."), ".")
+		if len(parts) == 0 || parts[0] == "" {
+			continue
+		}
+		wildcard := -1
+		for index, part := range parts {
+			if part == "*" {
+				wildcard = index
+				break
+			}
+		}
+		if wildcard < 0 {
+			steps = append(steps, DynamicDiscoveryStep{Path: strings.TrimSuffix(branch, ".") + ".", Segments: parts, Index: len(parts), Leaf: true})
+			continue
+		}
+		prefix := strings.Join(parts[:wildcard], ".")
+		if prefix != "" {
+			prefix += "."
+		}
+		steps = append(steps, DynamicDiscoveryStep{Path: prefix, Segments: parts, Index: wildcard})
+	}
+	return steps
+}
+
+func nextDynamicDiscoveryRequest(session *Session) *GetParameterNames {
+	if len(session.DynamicDiscoveryQueue) == 0 {
+		return &GetParameterNames{ParameterPath: session.DataModelRoot, NextLevel: false}
+	}
+	step := session.DynamicDiscoveryQueue[0]
+	session.DynamicDiscoveryQueue = session.DynamicDiscoveryQueue[1:]
+	session.DynamicDiscoveryCurrent = &step
+	session.State = StateProcessingTasks
+	session.LastSentContext = step.Path
+	session.LastSentParameters = nil
+	return &GetParameterNames{ParameterPath: step.Path, NextLevel: !step.Leaf}
 }
 
 func (h *Handler) handleSetParameterValuesResponse(ctx context.Context, resp *SetParameterValuesResp, remoteAddr string) (interface{}, error) {
@@ -1303,6 +1412,8 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 		}
 		if session.OverviewFetchActive {
 			session.OverviewFetchActive = false
+			session.DynamicDiscoveryActive = false
+			session.DynamicDiscoveryNames = nil
 			return h.getNextTask(ctx, session)
 		}
 

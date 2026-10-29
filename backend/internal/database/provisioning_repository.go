@@ -52,9 +52,9 @@ func (r *ProvisioningRepository) UpdateTemplate(ctx context.Context, template *m
 		query := tx.Model(&models.ProvisioningTemplate{}).Where("id = ?", template.ID)
 		var err error
 		if template.Variables != nil {
-			err = query.Select("name", "manufacturer", "product_class", "description", "variables").Updates(template).Error
+			err = query.Select("name", "manufacturer", "product_class", "description", "dynamic_parameter_branches", "variables").Updates(template).Error
 		} else {
-			err = query.Select("name", "manufacturer", "product_class", "description").Updates(template).Error
+			err = query.Select("name", "manufacturer", "product_class", "description", "dynamic_parameter_branches").Updates(template).Error
 		}
 		if err != nil || template.Variables == nil {
 			return err

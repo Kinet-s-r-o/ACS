@@ -25,16 +25,17 @@ type provisioningTransfer struct {
 }
 
 type provisioningTransferTemplate struct {
-	Name           string                           `json:"name"`
-	Manufacturer   string                           `json:"manufacturer"`
-	ProductClass   string                           `json:"product_class"`
-	Description    string                           `json:"description,omitempty"`
-	Inventory      models.TemplateInventory         `json:"inventory,omitempty"`
-	Variables      []models.ProvisioningVariable    `json:"variables,omitempty"`
-	Features       []models.ProvisioningFeature     `json:"features,omitempty"`
-	Rules          []models.ProvisioningRule        `json:"rules,omitempty"`
-	Metrics        []models.MetricDefinition        `json:"metrics,omitempty"`
-	ParameterPolls []models.ParameterPollDefinition `json:"parameter_polls,omitempty"`
+	Name                     string                           `json:"name"`
+	Manufacturer             string                           `json:"manufacturer"`
+	ProductClass             string                           `json:"product_class"`
+	Description              string                           `json:"description,omitempty"`
+	Inventory                models.TemplateInventory         `json:"inventory,omitempty"`
+	DynamicParameterBranches []string                         `json:"dynamic_parameter_branches,omitempty"`
+	Variables                []models.ProvisioningVariable    `json:"variables,omitempty"`
+	Features                 []models.ProvisioningFeature     `json:"features,omitempty"`
+	Rules                    []models.ProvisioningRule        `json:"rules,omitempty"`
+	Metrics                  []models.MetricDefinition        `json:"metrics,omitempty"`
+	ParameterPolls           []models.ParameterPollDefinition `json:"parameter_polls,omitempty"`
 }
 
 func requireFullProvisioningAccess(w http.ResponseWriter, req *http.Request) bool {
@@ -63,7 +64,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 	for _, template := range templates {
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
-			Description: template.Description, Inventory: template.Inventory, Variables: template.Variables, Features: template.Features,
+			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
 		}
 		rules, err := r.provisioningRepo.ListForTemplate(req.Context(), template.ID)
 		if err != nil {
@@ -173,7 +174,7 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 			}
 			template := models.ProvisioningTemplate{
 				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
-				Description: item.Description, Inventory: item.Inventory, Variables: item.Variables, Features: item.Features,
+				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, Variables: item.Variables, Features: item.Features,
 			}
 			if err := tx.Create(&template).Error; err != nil {
 				return err
@@ -239,6 +240,10 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 	if err := validateProvisioningVariables(item.Variables); err != nil {
 		return err
 	}
+	if err := validateDynamicParameterBranches(item.DynamicParameterBranches); err != nil {
+		return err
+	}
+	item.DynamicParameterBranches = normalizeDynamicParameterBranches(item.DynamicParameterBranches)
 	if err := validateProvisioningFeatures(item.Features); err != nil {
 		return err
 	}

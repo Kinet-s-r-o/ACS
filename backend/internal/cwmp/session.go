@@ -19,28 +19,33 @@ const (
 
 // Session represents single CPE session
 type Session struct {
-	mu                      sync.Mutex
-	ID                      string
-	SerialNumber            string
-	DeviceID                int64
-	CurrentTaskID           int64
-	CurrentDeleteObjectPath string
-	CurrentFullTreeFetch    bool
-	FeatureObjectPath       string
-	FeatureObjectInstance   string
-	FeatureObjectStage      int
-	FeatureObjectNames      []string
-	AutoFetchPhase          int
-	DataModelRoot           string
-	CWMPNamespace           string
-	AutoFetchReady          bool
-	OverviewFetchReady      bool
-	OverviewFetchActive     bool
-	OverviewFetchParams     []string
-	InformEvents            []string
-	Provisioning            *SetParameterValues
-	ProvisioningRules       []models.ProvisioningApplication
-	ProvisioningVariables   map[string]string
+	mu                       sync.Mutex
+	ID                       string
+	SerialNumber             string
+	DeviceID                 int64
+	CurrentTaskID            int64
+	CurrentDeleteObjectPath  string
+	CurrentFullTreeFetch     bool
+	FeatureObjectPath        string
+	FeatureObjectInstance    string
+	FeatureObjectStage       int
+	FeatureObjectNames       []string
+	AutoFetchPhase           int
+	DataModelRoot            string
+	CWMPNamespace            string
+	AutoFetchReady           bool
+	OverviewFetchReady       bool
+	OverviewFetchActive      bool
+	OverviewFetchParams      []string
+	DynamicParameterBranches []string
+	DynamicDiscoveryActive   bool
+	DynamicDiscoveryQueue    []DynamicDiscoveryStep
+	DynamicDiscoveryCurrent  *DynamicDiscoveryStep
+	DynamicDiscoveryNames    []string
+	InformEvents             []string
+	Provisioning             *SetParameterValues
+	ProvisioningRules        []models.ProvisioningApplication
+	ProvisioningVariables    map[string]string
 	// PendingSetParameters mirrors the last SetParameterValues request. A
 	// successful response confirms these values on the CPE even when the next
 	// periodic Inform does not include the affected parameters.
@@ -83,6 +88,13 @@ type Session struct {
 	State        SessionState
 	CreatedAt    time.Time
 	LastActivity time.Time
+}
+
+type DynamicDiscoveryStep struct {
+	Path     string
+	Segments []string
+	Index    int
+	Leaf     bool
 }
 
 // SessionManager manage active CWMP sessions

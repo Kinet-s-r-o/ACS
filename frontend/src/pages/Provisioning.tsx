@@ -137,7 +137,7 @@ const Provisioning: Component = () => {
   const [showTemplateModal, setShowTemplateModal] = createSignal(false);
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
-  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory() });
+  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[] });
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
@@ -631,7 +631,7 @@ const Provisioning: Component = () => {
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setCloningTemplate(null);
-    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory() };
+    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[] };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -641,7 +641,7 @@ const Provisioning: Component = () => {
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setCloningTemplate(null);
     setEditingTemplate(t);
-    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) } };
+    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])] };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     void loadTemplateImage(t);
@@ -651,7 +651,7 @@ const Provisioning: Component = () => {
   const openCloneTemplate = (template: ProvisioningTemplate) => {
     setEditingTemplate(null);
     setCloningTemplate(template);
-    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) } };
+    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])] };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -664,7 +664,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('create-template');
     try {
-      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
+      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean) });
       notify({ tone: 'success', title: 'Template created', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -679,7 +679,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('clone-template');
     try {
-      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
+      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean) });
       notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, and device photo.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
@@ -698,7 +698,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('update-template');
     try {
-      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory });
+      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean) });
       notify({ tone: 'success', title: 'Template updated', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -1754,6 +1754,18 @@ const Provisioning: Component = () => {
                   <input id="template-primary-ip-interface-name" type="text" value={templateForm().inventory.primary_ip_interface_name || ''} onInput={(e) => setTemplateForm(f => ({ ...f, inventory: { ...f.inventory, primary_ip_interface_name: e.currentTarget.value } }))} class="input w-full" placeholder="Internet" />
                 </div>
               </Show>
+            </fieldset>
+            <fieldset class="space-y-3 rounded border border-subtle p-3">
+              <legend class="px-1 text-xs font-medium text-secondary">Dynamic parameter branches</legend>
+              <p class="text-xs text-muted">These object branches are discovered live before overview polling, so removed CPE objects are not requested from the ACS cache.</p>
+              <div class="space-y-2">
+                <For each={templateForm().dynamic_parameter_branches}>{(branch, index) => <div class="flex items-center gap-2">
+                  <input aria-label={`Dynamic parameter branch ${index() + 1}`} class="input min-w-0 flex-1 font-mono text-xs" value={branch} onInput={(event) => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.map((item, itemIndex) => itemIndex === index() ? event.currentTarget.value : item) }))} placeholder="InternetGatewayDevice.LANDevice.*.Hosts.Host." />
+                  <button type="button" class="icon-button text-rose-400" aria-label={`Remove dynamic parameter branch ${index() + 1}`} title="Remove branch" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.filter((_, itemIndex) => itemIndex !== index()) }))}><Trash2 size={14} /></button>
+                </div>}</For>
+                <button type="button" class="btn btn-secondary text-xs" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: [...form.dynamic_parameter_branches, ''] }))}><Plus size={13} />Add branch</button>
+              </div>
+              <p class="text-[10px] text-muted">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.AssociatedDevice.</code></p>
             </fieldset>
             <div>
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>

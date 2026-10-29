@@ -3975,14 +3975,19 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := validateDynamicParameterBranches(body.DynamicParameterBranches); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
-		Name:         strings.TrimSpace(body.Name),
-		Manufacturer: strings.ToLower(strings.TrimSpace(body.Manufacturer)),
-		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
-		Description:  strings.TrimSpace(body.Description),
-		Inventory:    inventory,
-		Variables:    body.Variables,
+		Name:                     strings.TrimSpace(body.Name),
+		Manufacturer:             strings.ToLower(strings.TrimSpace(body.Manufacturer)),
+		ProductClass:             strings.ToLower(strings.TrimSpace(body.ProductClass)),
+		Description:              strings.TrimSpace(body.Description),
+		Inventory:                inventory,
+		DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches),
+		Variables:                body.Variables,
 	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -4051,15 +4056,24 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	dynamicBranches := previous.DynamicParameterBranches
+	if body.DynamicParameterBranches != nil {
+		dynamicBranches = normalizeDynamicParameterBranches(body.DynamicParameterBranches)
+	}
+	if err := validateDynamicParameterBranches(dynamicBranches); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
-		ID:           id,
-		Name:         strings.TrimSpace(body.Name),
-		Manufacturer: strings.ToLower(strings.TrimSpace(body.Manufacturer)),
-		ProductClass: strings.ToLower(strings.TrimSpace(body.ProductClass)),
-		Description:  strings.TrimSpace(body.Description),
-		Inventory:    inventory,
-		Variables:    body.Variables,
+		ID:                       id,
+		Name:                     strings.TrimSpace(body.Name),
+		Manufacturer:             strings.ToLower(strings.TrimSpace(body.Manufacturer)),
+		ProductClass:             strings.ToLower(strings.TrimSpace(body.ProductClass)),
+		Description:              strings.TrimSpace(body.Description),
+		Inventory:                inventory,
+		DynamicParameterBranches: dynamicBranches,
+		Variables:                body.Variables,
 	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, previous.Variables); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -4140,6 +4154,52 @@ func validateTemplateInventory(settings *models.TemplateInventory) error {
 		settings.PrimaryIPParameter = ""
 	default:
 		return fmt.Errorf("unsupported primary IP mode %q", settings.PrimaryIPMode)
+	}
+	return nil
+}
+
+func normalizeDynamicParameterBranches(branches []string) []string {
+	seen := make(map[string]bool, len(branches))
+	result := make([]string, 0, len(branches))
+	for _, branch := range branches {
+		branch = strings.TrimSpace(branch)
+		if branch == "" || seen[branch] {
+			continue
+		}
+		seen[branch] = true
+		result = append(result, branch)
+	}
+	return result
+}
+
+func validateDynamicParameterBranches(branches []string) error {
+	if len(branches) > 64 {
+		return errors.New("a template can define at most 64 dynamic parameter branches")
+	}
+	seen := make(map[string]bool, len(branches))
+	for _, raw := range branches {
+		branch := strings.TrimSpace(raw)
+		if branch == "" || len(branch) > 512 || seen[branch] {
+			if branch == "" || len(branch) > 512 {
+				return fmt.Errorf("dynamic parameter branch must be 1–512 characters")
+			}
+			return fmt.Errorf("duplicate dynamic parameter branch %q", branch)
+		}
+		seen[branch] = true
+		if !strings.HasSuffix(branch, ".") || (!strings.HasPrefix(branch, "InternetGatewayDevice.") && !strings.HasPrefix(branch, "Device.")) {
+			return fmt.Errorf("invalid dynamic parameter branch %q: use a CWMP object path ending in a dot", branch)
+		}
+		parts := strings.Split(strings.TrimSuffix(branch, "."), ".")
+		for _, part := range parts {
+			if part == "" || part == "*" {
+				continue
+			}
+			for _, character := range part {
+				if !(character == '_' || character == '-' || character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' || character >= '0' && character <= '9') {
+					return fmt.Errorf("invalid segment in dynamic parameter branch %q", branch)
+				}
+			}
+		}
 	}
 	return nil
 }
