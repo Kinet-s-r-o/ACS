@@ -49,6 +49,7 @@ type Router struct {
 	auditRepo            *database.AuditRepository
 	blockedRepo          *database.BlockedDeviceRepository
 	metricRepo           *database.MetricRepository
+	dashboardPanelRepo   *database.DashboardPanelRepository
 	snapshotRepo         *database.SnapshotRepository
 	tagRepo              *database.TagRepository
 	loginLimiter         *loginLimiter
@@ -120,6 +121,7 @@ func NewRouter(db *gorm.DB) *Router {
 		auditRepo:            database.NewAuditRepository(db),
 		blockedRepo:          database.NewBlockedDeviceRepository(db),
 		metricRepo:           database.NewMetricRepository(db),
+		dashboardPanelRepo:   database.NewDashboardPanelRepository(db),
 		snapshotRepo:         database.NewSnapshotRepository(db),
 		tagRepo:              database.NewTagRepository(db),
 		loginLimiter:         newLoginLimiter(5, 15*time.Minute),
@@ -167,6 +169,9 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /users", auth.RequirePermission(models.PermUsersWrite)(r.handleCreateUser))
 	apiMux.HandleFunc("PUT /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateUser))
 	apiMux.HandleFunc("DELETE /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleDeleteUser))
+	apiMux.HandleFunc("GET /dashboard/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDashboardPanels))
+	apiMux.HandleFunc("PUT /dashboard/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleSaveDashboardPanels))
+	apiMux.HandleFunc("POST /dashboard/panels/copy", auth.RequireFullAccess(auth.RequirePermission(models.PermUsersWrite)(r.handleCopyDashboardPanel)))
 
 	// Role management
 	apiMux.HandleFunc("GET /roles", auth.RequirePermission(models.PermRolesRead)(r.handleListRoles))

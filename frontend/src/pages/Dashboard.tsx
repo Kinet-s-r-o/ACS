@@ -5,23 +5,16 @@ import { RefreshCw, Router, Settings2, Plus, Trash2 } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
-import { api, type DashboardThreshold, type DashboardThresholdColor } from '../lib/api';
+import { api, type DashboardPanelConfig, type DashboardThreshold, type DashboardThresholdColor, type User } from '../lib/api';
 import { useFeedback } from '../components/Feedback';
 import { formatDateTime } from '../lib/dateTime';
-import { createPersistedJsonSignal } from '../lib/storage';
+import { useAuth } from '../lib/auth';
 
 interface DistributionListProps {
   data: Record<string, number>;
   limit?: number;
   semantic?: boolean;
   colors?: Record<string, DashboardThresholdColor>;
-}
-
-interface DashboardPanelConfig {
-  id: 'uptime' | 'temperature' | 'rxPower';
-  title: string;
-  parameterPattern: string;
-  thresholds: DashboardThreshold[];
 }
 
 interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
@@ -34,24 +27,48 @@ const thresholdColors: Array<{ id: DashboardThresholdColor; label: string }> = [
 ];
 
 const defaultDashboardPanels: DashboardPanelConfig[] = [
-  { id: 'uptime', title: 'Uptime', parameterPattern: 'InternetGatewayDevice.*UpTime', thresholds: [
+  { id: 'uptime', title: 'Uptime', parameter_pattern: 'InternetGatewayDevice.*UpTime', thresholds: [
     { label: '< 1 hour', max: 3600, color: 'blue' }, { label: '1-24 hours', max: 86400, color: 'blue' },
     { label: '1-7 days', max: 604800, color: 'blue' }, { label: '1-30 days', max: 2592000, color: 'blue' }, { label: '> 1 month', max: null, color: 'blue' },
   ] },
-  { id: 'temperature', title: 'Temperature', parameterPattern: 'InternetGatewayDevice.*Temp*', thresholds: [
+  { id: 'temperature', title: 'Temperature', parameter_pattern: 'InternetGatewayDevice.*Temp*', thresholds: [
     { label: 'Normal (< 45)', max: 45, color: 'green' }, { label: 'Warm (45-55)', max: 55, color: 'amber' },
     { label: 'Hot (55-65)', max: 65, color: 'orange' }, { label: 'Critical (> 65)', max: null, color: 'red' },
   ] },
-  { id: 'rxPower', title: 'Optical RX power', parameterPattern: 'InternetGatewayDevice.*RxPower*', thresholds: [
+  { id: 'rxPower', title: 'Optical RX power', parameter_pattern: 'InternetGatewayDevice.*RxPower*', thresholds: [
     { label: 'Critical (< -29)', max: -29, color: 'red' }, { label: 'Poor (-29 to -25)', max: -25, color: 'orange' },
     { label: 'Normal (-25 to -23)', max: -23, color: 'amber' }, { label: 'Excellent (-23 to -15)', max: -15, color: 'green' }, { label: 'Above range (> -15)', max: null, color: 'blue' },
   ] },
 ];
 
-const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => defaultDashboardPanels.map((fallback) => {
+const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => {
+  const defaults = defaultDashboardPanels.map((fallback) => {
   const saved = Array.isArray(panels) ? panels.find((panel) => panel?.id === fallback.id) : undefined;
   return saved && Array.isArray(saved.thresholds) ? { ...fallback, ...saved, thresholds: saved.thresholds } : fallback;
-});
+  });
+  const custom = Array.isArray(panels) ? panels.filter((panel) => panel?.id?.startsWith('custom-') && !defaultDashboardPanels.some((fallback) => fallback.id === panel.id)) : [];
+  return [...defaults, ...custom];
+};
+
+const loadDashboardPanelConfigs = async (): Promise<DashboardPanelConfig[]> => {
+  const remote = await api.getDashboardPanels();
+  let legacyRaw: string | null = null;
+  try { legacyRaw = localStorage.getItem('acs.dashboard.parameter-panels'); } catch { /* Local storage may be unavailable. */ }
+  if (remote.length > 0 || !legacyRaw) {
+    if (remote.length > 0) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
+    return remote;
+  }
+  try {
+    const legacy = JSON.parse(legacyRaw) as Array<Record<string, unknown>>;
+    const converted = legacy.map((panel) => ({ ...panel, parameter_pattern: panel.parameter_pattern ?? panel.parameterPattern })) as DashboardPanelConfig[];
+    const migrated = normalizeDashboardPanels(converted);
+    const saved = await api.saveDashboardPanels(migrated);
+    try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
+    return saved;
+  } catch {
+    return remote;
+  }
+};
 
 const semanticTone = (label: string) => {
   const normalized = label.toLowerCase();
@@ -91,10 +108,15 @@ const DistributionList: Component<DistributionListProps> = (props) => {
 
 const Dashboard: Component = () => {
   const { notify } = useFeedback();
-  const [savedPanelConfigs, setSavedPanelConfigs] = createPersistedJsonSignal('acs.dashboard.parameter-panels', defaultDashboardPanels);
-  const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs()));
-  const [editingPanelId, setEditingPanelId] = createSignal<DashboardPanelConfig['id'] | null>(null);
+  const { user, isFullAccess, hasPermission } = useAuth();
+  const [savedPanelConfigs, { mutate: setSavedPanelConfigs }] = createResource(loadDashboardPanelConfigs);
+  const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs() ?? []));
   const [panelDraft, setPanelDraft] = createSignal<DashboardPanelDraft | null>(null);
+  const [showCopyUsers, setShowCopyUsers] = createSignal(false);
+  const [selectedRecipientIDs, setSelectedRecipientIDs] = createSignal<number[]>([]);
+  const [savingPanel, setSavingPanel] = createSignal(false);
+  const canCopyPanels = () => isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
+  const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(async () => {
     const [stats, analytics] = await Promise.all([api.getDeviceStats(), api.getDeviceAnalytics()]);
     return { stats, analytics, fetchedAt: new Date() };
@@ -103,7 +125,7 @@ const Dashboard: Component = () => {
     const results = await Promise.all(configs.map(async (config) => {
       try {
         const result = await api.getDeviceParameterDistribution({
-          parameter_pattern: config.parameterPattern,
+          parameter_pattern: config.parameter_pattern,
           thresholds: config.thresholds.map(({ label, max }) => ({ label, max })),
         });
         return [config.id, result.distribution] as const;
@@ -124,10 +146,24 @@ const Dashboard: Component = () => {
     ...config.thresholds.map((threshold) => [threshold.label, threshold.color]), ['N/A', 'gray'],
   ]) as Record<string, DashboardThresholdColor>;
   const openPanelSettings = (config: DashboardPanelConfig) => {
-    setEditingPanelId(config.id);
+    setShowCopyUsers(false);
+    setSelectedRecipientIDs([]);
     setPanelDraft({ ...config, thresholds: config.thresholds.map((threshold) => ({ ...threshold, max: threshold.max === null ? '' : String(threshold.max) })) });
   };
-  const closePanelSettings = () => { setEditingPanelId(null); setPanelDraft(null); };
+  const addPanel = () => {
+    if (panelConfigs().length >= 12) {
+      notify({ tone: 'error', title: 'Panel limit reached', message: 'A maximum of 12 parameter panels can be shown on the dashboard.' });
+      return;
+    }
+    const id = `custom-${crypto.randomUUID()}`;
+    setShowCopyUsers(false);
+    setSelectedRecipientIDs([]);
+    setPanelDraft({
+      id, title: 'New parameter', parameter_pattern: '',
+      thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
+    });
+  };
+  const closePanelSettings = () => { setPanelDraft(null); setShowCopyUsers(false); setSelectedRecipientIDs([]); };
   const updatePanelDraft = (update: (draft: DashboardPanelDraft) => DashboardPanelDraft) => setPanelDraft((draft) => draft ? update(draft) : draft);
   const updateThreshold = (index: number, field: 'label' | 'max', value: string) => updatePanelDraft((draft) => ({
     ...draft,
@@ -149,22 +185,22 @@ const Dashboard: Component = () => {
     if (index === draft.thresholds.length - 1) next[next.length - 1] = { ...next[next.length - 1], max: '' };
     return { ...draft, thresholds: next };
   });
-  const savePanelSettings = () => {
+  const buildPanelConfig = (): DashboardPanelConfig | null => {
     const draft = panelDraft();
-    if (!draft) return;
+    if (!draft) return null;
     const title = draft.title.trim();
-    const parameterPattern = draft.parameterPattern.trim();
+    const parameterPattern = draft.parameter_pattern.trim();
     if (!title || title.length > 48) {
       notify({ tone: 'error', title: 'Invalid panel name', message: 'Enter a panel name with up to 48 characters.' });
-      return;
+      return null;
     }
     if (!/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(parameterPattern) || parameterPattern.length > 512) {
       notify({ tone: 'error', title: 'Invalid parameter pattern', message: 'Enter a Device. or InternetGatewayDevice. parameter path. Use * as a wildcard.' });
-      return;
+      return null;
     }
     if (draft.thresholds.length === 0 || draft.thresholds.length > 16) {
       notify({ tone: 'error', title: 'Invalid thresholds', message: 'Add between 1 and 16 threshold buckets.' });
-      return;
+      return null;
     }
     const thresholds: DashboardThreshold[] = [];
     let previousMax = Number.NEGATIVE_INFINITY;
@@ -174,29 +210,62 @@ const Dashboard: Component = () => {
       const max = threshold.max.trim() === '' ? null : Number(threshold.max);
       if (!label || label.length > 48 || label.toLowerCase() === 'n/a' || (max !== null && (!Number.isFinite(max) || max <= previousMax)) || (max === null && index !== draft.thresholds.length - 1)) {
         notify({ tone: 'error', title: 'Invalid thresholds', message: 'Threshold labels are required, maximums must increase, and only the last maximum can be empty.' });
-        return;
+        return null;
       }
       if (thresholds.some((saved) => saved.label.toLowerCase() === label.toLowerCase())) {
         notify({ tone: 'error', title: 'Duplicate threshold label', message: 'Use a different label for each threshold bucket.' });
-        return;
+        return null;
       }
       if (!thresholdColors.some((color) => color.id === threshold.color)) {
         notify({ tone: 'error', title: 'Invalid threshold color', message: 'Choose a supported color for each threshold.' });
-        return;
+        return null;
       }
       thresholds.push({ label, max, color: threshold.color });
       if (max !== null) previousMax = max;
     }
     if (thresholds[thresholds.length - 1].max !== null) {
       notify({ tone: 'error', title: 'Final threshold needs no maximum', message: 'Leave the last maximum empty so it catches all remaining values.' });
-      return;
+      return null;
     }
-    const next: DashboardPanelConfig = { id: draft.id, title, parameterPattern, thresholds };
-    setSavedPanelConfigs((previous) => normalizeDashboardPanels(previous).map((panel) => panel.id === next.id ? next : panel));
-    closePanelSettings();
+    return { id: draft.id, title, parameter_pattern: parameterPattern, thresholds };
   };
-  const currentEditingPanel = () => panelConfigs().find((panel) => panel.id === editingPanelId());
-
+  const persistPanelConfig = async (next: DashboardPanelConfig, closeAfterSave: boolean) => {
+    const current = normalizeDashboardPanels(savedPanelConfigs() ?? []);
+    const panels = current.some((panel) => panel.id === next.id)
+      ? current.map((panel) => panel.id === next.id ? next : panel)
+      : [...current, next];
+    setSavingPanel(true);
+    try {
+      const saved = await api.saveDashboardPanels(panels);
+      setSavedPanelConfigs(saved);
+      if (closeAfterSave) closePanelSettings();
+      return true;
+    } catch (error) {
+      notify({ tone: 'error', title: 'Panel configuration was not saved', detail: (error as Error).message, persistent: true });
+      return false;
+    } finally {
+      setSavingPanel(false);
+    }
+  };
+  const savePanelSettings = async () => {
+    const next = buildPanelConfig();
+    if (next) await persistPanelConfig(next, true);
+  };
+  const toggleRecipient = (id: number) => setSelectedRecipientIDs((previous) => previous.includes(id) ? previous.filter((value) => value !== id) : [...previous, id]);
+  const copyPanelToRecipients = async () => {
+    const next = buildPanelConfig();
+    const recipientIDs = selectedRecipientIDs();
+    if (!next || recipientIDs.length === 0) return;
+    if (!await persistPanelConfig(next, false)) return;
+    try {
+      const result = await api.copyDashboardPanel(next, recipientIDs);
+      notify({ tone: 'success', title: 'Panel copied', message: `Copied to ${result.copied_to} user${result.copied_to === 1 ? '' : 's'}.` });
+      setShowCopyUsers(false);
+      setSelectedRecipientIDs([]);
+    } catch (error) {
+      notify({ tone: 'error', title: 'Panel was saved but not copied', detail: (error as Error).message, persistent: true });
+    }
+  };
   return (
     <div class="space-y-4">
       <PageHeader
@@ -269,13 +338,14 @@ const Dashboard: Component = () => {
         <section class="data-panel">
           <div class="data-panel-header">
             <div><h2>Device health distributions</h2><p>Threshold buckets derived from the latest sampled parameter values.</p></div>
+            <button type="button" class="icon-button dashboard-add-panel" aria-label="Add parameter panel" title={panelConfigs().length >= 12 ? 'Panel limit reached' : 'Add parameter panel'} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} onClick={addPanel}><Plus size={15} /></button>
           </div>
           <div class="dashboard-health-grid">
             <For each={panelConfigs()}>{(config) => (
               <div class="data-panel-section">
                 <div class="dashboard-configurable-heading">
                   <h3>{config.title}</h3>
-                  <button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button>
+                  <button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" disabled={savedPanelConfigs.loading} onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button>
                 </div>
                 <DistributionList data={panelDistribution(config.id)} colors={panelColors(config)} />
               </div>
@@ -304,10 +374,30 @@ const Dashboard: Component = () => {
         </section>
       </Show>
       <Show when={panelDraft()}>
-        <Dialog title={`Configure ${currentEditingPanel()?.title ?? 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" onClick={savePanelSettings}>Save panel</button></>}>
+        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></>}>
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
-            <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameterPattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameterPattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
+            <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
+            <Show when={canCopyPanels()}>
+              <section class="rounded border border-subtle p-3">
+                <button type="button" class="btn btn-secondary text-xs" onClick={() => { setShowCopyUsers((value) => !value); setSelectedRecipientIDs([]); }} aria-expanded={showCopyUsers()}>Copy panel to users</button>
+                <Show when={showCopyUsers()}>
+                  <p class="mt-2 text-xs text-muted">Choose one or more users. Each gets an independent copy of this panel.</p>
+                  <Show when={shareUsers.loading}><p class="py-3 text-xs text-muted">Loading users…</p></Show>
+                  <Show when={shareUsers.error}><p class="py-3 text-xs text-rose-400">Could not load users.</p></Show>
+                  <div class="mt-2 max-h-44 space-y-1 overflow-y-auto">
+                    <For each={(shareUsers() ?? []).filter((recipient) => recipient.id !== user()?.id)}>{(recipient) => (
+                      <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-primary hover:bg-elevated/50">
+                        <input type="checkbox" checked={selectedRecipientIDs().includes(recipient.id)} onChange={() => toggleRecipient(recipient.id)} />
+                        <span>{[recipient.first_name, recipient.last_name].filter(Boolean).join(' ') || recipient.username}</span>
+                        <span class="ml-auto text-xs text-muted">{recipient.username}</span>
+                      </label>
+                    )}</For>
+                  </div>
+                  <button type="button" class="btn btn-primary mt-3 text-xs" disabled={savingPanel() || selectedRecipientIDs().length === 0} onClick={() => void copyPanelToRecipients()}>Copy to selected ({selectedRecipientIDs().length})</button>
+                </Show>
+              </section>
+            </Show>
             <section aria-label="Thresholds">
               <div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-primary">Thresholds and colors</h3><button type="button" class="btn btn-secondary text-xs" onClick={addThreshold}><Plus size={13} />Add threshold</button></div>
               <div class="space-y-2">

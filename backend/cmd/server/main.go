@@ -329,6 +329,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.DeviceLogEntry{},
 		&models.Task{},
 		&models.User{},
+		&models.UserDashboardPanel{},
 		&models.APIToken{},
 		&models.Role{},
 		&models.Fault{},

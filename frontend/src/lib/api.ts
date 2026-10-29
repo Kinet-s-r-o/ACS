@@ -45,6 +45,7 @@ export interface Fault { id: number; device_id: number; serial_number: string; m
 export interface FaultCounts { active: number; resolved: number; total: number }
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
+export interface DashboardPanelConfig { id: string; title: string; parameter_pattern: string; thresholds: DashboardThreshold[] }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
 export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
@@ -140,6 +141,9 @@ export const api = {
   getDeviceStats: () => request<DeviceStats>('/devices/stats'),
   getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics'),
   getDeviceParameterDistribution: (body: DashboardParameterDistributionRequest) => request<DashboardParameterDistribution>('/devices/analytics/distribution', { method: 'POST', body: JSON.stringify(body) }),
+  getDashboardPanels: () => request<DashboardPanelConfig[]>('/dashboard/panels'),
+  saveDashboardPanels: (panels: DashboardPanelConfig[]) => request<DashboardPanelConfig[]>('/dashboard/panels', { method: 'PUT', body: JSON.stringify(panels) }),
+  copyDashboardPanel: (panel: DashboardPanelConfig, userIds: number[]) => request<{ copied_to: number }>('/dashboard/panels/copy', { method: 'POST', body: JSON.stringify({ panel, user_ids: userIds }) }),
   getDeviceTypes: () => request<string[]>('/devices/device-types'),
   getDeviceParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameters`),
   getDeviceDetailParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/detail-parameters`),
