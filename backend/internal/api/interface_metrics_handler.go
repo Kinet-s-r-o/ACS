@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/matrix8412/acs/internal/auth"
 	"github.com/matrix8412/acs/internal/models"
@@ -166,7 +167,7 @@ func validateInterfaceMetricDefinition(def *models.MetricDefinition) error {
 	if def.GPVPollIntervalSeconds < 0 || def.GPVPollIntervalSeconds > 31536000 {
 		return errors.New("gpv_poll_interval_seconds must be between 0 and 31536000")
 	}
-	if def.Name == "" || len(def.Name) > 128 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) || len(def.Group) > 64 {
+	if strings.TrimSpace(def.Name) == "" || utf8.RuneCountInString(def.Name) > 20 || def.ParameterPattern == "" || len(def.ParameterPattern) > 512 || (def.InterfaceType != "wan" && def.InterfaceType != "lan") || (def.Transform != "" && def.Transform != "rate") || def.Multiplier < 0 || (def.Color != "" && !colorHexRe.MatchString(def.Color)) || len(def.Group) > 64 {
 		return errors.New("Invalid interface metric definition")
 	}
 	switch def.Source {

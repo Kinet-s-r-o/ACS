@@ -482,17 +482,17 @@ const Provisioning: Component = () => {
   const interfaceMetricCell = (def: InterfaceMetricDefinition, id: string) => {
     switch (id) {
       case 'name': return <td class="py-2 pr-3 text-primary">{def.name}</td>;
-      case 'parameter': return <td class="w-[45%] py-2 pr-3 font-mono break-words [overflow-wrap:anywhere]">{def.parameter_pattern}</td>;
-      case 'type': return <td class="py-2 pr-3 uppercase">{def.interface_type}</td>;
-      case 'source': return <td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
-      case 'min_interval': return <td class="py-2 pr-3" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td>;
-      case 'gpv_interval': return <td class="py-2 pr-3" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td>;
-      case 'unit_scale': return <td class="py-2 pr-3">{def.unit_scale || 'none'}</td>;
-      case 'group': return <td class="py-2 pr-3"><div class="flex items-center gap-1.5"><span class="chart-color-swatch inline-block h-3 w-6 shrink-0 rounded-sm" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#38bdf8' } as any} title={def.color || 'Default'} /><span>{def.group || '—'}</span></div></td>;
-      case 'active': return <td class="py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
-      case 'chart': return <td class="py-2 pr-3">{def.chart_type || 'line'}</td>;
-      case 'transform': return <td class="py-2 pr-3">{def.transform || 'raw'}</td>;
-      case 'multiplier': return <td class="py-2 pr-3">{def.multiplier}</td>;
+      case 'parameter': return <td class="w-[34%] max-w-[40vw] min-w-0 overflow-hidden whitespace-normal py-2 pr-3 font-mono break-all [overflow-wrap:anywhere]">{def.parameter_pattern}</td>;
+      case 'type': return <td class="whitespace-nowrap py-2 pr-3 uppercase">{def.interface_type}</td>;
+      case 'source': return <td class="whitespace-nowrap py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
+      case 'min_interval': return <td class="whitespace-nowrap py-2 pr-3" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td>;
+      case 'gpv_interval': return <td class="whitespace-nowrap py-2 pr-3" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td>;
+      case 'unit_scale': return <td class="whitespace-nowrap py-2 pr-3">{def.unit_scale || 'none'}</td>;
+      case 'group': return <td class="min-w-0 py-2 pr-3"><div class="flex min-w-0 items-center gap-1.5"><span class="chart-color-swatch inline-block h-3 w-3 shrink-0 rounded-sm" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#38bdf8' } as any} title={def.color || 'Default'} /><span class="min-w-0 break-words">{def.group || '—'}</span></div></td>;
+      case 'active': return <td class="whitespace-nowrap py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
+      case 'chart': return <td class="whitespace-nowrap py-2 pr-3">{def.chart_type || 'line'}</td>;
+      case 'transform': return <td class="whitespace-nowrap py-2 pr-3">{def.transform || 'raw'}</td>;
+      case 'multiplier': return <td class="whitespace-nowrap py-2 pr-3">{def.multiplier}</td>;
       default: return null;
     }
   };
@@ -1048,7 +1048,7 @@ const Provisioning: Component = () => {
 
   const copyInterfaceMetric = (def: InterfaceMetricDefinition) => {
     setEditingInterfaceMetric(null);
-    const next = { name: `${def.name} copy`, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', min_sample_interval_seconds: def.min_sample_interval_seconds ?? 0, gpv_poll_interval_seconds: def.gpv_poll_interval_seconds ?? 0, unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active };
+    const next = { name: `${Array.from(def.name).slice(0, 15).join('')} copy`, description: def.description || '', interface_type: def.interface_type, parameter_pattern: def.parameter_pattern, unit: def.unit || '', source: def.source || 'active', min_sample_interval_seconds: def.min_sample_interval_seconds ?? 0, gpv_poll_interval_seconds: def.gpv_poll_interval_seconds ?? 0, unit_scale: def.unit_scale || '', color: def.color || '', group: def.group || '', chart_type: def.chart_type || 'line', transform: def.transform || '', multiplier: def.multiplier || 1, active: def.active };
     setInterfaceMetricForm(next);
     setInterfaceMetricInitialSnapshot(JSON.stringify(next));
     setShowInterfaceMetricModal(true);
@@ -1060,6 +1060,10 @@ const Provisioning: Component = () => {
     if (!template) return;
     try {
       const form = interfaceMetricForm();
+      if (!form.name.trim() || Array.from(form.name).length > 20) {
+        notify({ tone: 'error', title: 'Invalid metric name', message: 'Metric names are required and can contain at most 20 characters.' });
+        return;
+      }
       const payload = { ...form, name: form.name.trim(), parameter_pattern: form.parameter_pattern.trim() };
       const editing = editingInterfaceMetric();
       if (editing) await api.updateInterfaceMetric(template.id, editing.id, payload);
@@ -1467,10 +1471,10 @@ const Provisioning: Component = () => {
               </div>
               <Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
-                <table class="data-table w-full min-w-[95rem] table-fixed text-left">
+                <table class="data-table w-full table-auto text-left">
                   <thead>
                     <tr class="border-b border-subtle">
-                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class={`py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide ${column.id === 'parameter' ? 'w-[45%]' : ''}`}>{column.label}</th></Show>}</For>
+                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class={`py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide ${column.id === 'parameter' ? 'w-[35%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For>
                       <th class="py-2 text-right text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
                       <th class="py-2 pr-2"><ColumnVisibility columns={metricColumns.columns} onToggle={metricColumns.toggle} /></th>
                     </tr>
@@ -1485,7 +1489,7 @@ const Provisioning: Component = () => {
                               <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                             </Show>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('parameter')}><td class="w-[45%] px-3 py-2.5 text-secondary font-mono text-xs break-words [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
+                          <Show when={metricColumns.isVisible('parameter')}><td class="w-[35%] max-w-[40vw] min-w-0 overflow-hidden whitespace-normal px-3 py-2.5 text-secondary font-mono text-xs break-all [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
                           <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5 whitespace-nowrap">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                           </td></Show>
@@ -1532,7 +1536,7 @@ const Provisioning: Component = () => {
                 <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[95rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[45%]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section></Show>
           </Show>
@@ -1808,7 +1812,7 @@ const Provisioning: Component = () => {
       <Show when={showInterfaceMetricModal()}>
         <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." headerBadge={<Show when={interfaceMetricDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" class="btn btn-primary">Save metric</button></>}>
           <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}>
-            <label class="block text-xs text-muted">Name<input required class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
+            <label class="block text-xs text-muted">Name (max 20 characters)<input required maxlength={20} class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
             <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
             <label for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></label>
             <label class="block text-xs text-muted">Minimum sample interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().min_sample_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per interface.</span></label>

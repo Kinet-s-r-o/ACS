@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/matrix8412/acs/internal/auth"
 	"github.com/matrix8412/acs/internal/models"
@@ -315,8 +317,8 @@ func validateMetricDefinition(def *models.MetricDefinition) error {
 	if def.GPVPollIntervalSeconds < 0 || def.GPVPollIntervalSeconds > 31536000 {
 		return errors.New("gpv_poll_interval_seconds must be between 0 and 31536000")
 	}
-	if def.Name == "" || len(def.Name) > 128 {
-		return errors.New("metric name is required and must be at most 128 characters")
+	if strings.TrimSpace(def.Name) == "" || utf8.RuneCountInString(def.Name) > 20 {
+		return errors.New("metric name is required and must be at most 20 characters")
 	}
 	if def.ParameterName == "" || len(def.ParameterName) > 512 {
 		return errors.New("parameter_name is required and must be at most 512 characters")

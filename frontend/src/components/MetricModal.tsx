@@ -121,7 +121,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     const copying = props.copyingMetric;
     if (open) {
       const initial = initForm(metric || copying || null);
-      const next = !metric && copying ? { ...initial, name: `${copying.name} copy` } : initial;
+      const next = !metric && copying ? { ...initial, name: `${Array.from(copying.name).slice(0, 15).join('')} copy` } : initial;
       if (next !== initial) setMetricForm(next);
       setInitialSnapshot(JSON.stringify(next));
     }
@@ -131,6 +131,10 @@ const MetricModal: Component<MetricModalProps> = (props) => {
     const form = metricForm();
     if (!form.name.trim() || !form.parameter_name.trim()) {
       notify({ tone: 'error', title: 'Missing fields', message: 'Name and parameter name are required.' });
+      return;
+    }
+    if (Array.from(form.name).length > 20) {
+      notify({ tone: 'error', title: 'Name is too long', message: 'Metric names can contain at most 20 characters.' });
       return;
     }
     setPendingAction('save-metric');
@@ -168,8 +172,8 @@ const MetricModal: Component<MetricModalProps> = (props) => {
           </div>
           <Show when={metricTab() === 'metric'}>
           <div>
-            <label for="metric-name" class="block text-xs text-muted mb-1.5">Name</label>
-            <input id="metric-name" type="text" value={metricForm().name} onInput={(e) => setMetricForm(f => ({ ...f, name: e.currentTarget.value }))} placeholder="e.g. Uptime, CPU Load" class="input w-full" />
+            <label for="metric-name" class="block text-xs text-muted mb-1.5">Name (max 20 characters)</label>
+            <input id="metric-name" type="text" maxlength={20} value={metricForm().name} onInput={(e) => setMetricForm(f => ({ ...f, name: e.currentTarget.value }))} placeholder="e.g. Uptime, CPU Load" class="input w-full" />
           </div>
           <div>
             <label for="metric-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
