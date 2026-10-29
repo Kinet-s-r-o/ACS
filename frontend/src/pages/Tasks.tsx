@@ -25,7 +25,7 @@ const statusBadge = (status: string) => {
     case 'pending': return 'badge-warning';
     case 'sent': return 'bg-sky-500/15 text-sky-400';
     case 'failed': return 'badge-error';
-    case 'deleted': return 'bg-zinc-500/15 text-zinc-400';
+    case 'deleted': return 'bg-elevated text-muted';
     default: return 'bg-zinc-700 text-secondary';
   }
 };
