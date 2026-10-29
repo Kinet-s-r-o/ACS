@@ -253,7 +253,7 @@ const Firmwares: Component = () => {
                 <Show when={isVisible('file_size')}>
                   <th class="px-4 py-3 text-left text-xs font-medium text-muted">
                     <div class="flex items-center gap-1.5"><SortableHeader column="file_size" label="Size" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
-                      <ColumnFilter columnId="file_size" label="Size" active={columnFilters()['file_size'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['file_size'] = s; else delete n['file_size']; return n; }); }} />
+                      <ColumnFilter columnId="file_size" label="Size" numeric active={columnFilters()['file_size'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['file_size'] = s; else delete n['file_size']; return n; }); }} />
                     </div>
                   </th>
                 </Show>

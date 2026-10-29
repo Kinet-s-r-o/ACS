@@ -321,7 +321,7 @@ const Faults: Component = () => {
                     <Show when={isVisible('fault_code')}>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted">
                         <div class="flex items-center gap-1.5"><SortableHeader column="fault_code" label="Code" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
-                          <ColumnFilter columnId="fault_code" label="Code" active={columnFilters()['fault_code'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['fault_code'] = s; else delete n['fault_code']; return n; }); }} />
+                          <ColumnFilter columnId="fault_code" label="Code" numeric active={columnFilters()['fault_code'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['fault_code'] = s; else delete n['fault_code']; return n; }); }} />
                         </div>
                       </th>
                     </Show>

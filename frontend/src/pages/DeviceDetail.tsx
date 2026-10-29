@@ -2939,7 +2939,7 @@ const DeviceDetail: Component = () => {
                         </th></Show>
                         <Show when={hostColumns().find(column => column.id === 'negRate')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Neg. rate
-                            <ColumnFilter columnId="negRate" label="Neg. rate" active={hostColumnFilters()['negRate'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['negRate'] = s; else delete n['negRate']; return n; }); }} />
+                            <ColumnFilter columnId="negRate" label="Neg. rate" numeric active={hostColumnFilters()['negRate'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['negRate'] = s; else delete n['negRate']; return n; }); }} />
                           </div>
                         </th></Show>
                         <Show when={hostColumns().find(column => column.id === 'interface')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
@@ -2949,7 +2949,7 @@ const DeviceDetail: Component = () => {
                         </th></Show>
                         <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Signal
-                            <ColumnFilter columnId="rssi" label="Signal" active={hostColumnFilters()['rssi'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['rssi'] = s; else delete n['rssi']; return n; }); }} />
+                            <ColumnFilter columnId="rssi" label="Signal" numeric active={hostColumnFilters()['rssi'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['rssi'] = s; else delete n['rssi']; return n; }); }} />
                           </div>
                         </th></Show>
                         <th class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} /></th>
@@ -3194,7 +3194,7 @@ const DeviceDetail: Component = () => {
                           </Show>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
                             <div class="flex items-center gap-1.5"><SortableHeader column="code" label="Code" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
-                              <ColumnFilter columnId="code" label="Code" active={deviceFaultColumnFilters()['code'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['code'] = s; else delete n['code']; return n; }); }} />
+                              <ColumnFilter columnId="code" label="Code" numeric active={deviceFaultColumnFilters()['code'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['code'] = s; else delete n['code']; return n; }); }} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">

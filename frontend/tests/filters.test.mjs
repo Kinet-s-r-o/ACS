@@ -90,3 +90,12 @@ test('matchesValue handles each operator independently', () => {
   assert.equal(matchesValue('Hello World', { operator: 'equals', value: 'hello world' }), true);
   assert.equal(matchesValue('Hello World', { operator: 'equals', value: 'hello' }), false);
 });
+
+test('matchesValue supports numeric comparisons', () => {
+  assert.equal(matchesValue('42', { operator: 'greater_than', value: '40' }), true);
+  assert.equal(matchesValue('42', { operator: 'greater_than_or_equal', value: '42' }), true);
+  assert.equal(matchesValue('42', { operator: 'less_than', value: '50' }), true);
+  assert.equal(matchesValue('42', { operator: 'less_than_or_equal', value: '42' }), true);
+  assert.equal(matchesValue('42', { operator: 'less_than', value: '40' }), false);
+  assert.equal(matchesValue('not-a-number', { operator: 'greater_than', value: '1' }), false);
+});

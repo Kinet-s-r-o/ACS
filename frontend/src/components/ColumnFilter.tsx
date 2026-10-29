@@ -12,6 +12,7 @@ import {
 interface ColumnFilterProps {
   columnId: string;
   label: string;
+  numeric?: boolean;
   active: ColumnFilterState | null;
   onApply: (state: ColumnFilterState | null) => void;
 }
@@ -118,7 +119,7 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
               </button>
             </div>
             <div class="filter-dropdown-body">
-              <div class="filter-dropdown-label">Logika</div>
+              <div class="filter-dropdown-label">Logic</div>
               <select
                 class="filter-dropdown-select"
                 value={logic()}
@@ -137,7 +138,7 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
                         value={rule.operator}
                         onChange={(e) => mutateRule(idx(), 'operator', e.currentTarget.value)}
                       >
-                        <For each={Object.entries(OPERATOR_LABELS)}>
+                        <For each={Object.entries(OPERATOR_LABELS).filter(([value]) => props.numeric || !value.startsWith('greater_than') && !value.startsWith('less_than'))}>
                           {([value, label]) => <option value={value}>{label}</option>}
                         </For>
                       </select>
@@ -146,7 +147,7 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
                         class="filter-rule-input"
                         value={rule.value}
                         onInput={(e) => mutateRule(idx(), 'value', e.currentTarget.value)}
-                        placeholder="Hodnota…"
+                        placeholder="Value…"
                       />
                       <Show when={rules().length > 1}>
                         <button type="button" class="filter-rule-remove" onClick={() => removeRule(idx())} aria-label="Remove rule">
@@ -159,15 +160,15 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
               </div>
               <button type="button" class="filter-add-rule" onClick={addRule}>
                 <Plus size={11} />
-                Pridať pravidlo
+                Add rule
               </button>
             </div>
             <div class="filter-dropdown-footer">
               <button type="button" class="filter-btn-clear" onClick={handleClear}>
-                Vymazať
+                Clear
               </button>
               <button type="button" class="filter-btn-apply" onClick={handleApply}>
-                Aplikovať
+                Apply
               </button>
             </div>
         </div>

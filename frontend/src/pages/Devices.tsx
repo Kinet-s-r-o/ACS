@@ -564,6 +564,7 @@ const Devices: Component = () => {
                           <ColumnFilter
                             columnId={col.id}
                             label={col.label}
+                            numeric={['rx_power', 'uptime', 'active_faults'].includes(col.id)}
                             active={columnFilters()[col.id] || null}
                             onApply={(state) => {
                               setColumnFilters((prev) => {
