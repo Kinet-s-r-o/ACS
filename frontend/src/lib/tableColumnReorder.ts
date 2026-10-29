@@ -88,13 +88,12 @@ const applyOrder = (table: HTMLTableElement, key: string, route: string) => {
   if (headers.length < 2 || desiredOrder.length === 0) return;
   const rank = new Map(desiredOrder.map((id, index) => [id, index]));
   const desired = [...headers].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-  if (desired.every((header, index) => header.id === headers[index].id)) return;
-
   const slots = headers.map((header) => header.index);
   for (const row of Array.from(table.rows)) {
     if (row.cells.length !== table.tHead?.rows[0]?.cells.length || Array.from(row.cells).some((cell) => cell.colSpan !== 1)) continue;
     const cells = Array.from(row.cells);
-    const dataCells = new Map(headers.map((header) => [header.id, cells[header.index]]));
+    const taggedCells = new Map(cells.filter((cell) => cell.dataset.columnOrderId).map((cell) => [cell.dataset.columnOrderId!, cell]));
+    const dataCells = new Map(headers.map((header) => [header.id, taggedCells.get(header.id) ?? cells[header.index]]));
     const nextCells = [...cells];
     desired.forEach((header, index) => { nextCells[slots[index]] = dataCells.get(header.id)!; });
     if (nextCells.some((cell, index) => cell !== cells[index])) row.replaceChildren(...nextCells);

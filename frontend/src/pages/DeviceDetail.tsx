@@ -2942,12 +2942,12 @@ const DeviceDetail: Component = () => {
                       <For each={filteredHosts()}>
                         {(host) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <Show when={hostColumns().find(column => column.id === 'hostname')?.visible}><td class="px-3 py-2 text-primary">{host.hostname}</td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'ip')?.visible}><td class="px-3 py-2 text-primary font-mono">{host.ip}</td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'ipv6')?.visible}><td class="px-3 py-2 text-primary font-mono">{host.ipv6}</td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'mac')?.visible}><td class="px-3 py-2 text-secondary font-mono text-xs">{host.mac}</td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'negRate')?.visible}><td class="px-3 py-2 text-secondary">{host.negRate}</td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'interface')?.visible}><td class="px-3 py-2">
+                            <Show when={hostColumns().find(column => column.id === 'hostname')?.visible}><td data-column-order-id="hostname#0" class="px-3 py-2 text-primary">{host.hostname}</td></Show>
+                            <Show when={hostColumns().find(column => column.id === 'ip')?.visible}><td data-column-order-id="ip address#0" class="px-3 py-2 text-primary font-mono">{host.ip}</td></Show>
+                            <Show when={hostColumns().find(column => column.id === 'ipv6')?.visible}><td data-column-order-id="ipv6 address#0" class="px-3 py-2 text-primary font-mono">{host.ipv6}</td></Show>
+                            <Show when={hostColumns().find(column => column.id === 'mac')?.visible}><td data-column-order-id="mac address#0" class="px-3 py-2 text-secondary font-mono text-xs">{host.mac}</td></Show>
+                            <Show when={hostColumns().find(column => column.id === 'negRate')?.visible}><td data-column-order-id="neg. rate#0" class="px-3 py-2 text-secondary">{host.negRate}</td></Show>
+                            <Show when={hostColumns().find(column => column.id === 'interface')?.visible}><td data-column-order-id="interface#0" class="px-3 py-2">
                               <span class={`px-2 py-0.5 rounded text-xs ${
                                 host.interface.startsWith('WiFi') || host.interface.startsWith('SSID')
                                   ? 'bg-sky-500/20 text-sky-400'
@@ -2958,7 +2958,7 @@ const DeviceDetail: Component = () => {
                                 {host.interface}
                               </span>
                             </td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><td class="px-3 py-2 text-secondary">
+                            <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><td data-column-order-id="signal#0" class="px-3 py-2 text-secondary">
                               {host.rssi && host.rssi !== '-' && host.rssi !== '0' ? `${host.rssi} dBm` : '-'}
                             </td></Show>
                             <td class="px-2 py-2"></td>
