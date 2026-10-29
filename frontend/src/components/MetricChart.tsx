@@ -4,7 +4,7 @@ import * as echarts from 'echarts/core';
 import { LineChart, BarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import { api, type MetricDefinition } from '../lib/api';
+import { api, type AggregatedMetric, type MetricDefinition, type MetricSample } from '../lib/api';
 import { thresholdLines, effectiveUnit } from '../lib/health';
 import { isTimeSeriesType } from '../lib/echartsTypes';
 
@@ -93,6 +93,23 @@ const MONO_FONT = '"IBM Plex Mono", monospace';
 const AXIS_COLOR = '#475569';
 const LABEL_COLOR = '#71717a';
 const GRID_COLOR = 'rgba(71,85,105,0.15)';
+type ChartPoint = { timestamp: number; value: number; min: number; max: number };
+
+const metricChartPoints = (result: { samples?: MetricSample[]; aggregates?: AggregatedMetric[] }, bucket: string): ChartPoint[] => {
+  const aggregates = result.aggregates ?? [];
+  if (aggregates.length === 0) {
+    return (result.samples ?? []).map((sample) => ({ timestamp: new Date(sample.timestamp).getTime(), value: sample.value, min: sample.value, max: sample.value }));
+  }
+  const bucketMs = bucket === '1h' ? 60 * 60_000 : bucket === '1d' ? 24 * 60 * 60_000 : 5 * 60_000;
+  const lastAggregateEnd = Math.max(...aggregates.map((aggregate) => new Date(aggregate.timestamp).getTime())) + bucketMs;
+  const tail = (result.samples ?? [])
+    .filter((sample) => new Date(sample.timestamp).getTime() >= lastAggregateEnd)
+    .map((sample) => ({ timestamp: new Date(sample.timestamp).getTime(), value: sample.value, min: sample.value, max: sample.value }));
+  return [
+    ...aggregates.map((aggregate) => ({ timestamp: new Date(aggregate.timestamp).getTime(), value: aggregate.avg, min: aggregate.min, max: aggregate.max })),
+    ...tail,
+  ].sort((a, b) => a.timestamp - b.timestamp);
+};
 
 const MetricChart: Component<MetricChartProps> = (props) => {
   const [bucket, setBucket] = createSignal(getStoredBucket(props.serial));
@@ -109,7 +126,17 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     () => ({ serial: props.serial, ids: props.metrics.map((m) => m.id), bucket: bucket().value, hours: bucket().hours, refreshKey: props.refreshKey ?? 0 }),
     async (q) => {
       const results = await Promise.all(
-        q.ids.map((id) => api.getDeviceMetrics(q.serial, id, q.bucket, q.hours)),
+        q.ids.map(async (id) => {
+          const result = await api.getDeviceMetrics(q.serial, id, q.bucket, q.hours);
+          if (q.bucket === 'raw' || !result.aggregates?.length) return result;
+          const tailHours = q.bucket === '5min' ? 0.25 : q.bucket === '1h' ? 6 : 24;
+          try {
+            const recent = await api.getDeviceMetrics(q.serial, id, 'raw', tailHours);
+            return { ...result, samples: recent.samples ?? [] };
+          } catch {
+            return result;
+          }
+        }),
       );
       return results;
     },
@@ -129,12 +156,9 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     let baseTimes: number[] | null = null;
 
     for (const r of results) {
-      if (r.aggregates && r.aggregates.length > 0) {
-        baseTimes = r.aggregates.map((a) => new Date(a.timestamp).getTime());
-        break;
-      }
-      if (r.samples && r.samples.length > 0) {
-        baseTimes = r.samples.map((s) => new Date(s.timestamp).getTime());
+      const points = metricChartPoints(r, bucket().value);
+      if (points.length > 0) {
+        baseTimes = points.map((point) => point.timestamp);
         break;
       }
     }
@@ -147,18 +171,16 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       const m = props.metrics[i];
+      const points = metricChartPoints(r, bucket().value);
       const scale = m.unit_scale ? computeUnitScale(
-        (r.aggregates?.map((a) => a.avg) ?? r.samples?.map((s) => s.value) ?? []),
+        points.map((point) => point.value),
         m.unit_scale
       ) : { divisor: 1, suffix: '' };
       suffixes.push(scale.suffix);
 
-      if (r.aggregates && r.aggregates.length > 0) {
-        series.push(r.aggregates.map((a) => a.avg / scale.divisor));
-        seriesTimes.push(r.aggregates.map((a) => new Date(a.timestamp).getTime()));
-      } else if (r.samples && r.samples.length > 0) {
-        series.push(r.samples.map((s) => s.value / scale.divisor));
-        seriesTimes.push(r.samples.map((s) => new Date(s.timestamp).getTime()));
+      if (points.length > 0) {
+        series.push(points.map((point) => point.value / scale.divisor));
+        seriesTimes.push(points.map((point) => point.timestamp));
       } else {
         series.push(baseTimes.map(() => null));
         seriesTimes.push(baseTimes);
@@ -184,21 +206,17 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     return results.map((r, i) => {
       const m = props.metrics[i];
       const color = m.color || DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
-      const values = r.aggregates?.map((a) => a.avg) ?? r.samples?.map((s) => s.value) ?? [];
+      const points = metricChartPoints(r, bucket().value);
+      const values = points.map((point) => point.value);
       const scale = m.unit_scale ? computeUnitScale(values, m.unit_scale) : { divisor: 1, suffix: '' };
       const unit = effectiveUnit(m.unit, m.unit_scale, scale.suffix);
       let min: number | null = null;
       let max: number | null = null;
       let avg: number | null = null;
-      if (r.aggregates && r.aggregates.length > 0) {
-        min = Math.min(...r.aggregates.map((a) => a.min)) / scale.divisor;
-        max = Math.max(...r.aggregates.map((a) => a.max)) / scale.divisor;
-        avg = r.aggregates.reduce((s, a) => s + a.avg, 0) / r.aggregates.length / scale.divisor;
-      } else if (r.samples && r.samples.length > 0) {
-        const vals = r.samples.map((s) => s.value);
-        min = Math.min(...vals) / scale.divisor;
-        max = Math.max(...vals) / scale.divisor;
-        avg = vals.reduce((s, v) => s + v, 0) / vals.length / scale.divisor;
+      if (points.length > 0) {
+        min = Math.min(...points.map((point) => point.min)) / scale.divisor;
+        max = Math.max(...points.map((point) => point.max)) / scale.divisor;
+        avg = values.reduce((sum, value) => sum + value, 0) / values.length / scale.divisor;
       }
       return { name: m.name, color, unit, min, avg, max };
     });

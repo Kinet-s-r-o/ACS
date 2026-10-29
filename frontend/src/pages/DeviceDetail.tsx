@@ -938,13 +938,16 @@ const DeviceDetail: Component = () => {
   const handleSummon = async () => {
     setActionLoading('summon');
     try {
-      const result = await api.connectionRequest(serial());
-      showMessage('success', result.message);
-      
       const hasTR181 = (parameters() || []).some(parameter => parameter.name.startsWith('Device.'));
-      await api.getParameterValues(serial(), [hasTR181 ? 'Device.' : 'InternetGatewayDevice.']);
+      const task = await api.getParameterValues(serial(), [hasTR181 ? 'Device.' : 'InternetGatewayDevice.']);
+      await api.connectionRequest(serial());
+      await waitForTask(task.id, 'Device parameter refresh');
+      await Promise.all([loadDeviceParameters(), refetchDevice(), refetchTasks(), refetchDeviceTaskCounts()]);
+      setAutoRefreshTick(value => value + 1);
+      showMessage('success', 'Device parameters and metrics refreshed.');
     } catch (err) {
-      showMessage('error', 'Connection request failed. Verify reachability and credentials, then retry.', (err as Error).message);
+      showMessage('error', 'Device refresh did not complete. Check the task result and CWMP faults, then retry.', (err as Error).message);
+      void refetchTasks();
     }
     setActionLoading(null);
   };
