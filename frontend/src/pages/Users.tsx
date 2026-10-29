@@ -51,7 +51,7 @@ const UsersPage: Component = () => {
     { id: 'role', label: 'Role', visible: true },
     { id: 'last_login', label: 'Last Login', visible: true },
   ]);
-  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'username', direction: 'asc' });
+  const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.users', { column: 'username', direction: 'asc' });
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const applyUserFilter = (column: string, state: ColumnFilterState | null) => {
     setColumnFilters(previous => {

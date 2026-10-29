@@ -32,7 +32,7 @@ const Dictionaries: Component = () => {
   const [deleting, setDeleting] = createSignal<string | null>(null);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.tags');
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tags', {});
-  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'name', direction: 'asc' });
+  const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.tags', { column: 'name', direction: 'asc' });
   const [tagsPage, setTagsPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('tags', 20);
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));

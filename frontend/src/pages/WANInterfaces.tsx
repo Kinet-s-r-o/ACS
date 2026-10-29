@@ -33,7 +33,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
   const [page, setPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('wan-interfaces', 20);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
-  const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.wan-interfaces', null);
   const { columns, isVisible, toggle } = useColumnVisibility('wan-interfaces', [
     { id: 'serial_number', label: 'Serial number', visible: true },
     { id: 'name', label: 'Name', visible: true },

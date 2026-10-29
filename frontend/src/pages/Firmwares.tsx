@@ -26,7 +26,7 @@ const Firmwares: Component = () => {
   const [validation, setValidation] = createSignal<{ file?: string; version?: string }>({});
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.firmwares', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.firmwares');
-  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.firmwares', { column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const { columns, isVisible, toggle } = useColumnVisibility('firmwares', [
     { id: 'filename', label: 'Filename', visible: true },

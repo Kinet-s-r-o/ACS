@@ -86,7 +86,7 @@ const RolesTab: Component = () => {
     { id: 'permissions', label: 'Permissions', visible: true },
     { id: 'type', label: 'Type', visible: true },
   ]);
-  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'name', direction: 'asc' });
+  const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.roles', { column: 'name', direction: 'asc' });
   const handleSort = (column: string) => {
     setRolePage(0);
     setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));

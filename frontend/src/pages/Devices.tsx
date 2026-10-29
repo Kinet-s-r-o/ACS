@@ -75,7 +75,7 @@ const Devices: Component = () => {
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [summoningAll, setSummoningAll] = createSignal(false);
   const [exportingDevices, setExportingDevices] = createSignal(false);
-  const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
   const { isFullAccess, hasAnyPermission } = useAuth();
   const { notify } = useFeedback();

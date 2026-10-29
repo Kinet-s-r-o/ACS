@@ -33,7 +33,7 @@ const Faults: Component = () => {
 
   const [stats, { refetch: refetchStats }] = createResource(() => api.getFaultStats());
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.faults', {});
-  const [sortState, setSortState] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.faults', { column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
   const { columns, isVisible, toggle } = useColumnVisibility('faults', [
     { id: 'serial_number', label: 'Device', visible: true },

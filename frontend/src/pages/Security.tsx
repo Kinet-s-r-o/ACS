@@ -30,7 +30,7 @@ const Security: Component = () => {
   const [message, setMessage] = createSignal<{ type: 'success' | 'error'; text: string } | null>(null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.security', {});
   const [auditSearch, setAuditSearch] = createPersistedSignal('acs.search.security.audit');
-  const [auditSort, setAuditSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [auditSort, setAuditSort] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.security-audit', { column: 'created_at', direction: 'desc' });
   const handleAuditSort = (column: string) => { setAuditPage(0); setAuditSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const updateAuditFilter = (columnId: string, state: ColumnFilterState | null) => {
     setAuditPage(0);

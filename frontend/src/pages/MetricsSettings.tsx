@@ -73,7 +73,7 @@ const MetricsSettings: Component = () => {
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.metrics', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.metrics');
-  const [sortBy, setSortBy] = createSignal<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.metrics', null);
   const { columns, isVisible, toggle } = useColumnVisibility('metrics', [
     { id: 'name', label: 'Name', visible: true },
     { id: 'parameter_name', label: 'Parameter', visible: true },
