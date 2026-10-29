@@ -47,7 +47,6 @@ const defaultHostColumns: HostColumnConfig[] = [
   { id: 'negRate', label: 'Neg. rate', visible: true },
   { id: 'interface', label: 'Interface', visible: true },
   { id: 'rssi', label: 'Signal', visible: true },
-  { id: 'uptime', label: 'Uptime', visible: true },
 ];
 
 interface ParamColumnConfig {
@@ -684,6 +683,13 @@ const DeviceDetail: Component = () => {
   });
 
   onMount(() => {
+    if (hostColumnFilters().uptime) {
+      setHostColumnFilters(previous => {
+        const next = { ...previous };
+        delete next.uptime;
+        return next;
+      });
+    }
     const saved = localStorage.getItem(HOST_COLUMNS_STORAGE_KEY);
     if (saved) {
       try {
@@ -1636,25 +1642,24 @@ const DeviceDetail: Component = () => {
       }));
   };
 
-  const getHosts = () => {
+  const getHosts = createMemo(() => {
     const params = parameters() || [];
-    const hosts: Array<{ index: number; hostname: string; ip: string; ipv6: string; mac: string; negRate: string; interface: string; rssi?: string; uptime?: string }> = [];
+    const valueByName = new Map(params.map(parameter => [parameter.name, parameter.value]));
+    const hosts: Array<{ index: number; hostname: string; ip: string; ipv6: string; mac: string; negRate: string; interface: string; rssi?: string }> = [];
     
-    const hostIndices = [...new Set(params.filter(p => p.name.includes('Hosts.Host.')).map(p => {
-      const match = p.name.match(/Host\.(\d+)\./);
-      return match ? parseInt(match[1]) : 0;
-    }))].filter(i => i > 0);
+    const hostPaths = [...new Set(params.map(p => p.name.match(/^InternetGatewayDevice\.LANDevice\.\d+\.Hosts\.Host\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
 
     const getInterfaceName = (path: string) => {
       const prefix = path.replace(/\.+$/, '');
-      return params.find(parameter => parameter.name === `${prefix}.Name`)?.value?.trim() || '';
+      return valueByName.get(`${prefix}.Name`)?.trim() || '';
     };
     
-    const getWifiBand = (ssidIdx: number): string => {
-      const wlanPrefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}.`;
-      const channel = params.find(p => p.name === wlanPrefix + 'Channel')?.value;
-      const standard = params.find(p => p.name === wlanPrefix + 'Standard')?.value;
-      const freq = params.find(p => p.name === wlanPrefix + 'X_HW_FrequencyBand')?.value;
+    const getWifiBand = (wlanPath: string): string => {
+      const wlanPrefix = `${wlanPath}.`;
+      const ssidIdx = Number(wlanPath.match(/WLANConfiguration\.(\d+)$/)?.[1] || 1);
+      const channel = valueByName.get(wlanPrefix + 'Channel');
+      const standard = valueByName.get(wlanPrefix + 'Standard');
+      const freq = valueByName.get(wlanPrefix + 'X_HW_FrequencyBand');
       
       if (freq) {
         if (freq.includes('5') || freq.includes('5GHz')) return '5GHz';
@@ -1675,9 +1680,8 @@ const DeviceDetail: Component = () => {
       return ssidIdx >= 5 ? '5GHz' : '2.4GHz';
     };
 
-    hostIndices.forEach(i => {
-      const prefix = `InternetGatewayDevice.LANDevice.1.Hosts.Host.${i}.`;
-      const getVal = (suffix: string) => params.find(p => p.name === prefix + suffix)?.value || '-';
+    hostPaths.forEach((prefix, index) => {
+      const getVal = (suffix: string) => valueByName.get(prefix + suffix) || '-';
       
       let interfaceType = 'LAN';
       const layer2 = getVal('Layer2Interface');
@@ -1685,10 +1689,8 @@ const DeviceDetail: Component = () => {
       
       if (layer2 && layer2 !== '-') {
         const interfaceName = getInterfaceName(layer2);
-        const wlanMatch = layer2.match(/WLANConfiguration\.(\d+)/);
-        if (wlanMatch) {
-          const ssidIdx = parseInt(wlanMatch[1]);
-          interfaceType = `WiFi ${getWifiBand(ssidIdx)}${interfaceName ? ` · ${interfaceName}` : ''}`;
+        if (/WLANConfiguration\.\d+/.test(layer2)) {
+          interfaceType = `WiFi ${getWifiBand(layer2.replace(/\.+$/, ''))}${interfaceName ? ` · ${interfaceName}` : ''}`;
         } else if (layer2.includes('Ethernet') || layer2.includes('LANEthernet')) {
           interfaceType = `Ethernet${interfaceName ? ` · ${interfaceName}` : ''}`;
         } else if (interfaceName) {
@@ -1705,49 +1707,56 @@ const DeviceDetail: Component = () => {
       }
       
       hosts.push({
-        index: i,
+        index: index + 1,
         hostname: getVal('HostName'),
         ip: getVal('IPAddress'),
         ipv6: getVal('IPv6Address'),
         mac: getVal('MACAddress'),
         negRate: getVal('X_HW_NegotiatedRate'),
         interface: interfaceType,
+        rssi: getVal('X_HW_RSSI'),
       });
     });
 
-    for (let ssidIdx = 1; ssidIdx <= 8; ssidIdx++) {
-      const assocIndices = [...new Set(params.filter(p => 
-        p.name.includes(`WLANConfiguration.${ssidIdx}.AssociatedDevice.`)
-      ).map(p => {
-        const match = p.name.match(/AssociatedDevice\.(\d+)\./);
-        return match ? parseInt(match[1]) : 0;
-      }))].filter(i => i > 0);
+    const assocPaths = [...new Set(params.map(p => p.name.match(/^InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.\d+\.AssociatedDevice\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
+    const macKey = (mac: string) => {
+      const normalized = mac.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+      return normalized.length >= 12 ? normalized : '';
+    };
+    const pick = (...values: string[]) => values.find(value => value && value !== '-') || '-';
+    const pickIp = (...values: string[]) => values.find(value => value && value !== '-' && value !== '0.0.0.0') || '-';
+    const pickRssi = (...values: string[]) => values.find(value => value && value !== '-' && value !== '0') || '-';
 
-      assocIndices.forEach(i => {
-        const prefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}.AssociatedDevice.${i}.`;
-        const getVal = (suffix: string) => params.find(p => p.name === prefix + suffix)?.value || '-';
-        
-        const mac = getVal('AssociatedDeviceMACAddress');
-        if (mac && mac !== '-') {
-          const exists = hosts.some(h => h.mac.toLowerCase() === mac.toLowerCase());
-          if (!exists) {
-            hosts.push({
-              index: 100 + ssidIdx * 10 + i,
-              hostname: getVal('X_HW_AssociatedDevicedescriptions') || '-',
-              ip: getVal('AssociatedDeviceIPAddress'),
-              ipv6: '-',
-              mac: mac,
-              negRate: '-',
-              interface: `WiFi ${getWifiBand(ssidIdx)}${getInterfaceName(`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}`) ? ` · ${getInterfaceName(`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ssidIdx}`)}` : ''}`,
-              rssi: getVal('X_HW_RSSI'),
-              uptime: getVal('X_HW_Uptime'),
-            });
-          }
-        }
-      });
+    for (const prefix of assocPaths) {
+      const getVal = (suffix: string) => valueByName.get(prefix + suffix) || '-';
+      const mac = getVal('AssociatedDeviceMACAddress');
+      if (!macKey(mac)) continue;
+      const wlanPath = prefix.replace(/\.AssociatedDevice\.\d+\.$/, '');
+      const interfaceName = getInterfaceName(wlanPath);
+      const interfaceType = `WiFi ${getWifiBand(wlanPath)}${interfaceName ? ` · ${interfaceName}` : ''}`;
+      const existing = hosts.find(host => macKey(host.mac) === macKey(mac));
+      if (existing) {
+        existing.hostname = pick(getVal('X_HW_AssociatedDevicedescriptions'), getVal('HostName'), existing.hostname);
+        existing.ip = pickIp(getVal('AssociatedDeviceIPAddress'), existing.ip);
+        existing.ipv6 = pick(getVal('AssociatedDeviceIPv6Address'), existing.ipv6);
+        existing.negRate = pick(getVal('X_HW_NegotiatedRate'), existing.negRate);
+        existing.interface = interfaceType;
+        existing.rssi = pickRssi(getVal('X_HW_RSSI'), existing.rssi || '-');
+      } else {
+        hosts.push({
+          index: hosts.length + 1,
+          hostname: pick(getVal('X_HW_AssociatedDevicedescriptions'), getVal('HostName')),
+          ip: pickIp(getVal('AssociatedDeviceIPAddress')),
+          ipv6: getVal('AssociatedDeviceIPv6Address'),
+          mac,
+          negRate: getVal('X_HW_NegotiatedRate'),
+          interface: interfaceType,
+          rssi: pickRssi(getVal('X_HW_RSSI')),
+        });
+      }
     }
     return hosts;
-  };
+  });
 
   const filteredAllParams = () => {
     let params = allParameters() || [];
@@ -1789,7 +1798,6 @@ const DeviceDetail: Component = () => {
         case 'negRate': return h.negRate || '';
         case 'interface': return h.interface || '';
         case 'rssi': return h.rssi || '';
-        case 'uptime': return h.uptime || '';
         default: return '';
       }
     });
@@ -2927,11 +2935,6 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="rssi" label="Signal" active={hostColumnFilters()['rssi'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['rssi'] = s; else delete n['rssi']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'uptime')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5">Uptime
-                            <ColumnFilter columnId="uptime" label="Uptime" active={hostColumnFilters()['uptime'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['uptime'] = s; else delete n['uptime']; return n; }); }} />
-                          </div>
-                        </th></Show>
                         <th class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} /></th>
                       </tr>
                     </thead>
@@ -2956,10 +2959,7 @@ const DeviceDetail: Component = () => {
                               </span>
                             </td></Show>
                             <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><td class="px-3 py-2 text-secondary">
-                              {host.rssi && host.rssi !== '-' ? `${host.rssi} dBm` : '-'}
-                            </td></Show>
-                            <Show when={hostColumns().find(column => column.id === 'uptime')?.visible}><td class="px-3 py-2 text-secondary text-xs">
-                              {host.uptime ? formatUptime(host.uptime) : '-'}
+                              {host.rssi && host.rssi !== '-' && host.rssi !== '0' ? `${host.rssi} dBm` : '-'}
                             </td></Show>
                             <td class="px-2 py-2"></td>
                           </tr>
