@@ -337,7 +337,7 @@ const Dashboard: Component = () => {
 
         <section class="data-panel">
           <div class="data-panel-header">
-            <div><h2>Device growth</h2><p>Cumulative number of CPEs added to ACS, based on their registration time.</p></div>
+            <div><h2>Device growth</h2><p>Active CPE count at the end of each period, including registrations and deletions.</p></div>
             <div class="flex flex-wrap justify-end gap-1" role="group" aria-label="Device growth interval">
               <For each={growthIntervals}>{(option) => (
                 <button

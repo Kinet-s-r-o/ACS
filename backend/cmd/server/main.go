@@ -325,6 +325,7 @@ func runAutoMigrate(db *gorm.DB) error {
 
 	allModels := []interface{}{
 		&models.Device{},
+		&models.DeviceLifecycleEvent{},
 		&models.DeviceParameter{},
 		&models.DeviceLogEntry{},
 		&models.Task{},

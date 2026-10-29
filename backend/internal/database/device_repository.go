@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -58,10 +59,27 @@ func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.
 		}
 	}
 
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "serial_number"}},
-		DoUpdates: clause.AssignmentColumns(updates),
-	}).Create(device).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing models.Device
+		err := tx.Where("serial_number = ?", device.SerialNumber).First(&existing).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
+		if err != nil && !isNew {
+			return err
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "serial_number"}},
+			DoUpdates: clause.AssignmentColumns(updates),
+		}).Create(device).Error; err != nil {
+			return err
+		}
+		if !isNew {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceLifecycleEvent{
+			DeviceID: device.ID, SerialNumber: device.SerialNumber,
+			EventType: models.DeviceLifecycleRegistered, OccurredAt: device.CreatedAt,
+		}).Error
+	})
 }
 
 func (r *DeviceRepository) MarkOverviewRefresh(ctx context.Context, deviceID int64) error {
@@ -316,6 +334,44 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 	for _, addition := range additions {
 		addedByBucket[growthBucketStart(addition.Bucket, interval).UnixNano()] = addition.Count
 	}
+	var lifecycle []struct {
+		Bucket    time.Time `gorm:"column:bucket"`
+		EventType string    `gorm:"column:event_type"`
+		Count     int64     `gorm:"column:count"`
+	}
+	if err := r.db.WithContext(ctx).Model(&models.DeviceLifecycleEvent{}).
+		Select(fmt.Sprintf("date_trunc('%s', occurred_at) AS bucket, event_type, COUNT(*) AS count", spec.SQLBucket)).
+		Where("occurred_at >= ? AND occurred_at < ?", start, growthNextBucket(end, interval)).
+		Where("event_type = ? OR (event_type = ? AND NOT EXISTS (SELECT 1 FROM devices WHERE devices.id = device_lifecycle_events.device_id))", models.DeviceLifecycleDeleted, models.DeviceLifecycleRegistered).
+		Group("bucket, event_type").Order("bucket ASC").Scan(&lifecycle).Error; err != nil {
+		return nil, err
+	}
+	for _, event := range lifecycle {
+		delta := event.Count
+		if event.EventType == models.DeviceLifecycleDeleted {
+			delta = -delta
+		}
+		key := growthBucketStart(event.Bucket, interval).UnixNano()
+		addedByBucket[key] += delta
+	}
+	var lifecycleBefore []struct {
+		EventType string `gorm:"column:event_type"`
+		Count     int64  `gorm:"column:count"`
+	}
+	if err := r.db.WithContext(ctx).Model(&models.DeviceLifecycleEvent{}).
+		Select("event_type, COUNT(*) AS count").
+		Where("occurred_at < ?", start).
+		Where("event_type = ? OR (event_type = ? AND NOT EXISTS (SELECT 1 FROM devices WHERE devices.id = device_lifecycle_events.device_id))", models.DeviceLifecycleDeleted, models.DeviceLifecycleRegistered).
+		Group("event_type").Scan(&lifecycleBefore).Error; err != nil {
+		return nil, err
+	}
+	for _, event := range lifecycleBefore {
+		if event.EventType == models.DeviceLifecycleDeleted {
+			countBefore -= event.Count
+		} else {
+			countBefore += event.Count
+		}
+	}
 
 	points := make([]DeviceGrowthPoint, 0, spec.Buckets+1)
 	count := countBefore
@@ -445,6 +501,22 @@ func (r *DeviceRepository) SetOffline(ctx context.Context, serialNumber string) 
 
 func (r *DeviceRepository) Delete(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var device models.Device
+		if err := tx.First(&device, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceLifecycleEvent{
+			DeviceID: device.ID, SerialNumber: device.SerialNumber,
+			EventType: models.DeviceLifecycleRegistered, OccurredAt: device.CreatedAt,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&models.DeviceLifecycleEvent{
+			DeviceID: device.ID, SerialNumber: device.SerialNumber,
+			EventType: models.DeviceLifecycleDeleted, OccurredAt: time.Now(),
+		}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("device_id = ?", id).Delete(&models.Task{}).Error; err != nil {
 			return err
 		}

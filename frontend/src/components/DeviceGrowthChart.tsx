@@ -17,6 +17,7 @@ const DeviceGrowthChart: Component<Props> = (props) => {
   const [element, setElement] = createSignal<HTMLDivElement>();
   let chart: echarts.ECharts | undefined;
   let observer: ResizeObserver | undefined;
+  let chartElement: HTMLDivElement | undefined;
   const [growth] = createResource(
     () => ({ interval: props.interval, refreshKey: props.refreshKey ?? 0 }),
     ({ interval }) => api.getDeviceGrowth(interval),
@@ -25,9 +26,24 @@ const DeviceGrowthChart: Component<Props> = (props) => {
   createEffect(() => {
     const el = element();
     const points = growth()?.points ?? [];
-    if (!el || points.length === 0) return;
+    if (!el || points.length === 0) {
+      observer?.disconnect();
+      chart?.dispose();
+      observer = undefined;
+      chart = undefined;
+      chartElement = undefined;
+      return;
+    }
+    if (chartElement && chartElement !== el) {
+      observer?.disconnect();
+      chart?.dispose();
+      observer = undefined;
+      chart = undefined;
+      chartElement = undefined;
+    }
     if (!chart) {
       chart = echarts.init(el);
+      chartElement = el;
       observer = new ResizeObserver(() => chart?.resize());
       observer.observe(el);
     }
