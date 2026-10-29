@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { A } from '@solidjs/router';
-import { AlertTriangle, CheckCircle, Trash2, RefreshCw, Download } from 'lucide-solid';
+import { AlertTriangle, CheckCircle, Download, RefreshCw, Search, Trash2, X } from 'lucide-solid';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -12,7 +12,7 @@ import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
-import { createPersistedJsonSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
 import { sortRows, type SortDirection } from '../lib/sorting';
@@ -22,6 +22,7 @@ const Faults: Component = () => {
   const { isFullAccess } = useAuth();
   const { confirm, notify } = useFeedback();
   const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved'>('active');
+  const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.faults');
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedFaults, setSelectedFaults] = createSignal<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
@@ -61,7 +62,16 @@ const Faults: Component = () => {
   };
 
   const filteredFaults = createMemo(() => {
-    const all = faults()?.faults || [];
+    const query = searchQuery().toLowerCase().trim();
+    const all = (faults()?.faults || []).filter(fault => !query || [
+      fault.serial_number,
+      fault.model_name || '',
+      fault.fault_code,
+      fault.fault_string,
+      fault.parameter_name || '',
+      fault.created_at,
+      fault.resolved ? 'Resolved' : 'Active',
+    ].some(value => value.toLowerCase().includes(query)));
     return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), sortState().column, sortState().direction, getFilterValue);
   });
   const pagedFaults = createMemo(() => {
@@ -235,16 +245,32 @@ const Faults: Component = () => {
       <Show when={!faults.error}><div class="card p-0 overflow-hidden">
         <div class="table-panel-toolbar">
           <span><strong>{pagedFaults().length}</strong> visible on this page · <strong>{stats()?.total ?? 0}</strong> total CWMP faults</span>
-          <button
-            type="button"
-            class="icon-button"
-            onClick={exportFaultsCSV}
-            disabled={faults.loading || filteredFaults().length === 0}
-            title="Export filtered faults as CSV"
-            aria-label={`Export ${filteredFaults().length} filtered CWMP faults as CSV`}
-          >
-            <Download size={15} aria-hidden="true" />
-          </button>
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery()}
+                onInput={(event) => { setSearchQuery(event.currentTarget.value); setFaultPage(0); }}
+                placeholder="Search faults…"
+                aria-label="Search faults by device, code, message, parameter, or status"
+                class="input pl-9! w-56 text-sm"
+              />
+              <Show when={searchQuery()}>
+                <button type="button" onClick={() => { setSearchQuery(''); setFaultPage(0); }} class="input-clear" aria-label="Clear fault search"><X size={12} /></button>
+              </Show>
+            </div>
+            <button
+              type="button"
+              class="icon-button"
+              onClick={exportFaultsCSV}
+              disabled={faults.loading || filteredFaults().length === 0}
+              title="Export filtered faults as CSV"
+              aria-label={`Export ${filteredFaults().length} filtered CWMP faults as CSV`}
+            >
+              <Download size={15} aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <Show when={!faults.loading} fallback={
           <div class="p-4 space-y-3" aria-label="Loading fault records"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div>
@@ -253,7 +279,7 @@ const Faults: Component = () => {
             <EmptyState
               icon={<AlertTriangle size={22} />}
               title={(faults()?.faults?.length ?? 0) > 0 ? 'No CWMP faults match the current filters' : filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
-              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear a column filter to inspect more fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
+              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear the search or a column filter to inspect more fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
               action={filter() !== 'all' ? <button type="button" class="btn btn-secondary" onClick={() => setFilter('all')}>Show all fault records</button> : undefined}
             />
           }>
