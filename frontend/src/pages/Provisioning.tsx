@@ -37,6 +37,8 @@ const metricTableColumns = [
   { id: 'name', label: 'Name', visible: true },
   { id: 'parameter', label: 'Parameter', visible: true },
   { id: 'source', label: 'Source', visible: true },
+  { id: 'min_interval', label: 'Min interval', visible: true },
+  { id: 'gpv_interval', label: 'GPV interval', visible: true },
   { id: 'group', label: 'Group', visible: true },
   { id: 'active', label: 'Active', visible: true },
   { id: 'device_match', label: 'Device Match', visible: false },
@@ -47,6 +49,8 @@ const interfaceMetricTableColumns = [
   { id: 'parameter', label: 'Parameter pattern', visible: true },
   { id: 'type', label: 'Type', visible: true },
   { id: 'source', label: 'Source', visible: true },
+  { id: 'min_interval', label: 'Min interval', visible: true },
+  { id: 'gpv_interval', label: 'GPV interval', visible: true },
   { id: 'unit_scale', label: 'Unit scale', visible: true },
   { id: 'group', label: 'Group + color', visible: true },
   { id: 'active', label: 'Active', visible: true },
@@ -62,6 +66,7 @@ const featureTableColumns = [
   { id: 'group', label: 'Collapsible box', visible: true },
 ];
 const defaultTemplateInventory = (): TemplateInventory => ({ primary_ip_mode: 'automatic', primary_ip_parameter: '', primary_ip_interface_name: '' });
+const formatInterval = (seconds: number) => seconds % 3600 === 0 ? `${seconds / 3600}h` : seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
 type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options' | 'object_fields'> & { optionsText: string; objectFieldsText: string };
@@ -480,6 +485,8 @@ const Provisioning: Component = () => {
       case 'parameter': return <td class="w-[45%] py-2 pr-3 font-mono break-words [overflow-wrap:anywhere]">{def.parameter_pattern}</td>;
       case 'type': return <td class="py-2 pr-3 uppercase">{def.interface_type}</td>;
       case 'source': return <td class="py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
+      case 'min_interval': return <td class="py-2 pr-3" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td>;
+      case 'gpv_interval': return <td class="py-2 pr-3" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td>;
       case 'unit_scale': return <td class="py-2 pr-3">{def.unit_scale || 'none'}</td>;
       case 'group': return <td class="py-2 pr-3"><div class="flex items-center gap-1.5"><span class="chart-color-swatch inline-block h-3 w-6 shrink-0 rounded-sm" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#38bdf8' } as any} title={def.color || 'Default'} /><span>{def.group || '—'}</span></div></td>;
       case 'active': return <td class="py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
@@ -1482,6 +1489,8 @@ const Provisioning: Component = () => {
                           <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5 whitespace-nowrap">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                           </td></Show>
+                          <Show when={metricColumns.isVisible('min_interval')}><td class="px-3 py-2.5 whitespace-nowrap" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td></Show>
+                          <Show when={metricColumns.isVisible('gpv_interval')}><td class="px-3 py-2.5 whitespace-nowrap" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td></Show>
                           <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">
                             <div class="flex items-center gap-1.5 whitespace-nowrap">
                               <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
