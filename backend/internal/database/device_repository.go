@@ -43,6 +43,13 @@ func NewDeviceRepository(db *gorm.DB) *DeviceRepository {
 }
 
 func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.Device) error {
+	_, err := r.UpsertFromInformWithTransition(ctx, device)
+	return err
+}
+
+// UpsertFromInformWithTransition persists an Inform and reports whether an
+// existing device changed from offline to online.
+func (r *DeviceRepository) UpsertFromInformWithTransition(ctx context.Context, device *models.Device) (bool, error) {
 	now := time.Now()
 	device.LastInform = &now
 	device.Online = true
@@ -60,7 +67,8 @@ func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.
 		}
 	}
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	recovered := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing models.Device
 		err := tx.Where("serial_number = ?", device.SerialNumber).First(&existing).Error
 		isNew := errors.Is(err, gorm.ErrRecordNotFound)
@@ -77,6 +85,7 @@ func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.
 			if existing.Online {
 				return nil
 			}
+			recovered = true
 			return tx.Create(&models.DeviceLifecycleEvent{
 				DeviceID: device.ID, SerialNumber: device.SerialNumber,
 				EventType: models.DeviceLifecycleOnline, OccurredAt: now,
@@ -93,6 +102,7 @@ func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.
 			EventType: models.DeviceLifecycleOnline, OccurredAt: now,
 		}).Error
 	})
+	return recovered, err
 }
 
 func (r *DeviceRepository) MarkOverviewRefresh(ctx context.Context, deviceID int64) error {

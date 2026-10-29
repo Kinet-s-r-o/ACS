@@ -121,6 +121,7 @@ func main() {
 	}
 
 	watchdog := cwmp.NewDeviceWatchdog(db)
+	cwmpHandler.SetWatchdog(watchdog)
 	go watchdog.Start(ctx)
 
 	go func() {

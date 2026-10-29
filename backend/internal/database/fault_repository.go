@@ -88,6 +88,24 @@ func (r *FaultRepository) Resolve(ctx context.Context, id int64) error {
 		}).Error
 }
 
+// ResolveActiveByDeviceAndCode closes active faults created by a specific
+// watchdog condition after the device has passed recovery verification.
+func (r *FaultRepository) ResolveActiveByDeviceAndCode(ctx context.Context, deviceID int64, faultCode string) (int64, error) {
+	now := time.Now()
+	result := r.db.WithContext(ctx).Model(&models.Fault{}).
+		Where("device_id = ? AND fault_code = ? AND resolved = ?", deviceID, faultCode, false).
+		Updates(map[string]interface{}{"resolved": true, "resolved_at": &now})
+	return result.RowsAffected, result.Error
+}
+
+func (r *FaultRepository) HasActiveByDeviceAndCode(ctx context.Context, deviceID int64, faultCode string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Fault{}).
+		Where("device_id = ? AND fault_code = ? AND resolved = ?", deviceID, faultCode, false).
+		Count(&count).Error
+	return count > 0, err
+}
+
 func (r *FaultRepository) Delete(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Delete(&models.Fault{}, id).Error
 }

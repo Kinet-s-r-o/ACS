@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/matrix8412/acs/internal/database"
@@ -22,6 +23,8 @@ type DeviceWatchdog struct {
 	staleThreshold time.Duration
 	maxRetries     int
 	retryState     map[int64]watchdogRetry
+	recoveryMu     sync.Mutex
+	recoveryActive map[string]bool
 }
 
 type watchdogRetry struct {
@@ -40,7 +43,72 @@ func NewDeviceWatchdog(db *gorm.DB) *DeviceWatchdog {
 		staleThreshold: 15 * time.Minute,
 		maxRetries:     3,
 		retryState:     make(map[int64]watchdogRetry),
+		recoveryActive: make(map[string]bool),
 	}
+}
+
+// VerifyRecoveredDevice performs one background connection-request check after
+// a device transitions from offline to online. It only resolves the watchdog
+// summon fault when the CPE accepts the request successfully.
+func (w *DeviceWatchdog) VerifyRecoveredDevice(serialNumber string) {
+	w.recoveryMu.Lock()
+	if w.recoveryActive[serialNumber] {
+		w.recoveryMu.Unlock()
+		return
+	}
+	w.recoveryActive[serialNumber] = true
+	w.recoveryMu.Unlock()
+
+	go func() {
+		defer func() {
+			w.recoveryMu.Lock()
+			delete(w.recoveryActive, serialNumber)
+			w.recoveryMu.Unlock()
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		device, err := w.deviceRepo.GetBySerial(ctx, serialNumber)
+		if err != nil || device == nil {
+			if err != nil {
+				log.Printf("[Watchdog] Could not load recovered device %s: %v", serialNumber, err)
+			}
+			return
+		}
+		hasFault, err := w.faultRepo.HasActiveByDeviceAndCode(ctx, device.ID, "WATCHDOG_SUMMON_FAILED")
+		if err != nil || !hasFault {
+			return
+		}
+		settings, err := w.settingsRepo.GetAll(ctx)
+		if err != nil {
+			log.Printf("[Watchdog] Could not load recovery connection request settings for %s: %v", serialNumber, err)
+			return
+		}
+		username, password, useAuto := connectionRequestSettings(settings)
+		if err := w.summonDevice(ctx, device, username, password, useAuto); err != nil {
+			log.Printf("[Watchdog] Recovery connection request to %s failed: %v", serialNumber, err)
+			return
+		}
+		resolved, err := w.faultRepo.ResolveActiveByDeviceAndCode(ctx, device.ID, "WATCHDOG_SUMMON_FAILED")
+		if err != nil {
+			log.Printf("[Watchdog] Could not resolve recovery fault for %s: %v", serialNumber, err)
+			return
+		}
+		log.Printf("[Watchdog] Recovery connection request to %s succeeded; resolved %d WATCHDOG_SUMMON_FAILED fault(s)", serialNumber, resolved)
+	}()
+}
+
+func connectionRequestSettings(settings []database.Setting) (username, password string, useAuto bool) {
+	for _, setting := range settings {
+		switch setting.Key {
+		case "connection_request_username":
+			username = setting.Value
+		case "connection_request_password":
+			password = setting.Value
+		case "use_auto_conn_credentials":
+			useAuto = setting.Value == "true"
+		}
+	}
+	return username, password, useAuto
 }
 
 func (w *DeviceWatchdog) Start(ctx context.Context) {

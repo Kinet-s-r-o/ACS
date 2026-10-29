@@ -31,6 +31,7 @@ type Handler struct {
 	blockedRepo          *database.BlockedDeviceRepository
 	metricRepo           *database.MetricRepository
 	settingsRepo         *database.SettingsRepository
+	watchdog             *DeviceWatchdog
 	metricPollInterval   time.Duration
 	overviewPollInterval time.Duration
 	fullPollInterval     time.Duration
@@ -39,6 +40,10 @@ type Handler struct {
 	allowedNetworks      []*net.IPNet
 	trustedProxies       []*net.IPNet
 	diagnosticSlots      chan struct{}
+}
+
+func (h *Handler) SetWatchdog(watchdog *DeviceWatchdog) {
+	h.watchdog = watchdog
 }
 
 func NewHandler(db *gorm.DB) *Handler {
@@ -276,11 +281,15 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			ConnectionRequestURL: strPtr(params["ConnectionRequestURL"]),
 		}
 
-		if err := h.deviceRepo.UpsertFromInform(ctx, device); err != nil {
+		recovered, err := h.deviceRepo.UpsertFromInformWithTransition(ctx, device)
+		if err != nil {
 			log.Printf("Error saving device: %v", err)
 		} else {
 			deviceID = device.ID
 			log.Printf("Device saved: %s (ID: %d)", device.SerialNumber, device.ID)
+			if recovered && h.watchdog != nil {
+				h.watchdog.VerifyRecoveredDevice(device.SerialNumber)
+			}
 		}
 
 		if h.parameterRepo != nil && deviceID > 0 && len(inform.ParameterList.Parameters) > 0 {
