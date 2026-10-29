@@ -1150,7 +1150,9 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"default_page_size": true, "chart_show_points": true, "app_name": true,
 		"app_logo":               true,
 		"overview_poll_interval": true, "full_tree_poll_interval": true,
-		"auto_refresh_interval": true,
+		"auto_refresh_interval":  true,
+		"ui_transitions_enabled": true, "ui_transition_style": true,
+		"ui_transition_duration": true,
 	}
 	for key := range database.RetentionDefaults() {
 		allowed[key] = true
@@ -1196,6 +1198,18 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	}
 	if value, ok := settings["chart_show_points"]; ok && value != "true" && value != "false" {
 		respondError(w, http.StatusBadRequest, "chart_show_points must be true or false")
+		return
+	}
+	if value, ok := settings["ui_transitions_enabled"]; ok && value != "true" && value != "false" {
+		respondError(w, http.StatusBadRequest, "ui_transitions_enabled must be true or false")
+		return
+	}
+	if value, ok := settings["ui_transition_style"]; ok && value != "fade" && value != "slide" && value != "fade-slide" {
+		respondError(w, http.StatusBadRequest, "ui_transition_style must be fade, slide, or fade-slide")
+		return
+	}
+	if value, ok := settings["ui_transition_duration"]; ok && value != "150" && value != "250" && value != "400" && value != "600" {
+		respondError(w, http.StatusBadRequest, "ui_transition_duration must be 150, 250, 400, or 600 milliseconds")
 		return
 	}
 	if value, ok := settings["auto_refresh_interval"]; ok {

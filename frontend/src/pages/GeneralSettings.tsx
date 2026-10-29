@@ -7,6 +7,7 @@ import { useFeedback } from '../components/Feedback';
 import { ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
 import { initAppName } from '../lib/appName';
+import { updateUITransitionSettings, type UITransitionStyle } from '../lib/uiTransitions';
 
 const GeneralSettings: Component = () => {
   const { isFullAccess } = useAuth();
@@ -14,9 +15,11 @@ const GeneralSettings: Component = () => {
   const [settings, { refetch }] = createResource(() => api.getSettings());
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
+  const [activeSection, setActiveSection] = createSignal<'general' | 'ui'>('general');
 
   const getValue = (key: string) => {
-    return formData()[key] ?? settings()?.[key] ?? '';
+    const defaults: Record<string, string> = { ui_transitions_enabled: 'false', ui_transition_style: 'fade-slide', ui_transition_duration: '250' };
+    return formData()[key] ?? settings()?.[key] ?? defaults[key] ?? '';
   };
 
   const handleLogoUpload = async (event: Event & { currentTarget: HTMLInputElement }) => {
@@ -69,9 +72,33 @@ const GeneralSettings: Component = () => {
       initAppName();
       notify({ tone: 'success', title: 'Settings saved', message: 'General settings have been updated.' });
       refetch();
-      setFormData({});
+      setFormData(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => key.startsWith('ui_'))));
     } catch (err) {
       notify({ tone: 'error', title: 'Settings were not saved', message: 'The previous configuration remains active. Review the fields and retry.', detail: (err as Error).message, persistent: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveUISettings = async () => {
+    const enabled = getValue('ui_transitions_enabled') === 'true';
+    const style = getValue('ui_transition_style');
+    const duration = getValue('ui_transition_duration');
+    setSaving(true);
+    try {
+      await api.updateSettings({ ui_transitions_enabled: String(enabled), ui_transition_style: style, ui_transition_duration: duration });
+      updateUITransitionSettings({ enabled, style: style as UITransitionStyle, duration: Number(duration) });
+      notify({ tone: 'success', title: 'UI settings saved', message: 'Animated transitions have been updated.' });
+      refetch();
+      setFormData(previous => {
+        const next = { ...previous };
+        delete next.ui_transitions_enabled;
+        delete next.ui_transition_style;
+        delete next.ui_transition_duration;
+        return next;
+      });
+    } catch (err) {
+      notify({ tone: 'error', title: 'UI settings were not saved', message: 'The previous animation settings remain active. Review the fields and retry.', detail: (err as Error).message, persistent: true });
     } finally {
       setSaving(false);
     }
@@ -82,6 +109,11 @@ const GeneralSettings: Component = () => {
       <PageHeader title="General" description="System-wide defaults and general configuration." />
 
       <div class="card p-5">
+        <div class="mb-5 flex gap-1 border-b border-subtle" role="tablist" aria-label="General settings sections">
+          <button type="button" role="tab" aria-selected={activeSection() === 'general'} onClick={() => setActiveSection('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General</button>
+          <button type="button" role="tab" aria-selected={activeSection() === 'ui'} onClick={() => setActiveSection('ui')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'ui' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>UI settings</button>
+        </div>
+        <Show when={activeSection() === 'general'}>
         <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
           <SettingsIcon size={14} />
           General
@@ -186,6 +218,33 @@ const GeneralSettings: Component = () => {
               {saving() ? 'Saving settings\u2026' : 'Save general settings'}
             </button>
           </div>
+        </Show>
+        </Show>
+        <Show when={activeSection() === 'ui'}>
+          <h2 class="text-sm font-medium text-secondary mb-2 flex items-center gap-2"><SettingsIcon size={14} />UI settings</h2>
+          <p class="text-muted text-xs mb-4">Configure animated transitions between application pages and sections.</p>
+          <Show when={settings.error}><ResourceError title="UI settings are unavailable" description="ACS could not read the current interface preferences. Retry before making changes." onRetry={() => refetch()} /></Show>
+          <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-10 w-full" /> : undefined}>
+            <div class="max-w-2xl space-y-5">
+              <label class="flex items-start gap-3 rounded border border-subtle p-3">
+                <input type="checkbox" class="mt-0.5" checked={getValue('ui_transitions_enabled') === 'true'} onChange={event => setFormData(previous => ({ ...previous, ui_transitions_enabled: String(event.currentTarget.checked) }))} disabled={!isFullAccess()} />
+                <span><span class="block text-sm text-primary">Animated transitions</span><span class="mt-1 block text-xs text-muted">Animate navigation between application pages and tabbed sections.</span></span>
+              </label>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label for="ui-transition-style" class="block text-xs text-muted">Transition style
+                  <select id="ui-transition-style" class="input mt-1 w-full" value={getValue('ui_transition_style')} onChange={event => setFormData(previous => ({ ...previous, ui_transition_style: event.currentTarget.value }))} disabled={!isFullAccess() || getValue('ui_transitions_enabled') !== 'true'}>
+                    <option value="fade">Fade</option><option value="slide">Slide</option><option value="fade-slide">Fade and slide</option>
+                  </select>
+                </label>
+                <label for="ui-transition-duration" class="block text-xs text-muted">Transition duration
+                  <select id="ui-transition-duration" class="input mt-1 w-full" value={getValue('ui_transition_duration')} onChange={event => setFormData(previous => ({ ...previous, ui_transition_duration: event.currentTarget.value }))} disabled={!isFullAccess() || getValue('ui_transitions_enabled') !== 'true'}>
+                    <option value="150">Fast — 150 ms</option><option value="250">Standard — 250 ms</option><option value="400">Relaxed — 400 ms</option><option value="600">Slow — 600 ms</option>
+                  </select>
+                </label>
+              </div>
+              <div class="border-t border-subtle pt-4"><button type="button" onClick={() => void handleSaveUISettings()} disabled={saving() || !isFullAccess()} class="btn btn-primary"><Save size={14} />{saving() ? 'Saving settings…' : 'Save UI settings'}</button></div>
+            </div>
+          </Show>
         </Show>
       </div>
     </div>

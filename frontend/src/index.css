@@ -174,6 +174,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .service-state.is-down { color: rgb(var(--error-text)); background: rgb(var(--error) / .08); border-color: rgb(var(--error) / .22); }
 .content-area { width: 100%; max-width: 1680px; margin: 0 auto; padding: 16px 12px 32px; }
 
+@keyframes ui-transition-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-transition-slide { from { transform: translateY(10px); } to { transform: translateY(0); } }
+@keyframes ui-transition-fade-slide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+html[data-ui-motion="on"][data-ui-motion-style="fade"] .content-area.ui-transition-replay > * { animation: ui-transition-fade var(--ui-transition-duration, 250ms) ease both; }
+html[data-ui-motion="on"][data-ui-motion-style="slide"] .content-area.ui-transition-replay > * { animation: ui-transition-slide var(--ui-transition-duration, 250ms) ease both; }
+html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-transition-replay > * { animation: ui-transition-fade-slide var(--ui-transition-duration, 250ms) ease both; }
+
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; min-height: 66px; padding: 0 0 14px; border-bottom: 1px solid rgb(var(--border-default)); }
 .page-header-copy h1 { margin: 0; font-size: 20px; font-weight: 620; letter-spacing: -.02em; }
 .page-header-copy p { max-width: 680px; margin: 5px 0 0; color: rgb(var(--text-muted)); font-size: 12px; }

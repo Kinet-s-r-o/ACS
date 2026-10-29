@@ -1,5 +1,5 @@
 import type { ParentComponent } from 'solid-js';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { A, useLocation } from '@solidjs/router';
 import {
   Activity, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, HardDrive, LayoutDashboard, LogOut,
@@ -11,6 +11,7 @@ import { APP_VERSION } from '../lib/version';
 import { appName, appLogo } from '../lib/appName';
 import { useTheme } from '../lib/theme';
 import { enableTableColumnReordering } from '../lib/tableColumnReorder';
+import { playUITransition, transitionSettingsFromAPI, updateUITransitionSettings } from '../lib/uiTransitions';
 
 const navigation = [
   { section: 'Monitor', items: [
@@ -74,12 +75,21 @@ const Layout: ParentComponent = (props) => {
   const { isDark, toggleTheme } = useTheme();
   const { user, logout, isFullAccess } = useAuth();
   let menuButton: HTMLButtonElement | undefined;
+  let previousContentLocation = `${location.pathname}${location.search}`;
+
+  createEffect(() => {
+    const current = `${location.pathname}${location.search}`;
+    if (current === previousContentLocation) return;
+    previousContentLocation = current;
+    requestAnimationFrame(playUITransition);
+  });
 
   const checkHealth = async () => {
     try { await api.health(); setAPIOnline(true); } catch { setAPIOnline(false); }
   };
   onMount(() => {
     const disableTableColumnReordering = enableTableColumnReordering(() => location.pathname);
+    void api.getSettings().then(values => updateUITransitionSettings(transitionSettingsFromAPI(values))).catch(() => {});
     const media = window.matchMedia('(min-width: 1024px)');
     const updateViewport = () => setDesktopViewport(media.matches);
     media.addEventListener('change', updateViewport);
@@ -91,8 +101,14 @@ const Layout: ParentComponent = (props) => {
         menuButton?.focus();
       }
     };
+    const animateSectionSwitch = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest('button[role="tab"], .tab-btn, [data-ui-section]')) {
+        window.setTimeout(() => requestAnimationFrame(playUITransition), 0);
+      }
+    };
     document.addEventListener('keydown', closeOnEscape);
-    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); media.removeEventListener('change', updateViewport); });
+    document.addEventListener('click', animateSectionSwitch);
+    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
   });
 
   const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();

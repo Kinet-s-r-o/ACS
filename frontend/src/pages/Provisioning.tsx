@@ -1440,9 +1440,9 @@ const Provisioning: Component = () => {
 
           <Show when={templateTab() === 'metrics'}>
             <div class="mb-4 flex flex-wrap gap-1 border-b border-subtle" aria-label="Metric configuration sections">
-              <button type="button" aria-pressed={metricSubTab() === 'general'} onClick={() => setMetricSubTab('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General Metrics</button>
-              <button type="button" aria-pressed={metricSubTab() === 'interface'} onClick={() => setMetricSubTab('interface')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'interface' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Per-interface metrics</button>
-              <button type="button" aria-pressed={metricSubTab() === 'polling'} onClick={() => setMetricSubTab('polling')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'polling' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Additional polling</button>
+              <button type="button" data-ui-section aria-pressed={metricSubTab() === 'general'} onClick={() => setMetricSubTab('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General Metrics</button>
+              <button type="button" data-ui-section aria-pressed={metricSubTab() === 'interface'} onClick={() => setMetricSubTab('interface')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'interface' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Per-interface metrics</button>
+              <button type="button" data-ui-section aria-pressed={metricSubTab() === 'polling'} onClick={() => setMetricSubTab('polling')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'polling' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Additional polling</button>
             </div>
             <Show when={metricSubTab() === 'polling'}><section class="mb-6">
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
