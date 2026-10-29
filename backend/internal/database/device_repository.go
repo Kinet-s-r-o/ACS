@@ -282,6 +282,40 @@ func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int)
 	return devices, int(total), err
 }
 
+type AnalyticsParameterValue struct {
+	DeviceID int64  `gorm:"column:device_id"`
+	Name     string `gorm:"column:name"`
+	Value    string `gorm:"column:value"`
+}
+
+func (r *DeviceRepository) ListParameterValuesForAnalytics(ctx context.Context, pattern string, maxDevices int) ([]AnalyticsParameterValue, int, int, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&total).Error; err != nil {
+		return nil, 0, 0, err
+	}
+	var deviceIDs []int64
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).
+		Order("last_inform DESC NULLS LAST").Limit(maxDevices).Pluck("id", &deviceIDs).Error; err != nil {
+		return nil, 0, 0, err
+	}
+	if len(deviceIDs) == 0 {
+		return nil, 0, int(total), nil
+	}
+
+	pattern = strings.ReplaceAll(pattern, `\`, `\\`)
+	pattern = strings.ReplaceAll(pattern, `%`, `\%`)
+	pattern = strings.ReplaceAll(pattern, `_`, `\_`)
+	pattern = strings.ReplaceAll(pattern, "*", "%")
+	var values []AnalyticsParameterValue
+	err := r.db.WithContext(ctx).Model(&models.DeviceParameter{}).
+		Select("device_id, name, value").
+		Where("device_id IN ?", deviceIDs).
+		Where("name ILIKE ? ESCAPE '\\'", pattern).
+		Order("device_id ASC, name ASC").
+		Find(&values).Error
+	return values, len(deviceIDs), int(total), err
+}
+
 func (r *DeviceRepository) SetTags(ctx context.Context, deviceID int64, tags []string) error {
 	device := &models.Device{ID: deviceID, Tags: tags}
 	return r.db.WithContext(ctx).Model(device).Select("tags").Updates(device).Error

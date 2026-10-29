@@ -43,6 +43,10 @@ export interface DeviceSnapshot { id: number; device_id: number; name: string; m
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
 export interface Fault { id: number; device_id: number; serial_number: string; model_name?: string; fault_code: string; fault_string: string; parameter_name: string; resolved: boolean; created_at: string; resolved_at: string | null }
 export interface FaultCounts { active: number; resolved: number; total: number }
+export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
+export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
+export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
+export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
 export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
 export interface TagDefinition { id: string; name: string; color: string; description?: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
@@ -135,6 +139,7 @@ export const api = {
   deleteTag: (id: string) => request<{ status: string }>(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getDeviceStats: () => request<DeviceStats>('/devices/stats'),
   getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics'),
+  getDeviceParameterDistribution: (body: DashboardParameterDistributionRequest) => request<DashboardParameterDistribution>('/devices/analytics/distribution', { method: 'POST', body: JSON.stringify(body) }),
   getDeviceTypes: () => request<string[]>('/devices/device-types'),
   getDeviceParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/parameters`),
   getDeviceDetailParameters: (serial: string) => request<DeviceParameter[]>(`/device/${encodeURIComponent(serial)}/detail-parameters`),

@@ -239,6 +239,20 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .distribution-progress.is-success::-moz-progress-bar { background: rgb(var(--success)); }
 .distribution-progress.is-muted::-webkit-progress-value { background: rgb(var(--text-muted)); }
 .distribution-progress.is-muted::-moz-progress-bar { background: rgb(var(--text-muted)); }
+.distribution-progress-blue::-webkit-progress-value { background: rgb(var(--accent)); }
+.distribution-progress-blue::-moz-progress-bar { background: rgb(var(--accent)); }
+.distribution-progress-green::-webkit-progress-value { background: rgb(var(--success)); }
+.distribution-progress-green::-moz-progress-bar { background: rgb(var(--success)); }
+.distribution-progress-amber::-webkit-progress-value { background: rgb(var(--warning)); }
+.distribution-progress-amber::-moz-progress-bar { background: rgb(var(--warning)); }
+.distribution-progress-orange::-webkit-progress-value { background: #f97316; }
+.distribution-progress-orange::-moz-progress-bar { background: #f97316; }
+.distribution-progress-red::-webkit-progress-value { background: rgb(var(--error)); }
+.distribution-progress-red::-moz-progress-bar { background: rgb(var(--error)); }
+.distribution-progress-gray::-webkit-progress-value { background: rgb(var(--text-muted)); }
+.distribution-progress-gray::-moz-progress-bar { background: rgb(var(--text-muted)); }
+.dashboard-configurable-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.data-panel-section .dashboard-configurable-heading h3 { min-width: 0; margin: 0; }
 .distribution-value { min-width: 32px; color: rgb(var(--text-secondary)); font-family: "IBM Plex Mono", monospace; font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
 
 .login-context { display: grid; grid-template-columns: 118px 1fr; gap: 0; margin-top: 36px; border-top: 1px solid rgb(var(--border-default)); }

@@ -182,6 +182,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /tasks/{id}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeletePendingTask))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
+	apiMux.HandleFunc("POST /devices/analytics/distribution", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceParameterDistribution))
 	apiMux.HandleFunc("GET /devices/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDevice))
 	apiMux.HandleFunc("DELETE /devices/{id}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeleteDevice))
 	apiMux.HandleFunc("GET /devices/{id}/parameters", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParameters))
@@ -784,6 +785,106 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 		"sampled":        len(devices),
 		"total":          totalDevices,
 	})
+}
+
+func (r *Router) handleDeviceParameterDistribution(w http.ResponseWriter, req *http.Request) {
+	type threshold struct {
+		Label string   `json:"label"`
+		Max   *float64 `json:"max"`
+	}
+	var body struct {
+		ParameterPattern string      `json:"parameter_pattern"`
+		Thresholds       []threshold `json:"thresholds"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 32*1024))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid parameter distribution request")
+		return
+	}
+	body.ParameterPattern = strings.TrimSpace(body.ParameterPattern)
+	if strings.Count(body.ParameterPattern, "*") > 8 || strings.ContainsAny(body.ParameterPattern, "?[]{}") || validateParameterNames([]string{strings.ReplaceAll(body.ParameterPattern, "*", "X")}) != nil {
+		respondError(w, http.StatusBadRequest, "Invalid parameter pattern")
+		return
+	}
+	if len(body.Thresholds) == 0 || len(body.Thresholds) > 16 {
+		respondError(w, http.StatusBadRequest, "Configure between 1 and 16 thresholds")
+		return
+	}
+	labels := make(map[string]struct{}, len(body.Thresholds))
+	var previousMax *float64
+	for index, item := range body.Thresholds {
+		item.Label = strings.TrimSpace(item.Label)
+		if item.Label == "" || len(item.Label) > 48 || strings.EqualFold(item.Label, "N/A") {
+			respondError(w, http.StatusBadRequest, "Threshold labels must be unique, non-empty, and cannot be N/A")
+			return
+		}
+		if _, exists := labels[strings.ToLower(item.Label)]; exists {
+			respondError(w, http.StatusBadRequest, "Threshold labels must be unique")
+			return
+		}
+		labels[strings.ToLower(item.Label)] = struct{}{}
+		if item.Max == nil {
+			if index != len(body.Thresholds)-1 {
+				respondError(w, http.StatusBadRequest, "Only the final threshold may have no maximum")
+				return
+			}
+			continue
+		}
+		if previousMax != nil && *item.Max <= *previousMax {
+			respondError(w, http.StatusBadRequest, "Threshold maximums must be in ascending order")
+			return
+		}
+		previousMax = item.Max
+	}
+	if body.Thresholds[len(body.Thresholds)-1].Max != nil {
+		respondError(w, http.StatusBadRequest, "The final threshold must have no maximum")
+		return
+	}
+
+	values, sampled, total, err := r.deviceRepo.ListParameterValuesForAnalytics(req.Context(), body.ParameterPattern, 10000)
+	if err != nil {
+		log.Printf("Error getting dashboard parameter distribution: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get parameter distribution")
+		return
+	}
+	distribution := make(map[string]int, len(body.Thresholds)+1)
+	for _, item := range body.Thresholds {
+		distribution[strings.TrimSpace(item.Label)] = 0
+	}
+	deviceWithValue := make(map[int64]bool)
+	for _, item := range values {
+		if deviceWithValue[item.DeviceID] || database.IsSensitiveParameterName(item.Name) {
+			continue
+		}
+		value, parseErr := strconv.ParseFloat(strings.TrimSpace(item.Value), 64)
+		if parseErr != nil || math.IsNaN(value) || math.IsInf(value, 0) {
+			continue
+		}
+		parameter := strings.ToLower(item.Name)
+		if strings.Contains(parameter, "rxpower") {
+			if value > 0 && value < 10000 {
+				value = 10 * math.Log10(value/10000)
+			} else if value > 100 {
+				value /= 100
+			}
+		} else if strings.Contains(parameter, "temperature") || strings.Contains(parameter, "temp") {
+			if value > 1000 {
+				value /= 256
+			} else if value > 100 {
+				value /= 10
+			}
+		}
+		for _, bucket := range body.Thresholds {
+			if bucket.Max == nil || value <= *bucket.Max {
+				distribution[strings.TrimSpace(bucket.Label)]++
+				deviceWithValue[item.DeviceID] = true
+				break
+			}
+		}
+	}
+	distribution["N/A"] = sampled - len(deviceWithValue)
+	respondJSON(w, http.StatusOK, map[string]interface{}{"distribution": distribution, "sampled": sampled, "total": total})
 }
 
 func (r *Router) handleGetDeviceParameters(w http.ResponseWriter, req *http.Request) {
