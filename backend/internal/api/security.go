@@ -444,7 +444,7 @@ func (r *Router) handleSecurityOverview(w http.ResponseWriter, req *http.Request
 }
 
 func (r *Router) handleListAuditLogs(w http.ResponseWriter, req *http.Request) {
-	limit, offset := parsePagination(req, 50, 200)
+	limit, offset := parsePagination(req, 50, 500)
 	entries, total, err := r.auditRepo.List(req.Context(), limit, offset)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to list audit logs")

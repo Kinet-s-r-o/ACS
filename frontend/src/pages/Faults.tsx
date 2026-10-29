@@ -28,7 +28,7 @@ const Faults: Component = () => {
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
   const [faults, { refetch }] = createResource(
     () => filter(),
-    (selected) => api.getFaults(selected)
+    (selected) => api.getFaults(selected, 500)
   );
 
   const [stats, { refetch: refetchStats }] = createResource(() => api.getFaultStats());

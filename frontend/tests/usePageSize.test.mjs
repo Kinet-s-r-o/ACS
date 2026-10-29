@@ -65,5 +65,5 @@ test('keeps independent sizes per storage key', () => {
 });
 
 test('exposes the standard page-size options', () => {
-  assert.deepEqual(PAGE_SIZE_OPTIONS, [10, 15, 20, 50, 100]);
+  assert.deepEqual(PAGE_SIZE_OPTIONS, [10, 15, 20, 50, 100, 200, 500]);
 });

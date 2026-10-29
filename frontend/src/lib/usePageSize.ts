@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 /** Standard page-size choices offered in each table's paginator. */
-export const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100];
+export const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100, 200, 500];
 export const DEFAULT_PAGE_SIZE = 20;
 
 /**

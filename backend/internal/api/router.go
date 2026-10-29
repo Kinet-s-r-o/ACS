@@ -376,7 +376,7 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 	offset := 0
 
 	if l := req.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 500 {
 			limit = parsed
 		}
 	}
@@ -1311,8 +1311,8 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	}
 	if value, ok := settings["default_page_size"]; ok {
 		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < 5 || parsed > 100 {
-			respondError(w, http.StatusBadRequest, "default_page_size must be an integer between 5 and 100")
+		if err != nil || parsed < 5 || parsed > 500 {
+			respondError(w, http.StatusBadRequest, "default_page_size must be an integer between 5 and 500")
 			return
 		}
 	}

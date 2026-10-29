@@ -195,9 +195,9 @@ export const api = {
   },
   deleteFirmware: (id: number) => request<{ status: string }>(`/firmwares/${id}`, { method: 'DELETE' }),
 
-  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active') => {
+  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 500) => {
     const resolved = filter === 'all' ? '' : `&resolved=${filter === 'resolved'}`;
-    return request<{ faults: Fault[]; total: number; limit: number; offset: number }>(`/faults?limit=100${resolved}`);
+    return request<{ faults: Fault[]; total: number; limit: number; offset: number }>(`/faults?limit=${limit}${resolved}`);
   },
   getFaultStats: () => request<{ total: number; active: number; resolved: number }>('/faults/stats'),
   resolveFault: (id: number) => request<{ status: string }>(`/faults/${id}/resolve`, { method: 'POST' }),
