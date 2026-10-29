@@ -67,6 +67,11 @@ const featureTableColumns = [
 ];
 const defaultTemplateInventory = (): TemplateInventory => ({ primary_ip_mode: 'automatic', primary_ip_parameter: '', primary_ip_interface_name: '' });
 const formatInterval = (seconds: number) => seconds % 3600 === 0 ? `${seconds / 3600}h` : seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
+const metricColumnOrderId = (id: string, interfaceMetric = false) => {
+  const labels: Record<string, string> = { min_interval: 'min interval', gpv_interval: 'gpv interval', device_match: 'device match', unit_scale: 'unit scale' };
+  if (id === 'group' && interfaceMetric) labels.group = 'group + color';
+  return `${labels[id] || id}#0`;
+};
 
 const PROV_STORAGE_KEY = 'acs-prov-columns';
 type FeatureControlDraft = Omit<ProvisioningFeatureControl, 'options' | 'object_fields'> & { optionsText: string; objectFieldsText: string };
@@ -481,18 +486,18 @@ const Provisioning: Component = () => {
 
   const interfaceMetricCell = (def: InterfaceMetricDefinition, id: string) => {
     switch (id) {
-      case 'name': return <td class="py-2 pr-3 text-primary">{def.name}</td>;
-      case 'parameter': return <td class="w-[34%] max-w-[40vw] min-w-0 overflow-hidden whitespace-normal py-2 pr-3 font-mono break-all [overflow-wrap:anywhere]">{def.parameter_pattern}</td>;
-      case 'type': return <td class="whitespace-nowrap py-2 pr-3 uppercase">{def.interface_type}</td>;
-      case 'source': return <td class="whitespace-nowrap py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
-      case 'min_interval': return <td class="whitespace-nowrap py-2 pr-3" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td>;
-      case 'gpv_interval': return <td class="whitespace-nowrap py-2 pr-3" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td>;
-      case 'unit_scale': return <td class="whitespace-nowrap py-2 pr-3">{def.unit_scale || 'none'}</td>;
-      case 'group': return <td class="min-w-0 py-2 pr-3"><div class="flex min-w-0 items-center gap-1.5"><span class="chart-color-swatch inline-block h-3 w-3 shrink-0 rounded-sm" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#38bdf8' } as any} title={def.color || 'Default'} /><span class="min-w-0 break-words">{def.group || '—'}</span></div></td>;
-      case 'active': return <td class="whitespace-nowrap py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
-      case 'chart': return <td class="whitespace-nowrap py-2 pr-3">{def.chart_type || 'line'}</td>;
-      case 'transform': return <td class="whitespace-nowrap py-2 pr-3">{def.transform || 'raw'}</td>;
-      case 'multiplier': return <td class="whitespace-nowrap py-2 pr-3">{def.multiplier}</td>;
+      case 'name': return <td data-column-order-id={metricColumnOrderId(id, true)} class="py-2 pr-3 text-primary">{def.name}</td>;
+      case 'parameter': return <td data-column-order-id={metricColumnOrderId(id, true)} class="w-[34%] max-w-[40vw] min-w-0 overflow-hidden whitespace-normal py-2 pr-3 font-mono break-all [overflow-wrap:anywhere]">{def.parameter_pattern}</td>;
+      case 'type': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3 uppercase">{def.interface_type}</td>;
+      case 'source': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3"><span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span></td>;
+      case 'min_interval': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td>;
+      case 'gpv_interval': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td>;
+      case 'unit_scale': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3">{def.unit_scale || 'none'}</td>;
+      case 'group': return <td data-column-order-id={metricColumnOrderId(id, true)} class="min-w-0 py-2 pr-3"><div class="flex min-w-0 items-center gap-1.5"><span class="chart-color-swatch inline-block h-3 w-3 shrink-0 rounded-sm" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#38bdf8' } as any} title={def.color || 'Default'} /><span class="min-w-0 break-words">{def.group || '—'}</span></div></td>;
+      case 'active': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3 text-center"><span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span></td>;
+      case 'chart': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3">{def.chart_type || 'line'}</td>;
+      case 'transform': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3">{def.transform || 'raw'}</td>;
+      case 'multiplier': return <td data-column-order-id={metricColumnOrderId(id, true)} class="whitespace-nowrap py-2 pr-3">{def.multiplier}</td>;
       default: return null;
     }
   };
@@ -1471,7 +1476,7 @@ const Provisioning: Component = () => {
               </div>
               <Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
-                <table class="data-table w-full table-auto text-left">
+                <table data-column-order-key="provisioning-metrics-general" class="data-table w-full table-auto text-left">
                   <thead>
                     <tr class="border-b border-subtle">
                       <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class={`py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide ${column.id === 'parameter' ? 'w-[35%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For>
@@ -1483,30 +1488,30 @@ const Provisioning: Component = () => {
                     <For each={templateMetrics()}>
                       {(def) => (
                         <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                          <Show when={metricColumns.isVisible('name')}><td class="px-3 py-2.5 text-primary font-medium whitespace-nowrap">
+                          <Show when={metricColumns.isVisible('name')}><td data-column-order-id={metricColumnOrderId('name')} class="px-3 py-2.5 text-primary font-medium whitespace-nowrap">
                             {def.name}
                             <Show when={def.description}>
                               <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                             </Show>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('parameter')}><td class="w-[35%] max-w-[40vw] min-w-0 overflow-hidden whitespace-normal px-3 py-2.5 text-secondary font-mono text-xs break-all [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
-                          <Show when={metricColumns.isVisible('source')}><td class="px-3 py-2.5 whitespace-nowrap">
+                          <Show when={metricColumns.isVisible('parameter')}><td data-column-order-id={metricColumnOrderId('parameter')} class="w-[35%] max-w-[40vw] min-w-0 overflow-hidden whitespace-normal px-3 py-2.5 text-secondary font-mono text-xs break-all [overflow-wrap:anywhere]">{def.parameter_name}</td></Show>
+                          <Show when={metricColumns.isVisible('source')}><td data-column-order-id={metricColumnOrderId('source')} class="px-3 py-2.5 whitespace-nowrap">
                             <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('min_interval')}><td class="px-3 py-2.5 whitespace-nowrap" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td></Show>
-                          <Show when={metricColumns.isVisible('gpv_interval')}><td class="px-3 py-2.5 whitespace-nowrap" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td></Show>
-                          <Show when={metricColumns.isVisible('group')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">
+                          <Show when={metricColumns.isVisible('min_interval')}><td data-column-order-id={metricColumnOrderId('min_interval')} class="px-3 py-2.5 whitespace-nowrap" title={def.min_sample_interval_seconds > 0 ? `Store at most one sample every ${def.min_sample_interval_seconds} seconds` : 'No minimum sample interval'}>{def.min_sample_interval_seconds > 0 ? formatInterval(def.min_sample_interval_seconds) : 'Off'}</td></Show>
+                          <Show when={metricColumns.isVisible('gpv_interval')}><td data-column-order-id={metricColumnOrderId('gpv_interval')} class="px-3 py-2.5 whitespace-nowrap" title={def.source === 'passive' ? 'Passive metrics do not send GPV requests' : def.gpv_poll_interval_seconds > 0 ? `Request this parameter every ${def.gpv_poll_interval_seconds} seconds` : 'Uses the server GPV interval'}>{def.source === 'passive' ? '—' : def.gpv_poll_interval_seconds > 0 ? formatInterval(def.gpv_poll_interval_seconds) : 'Server default'}</td></Show>
+                          <Show when={metricColumns.isVisible('group')}><td data-column-order-id={metricColumnOrderId('group')} class="px-3 py-2.5 text-secondary whitespace-nowrap">
                             <div class="flex items-center gap-1.5 whitespace-nowrap">
                               <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
                               <span class="text-xs">{def.group || '—'}</span>
                             </div>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('active')}><td class="px-3 py-2.5 text-center whitespace-nowrap">
+                          <Show when={metricColumns.isVisible('active')}><td data-column-order-id={metricColumnOrderId('active')} class="px-3 py-2.5 text-center whitespace-nowrap">
                             <span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span>
                           </td></Show>
-                          <Show when={metricColumns.isVisible('device_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs whitespace-nowrap">{def.device_type_match}</td></Show>
-                          <Show when={metricColumns.isVisible('unit')}><td class="px-3 py-2.5 text-secondary whitespace-nowrap">{def.unit || '—'}</td></Show>
-                          <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                          <Show when={metricColumns.isVisible('device_match')}><td data-column-order-id={metricColumnOrderId('device_match')} class="px-3 py-2.5 text-secondary font-mono text-xs whitespace-nowrap">{def.device_type_match}</td></Show>
+                          <Show when={metricColumns.isVisible('unit')}><td data-column-order-id={metricColumnOrderId('unit')} class="px-3 py-2.5 text-secondary whitespace-nowrap">{def.unit || '—'}</td></Show>
+                          <td data-column-order-id={metricColumnOrderId('actions')} class="px-3 py-2.5 text-right whitespace-nowrap">
                             <div class="flex justify-end gap-1">
                               <button type="button" onClick={() => openEditMetric(def)} class="icon-button" title="Edit metric" aria-label={`Edit ${def.name}`}>
                                 <Edit size={14} />
@@ -1536,7 +1541,7 @@ const Provisioning: Component = () => {
                 <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table data-column-order-key="provisioning-metrics-interface" class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td data-column-order-id={metricColumnOrderId('actions')} class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section></Show>
           </Show>

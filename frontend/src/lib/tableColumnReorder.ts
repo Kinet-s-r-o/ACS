@@ -13,8 +13,8 @@ interface DefaultColumnOrder {
 }
 
 const DEFAULT_COLUMN_ORDERS: DefaultColumnOrder[] = [
-  { route: '/settings/provisioning', matches: ['parameter pattern'], order: ['name', 'parameter pattern', 'source', 'group + color', 'active', 'type', 'unit scale', 'chart', 'transform', 'multiplier', 'actions'] },
-  { route: '/settings/provisioning', matches: ['group'], order: ['name', 'parameter', 'source', 'group', 'active', 'device match', 'unit', 'actions'] },
+  { route: '/settings/provisioning', matches: ['parameter pattern'], order: ['name', 'parameter pattern', 'type', 'source', 'min interval', 'gpv interval', 'unit scale', 'group + color', 'active', 'chart', 'transform', 'multiplier', 'actions'] },
+  { route: '/settings/provisioning', matches: ['group'], order: ['name', 'parameter', 'source', 'min interval', 'gpv interval', 'group', 'active', 'device match', 'unit', 'actions'] },
   { route: '/settings/provisioning', matches: ['#'], order: ['#', 'cwmp path', 'active', 'phase', 'value type', 'value', 'tags', 'actions'] },
   { route: '/settings/users', matches: ['username'], order: ['username', 'first name', 'last name', 'email', 'required 2fa', 'authenticator', 'role', 'last login', 'actions'] },
   { route: '/settings/users', matches: ['permissions'], order: ['name', 'description', 'permissions', 'type', 'actions'] },
@@ -119,6 +119,8 @@ const tableHeading = (table: HTMLTableElement) => table.closest('.card')?.queryS
 const tableSchema = (table: HTMLTableElement) => getHeaders(table).map((header) => header.id.split('#')[0]).sort().join('|');
 
 const makeTableKey = (table: HTMLTableElement, route: string, occurrence: number) => {
+  const explicitKey = table.dataset.columnOrderKey;
+  if (explicitKey) return `${route.replace(/^\/device\/[^/]+/, '/device/:serial')}::${explicitKey}`;
   const heading = stableHeading(tableHeading(table));
   const schema = tableSchema(table);
   const scope = `${heading || 'table'}::${schema || 'columns'}`;
@@ -164,7 +166,7 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
     for (const table of Array.from(document.querySelectorAll<HTMLTableElement>('table.data-table'))) {
       const heading = stableHeading(tableHeading(table));
       const schema = tableSchema(table);
-      const signature = `${heading || 'table'}::${schema || 'columns'}`;
+      const signature = table.dataset.columnOrderKey || `${heading || 'table'}::${schema || 'columns'}`;
       const occurrence = occurrences.get(signature) ?? 0;
       occurrences.set(signature, occurrence + 1);
       if (!tableKeys.has(table)) {
