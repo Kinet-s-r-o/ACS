@@ -2497,8 +2497,8 @@ const DeviceDetail: Component = () => {
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b-2 border-subtle bg-base">
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Adm. status</th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Type</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">VLAN</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">IP Address</th>
@@ -2541,9 +2541,6 @@ const DeviceDetail: Component = () => {
                               </div>
                             </td>
                             <td class="px-3 py-2.5">
-                              <span class={`badge ${statusBadgeClass(wan.status)}`}>{wan.status}</span>
-                            </td>
-                            <td class="px-3 py-2.5">
                               <Show when={isFullAccess()} fallback={<span class={`badge ${wan.enable === 'Enabled' ? 'badge-success' : wan.enable === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.enable}</span>}>
                                 <button
                                   onClick={() => handleWanEnable(wan, wan.enable !== 'Enabled')}
@@ -2554,6 +2551,9 @@ const DeviceDetail: Component = () => {
                                   {wan.enable === 'Enabled' ? 'Enabled' : 'Disabled'}
                                 </button>
                               </Show>
+                            </td>
+                            <td class="px-3 py-2.5">
+                              <span class={`badge ${statusBadgeClass(wan.status)}`}>{wan.status}</span>
                             </td>
                             <td class="px-3 py-2.5 text-secondary">{wan.type}</td>
                             <td class="px-3 py-2.5 text-primary font-mono">{wan.vlan}</td>
@@ -2700,8 +2700,8 @@ const DeviceDetail: Component = () => {
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b-2 border-subtle bg-base">
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
                         <th class="text-center px-2 py-2.5 font-semibold text-primary">Adm. status</th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">MAC Address</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Duplex</th>
                         <th class="text-left px-3 py-2.5 font-semibold text-primary">Speed</th>
@@ -2714,9 +2714,6 @@ const DeviceDetail: Component = () => {
                         {(lan) => (
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                             <td class="px-3 py-2.5 text-primary font-medium">{lan.name}</td>
-                            <td class="px-3 py-2.5">
-                              <span class={`badge ${statusBadgeClass(lan.status)}`}>{lan.status}</span>
-                            </td>
                             <td class="px-2 py-2.5 text-center">
                               <Show when={isFullAccess()} fallback={<span class={lan.enabled ? 'text-emerald-400' : 'text-muted'}>{lan.enabled ? 'Y' : '-'}</span>}>
                                 <button
@@ -2728,6 +2725,9 @@ const DeviceDetail: Component = () => {
                                   {lan.enabled ? 'Yes' : 'No'}
                                 </button>
                               </Show>
+                            </td>
+                            <td class="px-3 py-2.5">
+                              <span class={`badge ${statusBadgeClass(lan.status)}`}>{lan.status}</span>
                             </td>
                             <td class="px-3 py-2.5 text-primary font-mono">{lan.mac}</td>
                             <td class="px-3 py-2.5 text-secondary">{lan.duplex}</td>
@@ -2812,8 +2812,8 @@ const DeviceDetail: Component = () => {
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b border-subtle bg-base">
                         <th class="text-left px-2 py-2 font-medium text-secondary">Index</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Status</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Adm. status</th>
+                        <th class="text-left px-2 py-2 font-medium text-secondary">Status</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">SSID Name</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Security</th>
                         <th class="text-left px-2 py-2 font-medium text-secondary">Band</th>
@@ -2829,9 +2829,6 @@ const DeviceDetail: Component = () => {
                           <tr class={`border-t border-subtle/30 hover:bg-elevated/50 transition-colors ${i() % 2 === 1 ? 'bg-elevated/20' : ''}`}>
                             <td class="px-3 py-2 text-secondary">SSID{wlan.index}</td>
                             <td class="px-3 py-2">
-                              <span class={`badge ${statusBadgeClass(wlan.status)}`}>{wlan.status}</span>
-                            </td>
-                            <td class="px-3 py-2">
                               <Show when={isFullAccess()} fallback={<span class={`badge ${wlan.enabled ? 'badge-success' : 'badge-error'}`}>{wlan.enabled ? 'Yes' : 'No'}</span>}><button
                                 onClick={() => handleSetWifiEnabled(wlan.index, !wlan.enabled)}
                                 disabled={actionLoading() !== null}
@@ -2840,6 +2837,9 @@ const DeviceDetail: Component = () => {
                               >
                                 {wlan.enabled ? 'Yes' : 'No'}
                               </button></Show>
+                            </td>
+                            <td class="px-3 py-2">
+                              <span class={`badge ${statusBadgeClass(wlan.status)}`}>{wlan.status}</span>
                             </td>
                             <td class="px-3 py-2">
                               <span class="text-primary font-medium">{wlan.ssid}</span>
