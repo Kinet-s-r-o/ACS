@@ -21,6 +21,7 @@ type DeviceRepository struct {
 type DeviceGrowthPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	Count     int64     `json:"count"`
+	Online    int64     `json:"online"`
 }
 
 type deviceGrowthSpec struct {
@@ -73,11 +74,23 @@ func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.
 			return err
 		}
 		if !isNew {
-			return nil
+			if existing.Online {
+				return nil
+			}
+			return tx.Create(&models.DeviceLifecycleEvent{
+				DeviceID: device.ID, SerialNumber: device.SerialNumber,
+				EventType: models.DeviceLifecycleOnline, OccurredAt: now,
+			}).Error
 		}
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceLifecycleEvent{
+		if err := tx.Create(&models.DeviceLifecycleEvent{
 			DeviceID: device.ID, SerialNumber: device.SerialNumber,
 			EventType: models.DeviceLifecycleRegistered, OccurredAt: device.CreatedAt,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&models.DeviceLifecycleEvent{
+			DeviceID: device.ID, SerialNumber: device.SerialNumber,
+			EventType: models.DeviceLifecycleOnline, OccurredAt: now,
 		}).Error
 	})
 }
@@ -316,10 +329,15 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 	}
 	end := growthBucketStart(now, interval)
 
-	var countBefore int64
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Where("created_at < ?", start).Count(&countBefore).Error; err != nil {
+	var count, online int64
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&count).Error; err != nil {
 		return nil, err
 	}
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).Where("online = ?", true).Count(&online).Error; err != nil {
+		return nil, err
+	}
+	type growthDelta struct{ active, online int64 }
+	deltas := make(map[int64]growthDelta)
 	var additions []struct {
 		Bucket time.Time `gorm:"column:bucket"`
 		Count  int64     `gorm:"column:count"`
@@ -327,12 +345,13 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 	if err := r.db.WithContext(ctx).Model(&models.Device{}).
 		Select(fmt.Sprintf("date_trunc('%s', created_at) AS bucket, COUNT(*) AS count", spec.SQLBucket)).
 		Where("created_at >= ? AND created_at < ?", start, growthNextBucket(end, interval)).
+		Where("NOT EXISTS (SELECT 1 FROM device_lifecycle_events WHERE device_lifecycle_events.device_id = devices.id AND event_type = ?)", models.DeviceLifecycleRegistered).
 		Group("bucket").Order("bucket ASC").Scan(&additions).Error; err != nil {
 		return nil, err
 	}
-	addedByBucket := make(map[int64]int64, len(additions))
 	for _, addition := range additions {
-		addedByBucket[growthBucketStart(addition.Bucket, interval).UnixNano()] = addition.Count
+		key := growthBucketStart(addition.Bucket, interval).UnixNano()
+		deltas[key] = growthDelta{active: deltas[key].active + addition.Count, online: deltas[key].online}
 	}
 	var lifecycle []struct {
 		Bucket    time.Time `gorm:"column:bucket"`
@@ -342,42 +361,37 @@ func (r *DeviceRepository) GetGrowth(ctx context.Context, interval string) ([]De
 	if err := r.db.WithContext(ctx).Model(&models.DeviceLifecycleEvent{}).
 		Select(fmt.Sprintf("date_trunc('%s', occurred_at) AS bucket, event_type, COUNT(*) AS count", spec.SQLBucket)).
 		Where("occurred_at >= ? AND occurred_at < ?", start, growthNextBucket(end, interval)).
-		Where("event_type = ? OR (event_type = ? AND NOT EXISTS (SELECT 1 FROM devices WHERE devices.id = device_lifecycle_events.device_id))", models.DeviceLifecycleDeleted, models.DeviceLifecycleRegistered).
 		Group("bucket, event_type").Order("bucket ASC").Scan(&lifecycle).Error; err != nil {
 		return nil, err
 	}
 	for _, event := range lifecycle {
-		delta := event.Count
-		if event.EventType == models.DeviceLifecycleDeleted {
-			delta = -delta
-		}
 		key := growthBucketStart(event.Bucket, interval).UnixNano()
-		addedByBucket[key] += delta
-	}
-	var lifecycleBefore []struct {
-		EventType string `gorm:"column:event_type"`
-		Count     int64  `gorm:"column:count"`
-	}
-	if err := r.db.WithContext(ctx).Model(&models.DeviceLifecycleEvent{}).
-		Select("event_type, COUNT(*) AS count").
-		Where("occurred_at < ?", start).
-		Where("event_type = ? OR (event_type = ? AND NOT EXISTS (SELECT 1 FROM devices WHERE devices.id = device_lifecycle_events.device_id))", models.DeviceLifecycleDeleted, models.DeviceLifecycleRegistered).
-		Group("event_type").Scan(&lifecycleBefore).Error; err != nil {
-		return nil, err
-	}
-	for _, event := range lifecycleBefore {
-		if event.EventType == models.DeviceLifecycleDeleted {
-			countBefore -= event.Count
-		} else {
-			countBefore += event.Count
+		delta := deltas[key]
+		switch event.EventType {
+		case models.DeviceLifecycleRegistered:
+			delta.active += event.Count
+		case models.DeviceLifecycleDeleted:
+			delta.active -= event.Count
+		case models.DeviceLifecycleOnline:
+			delta.online += event.Count
+		case models.DeviceLifecycleOffline:
+			delta.online -= event.Count
 		}
+		deltas[key] = delta
 	}
 
 	points := make([]DeviceGrowthPoint, 0, spec.Buckets+1)
-	count := countBefore
+	buckets := make([]time.Time, 0, spec.Buckets+1)
 	for bucket := start; !bucket.After(end); bucket = growthNextBucket(bucket, interval) {
-		count += addedByBucket[growthBucketStart(bucket, interval).UnixNano()]
-		points = append(points, DeviceGrowthPoint{Timestamp: bucket, Count: count})
+		buckets = append(buckets, bucket)
+	}
+	for index := len(buckets) - 1; index >= 0; index-- {
+		points = append([]DeviceGrowthPoint{{Timestamp: buckets[index], Count: count, Online: online}}, points...)
+		if index > 0 {
+			delta := deltas[buckets[index].UnixNano()]
+			count -= delta.active
+			online -= delta.online
+		}
 	}
 	return points, nil
 }
@@ -494,9 +508,22 @@ func (r *DeviceRepository) SetConnCredentials(ctx context.Context, deviceID int6
 }
 
 func (r *DeviceRepository) SetOffline(ctx context.Context, serialNumber string) error {
-	return r.db.WithContext(ctx).Model(&models.Device{}).
-		Where("serial_number = ?", serialNumber).
-		Update("online", false).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var device models.Device
+		if err := tx.Where("serial_number = ?", serialNumber).First(&device).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		if !device.Online {
+			return nil
+		}
+		if err := tx.Create(&models.DeviceLifecycleEvent{DeviceID: device.ID, SerialNumber: device.SerialNumber, EventType: models.DeviceLifecycleOffline, OccurredAt: time.Now()}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.Device{}).Where("id = ?", device.ID).Update("online", false).Error
+	})
 }
 
 func (r *DeviceRepository) Delete(ctx context.Context, id int64) error {
@@ -505,11 +532,18 @@ func (r *DeviceRepository) Delete(ctx context.Context, id int64) error {
 		if err := tx.First(&device, id).Error; err != nil {
 			return err
 		}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceLifecycleEvent{
-			DeviceID: device.ID, SerialNumber: device.SerialNumber,
-			EventType: models.DeviceLifecycleRegistered, OccurredAt: device.CreatedAt,
-		}).Error; err != nil {
+		var registered models.DeviceLifecycleEvent
+		if err := tx.Where("device_id = ? AND event_type = ?", device.ID, models.DeviceLifecycleRegistered).First(&registered).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := tx.Create(&models.DeviceLifecycleEvent{DeviceID: device.ID, SerialNumber: device.SerialNumber, EventType: models.DeviceLifecycleRegistered, OccurredAt: device.CreatedAt}).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
+		}
+		if device.Online {
+			if err := tx.Create(&models.DeviceLifecycleEvent{DeviceID: device.ID, SerialNumber: device.SerialNumber, EventType: models.DeviceLifecycleOffline, OccurredAt: time.Now()}).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Create(&models.DeviceLifecycleEvent{
 			DeviceID: device.ID, SerialNumber: device.SerialNumber,

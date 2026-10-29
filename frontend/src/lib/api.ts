@@ -32,7 +32,7 @@ export interface Device {
 
 export interface DeviceStats { total: number; online: number; offline: number }
 export type DeviceGrowthInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly';
-export interface DeviceGrowthPoint { timestamp: string; count: number }
+export interface DeviceGrowthPoint { timestamp: string; count: number; online: number }
 export interface DeviceGrowth { interval: DeviceGrowthInterval; points: DeviceGrowthPoint[] }
 export interface DeviceListResponse { devices: Device[]; total: number; limit: number; offset: number }
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
