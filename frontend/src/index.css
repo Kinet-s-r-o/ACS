@@ -351,7 +351,7 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .filter-toggle:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
 .filter-toggle-active { color: rgb(var(--accent)); }
 .filter-badge { position: absolute; top: -4px; right: -4px; min-width: 12px; height: 12px; display: grid; place-items: center; padding: 0 2px; font-size: 8px; font-weight: 700; color: white; background: rgb(var(--accent)); border-radius: 6px; line-height: 1; }
-.filter-dropdown { z-index: 50; width: 320px; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
+.filter-dropdown { z-index: 50; width: 320px; max-width: calc(100vw - 16px); box-sizing: border-box; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
 .filter-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
 .filter-dropdown-title { font-size: 11px; font-weight: 600; color: rgb(var(--text-primary)); }
 .filter-dropdown-close { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }

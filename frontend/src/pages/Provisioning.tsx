@@ -299,6 +299,19 @@ const Provisioning: Component = () => {
     return applyColumnFilters(all, columnFilters(), getFilterValue);
   });
   const [provPage, setProvPage] = createSignal(0);
+  const [selectedProvRuleIDs, setSelectedProvRuleIDs] = createSignal<number[]>([]);
+  const [selectionProvTemplateID, setSelectionProvTemplateID] = createSignal<number | null>(null);
+  const [deleteReauthRequest, setDeleteReauthRequest] = createSignal<{ ids: number[]; bulk: boolean } | null>(null);
+  const [deleteReauthPassword, setDeleteReauthPassword] = createSignal('');
+  const [deleteReauthPending, setDeleteReauthPending] = createSignal(false);
+  const [deleteReauthError, setDeleteReauthError] = createSignal('');
+  createEffect(() => {
+    const templateID = selectedTemplate()?.id ?? null;
+    if (templateID !== selectionProvTemplateID()) {
+      setSelectionProvTemplateID(templateID);
+      setSelectedProvRuleIDs([]);
+    }
+  });
   const { pageSize, changePageSize } = usePageSize('provisioning', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setProvPage(0); };
   const pagedProvRules = createMemo(() => {
@@ -307,6 +320,18 @@ const Provisioning: Component = () => {
     return all.slice(start, start + pageSize());
   });
   const provTotalPages = createMemo(() => Math.ceil(filteredProvRules().length / pageSize()));
+  const allPagedProvRulesSelected = createMemo(() => {
+    const rows = pagedProvRules();
+    return rows.length > 0 && rows.every(rule => selectedProvRuleIDs().includes(rule.id));
+  });
+  const toggleProvRuleSelection = (id: number) => setSelectedProvRuleIDs(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
+  const selectPagedProvRules = (checked: boolean) => {
+    const pageIDs = pagedProvRules().map(rule => rule.id);
+    setSelectedProvRuleIDs(ids => checked
+      ? [...new Set([...ids, ...pageIDs])]
+      : ids.filter(id => !pageIDs.includes(id))
+    );
+  };
   const provDragEnabled = createMemo(() => Object.keys(columnFilters()).length === 0);
 
   onMount(() => {
@@ -578,10 +603,7 @@ const Provisioning: Component = () => {
   const handleDeleteProv = async (id: number) => {
     if (!await confirm({ title: 'Delete provisioning rule?', description: 'The rule will no longer run for future BOOTSTRAP sessions. Previously applied device values are not reverted.', confirmLabel: 'Delete rule', tone: 'danger' })) return;
     if (pendingAction()) return;
-    setPendingAction(`delete-provisioning-${id}`);
-    try { await api.deleteProvisioningRule(id); notify({ tone: 'success', title: 'Provisioning rule deleted' }); refetchProvRules(); }
-    catch (error) { notify({ tone: 'error', title: 'Could not delete provisioning rule', message: 'The rule remains active.', detail: (error as Error).message, persistent: true }); }
-    finally { setPendingAction(null); }
+    openDeleteReauth([id], false);
   };
 
   const handleToggleProv = async (id: number, enabled: boolean) => {
@@ -590,6 +612,68 @@ const Provisioning: Component = () => {
     try { await api.toggleProvisioningRule(id, enabled); notify({ tone: 'success', title: `Provisioning rule ${enabled ? 'enabled' : 'disabled'}` }); refetchProvRules(); }
     catch (error) { notify({ tone: 'error', title: 'Could not change rule state', message: 'The previous provisioning state remains active.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
+  };
+
+  const handleBulkProvAction = async (action: 'enable' | 'disable' | 'delete') => {
+    const ids = selectedProvRuleIDs();
+    const templateID = selectedTemplate()?.id;
+    if (!templateID || ids.length === 0 || pendingAction()) return;
+    if (action === 'delete' && !await confirm({
+      title: `Delete ${ids.length} provisioning rules?`,
+      description: 'The selected rules will no longer run for future BOOTSTRAP sessions. Previously applied device values are not reverted.',
+      confirmLabel: `Delete ${ids.length} rules`,
+      tone: 'danger',
+    })) return;
+    if (action === 'delete') {
+      openDeleteReauth(ids, true);
+      return;
+    }
+
+    setPendingAction(`bulk-provisioning-${action}`);
+    try {
+      await api.bulkProvisioningRules(templateID, ids, action);
+      const resultLabel = action === 'enable' ? 'enabled' : action === 'disable' ? 'disabled' : 'deleted';
+      notify({ tone: 'success', title: `${ids.length} provisioning rules ${resultLabel}` });
+      setSelectedProvRuleIDs([]);
+      await refetchProvRules();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not ${action} provisioning rules`, message: 'No selected rule state was changed.', detail: (error as Error).message, persistent: true });
+    } finally { setPendingAction(null); }
+  };
+
+  const openDeleteReauth = (ids: number[], bulk: boolean) => {
+    setDeleteReauthRequest({ ids, bulk });
+    setDeleteReauthPassword('');
+    setDeleteReauthError('');
+  };
+
+  const closeDeleteReauth = () => {
+    if (deleteReauthPending()) return;
+    setDeleteReauthRequest(null);
+    setDeleteReauthPassword('');
+    setDeleteReauthError('');
+  };
+
+  const submitDeleteReauth = async () => {
+    const request = deleteReauthRequest();
+    const templateID = selectedTemplate()?.id;
+    const password = deleteReauthPassword();
+    if (!request || !templateID || !password || deleteReauthPending()) return;
+    setDeleteReauthPending(true);
+    setDeleteReauthError('');
+    try {
+      if (request.bulk) {
+        await api.bulkProvisioningRules(templateID, request.ids, 'delete', password);
+      } else {
+        await api.deleteProvisioningRule(request.ids[0], password);
+      }
+      setSelectedProvRuleIDs(ids => ids.filter(id => !request.ids.includes(id)));
+      notify({ tone: 'success', title: request.bulk ? `${request.ids.length} provisioning rules deleted` : 'Provisioning rule deleted' });
+      closeDeleteReauth();
+      await refetchProvRules();
+    } catch (error) {
+      setDeleteReauthError((error as Error).message || 'Current password is incorrect.');
+    } finally { setDeleteReauthPending(false); }
   };
 
   const openEditProv = (p: ProvisioningRule) => {
@@ -1224,6 +1308,14 @@ const Provisioning: Component = () => {
 
             <Show when={templateTab() === 'rules'}>
               <div class="mb-4 flex flex-wrap items-center justify-end gap-2">
+                <Show when={isFullAccess() && selectedProvRuleIDs().length > 0}>
+                  <div class="mr-auto flex flex-wrap items-center gap-2" role="toolbar" aria-label="Selected provisioning rule actions">
+                    <span class="text-xs text-muted" aria-live="polite">{selectedProvRuleIDs().length} selected</span>
+                    <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => void handleBulkProvAction('enable')} disabled={pendingAction() !== null}>Enable</button>
+                    <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => void handleBulkProvAction('disable')} disabled={pendingAction() !== null}>Disable</button>
+                    <button type="button" class="btn btn-secondary text-xs py-1.5 text-rose-400" onClick={() => void handleBulkProvAction('delete')} disabled={pendingAction() !== null}><Trash2 size={12} />Delete</button>
+                  </div>
+                </Show>
                 <div class="relative">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                   <input type="text" value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} placeholder="Search rules…" class="input pl-9! w-56 text-sm" />
@@ -1287,6 +1379,11 @@ const Provisioning: Component = () => {
               <table class="data-table w-full text-left">
                 <thead>
                   <tr class="border-b border-subtle">
+                    <Show when={isFullAccess()}>
+                      <th class="py-2 pr-2 w-8 text-xs font-medium text-muted uppercase tracking-wide">
+                        <input type="checkbox" aria-label="Select all rules on this page" checked={allPagedProvRulesSelected()} onChange={(event) => selectPagedProvRules(event.currentTarget.checked)} disabled={pendingAction() !== null || pagedProvRules().length === 0} />
+                      </th>
+                    </Show>
                     <th class="py-2 pr-2 w-8 text-xs font-medium text-muted uppercase tracking-wide">#</th>
                     <For each={visibleProvColumns()}>
                       {(col) => (
@@ -1311,6 +1408,11 @@ const Provisioning: Component = () => {
                         onDragOver={handleRowDragOver}
                         onDrop={(e) => handleRowDrop(e, p.id)}
                       >
+                        <Show when={isFullAccess()}>
+                          <td class="py-2 pr-2 text-center whitespace-nowrap">
+                            <input type="checkbox" aria-label={`Select provisioning rule ${p.parameter_name}`} checked={selectedProvRuleIDs().includes(p.id)} onChange={() => toggleProvRuleSelection(p.id)} disabled={pendingAction() !== null} />
+                          </td>
+                        </Show>
                         <td class="py-2 pr-2 cursor-grab active:cursor-grabbing select-none">
                           <span class="flex items-center gap-1 text-muted">
                             <GripVertical size={12} />
@@ -1841,6 +1943,26 @@ const Provisioning: Component = () => {
             <p class="text-xs text-muted">Metrics with the same group name and chart type can be plotted together, such as received and sent bytes.</p>
             <label class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></label>
             <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={interfaceMetricForm().active} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} />Active</label>
+          </form>
+        </Dialog>
+      </Show>
+      <Show when={deleteReauthRequest()}>
+        <Dialog
+          title="Confirm rule deletion"
+          description="For your security, enter the current password of the signed-in user before deleting provisioning rules."
+          size="small"
+          onClose={closeDeleteReauth}
+          actions={<>
+            <button type="button" class="btn btn-secondary flex-1" onClick={closeDeleteReauth} disabled={deleteReauthPending()}>Cancel</button>
+            <button type="submit" form="provisioning-delete-reauth-form" class="btn btn-danger flex-1" disabled={deleteReauthPending() || !deleteReauthPassword()}>{deleteReauthPending() ? 'Verifying…' : 'Verify and delete'}</button>
+          </>}
+        >
+          <form id="provisioning-delete-reauth-form" class="space-y-3" onSubmit={(event) => { event.preventDefault(); void submitDeleteReauth(); }}>
+            <label for="provisioning-delete-current-password" class="block text-xs text-muted">Current password</label>
+            <input id="provisioning-delete-current-password" type="password" class="input w-full" value={deleteReauthPassword()} onInput={(event) => setDeleteReauthPassword(event.currentTarget.value)} autocomplete="current-password" autofocus required />
+            <Show when={deleteReauthError()}>
+              <p class="text-xs text-rose-400" role="alert">{deleteReauthError()}</p>
+            </Show>
           </form>
         </Dialog>
       </Show>

@@ -363,3 +363,27 @@ func (r *ProvisioningRepository) ToggleEnabled(ctx context.Context, id int64, en
 		Where("id = ?", id).
 		Update("enabled", enabled).Error
 }
+
+func (r *ProvisioningRepository) BulkToggleEnabled(ctx context.Context, templateID int64, ids []int64, enabled bool) error {
+	return r.db.WithContext(ctx).Model(&models.ProvisioningRule{}).
+		Where("template_id = ? AND id IN ?", templateID, ids).
+		Update("enabled", enabled).Error
+}
+
+func (r *ProvisioningRepository) BulkDelete(ctx context.Context, templateID int64, ids []int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var ruleIDs []int64
+		if err := tx.Model(&models.ProvisioningRule{}).
+			Where("template_id = ? AND id IN ?", templateID, ids).
+			Pluck("id", &ruleIDs).Error; err != nil {
+			return err
+		}
+		if len(ruleIDs) == 0 {
+			return nil
+		}
+		if err := tx.Where("rule_id IN ?", ruleIDs).Delete(&models.ProvisioningApplication{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("template_id = ? AND id IN ?", templateID, ruleIDs).Delete(&models.ProvisioningRule{}).Error
+	})
+}

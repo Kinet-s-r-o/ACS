@@ -254,6 +254,7 @@ func (r *Router) Handler() http.Handler {
 	// Provisioning endpoints
 	apiMux.HandleFunc("GET /provisioning", auth.RequirePermission(models.PermProvisioningRead)(r.handleListProvisioningRules))
 	apiMux.HandleFunc("POST /provisioning", auth.RequireAnyPermission(models.PermProvisioningRules, models.PermProvisioningWrite)(r.handleCreateProvisioningRule))
+	apiMux.HandleFunc("POST /provisioning/bulk", auth.RequireAnyPermission(models.PermProvisioningRules, models.PermProvisioningWrite)(r.handleBulkProvisioningRules))
 	apiMux.HandleFunc("PUT /provisioning/{id}", auth.RequireAnyPermission(models.PermProvisioningRules, models.PermProvisioningWrite)(r.handleUpdateProvisioningRule))
 	apiMux.HandleFunc("DELETE /provisioning/{id}", auth.RequireAnyPermission(models.PermProvisioningRules, models.PermProvisioningWrite)(r.handleDeleteProvisioningRule))
 	apiMux.HandleFunc("POST /provisioning/{id}/toggle", auth.RequireAnyPermission(models.PermProvisioningRules, models.PermProvisioningWrite)(r.handleToggleProvisioningRule))
@@ -1119,12 +1120,6 @@ func (r *Router) handleFactoryReset(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) requireCurrentPassword(w http.ResponseWriter, req *http.Request) bool {
-	key := "reauth:" + clientIP(req)
-	if !r.loginLimiter.Allow(key) {
-		w.Header().Set("Retry-After", "900")
-		respondError(w, http.StatusTooManyRequests, "Too many reauthentication attempts; try again later")
-		return false
-	}
 	var body struct {
 		CurrentPassword string `json:"current_password"`
 	}
@@ -1132,6 +1127,16 @@ func (r *Router) requireCurrentPassword(w http.ResponseWriter, req *http.Request
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&body); err != nil || body.CurrentPassword == "" {
 		respondError(w, http.StatusBadRequest, "Current password is required")
+		return false
+	}
+	return r.verifyCurrentPassword(w, req, body.CurrentPassword)
+}
+
+func (r *Router) verifyCurrentPassword(w http.ResponseWriter, req *http.Request, currentPassword string) bool {
+	key := "reauth:" + clientIP(req)
+	if !r.loginLimiter.Allow(key) {
+		w.Header().Set("Retry-After", "900")
+		respondError(w, http.StatusTooManyRequests, "Too many reauthentication attempts; try again later")
 		return false
 	}
 	claims := auth.GetUserFromContext(req.Context())
@@ -1144,7 +1149,7 @@ func (r *Router) requireCurrentPassword(w http.ResponseWriter, req *http.Request
 		respondError(w, http.StatusInternalServerError, "Failed to verify current password")
 		return false
 	}
-	if user == nil || !auth.CheckPassword(body.CurrentPassword, user.PasswordHash) {
+	if user == nil || !auth.CheckPassword(currentPassword, user.PasswordHash) {
 		respondError(w, http.StatusForbidden, "Current password is incorrect")
 		return false
 	}
@@ -3837,6 +3842,9 @@ func validateAddObjectPath(path string) error {
 }
 
 func (r *Router) handleDeleteProvisioningRule(w http.ResponseWriter, req *http.Request) {
+	if !r.requireCurrentPassword(w, req) {
+		return
+	}
 	claims := auth.GetUserFromContext(req.Context())
 	if claims == nil || claims.Role != models.RoleFull {
 		respondError(w, http.StatusForbidden, "Full access required")
@@ -3886,6 +3894,53 @@ func (r *Router) handleToggleProvisioningRule(w http.ResponseWriter, req *http.R
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "toggled"})
+}
+
+func (r *Router) handleBulkProvisioningRules(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil || claims.Role != models.RoleFull {
+		respondError(w, http.StatusForbidden, "Full access required")
+		return
+	}
+
+	var body struct {
+		TemplateID      int64   `json:"template_id"`
+		IDs             []int64 `json:"ids"`
+		Action          string  `json:"action"`
+		CurrentPassword string  `json:"current_password"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if body.TemplateID == 0 || len(body.IDs) == 0 {
+		respondError(w, http.StatusBadRequest, "template_id and ids are required")
+		return
+	}
+	if body.Action != "enable" && body.Action != "disable" && body.Action != "delete" {
+		respondError(w, http.StatusBadRequest, "action must be enable, disable, or delete")
+		return
+	}
+	if body.Action == "delete" && !r.verifyCurrentPassword(w, req, body.CurrentPassword) {
+		return
+	}
+
+	var err error
+	switch body.Action {
+	case "enable", "disable":
+		err = r.provisioningRepo.BulkToggleEnabled(req.Context(), body.TemplateID, body.IDs, body.Action == "enable")
+	case "delete":
+		err = r.provisioningRepo.BulkDelete(req.Context(), body.TemplateID, body.IDs)
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to apply bulk rule action")
+		return
+	}
+
+	status := map[string]string{"enable": "enabled", "disable": "disabled", "delete": "deleted"}[body.Action]
+	respondJSON(w, http.StatusOK, map[string]string{"status": status})
 }
 
 func (r *Router) handleReorderProvisioningRules(w http.ResponseWriter, req *http.Request) {

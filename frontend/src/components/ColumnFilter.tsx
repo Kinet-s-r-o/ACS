@@ -23,7 +23,6 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
   const [rules, setRules] = createSignal<{ operator: FilterOperator; value: string }[]>(
     props.active?.rules?.length ? props.active.rules : [{ operator: 'contains', value: '' }]
   );
-  const [pos, setPos] = createSignal<{ top: number; left: number }>({ top: 0, left: 0 });
   let btnRef: HTMLButtonElement | undefined;
   let panelRef: HTMLDivElement | undefined;
 
@@ -34,14 +33,33 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
     }
   };
 
+  const positionPanel = (panel: HTMLDivElement) => {
+    if (!btnRef) return;
+
+    const viewportPadding = 8;
+    const buttonRect = btnRef.getBoundingClientRect();
+
+    // Start below the trigger so the panel can be measured before choosing
+    // whether it needs to open left-aligned or above the trigger.
+    panel.style.top = `${buttonRect.bottom + 4}px`;
+    panel.style.left = `${buttonRect.left}px`;
+
+    const panelRect = panel.getBoundingClientRect();
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - panelRect.width - viewportPadding);
+    const left = Math.min(buttonRect.left, maxLeft);
+    const opensBelow = buttonRect.bottom + 4 + panelRect.height <= window.innerHeight - viewportPadding;
+    const preferredTop = opensBelow ? buttonRect.bottom + 4 : buttonRect.top - panelRect.height - 4;
+    const maxTop = Math.max(viewportPadding, window.innerHeight - panelRect.height - viewportPadding);
+    const top = Math.min(Math.max(viewportPadding, preferredTop), maxTop);
+
+    panel.style.top = `${top}px`;
+    panel.style.left = `${left}px`;
+  };
+
   const toggle = () => {
     if (!open()) {
       setLogic(props.active?.logic ?? 'all');
       setRules(props.active?.rules?.length ? props.active.rules : [{ operator: 'contains', value: '' }]);
-      if (btnRef) {
-        const rect = btnRef.getBoundingClientRect();
-        setPos({ top: rect.bottom + 4, left: rect.left });
-      }
     }
     setOpen(!open());
   };
@@ -106,8 +124,7 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
           ref={(el) => {
             panelRef = el;
             el.style.position = 'fixed';
-            el.style.top = `${pos().top}px`;
-            el.style.left = `${pos().left}px`;
+            positionPanel(el);
             if (el) document.addEventListener('click', handleClickOutside);
           }}
           onClick={(e) => e.stopPropagation()}
