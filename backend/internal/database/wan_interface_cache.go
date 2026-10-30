@@ -14,6 +14,51 @@ import (
 
 const wanParameterPrefix = "InternetGatewayDevice.WANDevice."
 
+func wanInterfaceSummaryValues(params []models.DeviceParameter) map[string]string {
+	values := make(map[string]string)
+	for _, parameter := range params {
+		objectPath := wanInterfacePathPattern.FindString(parameter.Name)
+		if objectPath == "" {
+			continue
+		}
+		switch strings.TrimPrefix(parameter.Name, objectPath) {
+		case "Name", "ConnectionType", "ConnectionStatus", "ExternalIPAddress", "IPAddress", "MACAddress", "MAC":
+			values[parameter.Name] = parameter.Value
+		}
+	}
+	return values
+}
+
+func wanInterfaceSummaryChanged(db *gorm.DB, deviceID int64, params []models.DeviceParameter) (bool, error) {
+	incoming := wanInterfaceSummaryValues(params)
+	if len(incoming) == 0 {
+		return false, nil
+	}
+	var existing []models.DeviceParameter
+	if err := db.Model(&models.DeviceParameter{}).Select("name", "value").
+		Where("device_id = ? AND name IN ?", deviceID, mapKeys(incoming)).Find(&existing).Error; err != nil {
+		return false, err
+	}
+	current := make(map[string]string, len(existing))
+	for _, parameter := range existing {
+		current[parameter.Name] = parameter.Value
+	}
+	for name, value := range incoming {
+		if currentValue, ok := current[name]; !ok || currentValue != value {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func mapKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func hasWANParameters(params []models.DeviceParameter) bool {
 	for _, parameter := range params {
 		if strings.HasPrefix(parameter.Name, wanParameterPrefix) {

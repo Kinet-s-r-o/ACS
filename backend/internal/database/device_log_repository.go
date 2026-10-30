@@ -84,7 +84,7 @@ func BackfillDeviceLogs(ctx context.Context, db *gorm.DB) error {
 		}
 		for _, parameter := range parameters {
 			if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-				return upsertMany(tx, parameter.DeviceID, []models.DeviceParameter{parameter})
+				return upsertMany(tx, parameter.DeviceID, []models.DeviceParameter{parameter}, true)
 			}); err != nil {
 				return fmt.Errorf("backfill cached device log for device %d: %w", parameter.DeviceID, err)
 			}

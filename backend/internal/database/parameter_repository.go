@@ -106,22 +106,30 @@ func NewParameterRepository(db *gorm.DB) *ParameterRepository {
 func (r *ParameterRepository) UpsertMany(ctx context.Context, deviceID int64, params []models.DeviceParameter) error {
 	if hasWANParameters(params) {
 		return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			return upsertMany(tx, deviceID, params)
+			return upsertMany(tx, deviceID, params, true)
 		})
 	}
 	for _, param := range params {
 		if param.Name == DeviceLogParameterName {
 			return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-				return upsertMany(tx, deviceID, params)
+				return upsertMany(tx, deviceID, params, true)
 			})
 		}
 	}
-	return upsertMany(r.db.WithContext(ctx), deviceID, params)
+	return upsertMany(r.db.WithContext(ctx), deviceID, params, true)
 }
 
-func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter) error {
+func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter, refreshWAN bool) error {
 	if len(params) == 0 {
 		return nil
+	}
+	wanSummaryChanged := false
+	if refreshWAN && hasWANParameters(params) {
+		var err error
+		wanSummaryChanged, err = wanInterfaceSummaryChanged(db, deviceID, params)
+		if err != nil {
+			return err
+		}
 	}
 
 	now := time.Now()
@@ -172,7 +180,7 @@ func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter) er
 			}
 		}
 	}
-	if hasWANParameters(params) {
+	if wanSummaryChanged {
 		return refreshWANInterfacesForDevice(db, deviceID)
 	}
 	return nil
@@ -184,7 +192,7 @@ func (r *ParameterRepository) SaveInformParameters(ctx context.Context, deviceID
 		return nil
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return upsertMany(tx, deviceID, params)
+		return upsertMany(tx, deviceID, params, true)
 	})
 }
 
@@ -199,7 +207,7 @@ func (r *ParameterRepository) SaveFullTreeParameters(ctx context.Context, device
 		}
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := upsertMany(tx, deviceID, params); err != nil {
+		if err := upsertMany(tx, deviceID, params, false); err != nil {
 			return err
 		}
 		if err := deleteStale(tx, deviceID, names); err != nil {
@@ -347,15 +355,16 @@ func (r *ParameterRepository) ReplaceDynamicParameters(ctx context.Context, devi
 				}
 			}
 		}
-		if err := upsertMany(tx, deviceID, params); err != nil {
+		if err := upsertMany(tx, deviceID, params, false); err != nil {
 			return err
 		}
-		if !hasWANParameters(params) {
-			for _, branch := range branches {
-				if strings.HasPrefix(branch, wanParameterPrefix) || strings.HasPrefix(wanParameterPrefix, branch) {
-					return refreshWANInterfacesForDevice(tx, deviceID)
-				}
+		for _, branch := range branches {
+			if strings.HasPrefix(branch, wanParameterPrefix) || strings.HasPrefix(wanParameterPrefix, branch) {
+				return refreshWANInterfacesForDevice(tx, deviceID)
 			}
+		}
+		if hasWANParameters(params) {
+			return refreshWANInterfacesForDevice(tx, deviceID)
 		}
 		return nil
 	})
