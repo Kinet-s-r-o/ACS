@@ -190,6 +190,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/growth", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceGrowth))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
+	apiMux.HandleFunc("POST /devices/analytics/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleDashboardPanelAnalytics))
 	apiMux.HandleFunc("POST /devices/analytics/distribution", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceParameterDistribution))
 	apiMux.HandleFunc("GET /devices/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDevice))
 	apiMux.HandleFunc("DELETE /devices/{id}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeleteDevice))

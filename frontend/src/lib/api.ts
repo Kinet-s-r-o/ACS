@@ -82,7 +82,9 @@ export interface CompressionStatus {
 }
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
-export interface DashboardPanelConfig { id: string; title: string; parameter_pattern: string; thresholds: DashboardThreshold[] }
+export type DashboardPanelKind = 'parameter' | 'category' | 'recency';
+export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'last_inform';
+export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; limit?: number; parameter_pattern: string; thresholds: DashboardThreshold[] }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
 export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
@@ -190,6 +192,7 @@ export const api = {
   getDeviceGrowth: (interval: DeviceGrowthInterval) => request<DeviceGrowth>(`/devices/growth?interval=${interval}`),
   getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics', { signal: AbortSignal.timeout(30_000) }),
   getDeviceParameterDistribution: (body: DashboardParameterDistributionRequest, signal?: AbortSignal) => request<DashboardParameterDistribution>('/devices/analytics/distribution', { method: 'POST', body: JSON.stringify(body), signal: signal ?? AbortSignal.timeout(30_000) }),
+  getDashboardPanelAnalytics: (panels: DashboardPanelConfig[]) => request<{ panels: Record<string, Record<string, number>> }>('/devices/analytics/panels', { method: 'POST', body: JSON.stringify(panels), signal: AbortSignal.timeout(30_000) }),
   getDashboardPanels: () => request<DashboardPanelConfig[]>('/dashboard/panels'),
   saveDashboardPanels: (panels: DashboardPanelConfig[]) => request<DashboardPanelConfig[]>('/dashboard/panels', { method: 'PUT', body: JSON.stringify(panels) }),
   copyDashboardPanel: (panel: DashboardPanelConfig, userIds: number[]) => request<{ copied_to: number }>('/dashboard/panels/copy', { method: 'POST', body: JSON.stringify({ panel, user_ids: userIds }) }),

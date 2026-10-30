@@ -709,6 +709,79 @@ type AnalyticsDistributionRow struct {
 	Total   int     `gorm:"column:total"`
 }
 
+func (r *DeviceRepository) GetCategoricalAnalytics(ctx context.Context, source string, maxDevices, limit int) (map[string]int, error) {
+	if maxDevices < 1 {
+		maxDevices = 10000
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+	queries := map[string]string{
+		"manufacturer": `WITH sampled AS (SELECT manufacturer AS value FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?)
+			SELECT COALESCE(NULLIF(BTRIM(value), ''), 'Unknown') AS label, COUNT(*) AS count
+			FROM sampled GROUP BY 1 ORDER BY count DESC, label LIMIT ?`,
+		"product_class": `WITH sampled AS (SELECT COALESCE(NULLIF(product_class, ''), model_name) AS value FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?)
+			SELECT COALESCE(NULLIF(BTRIM(value), ''), 'Unknown') AS label, COUNT(*) AS count
+			FROM sampled GROUP BY 1 ORDER BY count DESC, label LIMIT ?`,
+		"access_type": `WITH sampled AS (SELECT id FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?), latest AS (
+			SELECT DISTINCT ON (p.device_id) p.device_id, p.value
+			FROM device_parameters p JOIN sampled s ON s.id = p.device_id
+			WHERE p.name LIKE '%PONMode%' OR p.name LIKE '%AccessType%'
+			ORDER BY p.device_id, p.updated_at DESC, p.name
+		) SELECT CASE WHEN UPPER(latest.value) LIKE '%GPON%' THEN 'GPON' WHEN UPPER(latest.value) LIKE '%EPON%' THEN 'EPON'
+			WHEN UPPER(latest.value) LIKE '%ETH%' THEN 'Ethernet' ELSE 'Other' END AS label,
+			COUNT(*) AS count FROM sampled LEFT JOIN latest ON latest.device_id = sampled.id GROUP BY 1 ORDER BY count DESC, label LIMIT ?`,
+	}
+	query, ok := queries[source]
+	if !ok {
+		return nil, fmt.Errorf("invalid analytics category source")
+	}
+	rows, err := r.db.WithContext(ctx).Raw(query, maxDevices, limit).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]int)
+	for rows.Next() {
+		var label string
+		var count int
+		if err := rows.Scan(&label, &count); err != nil {
+			return nil, err
+		}
+		result[label] = count
+	}
+	return result, rows.Err()
+}
+
+func (r *DeviceRepository) GetRecencyAnalytics(ctx context.Context, maxDevices int) (map[string]int, error) {
+	if maxDevices < 1 {
+		maxDevices = 10000
+	}
+	query := `SELECT CASE WHEN last_inform IS NULL OR NOW() - last_inform >= INTERVAL '30 days' THEN 'Offline >30d'
+		WHEN NOW() - last_inform >= INTERVAL '7 days' THEN 'Offline >7d'
+		WHEN NOW() - last_inform >= INTERVAL '1 day' THEN 'Offline >1d'
+		WHEN NOW() - last_inform >= INTERVAL '1 hour' THEN 'Offline >1h'
+		WHEN NOW() - last_inform >= INTERVAL '30 minutes' THEN 'Offline >30m'
+		ELSE 'Online' END AS label, COUNT(*) AS count
+		FROM (SELECT last_inform FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?) sampled
+		GROUP BY 1 ORDER BY count DESC, label`
+	rows, err := r.db.WithContext(ctx).Raw(query, maxDevices).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]int)
+	for rows.Next() {
+		var label string
+		var count int
+		if err := rows.Scan(&label, &count); err != nil {
+			return nil, err
+		}
+		result[label] = count
+	}
+	return result, rows.Err()
+}
+
 func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern string, maxDevices int, thresholds []AnalyticsDistributionThreshold) ([]AnalyticsDistributionRow, error) {
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()

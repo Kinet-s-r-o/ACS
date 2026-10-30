@@ -33,6 +33,10 @@ const growthIntervals: Array<{ id: DeviceGrowthInterval; label: string }> = [
 ];
 
 const defaultDashboardPanels: DashboardPanelConfig[] = [
+  { id: 'contactRecency', title: 'Contact recency', kind: 'recency', source: 'last_inform', parameter_pattern: '', thresholds: [] },
+  { id: 'accessType', title: 'Access type', kind: 'category', source: 'access_type', limit: 6, parameter_pattern: '', thresholds: [] },
+  { id: 'manufacturer', title: 'Manufacturer', kind: 'category', source: 'manufacturer', limit: 6, parameter_pattern: '', thresholds: [] },
+  { id: 'productClass', title: 'Product class', kind: 'category', source: 'product_class', limit: 6, parameter_pattern: '', thresholds: [] },
   { id: 'uptime', title: 'Uptime', parameter_pattern: 'InternetGatewayDevice.*UpTime', thresholds: [
     { label: '< 1 hour', max: 3600, color: 'blue' }, { label: '1-24 hours', max: 86400, color: 'blue' },
     { label: '1-7 days', max: 604800, color: 'blue' }, { label: '1-30 days', max: 2592000, color: 'blue' }, { label: '> 1 month', max: null, color: 'blue' },
@@ -159,9 +163,11 @@ const Dashboard: Component = () => {
   const canCopyPanels = () => isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
-  const [fleetAnalytics, { refetch: refetchAnalytics }] = createResource(() => loadFleetData(api.getDeviceAnalytics));
+  const [panelAnalytics, { refetch: refetchPanelAnalytics }] = createResource(
+    () => savedPanelConfigs() ? normalizeDashboardPanels(savedPanelConfigs() ?? []) : undefined,
+    (panels) => loadFleetData(() => api.getDashboardPanelAnalytics(panels)),
+  );
   const stats = createMemo(() => dashboard()?.data);
-  const analytics = createMemo(() => fleetAnalytics()?.data);
   const onlinePercent = createMemo(() => {
     const total = stats()?.total ?? 0;
     return total > 0 ? Math.round(((stats()?.online ?? 0) / total) * 1000) / 10 : 0;
@@ -184,7 +190,7 @@ const Dashboard: Component = () => {
       thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
     });
   };
-  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); refetchAnalytics(); };
+  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); refetchPanelAnalytics(); };
   const closePanelSettings = () => { setPanelDraft(null); setShowCopyUsers(false); setSelectedRecipientIDs([]); };
   const updatePanelDraft = (update: (draft: DashboardPanelDraft) => DashboardPanelDraft) => setPanelDraft((draft) => draft ? update(draft) : draft);
   const updateThreshold = (index: number, field: 'label' | 'max', value: string) => updatePanelDraft((draft) => ({
@@ -211,10 +217,22 @@ const Dashboard: Component = () => {
     const draft = panelDraft();
     if (!draft) return null;
     const title = draft.title.trim();
+    const kind = draft.kind ?? 'parameter';
     const parameterPattern = draft.parameter_pattern.trim();
     if (!title || title.length > 48) {
       notify({ tone: 'error', title: 'Invalid panel name', message: 'Enter a panel name with up to 48 characters.' });
       return null;
+    }
+    if (kind !== 'parameter') {
+      if (kind === 'category' && !['access_type', 'manufacturer', 'product_class'].includes(draft.source ?? '')) {
+        notify({ tone: 'error', title: 'Invalid panel source', message: 'Choose a supported category source.' });
+        return null;
+      }
+      if (kind === 'recency' && draft.source !== 'last_inform') {
+        notify({ tone: 'error', title: 'Invalid panel source', message: 'Contact recency must use Last Inform.' });
+        return null;
+      }
+      return { id: draft.id, title, kind, source: draft.source, limit: draft.limit ?? 6, parameter_pattern: '', thresholds: [] };
     }
     if (!/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(parameterPattern) || parameterPattern.length > 512) {
       notify({ tone: 'error', title: 'Invalid parameter pattern', message: 'Enter a Device. or InternetGatewayDevice. parameter path. Use * as a wildcard.' });
@@ -249,7 +267,7 @@ const Dashboard: Component = () => {
       notify({ tone: 'error', title: 'Final threshold needs no maximum', message: 'Leave the last maximum empty so it catches all remaining values.' });
       return null;
     }
-    return { id: draft.id, title, parameter_pattern: parameterPattern, thresholds };
+    return { id: draft.id, title, kind: 'parameter', parameter_pattern: parameterPattern, thresholds };
   };
   const persistPanelConfig = async (next: DashboardPanelConfig, closeAfterSave: boolean) => {
     const current = normalizeDashboardPanels(savedPanelConfigs() ?? []);
@@ -293,9 +311,9 @@ const Dashboard: Component = () => {
       <PageHeader
         title="Fleet status"
         description="Current fleet reachability, contact recency, health thresholds, and hardware mix."
-        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || fleetAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
+        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
-        <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading || fleetAnalytics.loading}><RefreshCw size={14} />Refresh fleet data</button>
+        <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading}><RefreshCw size={14} />Refresh fleet data</button>
       </PageHeader>
 
       <Show when={!dashboard.loading && !dashboard()?.error && (stats()?.total ?? 0) === 0}>
@@ -305,12 +323,6 @@ const Dashboard: Component = () => {
           description="The fleet register will populate after a device sends its first CWMP Inform. Verify the published CWMP endpoint and the CPE ACS URL."
           action={<A class="btn btn-secondary" href="/settings/delivery">Review CWMP connection settings</A>}
         /></div>
-      </Show>
-
-      <Show when={(analytics()?.total ?? 0) > (analytics()?.sampled ?? 0)}>
-        <div class="px-4 py-3 border border-amber-500/30 text-amber-400 text-xs">
-          Analytics use the most recent {analytics()?.sampled.toLocaleString()} of {analytics()?.total.toLocaleString()} devices; fleet totals remain exact.
-        </div>
       </Show>
 
       <Show when={dashboard.loading}>
@@ -348,9 +360,9 @@ const Dashboard: Component = () => {
           </div>
         </dl>
 
-        <Show when={fleetAnalytics.loading}><p class="text-xs text-muted" role="status">Loading fleet analytics…</p></Show>
-        <Show when={fleetAnalytics()?.error}>
-          <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={fleetAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchAnalytics()} /></div>
+        <Show when={panelAnalytics.loading}><p class="text-xs text-muted" role="status">Loading fleet analytics…</p></Show>
+        <Show when={panelAnalytics()?.error}>
+          <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={panelAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchPanelAnalytics()} /></div>
         </Show>
 
         <section class="data-panel">
@@ -370,12 +382,15 @@ const Dashboard: Component = () => {
           <div class="data-panel-body"><DeviceGrowthChart interval={growthInterval()} refreshKey={refreshKey()} /></div>
         </section>
 
-        <Show when={analytics()}><section class="data-panel">
+        <Show when={panelAnalytics()?.data}><section class="data-panel">
           <div class="data-panel-header">
-            <div><h2>Contact recency</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
+            <div><h2>{panelConfigs().find((config) => config.id === 'contactRecency')?.title ?? 'Contact recency'}</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
+            <button type="button" class="icon-button" aria-label="Configure contact recency panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'contactRecency'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button>
           </div>
           <div class="data-panel-body">
-            <DistributionList data={analytics()?.lastInform ?? {}} semantic />
+            <Show when={panelAnalytics()?.data?.panels.contactRecency} fallback={<p class="text-xs text-muted">Loading distribution…</p>}>
+              <DistributionList data={panelAnalytics()!.data!.panels.contactRecency} semantic />
+            </Show>
           </div>
         </section></Show>
 
@@ -388,7 +403,7 @@ const Dashboard: Component = () => {
           <Show when={savedPanelConfigs.error}><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></Show>
           <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
           <div class="dashboard-health-grid">
-            <For each={panelConfigs()}>{(config) => (
+            <For each={panelConfigs().filter((config) => (config.kind ?? 'parameter') === 'parameter')}>{(config) => (
               <div class="data-panel-section">
                 <div class="dashboard-configurable-heading">
                   <h3>{config.title}</h3>
@@ -401,22 +416,22 @@ const Dashboard: Component = () => {
           </Show>
         </section>
 
-        <Show when={analytics()}><section class="data-panel">
+        <Show when={panelAnalytics()?.data}><section class="data-panel">
           <div class="data-panel-header">
             <div><h2>Inventory composition</h2><p>Access technology, manufacturer, and product-class concentration.</p></div>
           </div>
           <div class="inventory-grid">
             <div class="data-panel-section">
-              <h3>Access type</h3>
-              <DistributionList data={analytics()?.accessType ?? {}} limit={6} />
+              <div class="dashboard-configurable-heading"><h3>{panelConfigs().find((config) => config.id === 'accessType')?.title ?? 'Access type'}</h3><button type="button" class="icon-button" aria-label="Configure access type panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'accessType'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button></div>
+              <DistributionList data={panelAnalytics()!.data!.panels.accessType ?? {}} limit={panelConfigs().find((config) => config.id === 'accessType')?.limit ?? 6} />
             </div>
             <div class="data-panel-section">
-              <h3>Manufacturer</h3>
-              <DistributionList data={analytics()?.manufacturers ?? {}} limit={6} />
+              <div class="dashboard-configurable-heading"><h3>{panelConfigs().find((config) => config.id === 'manufacturer')?.title ?? 'Manufacturer'}</h3><button type="button" class="icon-button" aria-label="Configure manufacturer panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'manufacturer'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button></div>
+              <DistributionList data={panelAnalytics()!.data!.panels.manufacturer ?? {}} limit={panelConfigs().find((config) => config.id === 'manufacturer')?.limit ?? 6} />
             </div>
             <div class="data-panel-section">
-              <h3>Product class</h3>
-              <DistributionList data={analytics()?.productClasses ?? {}} limit={6} />
+              <div class="dashboard-configurable-heading"><h3>{panelConfigs().find((config) => config.id === 'productClass')?.title ?? 'Product class'}</h3><button type="button" class="icon-button" aria-label="Configure product class panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'productClass'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button></div>
+              <DistributionList data={panelAnalytics()!.data!.panels.productClass ?? {}} limit={panelConfigs().find((config) => config.id === 'productClass')?.limit ?? 6} />
             </div>
           </div>
         </section></Show>
@@ -425,7 +440,18 @@ const Dashboard: Component = () => {
         <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></>}>
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
-            <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
+            <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
+              <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
+            </Show>
+            <Show when={(panelDraft()?.kind ?? 'parameter') !== 'parameter'}>
+              <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.source ?? ''} onChange={(event) => updatePanelDraft((draft) => ({ ...draft, source: event.currentTarget.value as DashboardPanelConfig['source'] }))}>
+                <Show when={panelDraft()?.kind === 'category'}><option value="access_type">Access type</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option></Show>
+                <Show when={panelDraft()?.kind === 'recency'}><option value="last_inform">Last Inform</option></Show>
+              </select><span class="mt-1 block">Values are grouped and counted by the SQL backend.</span></label>
+              <Show when={panelDraft()?.kind === 'category'}>
+                <label class="block text-xs text-muted">Maximum categories<input type="number" min="1" max="100" class="input mt-1 w-full" value={panelDraft()?.limit ?? 6} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, limit: Number(event.currentTarget.value) }))} /></label>
+              </Show>
+            </Show>
             <Show when={canCopyPanels()}>
               <section class="rounded border border-subtle p-3">
                 <button type="button" class="btn btn-secondary text-xs" onClick={() => { setShowCopyUsers((value) => !value); setSelectedRecipientIDs([]); }} aria-expanded={showCopyUsers()}>Copy panel to users</button>
@@ -446,7 +472,7 @@ const Dashboard: Component = () => {
                 </Show>
               </section>
             </Show>
-            <section aria-label="Thresholds">
+            <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}><section aria-label="Thresholds">
               <div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-primary">Thresholds and colors</h3><button type="button" class="btn btn-secondary text-xs" onClick={addThreshold}><Plus size={13} />Add threshold</button></div>
               <div class="space-y-2">
                 <For each={panelDraft()?.thresholds ?? []}>{(threshold, index) => (
@@ -459,7 +485,7 @@ const Dashboard: Component = () => {
                 )}</For>
               </div>
               <p class="mt-2 text-xs text-muted">Buckets are checked in order using value ≤ maximum. Leave the final maximum empty to include all remaining values; missing or nonnumeric values appear as N/A.</p>
-            </section>
+            </section></Show>
           </div>
         </Dialog>
       </Show>

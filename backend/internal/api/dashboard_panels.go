@@ -25,6 +25,9 @@ type dashboardPanelThreshold struct {
 type dashboardPanelConfig struct {
 	ID               string                    `json:"id"`
 	Title            string                    `json:"title"`
+	Kind             string                    `json:"kind,omitempty"`
+	Source           string                    `json:"source,omitempty"`
+	Limit            int                       `json:"limit,omitempty"`
 	ParameterPattern string                    `json:"parameter_pattern"`
 	Thresholds       []dashboardPanelThreshold `json:"thresholds"`
 }
@@ -51,9 +54,36 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 		if title := strings.TrimSpace(config.Title); title == "" || len(title) > 48 {
 			return errors.New("panel title is required and must be at most 48 characters")
 		}
+		kind := config.Kind
+		if kind == "" {
+			kind = "parameter"
+		}
+		if kind != "parameter" && kind != "category" && kind != "recency" {
+			return errors.New("invalid dashboard panel kind")
+		}
+		if kind == "category" {
+			switch config.Source {
+			case "access_type", "manufacturer", "product_class":
+			default:
+				return errors.New("invalid dashboard category source")
+			}
+		} else if kind == "recency" && config.Source != "last_inform" {
+			return errors.New("invalid dashboard recency source")
+		}
+		if config.Limit < 0 || config.Limit > 100 {
+			return errors.New("dashboard panel limit must be between 0 and 100")
+		}
 		pattern := strings.TrimSpace(config.ParameterPattern)
+		if kind != "parameter" {
+			pattern = ""
+		}
 		if len(pattern) > 512 || strings.Count(pattern, "*") > 8 || strings.ContainsAny(pattern, "?[]{}") || validateParameterNames([]string{strings.ReplaceAll(pattern, "*", "X")}) != nil {
-			return errors.New("invalid dashboard parameter pattern")
+			if kind == "parameter" {
+				return errors.New("invalid dashboard parameter pattern")
+			}
+		}
+		if kind != "parameter" {
+			continue
 		}
 		if len(config.Thresholds) == 0 || len(config.Thresholds) > 16 {
 			return errors.New("configure between 1 and 16 threshold buckets")
@@ -92,7 +122,7 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 
 func validDashboardPanelID(id string) bool {
 	switch id {
-	case "uptime", "temperature", "rxPower":
+	case "uptime", "temperature", "rxPower", "contactRecency", "accessType", "manufacturer", "productClass":
 		return true
 	default:
 		return dashboardPanelIDRe.MatchString(id)
@@ -217,6 +247,40 @@ func (r *Router) handleCopyDashboardPanel(w http.ResponseWriter, req *http.Reque
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]int{"copied_to": len(body.UserIDs)})
+}
+
+func (r *Router) handleDashboardPanelAnalytics(w http.ResponseWriter, req *http.Request) {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 64*1024))
+	decoder.DisallowUnknownFields()
+	var configs []dashboardPanelConfig
+	if err := decoder.Decode(&configs); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard analytics request")
+		return
+	}
+	if err := validateDashboardPanelConfigs(configs); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	panels := make(map[string]map[string]int)
+	for _, config := range configs {
+		if config.Kind == "" || config.Kind == "parameter" {
+			continue
+		}
+		var values map[string]int
+		var err error
+		if config.Kind == "recency" {
+			values, err = r.deviceRepo.GetRecencyAnalytics(req.Context(), 10000)
+		} else {
+			values, err = r.deviceRepo.GetCategoricalAnalytics(req.Context(), config.Source, 10000, config.Limit)
+		}
+		if err != nil {
+			log.Printf("Error getting dashboard panel analytics: %v", err)
+			respondError(w, http.StatusInternalServerError, "Failed to get dashboard panel analytics")
+			return
+		}
+		panels[config.ID] = values
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"panels": panels})
 }
 
 func logDashboardPanelError(action string, err error) {
