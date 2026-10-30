@@ -42,6 +42,7 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true, order: 13 },
   { id: 'active_faults', label: 'CWMP faults', visible: true, order: 14 },
 ];
+const inventoryColumnSelection = JSON.stringify(defaultColumns.map(column => column.id).sort());
 
 const STORAGE_KEY = 'acs_device_columns';
 const previousDefaultColumnOrder = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'rx_power', 'uptime', 'ppp_username', 'status', 'last_inform', 'tags'];
@@ -81,8 +82,6 @@ const Devices: Component = () => {
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
-  const inventoryColumnSelection = () => JSON.stringify(columns().filter(column => column.visible).map(column => column.id).sort());
-
   onMount(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -111,9 +110,8 @@ const Devices: Component = () => {
   });
 
   const [deviceList, { refetch }] = createResource(
-    () => columns().length > 0 ? inventoryColumnSelection() : undefined,
+    inventoryColumnSelection,
     async columnSelection => {
-      if (columnSelection === undefined) return { devices: [], total: 0 };
       const requestedColumns = JSON.parse(columnSelection) as string[];
       const firstPage = await api.getDevices(500, 0, requestedColumns);
       const devices = [...firstPage.devices];
