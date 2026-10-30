@@ -1,4 +1,3 @@
-import type { Component } from 'solid-js';
 import { createMemo, createResource, createSignal, For, onCleanup, Show, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2 } from 'lucide-solid';
