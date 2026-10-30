@@ -274,9 +274,6 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fleet-panel-resize-x { top: 0; right: 0; width: 10px; height: 100%; cursor: ew-resize; }
 .fleet-panel-resize-y { right: 0; bottom: 0; left: 0; height: 10px; cursor: ns-resize; }
 .fleet-panel-resize-x:focus-visible, .fleet-panel-resize-y:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; }
-.fleet-panel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid rgb(var(--border-subtle)); background: rgb(var(--surface)); }
-.dashboard-add-panel { flex: 0 0 auto; color: rgb(var(--text-muted)); opacity: .8; }
-.dashboard-add-panel:hover:not(:disabled) { color: rgb(var(--text-primary)); opacity: 1; }
 .distribution-value { min-width: 32px; color: rgb(var(--text-secondary)); font-family: "IBM Plex Mono", monospace; font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
 
 .login-context { display: grid; grid-template-columns: 118px 1fr; gap: 0; margin-top: 36px; border-top: 1px solid rgb(var(--border-default)); }

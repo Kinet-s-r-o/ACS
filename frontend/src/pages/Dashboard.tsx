@@ -511,6 +511,7 @@ const Dashboard: Component = () => {
         status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
         <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading}><RefreshCw size={14} />Refresh fleet data</button>
+        <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
       </PageHeader>
 
       <Show when={!dashboard.loading && !dashboard()?.error && (stats()?.total ?? 0) === 0}>
@@ -562,7 +563,6 @@ const Dashboard: Component = () => {
           <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={panelAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchPanelAnalytics()} /></div>
         </Show>
 
-        <div class="fleet-panel-toolbar"><div><h2>Fleet panels</h2><p>Drag panels by the grip to move them; resize from the right or bottom edge.</p></div><button type="button" class="btn btn-secondary" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}><Plus size={14} />Add panel</button></div>
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
         <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel} onResize={resizePanel}>
         <section class="data-panel fleet-content-panel">
