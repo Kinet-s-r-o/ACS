@@ -438,35 +438,48 @@ func (r *MetricRepository) QueryRawRate(ctx context.Context, deviceID, metricID 
 	return samples, err
 }
 
-// QueryAggregatedRate returns aggregated metric data with rate computed as
-// (max_value - min_value) / bucket_duration * multiplier.
+// QueryAggregatedRate computes per-sample counter deltas before aggregating
+// them. Computing max-minus-min inside a bucket loses every bucket that has
+// only one sample, which is common when the poll and bucket intervals match.
 func (r *MetricRepository) QueryAggregatedRate(ctx context.Context, deviceID, metricID int64, from, to time.Time, bucket string, multiplier float64) ([]models.AggregatedMetric, error) {
-	table := caTableForBucket(bucket)
-	if table == "" {
-		return nil, fmt.Errorf("unsupported bucket: %s", bucket)
-	}
-	var duration float64
+	var interval string
 	switch bucket {
 	case "5min":
-		duration = 300
+		interval = "5 minutes"
 	case "1h":
-		duration = 3600
+		interval = "1 hour"
 	case "1d":
-		duration = 86400
+		interval = "1 day"
 	default:
 		return nil, fmt.Errorf("unsupported bucket: %s", bucket)
 	}
 	var rows []models.AggregatedMetric
 	query := fmt.Sprintf(`
+		WITH deltas AS (
+			SELECT "timestamp",
+				CASE
+					WHEN LAG(value) OVER w IS NULL THEN 0
+					WHEN value < LAG(value) OVER w THEN 0
+					ELSE (value - LAG(value) OVER w)
+						 / GREATEST(EXTRACT(EPOCH FROM ("timestamp" - LAG("timestamp") OVER w)), 1)
+					END * $4 AS value
+			FROM metric_samples
+			WHERE device_id = $1 AND metric_id = $2 AND "timestamp" <= $5
+			WINDOW w AS (ORDER BY "timestamp")
+		), bucketed AS (
+			SELECT time_bucket(INTERVAL '%s', "timestamp") AS time_bucket, value
+			FROM deltas
+			WHERE "timestamp" BETWEEN $3 AND $5
+		)
 		SELECT time_bucket AS "timestamp",
-			GREATEST(max_value - min_value, 0) / $4 * $5 AS "avg",
-			0 AS "min",
-			0 AS "max",
-			0 AS "count"
-		FROM %s
-		WHERE device_id = $1 AND metric_id = $2 AND time_bucket BETWEEN $3 AND $6
-		ORDER BY time_bucket ASC`, table)
-	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, from, duration, multiplier, to).Scan(&rows).Error
+			AVG(value) AS "avg",
+			MIN(value) AS "min",
+			MAX(value) AS "max",
+			COUNT(*) AS "count"
+		FROM bucketed
+		GROUP BY time_bucket
+		ORDER BY time_bucket ASC`, interval)
+	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, from, multiplier, to).Scan(&rows).Error
 	return rows, err
 }
 
