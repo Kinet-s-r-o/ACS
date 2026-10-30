@@ -127,13 +127,22 @@ func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter) er
 	now := time.Now()
 	deviceLog := ""
 	hasDeviceLog := false
+	lastParameterIndex := make(map[string]int, len(params))
+	for index, param := range params {
+		if param.Name != DeviceLogParameterName {
+			lastParameterIndex[param.Name] = index
+		}
+	}
 	persisted := make([]models.DeviceParameter, 0, len(params))
-	for _, param := range params {
+	for index, param := range params {
 		param.DeviceID = deviceID
 		param.UpdatedAt = now
 		if param.Name == DeviceLogParameterName {
 			deviceLog = param.Value
 			hasDeviceLog = true
+			continue
+		}
+		if lastParameterIndex[param.Name] != index {
 			continue
 		}
 		if IsSensitiveParameterName(param.Name) {
