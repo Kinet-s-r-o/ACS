@@ -1,21 +1,27 @@
 import type { Component } from 'solid-js';
+import { Monitor, Moon, Sun } from 'lucide-solid';
 import { useTheme, type ThemePreference } from '../lib/theme';
 
 const ThemeSwitcher: Component = () => {
   const { themePreference, setTheme } = useTheme();
-
+  const preferenceLabel = (preference: ThemePreference) => ({ dark: 'Dark', light: 'Light', system: 'System' })[preference];
+  const nextPreference = () => {
+    switch (themePreference()) {
+      case 'dark': return 'light';
+      case 'light': return 'system';
+      case 'system': return 'dark';
+    }
+  };
   return (
-    <select
-      class="input w-28!"
-      aria-label="Color theme"
-      title="Color theme"
-      value={themePreference()}
-      onChange={(event) => setTheme(event.currentTarget.value as ThemePreference)}
+    <button
+      type="button"
+      class="icon-button"
+      aria-label={`Current theme ${preferenceLabel(themePreference())}. Switch to ${preferenceLabel(nextPreference())}`}
+      title={`Current theme: ${preferenceLabel(themePreference())}. Switch to ${preferenceLabel(nextPreference())}`}
+      onClick={() => setTheme(nextPreference())}
     >
-      <option value="system">System</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
+      {nextPreference() === 'light' ? <Sun size={17} /> : nextPreference() === 'dark' ? <Moon size={17} /> : <Monitor size={17} />}
+    </button>
   );
 };
 
