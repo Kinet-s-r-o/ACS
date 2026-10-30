@@ -31,8 +31,36 @@ func EnsureAnalyticsParameterIndex(ctx context.Context, db *gorm.DB) error {
 	if db.Dialector.Name() != "postgres" {
 		return nil
 	}
-	return db.WithContext(ctx).Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_device_updated_name
-		ON device_parameters (device_id, updated_at DESC, name)`).Error
+	db = db.WithContext(ctx)
+	var index struct{ Valid bool }
+	result := db.Raw(`SELECT indisvalid AS valid FROM pg_index
+		WHERE indexrelid = to_regclass('idx_device_parameters_name_trgm')`).Scan(&index)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		if index.Valid {
+			return nil
+		}
+		// An interrupted concurrent build leaves an unusable index with the same name.
+		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS idx_device_parameters_name_trgm`).Error; err != nil {
+			return err
+		}
+	}
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS pg_trgm`).Error; err != nil {
+		return fmt.Errorf("enable pg_trgm for parameter search: %w", err)
+	}
+	var extensionSchema string
+	if err := db.Raw(`SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+		WHERE e.extname = 'pg_trgm'`).Scan(&extensionSchema).Error; err != nil {
+		return err
+	}
+	operatorClass := `"` + strings.ReplaceAll(extensionSchema, `"`, `""`) + `".gin_trgm_ops`
+	if err := db.Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_name_trgm
+		ON device_parameters USING gin (name ` + operatorClass + `)`).Error; err != nil {
+		return err
+	}
+	return db.Exec(`ANALYZE device_parameters (name)`).Error
 }
 
 type DeviceGrowthPoint struct {

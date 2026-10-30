@@ -142,26 +142,24 @@ func main() {
 		}
 	}()
 	go func() {
-		log.Println("Preparing fleet analytics parameter index in the background...")
-		if err := database.EnsureAnalyticsParameterIndex(ctx, db); err != nil {
-			log.Printf("Fleet analytics parameter index creation failed: %v", err)
-			return
-		}
-		log.Println("Fleet analytics parameter index is ready")
-	}()
-	if wanBackfillNeeded {
-		go func() {
+		if wanBackfillNeeded {
 			log.Println("Preparing WAN interface inventory in the background...")
 			if err := database.EnsureWANParameterIndex(ctx, db); err != nil {
 				log.Printf("WAN parameter index creation failed: %v", err)
 			}
 			if err := database.BackfillWANInterfaces(ctx, db); err != nil {
 				log.Printf("WAN interface inventory preparation failed: %v", err)
-				return
+			} else {
+				log.Println("WAN interface inventory preparation completed")
 			}
-			log.Println("WAN interface inventory preparation completed")
-		}()
-	}
+		}
+		log.Println("Preparing fleet parameter search index (pg_trgm) in the background...")
+		if err := database.EnsureAnalyticsParameterIndex(ctx, db); err != nil {
+			log.Printf("Fleet parameter search index creation failed: %v", err)
+			return
+		}
+		log.Println("Fleet parameter search index is ready (idx_device_parameters_name_trgm)")
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

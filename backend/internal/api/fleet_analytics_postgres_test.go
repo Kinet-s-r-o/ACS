@@ -15,6 +15,9 @@ import (
 
 func TestFleetAnalyticsPostgres(t *testing.T) {
 	db := integrationTestDatabase(t)
+	if err := database.EnsureAnalyticsParameterIndex(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now().UTC().Truncate(time.Second)
 	old := now.Add(-time.Hour)
 	for _, d := range []models.Device{
@@ -106,5 +109,57 @@ func TestFleetAnalyticsPostgres(t *testing.T) {
 				t.Fatalf("incorrect distribution: %+v", result)
 			}
 		})
+	}
+}
+
+func TestFleetParameterSearchIndexPostgres(t *testing.T) {
+	db := integrationTestDatabase(t)
+	// The extension may already live outside the application's search_path.
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.EnsureAnalyticsParameterIndex(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var originalOID int64
+	if err := db.Raw(`SELECT 'idx_device_parameters_name_trgm'::regclass::oid`).Scan(&originalOID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.EnsureAnalyticsParameterIndex(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var currentOID int64
+	if err := db.Raw(`SELECT 'idx_device_parameters_name_trgm'::regclass::oid`).Scan(&currentOID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if originalOID != currentOID {
+		t.Fatal("startup rebuilt an already valid search index")
+	}
+	device := models.Device{SerialNumber: "INDEX-RECOVERY", OUI: "000000"}
+	if err := db.Create(&device).Error; err != nil {
+		t.Fatal(err)
+	}
+	params := []models.DeviceParameter{{DeviceID: device.ID, Name: "Device.Temperature", Value: "40"}, {DeviceID: device.ID, Name: "Device.UpTime", Value: "100"}}
+	if err := db.Create(&params).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`DROP INDEX idx_device_parameters_name_trgm`).Error; err != nil {
+		t.Fatal(err)
+	}
+	// A failed concurrent build leaves the same invalid catalog state as interruption.
+	if err := db.Exec(`CREATE UNIQUE INDEX CONCURRENTLY idx_device_parameters_name_trgm ON device_parameters (device_id)`).Error; err == nil {
+		t.Fatal("expected duplicate device IDs to fail the concurrent unique index build")
+	}
+	if err := database.EnsureAnalyticsParameterIndex(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var ready bool
+	if err := db.Raw(`SELECT i.indisvalid AND am.amname = 'gin'
+		FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_am am ON am.oid = c.relam
+		WHERE i.indexrelid = 'idx_device_parameters_name_trgm'::regclass`).Scan(&ready).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !ready {
+		t.Fatal("failed concurrent index was not replaced with a valid GIN search index")
 	}
 }
