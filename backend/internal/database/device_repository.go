@@ -603,6 +603,8 @@ type AnalyticsDistributionThreshold struct {
 	Max   *float64
 }
 
+const analyticsNumericValuePattern = `^([+-]{0,1})([0-9]+(\.[0-9]*){0,1}|\.[0-9]+)([eE][+-]{0,1}[0-9]{1,3}){0,1}$`
+
 type AnalyticsDistributionRow struct {
 	Label   *string `gorm:"column:label"`
 	Count   int     `gorm:"column:count"`
@@ -613,7 +615,7 @@ type AnalyticsDistributionRow struct {
 func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern string, maxDevices int, thresholds []AnalyticsDistributionThreshold) ([]AnalyticsDistributionRow, error) {
 	pattern = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_", "*", "%").Replace(pattern)
 	caseParts := make([]string, 0, len(thresholds))
-	args := []interface{}{maxDevices, pattern}
+	args := []interface{}{maxDevices, analyticsNumericValuePattern, pattern}
 	for _, threshold := range thresholds {
 		if threshold.Max == nil {
 			caseParts = append(caseParts, "ELSE ?")
@@ -632,7 +634,7 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 	), raw_values AS (
 		SELECT dp.device_id, dp.name,
 			CASE WHEN LENGTH(BTRIM(dp.value)) <= 256
-				AND BTRIM(dp.value) ~ '^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]{1,3})?$'
+			AND BTRIM(dp.value) ~ ?
 				THEN BTRIM(dp.value)::numeric END AS parsed_value
 		FROM device_parameters dp
 		JOIN sampled_devices sd ON sd.id = dp.device_id
