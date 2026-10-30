@@ -42,7 +42,10 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true, order: 13 },
   { id: 'active_faults', label: 'CWMP faults', visible: true, order: 14 },
 ];
-const inventoryColumnSelection = JSON.stringify(defaultColumns.map(column => column.id).sort());
+const inventoryParameterColumns = new Set([
+  'ip_address', 'ppp_username', 'rx_power', 'uptime',
+  'software_version', 'hardware_version', 'manufacturer_oui',
+]);
 
 const STORAGE_KEY = 'acs_device_columns';
 const previousDefaultColumnOrder = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'rx_power', 'uptime', 'ppp_username', 'status', 'last_inform', 'tags'];
@@ -74,6 +77,7 @@ const Devices: Component = () => {
   const [page, setPage] = createSignal(0);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.devices');
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
+  const [inventoryColumnSelection, setInventoryColumnSelection] = createSignal<string>();
   const [summoningAll, setSummoningAll] = createSignal(false);
   const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', null);
@@ -94,11 +98,14 @@ const Devices: Component = () => {
           return saved ? { ...dc, visible: saved.visible, order: usesPreviousDefaultOrder ? dc.order : saved.order } : dc;
         });
         setColumns(merged.sort((a, b) => a.order - b.order));
+        setInventoryColumnSelection(JSON.stringify(merged.filter(column => column.visible && inventoryParameterColumns.has(column.id)).map(column => column.id).sort()));
       } catch {
         setColumns([...defaultColumns]);
+        setInventoryColumnSelection(JSON.stringify(defaultColumns.filter(column => column.visible && inventoryParameterColumns.has(column.id)).map(column => column.id).sort()));
       }
     } else {
       setColumns([...defaultColumns]);
+      setInventoryColumnSelection(JSON.stringify(defaultColumns.filter(column => column.visible && inventoryParameterColumns.has(column.id)).map(column => column.id).sort()));
     }
   });
 
@@ -138,7 +145,13 @@ const Devices: Component = () => {
   };
 
   const toggleColumn = (id: string) => {
+    const newlyVisible = columns().some(column => column.id === id && !column.visible);
     setColumns(cols => cols.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+    if (newlyVisible && inventoryParameterColumns.has(id)) {
+      const requested = new Set<string>(JSON.parse(inventoryColumnSelection() || '[]'));
+      requested.add(id);
+      setInventoryColumnSelection(JSON.stringify([...requested].sort()));
+    }
   };
 
   const getRxPower = (device: Device) => {
