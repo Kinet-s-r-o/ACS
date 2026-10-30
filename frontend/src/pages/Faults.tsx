@@ -217,7 +217,7 @@ const Faults: Component = () => {
                 onInput={(event) => { setSearchQuery(event.currentTarget.value); setFaultPage(0); }}
                 placeholder="Search faults…"
                 aria-label="Search faults by device, code, message, parameter, or status"
-                class="input pl-9! w-56 text-sm"
+                class="input pl-9! sm:w-72 text-sm"
               />
               <Show when={searchQuery()}>
                 <button type="button" onClick={() => { setSearchQuery(''); setFaultPage(0); }} class="input-clear" aria-label="Clear fault search"><X size={12} /></button>
