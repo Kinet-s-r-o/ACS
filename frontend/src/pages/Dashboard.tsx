@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, Index, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
-import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, RotateCcw } from 'lucide-solid';
+import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, RotateCcw, MoreVertical } from 'lucide-solid';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
 import { api, type DashboardAggregationOption, type DashboardPanelConfig, type DashboardPanelLayout, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
@@ -328,6 +328,8 @@ const Dashboard: Component = () => {
   const [showCopyUsers, setShowCopyUsers] = createSignal(false);
   const [selectedRecipientIDs, setSelectedRecipientIDs] = createSignal<number[]>([]);
   const [savingPanel, setSavingPanel] = createSignal(false);
+  const [showPanelActionsMenu, setShowPanelActionsMenu] = createSignal(false);
+  let panelActionsMenu: HTMLDivElement | undefined;
   const [storedGrowthInterval, setStoredGrowthInterval] = createPersistedSignal('acs.dashboard.growth-interval', 'daily');
   const growthInterval = () => growthIntervals.some(({ id }) => id === storedGrowthInterval()) ? storedGrowthInterval() as DeviceGrowthInterval : 'daily';
   const [refreshKey, setRefreshKey] = createSignal(0);
@@ -383,6 +385,20 @@ const Dashboard: Component = () => {
     });
   };
   const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); refetchPanelAnalytics(); };
+  onMount(() => {
+    const closeMenu = (event: MouseEvent) => {
+      if (!panelActionsMenu?.contains(event.target as Node)) setShowPanelActionsMenu(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowPanelActionsMenu(false);
+    };
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', closeOnEscape);
+    onCleanup(() => {
+      document.removeEventListener('click', closeMenu);
+      document.removeEventListener('keydown', closeOnEscape);
+    });
+  });
   const layoutFor = (id: string, fallbackOrder = 100): FleetPanelLayout => {
     const saved = fleetLayout()[id] ?? { order: fallbackOrder, width: 40, height: 2 };
     return { ...saved, width: Math.max(30, Math.min(120, saved.width <= 12 ? saved.width * 10 : saved.width)), height: saved.height > 5 ? saved.height : 0 };
@@ -585,8 +601,24 @@ const Dashboard: Component = () => {
         <div class="flex flex-wrap items-center justify-end gap-2">
           <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
           <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
-          <Show when={panelConfigs().some((panel) => removableDefaultAggregationPanels.includes(panel.id) && panel.hidden)}><button type="button" class="btn btn-secondary text-xs" onClick={() => void restoreDefaultAggregationPanels()} disabled={savingPanel() || savedPanelConfigs.loading}><RotateCcw size={14} />Restore built-in panels</button></Show>
           <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
+          <div class="relative" ref={panelActionsMenu}>
+            <button type="button" class="icon-button" aria-label="Fleet panel actions" aria-haspopup="menu" aria-expanded={showPanelActionsMenu()} onClick={() => setShowPanelActionsMenu((visible) => !visible)}>
+              <MoreVertical size={18} />
+            </button>
+            <Show when={showPanelActionsMenu()}>
+              <div class="absolute right-0 top-full z-50 mt-2 min-w-48 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
+                <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" onClick={() => { setShowPanelActionsMenu(false); addPanel(); }} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}>
+                  <Plus size={14} />Add panel
+                </button>
+                <Show when={panelConfigs().some((panel) => removableDefaultAggregationPanels.includes(panel.id) && panel.hidden)}>
+                  <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" onClick={() => { setShowPanelActionsMenu(false); void restoreDefaultAggregationPanels(); }} disabled={savingPanel() || savedPanelConfigs.loading}>
+                    <RotateCcw size={14} />Restore built-in panels
+                  </button>
+                </Show>
+              </div>
+            </Show>
+          </div>
         </div>
       </header>
 
