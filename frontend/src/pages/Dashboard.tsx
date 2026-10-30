@@ -54,7 +54,7 @@ const readLegacyFleetLayout = (): FleetLayout => {
 const FleetPanelFrame: Component<{
   id: string;
   layout: FleetPanelLayout;
-  onMove: (source: string, target: string) => void;
+  onMove: (source: string, target: string, after: boolean) => void;
   onResize: (id: string, width: number, height?: number) => void;
   children: JSX.Element;
 }> = (props) => {
@@ -106,18 +106,36 @@ const FleetPanelFrame: Component<{
       transform: 'none', transition: 'none',
     });
     document.body.append(ghost);
-    let previousTarget = '';
+    let previousPosition = '';
     const move = (current: PointerEvent) => {
       ghost.style.left = `${current.clientX - offsetX}px`;
       ghost.style.top = `${current.clientY - offsetY}px`;
-      const target = document.elementFromPoint(current.clientX, current.clientY)?.closest<HTMLElement>('.fleet-layout-panel');
-      const targetID = target?.dataset.fleetPanelId && target.dataset.fleetPanelId !== props.id ? target.dataset.fleetPanelId : '';
+      const grid = source.closest('.fleet-dashboard-grid');
+      const hit = document.elementFromPoint(current.clientX, current.clientY);
+      const hitPanel = hit?.closest<HTMLElement>('.fleet-layout-panel');
+      let target = hitPanel && hitPanel !== source ? hitPanel : null;
+      if (!hitPanel && grid && hit && grid.contains(hit)) {
+        const candidates = Array.from(grid.querySelectorAll<HTMLElement>('.fleet-layout-panel')).filter((panel) => panel !== source);
+        target = candidates.reduce<HTMLElement | null>((closest, panel) => {
+          if (!closest) return panel;
+          const distance = (candidate: HTMLElement) => {
+            const bounds = candidate.getBoundingClientRect();
+            const dx = Math.max(bounds.left - current.clientX, 0, current.clientX - bounds.right);
+            const dy = Math.max(bounds.top - current.clientY, 0, current.clientY - bounds.bottom);
+            return dx * dx + dy * dy;
+          };
+          return distance(panel) < distance(closest) ? panel : closest;
+        }, null);
+      }
+      const targetID = target?.dataset.fleetPanelId ?? '';
+      const after = target ? current.clientX >= target.getBoundingClientRect().left + target.getBoundingClientRect().width / 2 : false;
+      const position = targetID ? `${targetID}:${after}` : '';
       document.querySelectorAll('.fleet-layout-panel.is-drop-target').forEach((panel) => panel.classList.remove('is-drop-target'));
       if (targetID && target) {
         target.classList.add('is-drop-target');
-        if (targetID !== previousTarget) props.onMove(props.id, targetID);
+        if (position !== previousPosition) props.onMove(props.id, targetID, after);
       }
-      previousTarget = targetID;
+      previousPosition = position;
     };
     const end = () => {
       window.removeEventListener('pointermove', move);
@@ -347,10 +365,19 @@ const Dashboard: Component = () => {
     const saved = current[id] ?? layoutFor(id);
     return { ...current, [id]: { ...saved, width, ...(height === undefined ? {} : { height }) } };
   });
-  const movePanel = (source: string, target: string) => setFleetLayout((current) => {
-    const sourceLayout = current[source] ?? layoutFor(source);
-    const targetLayout = current[target] ?? layoutFor(target);
-    return { ...current, [source]: { ...sourceLayout, order: targetLayout.order }, [target]: { ...targetLayout, order: sourceLayout.order } };
+  const movePanel = (source: string, target: string, after: boolean) => setFleetLayout((current) => {
+    const layouts: FleetLayout = { ...defaultFleetLayout, ...current };
+    panelConfigs().filter((panel) => (panel.kind ?? 'parameter') === 'parameter').forEach((panel, index) => {
+      if (!layouts[panel.id]) layouts[panel.id] = layoutFor(panel.id, 2 + index);
+    });
+    if (!layouts[source]) layouts[source] = layoutFor(source);
+    if (!layouts[target]) layouts[target] = layoutFor(target);
+    const ordered = Object.entries(layouts).sort((a, b) => a[1].order - b[1].order);
+    const sourceEntry = ordered.findIndex(([id]) => id === source);
+    const [moving] = ordered.splice(sourceEntry, 1);
+    const targetIndex = ordered.findIndex(([id]) => id === target);
+    ordered.splice(Math.max(0, targetIndex + (after ? 1 : 0)), 0, moving);
+    return Object.fromEntries(ordered.map(([id, layout], order) => [id, { ...layout, order }])) as FleetLayout;
   });
   const closePanelSettings = () => { setPanelDraft(null); setShowCopyUsers(false); setSelectedRecipientIDs([]); };
   const updatePanelDraft = (update: (draft: DashboardPanelDraft) => DashboardPanelDraft) => setPanelDraft((draft) => draft ? update(draft) : draft);
