@@ -60,6 +60,10 @@ func EnsureAnalyticsParameterIndex(ctx context.Context, db *gorm.DB) error {
 		ON device_parameters USING gin (name ` + operatorClass + `)`).Error; err != nil {
 		return err
 	}
+	if err := db.Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_device_updated
+		ON device_parameters (device_id, updated_at DESC, name) INCLUDE (value)`).Error; err != nil {
+		return err
+	}
 	return db.Exec(`ANALYZE device_parameters (name)`).Error
 }
 
@@ -729,27 +733,35 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 
 	query := `WITH sampled_devices AS MATERIALIZED (
 		SELECT id FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
-	), matching_parameters AS MATERIALIZED (
-		SELECT dp.device_id, dp.name, dp.value, dp.updated_at
-		FROM device_parameters dp JOIN sampled_devices sd ON sd.id = dp.device_id
-		WHERE dp.name ILIKE ? ESCAPE '!'
-			AND dp.name NOT ILIKE '%password%'
-			AND dp.name NOT ILIKE '%passphrase%'
-			AND dp.name NOT ILIKE '%presharedkey%'
-			AND dp.name NOT ILIKE '%pre_shared_key%'
-			AND dp.name NOT ILIKE '%privatekey%'
-			AND dp.name NOT ILIKE '%secret%'
-			AND dp.name NOT ILIKE '%connectionrequestusername%'
-			AND dp.name NOT ILIKE '%.username'
 	), selected_values AS MATERIALIZED (
-		SELECT DISTINCT ON (dp.device_id) dp.device_id, dp.name, BTRIM(dp.value)::numeric::double precision AS value
-		FROM matching_parameters dp
-		WHERE CASE WHEN LENGTH(BTRIM(dp.value)) <= 256 AND BTRIM(dp.value) ~ ?
-			THEN BTRIM(dp.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
-			ELSE FALSE END
-		ORDER BY dp.device_id, dp.updated_at DESC, dp.name
+		SELECT sd.id AS device_id, latest.name,
+			BTRIM(latest.value)::numeric::double precision AS value
+		FROM sampled_devices sd
+		CROSS JOIN LATERAL (
+			SELECT dp.name, dp.value
+			FROM device_parameters dp
+			WHERE dp.device_id = sd.id
+				AND dp.name ILIKE ? ESCAPE '!'
+				AND dp.name NOT ILIKE '%password%'
+				AND dp.name NOT ILIKE '%passphrase%'
+				AND dp.name NOT ILIKE '%presharedkey%'
+				AND dp.name NOT ILIKE '%pre_shared_key%'
+				AND dp.name NOT ILIKE '%privatekey%'
+				AND dp.name NOT ILIKE '%secret%'
+				AND dp.name NOT ILIKE '%connectionrequestusername%'
+				AND dp.name NOT ILIKE '%.username'
+				AND CASE WHEN LENGTH(BTRIM(dp.value)) <= 256 AND BTRIM(dp.value) ~ ?
+					THEN BTRIM(dp.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+					ELSE FALSE END
+			ORDER BY dp.updated_at DESC, dp.name
+			LIMIT 1
+		) latest
 	), normalized_values AS (
-		SELECT device_id,
+		SELECT device_id, name, value
+		FROM selected_values
+		WHERE value IS NOT NULL
+	), normalized_values_with_units AS (
+		SELECT device_id, name,
 			CASE
 				WHEN LOWER(name) LIKE '%rxpower%' AND value > 0 AND value < 10000 THEN 10 * LN(value / 10000.0) / LN(10.0)
 				WHEN LOWER(name) LIKE '%rxpower%' AND value > 100 THEN value / 100.0
@@ -757,9 +769,9 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 				WHEN (LOWER(name) LIKE '%temperature%' OR LOWER(name) LIKE '%temp%') AND value > 100 THEN value / 10.0
 				ELSE value
 			END AS value
-		FROM selected_values
+		FROM normalized_values
 	), bucketed AS (
-		SELECT CASE ` + strings.Join(caseParts, " ") + ` END AS label FROM normalized_values
+		SELECT CASE ` + strings.Join(caseParts, " ") + ` END AS label FROM normalized_values_with_units
 	), bucket_counts AS (
 		SELECT label, COUNT(*) AS count FROM bucketed GROUP BY label
 	)
