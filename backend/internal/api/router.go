@@ -846,59 +846,42 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 		var deviceTemp float64 = -999
 		var deviceUptime float64 = -1
 		var deviceAccessType string
-		totalStations := 0
-
-		for _, p := range device.Parameters {
-			// RX Power - ambil nilai pertama yang valid
-			if deviceRxPower == -999 && (strings.Contains(p.Name, "RXPower") || strings.Contains(p.Name, "RxPower")) {
-				if val, err := strconv.ParseFloat(p.Value, 64); err == nil {
-					if val > 0 && val < 10000 {
-						val = 10 * math.Log10(val/10000)
-					} else if val > 100 {
-						val = val / 100
-					}
-					deviceRxPower = val
+		totalStations := int(device.WifiStations)
+		if device.RxPowerValue != nil {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(*device.RxPowerValue), 64); err == nil {
+				if val > 0 && val < 10000 {
+					val = 10 * math.Log10(val/10000)
+				} else if val > 100 {
+					val /= 100
 				}
+				deviceRxPower = val
 			}
-
-			// Temperature - ambil nilai pertama yang valid
-			if deviceTemp == -999 && (strings.Contains(p.Name, "Temperature") || strings.Contains(p.Name, "Temp")) {
-				if val, err := strconv.ParseFloat(p.Value, 64); err == nil {
-					if val > 1000 {
-						val = val / 256
-					} else if val > 100 {
-						val = val / 10
-					}
-					deviceTemp = val
+		}
+		if device.Temperature != nil {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(*device.Temperature), 64); err == nil {
+				if val > 1000 {
+					val /= 256
+				} else if val > 100 {
+					val /= 10
 				}
+				deviceTemp = val
 			}
-
-			// Uptime - prioritaskan DeviceInfo.UpTime
-			if deviceUptime == -1 && (strings.HasSuffix(p.Name, "DeviceInfo.UpTime") || strings.HasSuffix(p.Name, "UpTime")) {
-				if val, err := strconv.ParseFloat(p.Value, 64); err == nil {
-					deviceUptime = val
-				}
+		}
+		if device.Uptime != nil {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(*device.Uptime), 64); err == nil {
+				deviceUptime = val
 			}
-
-			// Access Type - ambil pertama yang valid
-			if deviceAccessType == "" && (strings.Contains(p.Name, "PONMode") || strings.Contains(p.Name, "AccessType")) {
-				valUpper := strings.ToUpper(p.Value)
-				if strings.Contains(valUpper, "EPON") {
-					deviceAccessType = "EPON"
-				} else if strings.Contains(valUpper, "GPON") {
-					deviceAccessType = "GPON"
-				} else if strings.Contains(valUpper, "ETH") {
-					deviceAccessType = "Ethernet"
-				} else if p.Value != "" {
-					deviceAccessType = "Other"
-				}
-			}
-
-			// WiFi Stations - sum semua
-			if strings.Contains(p.Name, "TotalAssociations") || strings.Contains(p.Name, "AssociatedDeviceNumberOfEntries") {
-				if val, err := strconv.Atoi(p.Value); err == nil {
-					totalStations += val
-				}
+		}
+		if device.AccessType != nil {
+			valUpper := strings.ToUpper(*device.AccessType)
+			if strings.Contains(valUpper, "EPON") {
+				deviceAccessType = "EPON"
+			} else if strings.Contains(valUpper, "GPON") {
+				deviceAccessType = "GPON"
+			} else if strings.Contains(valUpper, "ETH") {
+				deviceAccessType = "Ethernet"
+			} else if *device.AccessType != "" {
+				deviceAccessType = "Other"
 			}
 		}
 

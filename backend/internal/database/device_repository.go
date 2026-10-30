@@ -576,26 +576,77 @@ func growthNextBucket(value time.Time, interval string) time.Time {
 	}
 }
 
-func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int) ([]*models.Device, int, error) {
+type FleetAnalyticsDevice struct {
+	Manufacturer *string    `gorm:"column:manufacturer"`
+	ProductClass *string    `gorm:"column:product_class"`
+	ModelName    *string    `gorm:"column:model_name"`
+	LastInform   *time.Time `gorm:"column:last_inform"`
+	RxPowerValue *string    `gorm:"column:rx_power_value"`
+	Temperature  *string    `gorm:"column:temperature_value"`
+	Uptime       *string    `gorm:"column:uptime_value"`
+	AccessType   *string    `gorm:"column:access_type_value"`
+	WifiStations int64      `gorm:"column:wifi_stations"`
+}
+
+const analyticsIntegerValuePattern = `^([+-]{0,1})[0-9]+$`
+
+func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int) ([]FleetAnalyticsDevice, int, error) {
+	query := `WITH sampled_devices AS MATERIALIZED (
+		SELECT id, manufacturer, product_class, model_name, last_inform
+		FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
+	), station_counts AS (
+		SELECT p.device_id, SUM(CASE
+			WHEN LENGTH(BTRIM(p.value)) <= 20 AND BTRIM(p.value) ~ ?
+				AND BTRIM(p.value)::numeric BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
+			THEN BTRIM(p.value)::bigint ELSE 0 END) AS wifi_stations
+		FROM device_parameters p
+		JOIN sampled_devices d ON d.id = p.device_id
+		WHERE p.name LIKE '%TotalAssociations%' OR p.name LIKE '%AssociatedDeviceNumberOfEntries%'
+		GROUP BY p.device_id
+	)
+	SELECT d.manufacturer, d.product_class, d.model_name, d.last_inform,
+		rx.value AS rx_power_value, temp.value AS temperature_value,
+		uptime.value AS uptime_value, access_type.value AS access_type_value,
+		COALESCE(station_counts.wifi_stations, 0) AS wifi_stations
+	FROM sampled_devices d
+	LEFT JOIN LATERAL (
+		SELECT p.value FROM device_parameters p
+		WHERE p.device_id = d.id AND (p.name LIKE '%RXPower%' OR p.name LIKE '%RxPower%')
+			AND LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
+			AND BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+		ORDER BY p.updated_at DESC, p.name LIMIT 1
+	) rx ON TRUE
+	LEFT JOIN LATERAL (
+		SELECT p.value FROM device_parameters p
+		WHERE p.device_id = d.id AND (p.name LIKE '%Temperature%' OR p.name LIKE '%Temp%')
+			AND LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
+			AND BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+		ORDER BY p.updated_at DESC, p.name LIMIT 1
+	) temp ON TRUE
+	LEFT JOIN LATERAL (
+		SELECT p.value FROM device_parameters p
+		WHERE p.device_id = d.id AND p.name LIKE '%UpTime'
+			AND LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
+			AND BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+		ORDER BY p.updated_at DESC, p.name LIMIT 1
+	) uptime ON TRUE
+	LEFT JOIN LATERAL (
+		SELECT p.value FROM device_parameters p
+		WHERE p.device_id = d.id AND (p.name LIKE '%PONMode%' OR p.name LIKE '%AccessType%') AND p.value <> ''
+		ORDER BY p.updated_at DESC, p.name LIMIT 1
+	) access_type ON TRUE
+	LEFT JOIN station_counts ON station_counts.device_id = d.id`
+	var devices []FleetAnalyticsDevice
+	args := []interface{}{maxDevices, analyticsIntegerValuePattern, analyticsNumericValuePattern, analyticsNumericValuePattern, analyticsNumericValuePattern}
+	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&devices).Error
+	if err != nil {
+		return nil, 0, err
+	}
 	var total int64
 	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	patterns := []string{"%RXPower%", "%RxPower%", "%Temperature%", "%Temp%", "%UpTime%", "%PONMode%", "%AccessType%", "%TotalAssociations%", "%AssociatedDeviceNumberOfEntries%"}
-	query := r.db.WithContext(ctx)
-	conditions := make([]string, 0, len(patterns))
-	arguments := make([]interface{}, 0, len(patterns))
-	for _, pattern := range patterns {
-		conditions = append(conditions, "name LIKE ?")
-		arguments = append(arguments, pattern)
-	}
-	preloadArgs := append([]interface{}{"(" + strings.Join(conditions, " OR ") + ")"}, arguments...)
-	var devices []*models.Device
-	err := query.Preload("Parameters", preloadArgs...).
-		Order("last_inform DESC NULLS LAST").
-		Limit(maxDevices).
-		Find(&devices).Error
-	return devices, int(total), err
+	return devices, int(total), nil
 }
 
 type AnalyticsDistributionThreshold struct {
@@ -615,7 +666,7 @@ type AnalyticsDistributionRow struct {
 func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern string, maxDevices int, thresholds []AnalyticsDistributionThreshold) ([]AnalyticsDistributionRow, error) {
 	pattern = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_", "*", "%").Replace(pattern)
 	caseParts := make([]string, 0, len(thresholds))
-	args := []interface{}{maxDevices, analyticsNumericValuePattern, pattern}
+	args := []interface{}{maxDevices, pattern, analyticsNumericValuePattern}
 	for _, threshold := range thresholds {
 		if threshold.Max == nil {
 			caseParts = append(caseParts, "ELSE ?")
@@ -631,14 +682,13 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 
 	query := `WITH sampled_devices AS MATERIALIZED (
 		SELECT id FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
-	), raw_values AS (
-		SELECT dp.device_id, dp.name,
-			CASE WHEN LENGTH(BTRIM(dp.value)) <= 256
-			AND BTRIM(dp.value) ~ ?
-				THEN BTRIM(dp.value)::numeric END AS parsed_value
-		FROM device_parameters dp
-		JOIN sampled_devices sd ON sd.id = dp.device_id
-		WHERE dp.name ILIKE ? ESCAPE '!'
+	), selected_values AS (
+		SELECT candidate.device_id, candidate.name, candidate.value::double precision AS value
+		FROM sampled_devices sd
+		JOIN LATERAL (
+			SELECT dp.device_id, dp.name, BTRIM(dp.value)::numeric AS value
+			FROM device_parameters dp
+			WHERE dp.device_id = sd.id AND dp.name ILIKE ? ESCAPE '!'
 			AND dp.name NOT ILIKE '%password%'
 			AND dp.name NOT ILIKE '%passphrase%'
 			AND dp.name NOT ILIKE '%presharedkey%'
@@ -647,14 +697,11 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 			AND dp.name NOT ILIKE '%secret%'
 			AND dp.name NOT ILIKE '%connectionrequestusername%'
 			AND dp.name NOT ILIKE '%.username'
-	), valid_values AS (
-		SELECT device_id, name, parsed_value::double precision AS value
-		FROM raw_values
-		WHERE parsed_value BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
-	), first_values AS (
-		SELECT DISTINCT ON (device_id) device_id, name, value
-		FROM valid_values
-		ORDER BY device_id, name
+			AND LENGTH(BTRIM(dp.value)) <= 256 AND BTRIM(dp.value) ~ ?
+			AND BTRIM(dp.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+			ORDER BY dp.updated_at DESC, dp.name
+			LIMIT 1
+		) candidate ON TRUE
 	), normalized_values AS (
 		SELECT device_id,
 			CASE
@@ -664,7 +711,7 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 				WHEN (LOWER(name) LIKE '%temperature%' OR LOWER(name) LIKE '%temp%') AND value > 100 THEN value / 10.0
 				ELSE value
 			END AS value
-		FROM first_values
+		FROM selected_values
 	), bucketed AS (
 		SELECT CASE ` + strings.Join(caseParts, " ") + ` END AS label FROM normalized_values
 	), bucket_counts AS (
