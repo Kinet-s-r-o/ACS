@@ -1,14 +1,16 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, For, Show } from 'solid-js';
 import { Save } from 'lucide-solid';
-import { api } from '../lib/api';
+import { api, type DatabaseQuerySort } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
 import { ResourceError } from '../components/ResourceState';
 import { useFeedback } from '../components/Feedback';
 import SortableHeader from '../components/SortableHeader';
 import type { SortDirection } from '../lib/sorting';
-import type { DatabaseQuerySort } from '../lib/api';
+import ColumnFilter from '../components/ColumnFilter';
+import type { ColumnFilterState } from '../lib/filters';
+import { createPersistedJsonSignal } from '../lib/storage';
 
 const groups = [
   { title: 'Housekeeping', fields: [
@@ -57,9 +59,10 @@ const RetentionSettings: Component = () => {
   const [tableStats, { refetch: refetchTableStats }] = createResource(api.getRetentionStats);
   const [activeTab, setActiveTab] = createSignal<'retention' | 'statistics'>('retention');
   const [querySort, setQuerySort] = createSignal<{ column: DatabaseQuerySort; direction: SortDirection }>({ column: 'total_time', direction: 'desc' });
+  const [queryFilters, setQueryFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.database-query-statements', {});
   const [queryStats, { refetch: refetchQueryStats }] = createResource(
-    () => activeTab() === 'statistics' && hasPermission('database.stats.read') ? querySort() : undefined,
-    sort => sort ? api.getDatabaseStatistics(sort.column, sort.direction) : Promise.resolve(undefined),
+    () => activeTab() === 'statistics' && hasPermission('database.stats.read') ? { sort: querySort(), filters: queryFilters() } : undefined,
+    request => request ? api.getDatabaseStatistics(request.sort.column, request.sort.direction, request.filters) : Promise.resolve(undefined),
   );
   const [draft, setDraft] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
@@ -69,6 +72,12 @@ const RetentionSettings: Component = () => {
     column: column as DatabaseQuerySort,
     direction: current.column === column && current.direction === 'desc' ? 'asc' : 'desc',
   }));
+  const applyQueryFilter = (column: string, state: ColumnFilterState | null) => setQueryFilters(previous => {
+    const next = { ...previous };
+    if (state) next[column] = state;
+    else delete next[column];
+    return next;
+  });
   const save = async (event: SubmitEvent) => {
     event.preventDefault();
     const values: Record<string, string> = { retention_enabled: value('retention_enabled') };
@@ -154,22 +163,25 @@ const RetentionSettings: Component = () => {
         <section class="card p-5 space-y-4">
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div><h2 class="text-sm font-medium text-secondary">Query execution</h2><p class="text-xs text-muted mt-1">Aggregated timings for up to 50 statements in the current database. Select a column heading to sort; select it again to reverse the order.</p></div>
-            <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchQueryStats()} disabled={queryStats.loading}>Refresh</button>
+            <div class="flex gap-2">
+              <Show when={Object.keys(queryFilters()).length > 0}><button type="button" class="btn btn-secondary text-xs" onClick={() => setQueryFilters({})}>Clear filters</button></Show>
+              <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchQueryStats()} disabled={queryStats.loading}>Refresh</button>
+            </div>
           </div>
           <p class="text-xs text-muted">Query timings are cumulative since the last statistics reset. SQL text is normalized by PostgreSQL and may be unavailable if the database account cannot view it.</p>
           <Show when={!queryStats.error} fallback={<ResourceError title="Query statistics are unavailable" description="Check database permissions and retry." onRetry={() => void refetchQueryStats()} />}>
             <Show when={queryStats()?.available} fallback={queryStats()?.reason ? <div class="border border-subtle p-4 text-sm text-secondary" role="status"><strong>Query tracking is not enabled.</strong><p class="text-xs text-muted mt-1">{queryStats()?.reason}. Enable pg_stat_statements on the PostgreSQL server and install it in this database to view statement timings.</p></div> : <div class="skeleton h-16 w-full" />}>
-              <Show when={(queryStats()?.queries.length ?? 0) > 0} fallback={<p class="text-sm text-muted">No statement statistics are available yet.</p>}>
+              <Show when={(queryStats()?.queries.length ?? 0) > 0} fallback={<p class="text-sm text-muted">{Object.keys(queryFilters()).length > 0 ? 'No statements match the active filters.' : 'No statement statistics are available yet.'}</p>}>
                 <p class="text-xs text-muted">Last reset: {queryStats()?.stats_reset ? new Date(queryStats()!.stats_reset!).toLocaleString() : 'unknown'}</p>
                 <div class="overflow-x-auto border border-subtle rounded"><table class="w-full text-xs text-left"><thead class="bg-surface text-muted"><tr>
-                  <th scope="col" class="sticky left-0 z-10 bg-surface p-2 min-w-72"><SortableHeader column="query" label="Statement" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="calls" label="Calls" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="total_time" label="Total ms" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="mean_time" label="Average ms" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="rows" label="Rows" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="shared_read_blocks" label="Shared reads" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="shared_hit_blocks" label="Shared hits" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
-                  <th scope="col" class="p-2 text-right"><SortableHeader column="temp_blocks" label="Temp blocks" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="sticky left-0 z-10 bg-surface p-2 min-w-72"><SortableHeader column="query" label="Statement" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort}><ColumnFilter columnId="query" label="Statement" active={queryFilters().query || null} onApply={state => applyQueryFilter('query', state)} /></SortableHeader></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="calls" label="Calls" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="calls" label="Calls" numeric active={queryFilters().calls || null} onApply={state => applyQueryFilter('calls', state)} /></div></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="total_time" label="Total ms" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="total_time" label="Total ms" numeric active={queryFilters().total_time || null} onApply={state => applyQueryFilter('total_time', state)} /></div></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="mean_time" label="Average ms" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="mean_time" label="Average ms" numeric active={queryFilters().mean_time || null} onApply={state => applyQueryFilter('mean_time', state)} /></div></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="rows" label="Rows" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="rows" label="Rows" numeric active={queryFilters().rows || null} onApply={state => applyQueryFilter('rows', state)} /></div></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="shared_read_blocks" label="Shared reads" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="shared_read_blocks" label="Shared reads" numeric active={queryFilters().shared_read_blocks || null} onApply={state => applyQueryFilter('shared_read_blocks', state)} /></div></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="shared_hit_blocks" label="Shared hits" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="shared_hit_blocks" label="Shared hits" numeric active={queryFilters().shared_hit_blocks || null} onApply={state => applyQueryFilter('shared_hit_blocks', state)} /></div></th>
+                  <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="temp_blocks" label="Temp blocks" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="temp_blocks" label="Temp blocks" numeric active={queryFilters().temp_blocks || null} onApply={state => applyQueryFilter('temp_blocks', state)} /></div></th>
                 </tr></thead><tbody><For each={queryStats()?.queries}>{query => <tr class="border-t border-subtle align-top">
                   <td class="sticky left-0 z-10 bg-surface p-2 min-w-72"><details><summary class="cursor-pointer text-primary">{query.query ? query.query.slice(0, 160) : `Query ${query.query_id} (text unavailable)`}</summary><pre class="mt-2 max-w-[70vw] overflow-x-auto whitespace-pre-wrap break-all font-mono text-muted">{query.query || 'SQL text is not available to the application database role.'}</pre></details></td>
                   <td class="p-2 text-right font-mono tabular-nums">{query.calls.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{query.total_time_ms.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td><td class="p-2 text-right font-mono tabular-nums">{query.mean_time_ms.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td class="p-2 text-right font-mono tabular-nums">{query.rows.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{query.shared_read_blocks.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{query.shared_hit_blocks.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{(query.temp_read_blocks + query.temp_write_blocks).toLocaleString()}</td>

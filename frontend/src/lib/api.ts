@@ -1,3 +1,5 @@
+import type { ColumnFilterState } from './filters';
+
 export const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:7548`;
 
 export interface APIToken {
@@ -212,7 +214,10 @@ export const api = {
   getSettings: () => request<Record<string, string>>('/settings'),
   getConnectionRequestSecret: () => request<{ value: string }>('/settings/connection-request-secret'),
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
-  getDatabaseStatistics: (sort: DatabaseQuerySort = 'total_time', direction: 'asc' | 'desc' = 'desc') => request<DatabaseStatistics>(`/settings/database/statistics?sort=${sort}&direction=${direction}`),
+  getDatabaseStatistics: (sort: DatabaseQuerySort = 'total_time', direction: 'asc' | 'desc' = 'desc', filters: Record<string, ColumnFilterState> = {}) => {
+    const params = new URLSearchParams({ sort, direction, filters: JSON.stringify(filters) });
+    return request<DatabaseStatistics>(`/settings/database/statistics?${params}`);
+  },
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getUsers: () => request<User[]>('/users'),
   getAPITokens: (userId: number) => request<APIToken[]>(`/users/${userId}/api-tokens`),

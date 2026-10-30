@@ -1296,7 +1296,21 @@ func (r *Router) handleRetentionStats(w http.ResponseWriter, req *http.Request) 
 func (r *Router) handleDatabaseStatistics(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
 	defer cancel()
-	stats, err := database.GetDatabaseStatistics(ctx, r.db, req.URL.Query().Get("sort"), req.URL.Query().Get("direction"))
+	filterJSON := req.URL.Query().Get("filters")
+	if len(filterJSON) > 8192 {
+		respondError(w, http.StatusBadRequest, "Database query filters are too large")
+		return
+	}
+	filters, err := database.ParseDatabaseQueryFilters(filterJSON)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid database query filters")
+		return
+	}
+	if err := database.ValidateDatabaseQueryFilters(filters); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid database query filters")
+		return
+	}
+	stats, err := database.GetDatabaseStatistics(ctx, r.db, req.URL.Query().Get("sort"), req.URL.Query().Get("direction"), filters)
 	if err != nil {
 		log.Printf("Error getting database query statistics: %v", err)
 		respondError(w, http.StatusServiceUnavailable, "Database query statistics are unavailable")
