@@ -137,7 +137,7 @@ const FleetPanelFrame: Component<{
   return <div
     class={`fleet-layout-panel ${dragging() ? 'is-dragging' : ''}`}
     data-fleet-panel-id={props.id}
-    style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};width:${(width() / occupiedColumns()) * 100}%;--fleet-panel-height:${savedHeight()}px`}
+    style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};width:calc(${(width() / occupiedColumns()) * 100}% - var(--fleet-grid-line));--fleet-panel-height:${savedHeight()}px`}
   >
     <div class="fleet-panel-shell">
       {props.children}
