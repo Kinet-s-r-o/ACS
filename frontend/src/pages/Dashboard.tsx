@@ -303,7 +303,7 @@ const ParameterDistribution: Component<{ config: DashboardPanelConfig; refreshKe
 };
 
 const Dashboard: Component = () => {
-  const { notify } = useFeedback();
+  const { confirm, notify } = useFeedback();
   const { user, isFullAccess, hasPermission } = useAuth();
   const [savedPanelConfigs, { mutate: setSavedPanelConfigs, refetch: refetchPanelConfigs }] = createResource(loadDashboardPanelConfigs);
   const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs.error ? [] : savedPanelConfigs() ?? []));
@@ -488,6 +488,33 @@ const Dashboard: Component = () => {
     const next = buildPanelConfig();
     if (next) await persistPanelConfig(next, true);
   };
+  const deletePanel = async () => {
+    const panel = panelDraft();
+    if (!panel?.id.startsWith('custom-')) return;
+    if (!await confirm({
+      title: `Remove “${panel.title}” panel?`,
+      description: 'This removes the custom panel and its saved layout from your Fleet dashboard. Copies already shared with other users stay on their dashboards.',
+      confirmLabel: 'Remove panel',
+      tone: 'danger',
+    })) return;
+    setSavingPanel(true);
+    try {
+      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? []).filter((item) => item.id !== panel.id);
+      const saved = await api.saveDashboardPanels(panels);
+      setSavedPanelConfigs(saved);
+      setFleetLayout((current) => {
+        const next = { ...current };
+        delete next[panel.id];
+        return next;
+      });
+      closePanelSettings();
+      notify({ tone: 'success', title: 'Custom panel removed', message: `“${panel.title}” was removed from your Fleet dashboard.` });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not remove panel', message: 'The panel remains on your Fleet dashboard.', detail: (error as Error).message, persistent: true });
+    } finally {
+      setSavingPanel(false);
+    }
+  };
   const toggleRecipient = (id: number) => setSelectedRecipientIDs((previous) => previous.includes(id) ? previous.filter((value) => value !== id) : [...previous, id]);
   const copyPanelToRecipients = async () => {
     const next = buildPanelConfig();
@@ -626,7 +653,7 @@ const Dashboard: Component = () => {
         </div>
       </Show>
       <Show when={panelDraft()}>
-        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></>}>
+        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<div class="flex w-full items-center justify-between gap-3"><Show when={panelDraft()?.id.startsWith('custom-')}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
             <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
