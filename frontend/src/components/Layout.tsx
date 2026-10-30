@@ -3,13 +3,13 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid
 import { A, useLocation } from '@solidjs/router';
 import {
   Activity, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, HardDrive, LayoutDashboard, LogOut,
-  Menu, Moon, Router, Settings, ShieldCheck, Sun, X,
+  Menu, Router, Settings, ShieldCheck, X,
 } from 'lucide-solid';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { APP_VERSION } from '../lib/version';
 import { appName, appLogo } from '../lib/appName';
-import { useTheme } from '../lib/theme';
+import ThemeSwitcher from './ThemeSwitcher';
 import { enableTableColumnReordering } from '../lib/tableColumnReorder';
 import { playUITransition, transitionSettingsFromAPI, updateUITransitionSettings } from '../lib/uiTransitions';
 
@@ -72,7 +72,6 @@ const Layout: ParentComponent = (props) => {
   const [apiOnline, setAPIOnline] = createSignal<boolean | null>(null);
   const [settingsExpanded, setSettingsExpanded] = createSignal(false);
   const [inventoryExpanded, setInventoryExpanded] = createSignal(false);
-  const { isDark, toggleTheme } = useTheme();
   const { user, logout, isFullAccess } = useAuth();
   let menuButton: HTMLButtonElement | undefined;
   let previousContentLocation = `${location.pathname}${location.search}`;
@@ -214,9 +213,7 @@ const Layout: ParentComponent = (props) => {
               <Activity size={14} />
               <span>{apiOnline() === null ? 'Checking API' : apiOnline() ? 'API operational' : 'API unavailable'}</span>
             </button>
-            <button class="icon-button" onClick={toggleTheme} aria-label={isDark() ? 'Use light theme' : 'Use dark theme'}>
-              {isDark() ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
+            <ThemeSwitcher />
           </div>
         </header>
 

@@ -1,12 +1,12 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { Eye, EyeOff, Moon, Sun } from 'lucide-solid';
+import { Eye, EyeOff } from 'lucide-solid';
 import QRCode from 'qrcode';
 import { useAuth } from '../lib/auth';
 import { APP_VERSION } from '../lib/version';
 import { appName } from '../lib/appName';
-import { useTheme } from '../lib/theme';
+import ThemeSwitcher from '../components/ThemeSwitcher';
 
 const Login: Component = () => {
   const [username, setUsername] = createSignal('');
@@ -19,7 +19,6 @@ const Login: Component = () => {
   const [factorSecret, setFactorSecret] = createSignal('');
   const [factorQR, setFactorQR] = createSignal('');
   const { login, completeTwoFactor, cancelTwoFactor } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleSubmit = async (event: SubmitEvent) => {
@@ -94,7 +93,7 @@ const Login: Component = () => {
             <div><div class="brand-name">{appName()}</div><div class="brand-subtitle">CWMP control plane</div></div>
           </div>
           <span class="hidden lg:block text-[11px] text-muted">Operator authentication</span>
-          <button class="icon-button" onClick={toggleTheme} aria-label="Toggle theme">{isDark() ? <Sun size={17} /> : <Moon size={17} />}</button>
+          <ThemeSwitcher />
         </div>
 
         <div class="flex-1 flex items-center justify-center px-5 py-10">
