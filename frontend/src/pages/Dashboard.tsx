@@ -1,15 +1,15 @@
-import { createMemo, createResource, createSignal, For, onCleanup, Show, type Component, type JSX } from 'solid-js';
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
-import { api, type DashboardPanelConfig, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
+import { api, type DashboardPanelConfig, type DashboardPanelLayout, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
 import { useFeedback } from '../components/Feedback';
 import { formatDateTime } from '../lib/dateTime';
 import { useAuth } from '../lib/auth';
 import DeviceGrowthChart from '../components/DeviceGrowthChart';
-import { createPersistedJsonSignal } from '../lib/storage';
+import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 
 interface DistributionListProps {
   data: Record<string, number>;
@@ -22,13 +22,33 @@ interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
   thresholds: Array<Omit<DashboardThreshold, 'max'> & { max: string }>;
 }
 
-interface FleetPanelLayout { order: number; width: number; height: number }
+type FleetPanelLayout = DashboardPanelLayout;
 type FleetLayout = Record<string, FleetPanelLayout>;
 
 const defaultFleetLayout: FleetLayout = {
   growth: { order: 0, width: 60, height: 2 }, contactRecency: { order: 1, width: 60, height: 2 },
   uptime: { order: 2, width: 40, height: 2 }, temperature: { order: 3, width: 40, height: 2 }, rxPower: { order: 4, width: 40, height: 2 },
   accessType: { order: 5, width: 40, height: 2 }, manufacturer: { order: 6, width: 40, height: 2 }, productClass: { order: 7, width: 40, height: 2 },
+};
+
+const normalizeFleetLayout = (layout: FleetLayout): FleetLayout => Object.fromEntries(
+  Object.entries(layout).filter((entry): entry is [string, FleetPanelLayout] => {
+    const item = entry[1] as FleetPanelLayout | undefined;
+    return !!item && Number.isFinite(item.order) && Number.isFinite(item.width) && Number.isFinite(item.height);
+  }).map(([id, item]) => [id, {
+    ...item,
+    width: Math.max(30, Math.min(120, item.width <= 12 ? item.width * 10 : item.width)),
+    height: item.height > 5 ? item.height : 0,
+  }]),
+);
+
+const readLegacyFleetLayout = (): FleetLayout => {
+  try {
+    const saved = localStorage.getItem('acs.dashboard.fleet-layout');
+    if (!saved) return defaultFleetLayout;
+    const parsed: unknown = JSON.parse(saved);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FleetLayout : defaultFleetLayout;
+  } catch { return defaultFleetLayout; }
 };
 
 const FleetPanelFrame: Component<{
@@ -264,9 +284,30 @@ const Dashboard: Component = () => {
   const [showCopyUsers, setShowCopyUsers] = createSignal(false);
   const [selectedRecipientIDs, setSelectedRecipientIDs] = createSignal<number[]>([]);
   const [savingPanel, setSavingPanel] = createSignal(false);
-  const [growthInterval, setGrowthInterval] = createSignal<DeviceGrowthInterval>('daily');
+  const [storedGrowthInterval, setStoredGrowthInterval] = createPersistedSignal('acs.dashboard.growth-interval', 'daily');
+  const growthInterval = () => growthIntervals.some(({ id }) => id === storedGrowthInterval()) ? storedGrowthInterval() as DeviceGrowthInterval : 'daily';
   const [refreshKey, setRefreshKey] = createSignal(0);
-  const [fleetLayout, setFleetLayout] = createPersistedJsonSignal<FleetLayout>('acs.dashboard.fleet-layout', defaultFleetLayout);
+  const userID = user()?.id ?? 'unknown';
+  const [fleetLayout, setFleetLayout] = createPersistedJsonSignal<FleetLayout>(`acs.dashboard.fleet-layout:${userID}`, readLegacyFleetLayout());
+  const [savedFleetLayout] = createResource(() => api.getDashboardLayout());
+  const [fleetLayoutReady, setFleetLayoutReady] = createSignal(false);
+  createEffect(() => {
+    const remote = savedFleetLayout();
+    if (savedFleetLayout.loading || savedFleetLayout.error || !remote) return;
+    const cached = untrack(fleetLayout);
+    const initial = Object.keys(remote).length > 0 ? { ...defaultFleetLayout, ...remote } : { ...defaultFleetLayout, ...cached };
+    setFleetLayout(normalizeFleetLayout(initial));
+    setFleetLayoutReady(true);
+    try { localStorage.removeItem('acs.dashboard.fleet-layout'); } catch { /* Ignore unavailable local storage. */ }
+  });
+  createEffect(() => {
+    if (!fleetLayoutReady()) return;
+    const snapshot = normalizeFleetLayout(fleetLayout());
+    const timer = window.setTimeout(() => {
+      void api.saveDashboardLayout(snapshot).catch((error) => notify({ tone: 'error', title: 'Dashboard layout was not synced', detail: (error as Error).message }));
+    }, 500);
+    onCleanup(() => window.clearTimeout(timer));
+  });
   const canCopyPanels = () => isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
@@ -497,7 +538,7 @@ const Dashboard: Component = () => {
                   type="button"
                   class={`btn text-xs ${growthInterval() === option.id ? 'btn-primary' : 'btn-secondary'}`}
                   aria-pressed={growthInterval() === option.id}
-                  onClick={() => setGrowthInterval(option.id)}
+                  onClick={() => setStoredGrowthInterval(option.id)}
                 >{option.label}</button>
               )}</For>
             </div>

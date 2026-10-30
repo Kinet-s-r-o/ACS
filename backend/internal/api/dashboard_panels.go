@@ -38,6 +38,34 @@ var dashboardPanelColors = map[string]struct{}{
 	"blue": {}, "green": {}, "amber": {}, "orange": {}, "red": {}, "gray": {},
 }
 
+type dashboardLayoutItem struct {
+	Order  int     `json:"order"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+type dashboardLayoutConfig map[string]dashboardLayoutItem
+
+var builtInDashboardPanelIDs = map[string]struct{}{
+	"growth": {}, "contactRecency": {}, "uptime": {}, "temperature": {}, "rxPower": {},
+	"accessType": {}, "manufacturer": {}, "productClass": {},
+}
+
+func validateDashboardLayout(layout dashboardLayoutConfig) error {
+	if len(layout) > 32 {
+		return errors.New("dashboard layout has too many panels")
+	}
+	for id, item := range layout {
+		if _, ok := builtInDashboardPanelIDs[id]; !ok && !dashboardPanelIDRe.MatchString(id) {
+			return fmt.Errorf("invalid dashboard layout panel ID %q", id)
+		}
+		if item.Order < 0 || item.Order > 1000 || math.IsNaN(item.Width) || math.IsInf(item.Width, 0) || item.Width < 30 || item.Width > 120 || math.IsNaN(item.Height) || math.IsInf(item.Height, 0) || item.Height < 0 || item.Height > 10000 {
+			return fmt.Errorf("invalid dashboard layout for panel %q", id)
+		}
+	}
+	return nil
+}
+
 func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 	if len(configs) > 12 {
 		return database.ErrDashboardPanelLimit
@@ -152,6 +180,60 @@ func (r *Router) handleGetDashboardPanels(w http.ResponseWriter, req *http.Reque
 		configs = append(configs, config)
 	}
 	respondJSON(w, http.StatusOK, configs)
+}
+
+func (r *Router) handleGetDashboardLayout(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	encoded, err := r.dashboardLayoutRepo.Get(req.Context(), claims.UserID)
+	if err != nil {
+		log.Printf("Error loading dashboard layout: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to load dashboard layout")
+		return
+	}
+	var layout dashboardLayoutConfig
+	if err := json.Unmarshal([]byte(encoded), &layout); err != nil {
+		log.Printf("Error decoding dashboard layout: %v", err)
+		respondError(w, http.StatusInternalServerError, "Stored dashboard layout is invalid")
+		return
+	}
+	if layout == nil {
+		layout = dashboardLayoutConfig{}
+	}
+	respondJSON(w, http.StatusOK, layout)
+}
+
+func (r *Router) handleSaveDashboardLayout(w http.ResponseWriter, req *http.Request) {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16*1024))
+	decoder.DisallowUnknownFields()
+	var layout dashboardLayoutConfig
+	if err := decoder.Decode(&layout); err != nil || layout == nil {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard layout")
+		return
+	}
+	if err := validateDashboardLayout(layout); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	encoded, err := json.Marshal(layout)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard layout")
+		return
+	}
+	if err := r.dashboardLayoutRepo.Save(req.Context(), claims.UserID, string(encoded)); err != nil {
+		log.Printf("Error saving dashboard layout: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to save dashboard layout")
+		return
+	}
+	respondJSON(w, http.StatusOK, layout)
 }
 
 func (r *Router) handleSaveDashboardPanels(w http.ResponseWriter, req *http.Request) {
