@@ -598,38 +598,84 @@ func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int)
 	return devices, int(total), err
 }
 
-type AnalyticsParameterValue struct {
-	DeviceID int64  `gorm:"column:device_id"`
-	Name     string `gorm:"column:name"`
-	Value    string `gorm:"column:value"`
+type AnalyticsDistributionThreshold struct {
+	Label string
+	Max   *float64
 }
 
-func (r *DeviceRepository) ListParameterValuesForAnalytics(ctx context.Context, pattern string, maxDevices int) ([]AnalyticsParameterValue, int, int, error) {
-	var total int64
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&total).Error; err != nil {
-		return nil, 0, 0, err
+type AnalyticsDistributionRow struct {
+	Label   *string `gorm:"column:label"`
+	Count   int     `gorm:"column:count"`
+	Sampled int     `gorm:"column:sampled"`
+	Total   int     `gorm:"column:total"`
+}
+
+func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern string, maxDevices int, thresholds []AnalyticsDistributionThreshold) ([]AnalyticsDistributionRow, error) {
+	pattern = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_", "*", "%").Replace(pattern)
+	caseParts := make([]string, 0, len(thresholds))
+	args := []interface{}{maxDevices, pattern}
+	for _, threshold := range thresholds {
+		if threshold.Max == nil {
+			caseParts = append(caseParts, "ELSE ?")
+			args = append(args, threshold.Label)
+			continue
+		}
+		caseParts = append(caseParts, "WHEN value <= ? THEN ?")
+		args = append(args, *threshold.Max, threshold.Label)
 	}
-	var deviceIDs []int64
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).
-		Order("last_inform DESC NULLS LAST").Limit(maxDevices).Pluck("id", &deviceIDs).Error; err != nil {
-		return nil, 0, 0, err
-	}
-	if len(deviceIDs) == 0 {
-		return nil, 0, int(total), nil
+	if len(caseParts) == 0 || thresholds[len(thresholds)-1].Max != nil {
+		return nil, fmt.Errorf("analytics distribution requires an unbounded final threshold")
 	}
 
-	pattern = strings.ReplaceAll(pattern, `\`, `\\`)
-	pattern = strings.ReplaceAll(pattern, `%`, `\%`)
-	pattern = strings.ReplaceAll(pattern, `_`, `\_`)
-	pattern = strings.ReplaceAll(pattern, "*", "%")
-	var values []AnalyticsParameterValue
-	err := r.db.WithContext(ctx).Model(&models.DeviceParameter{}).
-		Select("device_id, name, value").
-		Where("device_id IN ?", deviceIDs).
-		Where("name ILIKE ? ESCAPE '\\'", pattern).
-		Order("device_id ASC, name ASC").
-		Find(&values).Error
-	return values, len(deviceIDs), int(total), err
+	query := `WITH sampled_devices AS MATERIALIZED (
+		SELECT id FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
+	), raw_values AS (
+		SELECT dp.device_id, dp.name,
+			CASE WHEN LENGTH(BTRIM(dp.value)) <= 256
+				AND BTRIM(dp.value) ~ '^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]{1,3})?$'
+				THEN BTRIM(dp.value)::numeric END AS parsed_value
+		FROM device_parameters dp
+		JOIN sampled_devices sd ON sd.id = dp.device_id
+		WHERE dp.name ILIKE ? ESCAPE '!'
+			AND dp.name NOT ILIKE '%password%'
+			AND dp.name NOT ILIKE '%passphrase%'
+			AND dp.name NOT ILIKE '%presharedkey%'
+			AND dp.name NOT ILIKE '%pre_shared_key%'
+			AND dp.name NOT ILIKE '%privatekey%'
+			AND dp.name NOT ILIKE '%secret%'
+			AND dp.name NOT ILIKE '%connectionrequestusername%'
+			AND dp.name NOT ILIKE '%.username'
+	), valid_values AS (
+		SELECT device_id, name, parsed_value::double precision AS value
+		FROM raw_values
+		WHERE parsed_value BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+	), first_values AS (
+		SELECT DISTINCT ON (device_id) device_id, name, value
+		FROM valid_values
+		ORDER BY device_id, name
+	), normalized_values AS (
+		SELECT device_id,
+			CASE
+				WHEN LOWER(name) LIKE '%rxpower%' AND value > 0 AND value < 10000 THEN 10 * LN(value / 10000.0) / LN(10.0)
+				WHEN LOWER(name) LIKE '%rxpower%' AND value > 100 THEN value / 100.0
+				WHEN (LOWER(name) LIKE '%temperature%' OR LOWER(name) LIKE '%temp%') AND value > 1000 THEN value / 256.0
+				WHEN (LOWER(name) LIKE '%temperature%' OR LOWER(name) LIKE '%temp%') AND value > 100 THEN value / 10.0
+				ELSE value
+			END AS value
+		FROM first_values
+	), bucketed AS (
+		SELECT CASE ` + strings.Join(caseParts, " ") + ` END AS label FROM normalized_values
+	), bucket_counts AS (
+		SELECT label, COUNT(*) AS count FROM bucketed GROUP BY label
+	)
+	SELECT label, count, 0::bigint AS sampled, 0::bigint AS total FROM bucket_counts
+	UNION ALL
+	SELECT NULL::text AS label, 0::bigint AS count,
+		(SELECT COUNT(*) FROM sampled_devices) AS sampled,
+		(SELECT COUNT(*) FROM devices) AS total`
+	var rows []AnalyticsDistributionRow
+	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&rows).Error
+	return rows, err
 }
 
 func (r *DeviceRepository) SetTags(ctx context.Context, deviceID int64, tags []string) error {

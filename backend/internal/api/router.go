@@ -1036,7 +1036,11 @@ func (r *Router) handleDeviceParameterDistribution(w http.ResponseWriter, req *h
 		return
 	}
 
-	values, sampled, total, err := r.deviceRepo.ListParameterValuesForAnalytics(req.Context(), body.ParameterPattern, 10000)
+	thresholds := make([]database.AnalyticsDistributionThreshold, 0, len(body.Thresholds))
+	for _, item := range body.Thresholds {
+		thresholds = append(thresholds, database.AnalyticsDistributionThreshold{Label: strings.TrimSpace(item.Label), Max: item.Max})
+	}
+	rows, err := r.deviceRepo.GetParameterDistribution(req.Context(), body.ParameterPattern, 10000, thresholds)
 	if err != nil {
 		log.Printf("Error getting dashboard parameter distribution: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to get parameter distribution")
@@ -1046,38 +1050,17 @@ func (r *Router) handleDeviceParameterDistribution(w http.ResponseWriter, req *h
 	for _, item := range body.Thresholds {
 		distribution[strings.TrimSpace(item.Label)] = 0
 	}
-	deviceWithValue := make(map[int64]bool)
-	for _, item := range values {
-		if deviceWithValue[item.DeviceID] || database.IsSensitiveParameterName(item.Name) {
+	var sampled, total int
+	var classified int
+	for _, row := range rows {
+		if row.Label == nil {
+			sampled, total = row.Sampled, row.Total
 			continue
 		}
-		value, parseErr := strconv.ParseFloat(strings.TrimSpace(item.Value), 64)
-		if parseErr != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-			continue
-		}
-		parameter := strings.ToLower(item.Name)
-		if strings.Contains(parameter, "rxpower") {
-			if value > 0 && value < 10000 {
-				value = 10 * math.Log10(value/10000)
-			} else if value > 100 {
-				value /= 100
-			}
-		} else if strings.Contains(parameter, "temperature") || strings.Contains(parameter, "temp") {
-			if value > 1000 {
-				value /= 256
-			} else if value > 100 {
-				value /= 10
-			}
-		}
-		for _, bucket := range body.Thresholds {
-			if bucket.Max == nil || value <= *bucket.Max {
-				distribution[strings.TrimSpace(bucket.Label)]++
-				deviceWithValue[item.DeviceID] = true
-				break
-			}
-		}
+		distribution[*row.Label] = row.Count
+		classified += row.Count
 	}
-	distribution["N/A"] = sampled - len(deviceWithValue)
+	distribution["N/A"] = sampled - classified
 	respondJSON(w, http.StatusOK, map[string]interface{}{"distribution": distribution, "sampled": sampled, "total": total})
 }
 
