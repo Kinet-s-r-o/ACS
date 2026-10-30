@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createEffect, createResource, createSignal, For, Show } from 'solid-js';
 import { Plus, Save, Settings as SettingsIcon, Trash2 } from 'lucide-solid';
-import { api, type DashboardAggregationOption } from '../lib/api';
+import { api, type DashboardAggregationOption, type DashboardAggregationSource } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
 import { ResourceError } from '../components/ResourceState';
@@ -23,7 +23,7 @@ const GeneralSettings: Component = () => {
     if (!raw) return;
     try {
       const parsed = JSON.parse(raw) as DashboardAggregationOption[];
-      setAggregationOptions(Array.isArray(parsed) ? parsed : []);
+      setAggregationOptions(Array.isArray(parsed) ? parsed.map((option) => ({ ...option, source: option.source ?? 'parameter' })) : []);
     } catch {
       setAggregationOptions([]);
     }
@@ -119,15 +119,16 @@ const GeneralSettings: Component = () => {
   const addAggregationOption = () => setAggregationOptions((current) => [...current, {
     id: `aggregation-${crypto.randomUUID()}`,
     title: '',
+    source: 'parameter',
     parameter_pattern: '',
   }]);
 
-  const updateAggregationOption = (id: string, field: 'title' | 'parameter_pattern', value: string) => setAggregationOptions((current) => current.map((option) => option.id === id ? { ...option, [field]: value } : option));
+  const updateAggregationOption = (id: string, field: 'title' | 'source' | 'parameter_pattern', value: string) => setAggregationOptions((current) => current.map((option) => option.id === id ? { ...option, [field]: value } : option));
 
   const saveAggregationOptions = async () => {
-    const options = aggregationOptions().map((option) => ({ ...option, title: option.title.trim(), parameter_pattern: option.parameter_pattern.trim() }));
-    if (options.some((option) => !option.title || !option.parameter_pattern)) {
-      notify({ tone: 'error', title: 'Complete each aggregation option', message: 'Every option needs a name and a CWMP parameter path.' });
+    const options = aggregationOptions().map((option) => ({ ...option, title: option.title.trim(), parameter_pattern: option.source === 'parameter' ? option.parameter_pattern.trim() : '' }));
+    if (options.some((option) => !option.title || (option.source === 'parameter' && !option.parameter_pattern))) {
+      notify({ tone: 'error', title: 'Complete each aggregation option', message: 'Every option needs a name and parameter-based options need a CWMP path.' });
       return;
     }
     setSaving(true);
@@ -288,14 +289,17 @@ const GeneralSettings: Component = () => {
         </Show>
         <Show when={activeSection() === 'aggregations'}>
           <h2 class="text-sm font-medium text-secondary mb-2 flex items-center gap-2"><SettingsIcon size={14} />Fleet aggregation options</h2>
-          <p class="text-muted text-xs mb-4">Define named CWMP parameter dimensions. Fleet panels group the latest matching value per CPE and count each group in SQL. Existing panels keep their saved parameter path if an option is later changed or removed.</p>
+          <p class="text-muted text-xs mb-4">Define exactly which aggregation dimensions operators can select. Parameter dimensions group the latest matching value per CPE; every option is counted in SQL. Panels using a removed option need to be assigned another configured option.</p>
           <Show when={settings.error}><ResourceError title="Aggregation settings are unavailable" description="ACS could not read the current Fleet aggregation options. Retry before making changes." onRetry={() => refetch()} /></Show>
           <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-10 w-full" /> : undefined}>
             <div class="space-y-3">
-              <Show when={aggregationOptions().length === 0}><p class="rounded border border-subtle p-3 text-xs text-muted">No custom aggregation options are configured. The built-in manufacturer, product class, and access type options remain available.</p></Show>
+              <Show when={aggregationOptions().length === 0}><p class="rounded border border-subtle p-3 text-xs text-muted">No aggregation options are configured, so users cannot create aggregation panels.</p></Show>
               <For each={aggregationOptions()}>{(option) => <div class="grid gap-3 rounded border border-subtle p-3 sm:grid-cols-[minmax(12rem,1fr)_minmax(18rem,2fr)_auto] sm:items-end">
                 <label class="block text-xs text-muted">Option name<input class="input mt-1 w-full" maxlength={48} value={option.title} onInput={(event) => updateAggregationOption(option.id, 'title', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Region" /></label>
-                <label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={option.parameter_pattern} onInput={(event) => updateAggregationOption(option.id, 'parameter_pattern', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Device.DeviceInfo.X_VENDOR.Region" /><span class="mt-1 block">Use * for dynamic sections. Sensitive parameter names are excluded.</span></label>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={option.source} onChange={(event) => updateAggregationOption(option.id, 'source', event.currentTarget.value as DashboardAggregationSource)} disabled={!isFullAccess()}><option value="parameter">CWMP parameter</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><option value="access_type">Access type</option></select></label>
+                  <Show when={option.source === 'parameter'}><label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={option.parameter_pattern} onInput={(event) => updateAggregationOption(option.id, 'parameter_pattern', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Device.DeviceInfo.X_VENDOR.Region" /><span class="mt-1 block">Use * for dynamic sections. Sensitive parameter names are excluded.</span></label></Show>
+                </div>
                 <button type="button" class="btn btn-secondary text-rose-400" onClick={() => setAggregationOptions((current) => current.filter((item) => item.id !== option.id))} disabled={!isFullAccess()} aria-label={`Remove ${option.title || 'unnamed'} aggregation option`}><Trash2 size={14} />Remove</button>
               </div>}</For>
               <div class="flex flex-wrap gap-2 pt-2">

@@ -424,19 +424,28 @@ const Dashboard: Component = () => {
       return null;
     }
     if (kind !== 'parameter') {
-      if (kind === 'category' && !['access_type', 'manufacturer', 'product_class', 'custom_parameter'].includes(draft.source ?? '')) {
+      if (kind === 'category' && draft.id.startsWith('custom-') && !['configured_option', 'custom_parameter'].includes(draft.source ?? '')) {
         notify({ tone: 'error', title: 'Invalid panel source', message: 'Choose a supported category source.' });
         return null;
       }
-      if (kind === 'category' && draft.source === 'custom_parameter' && (!draft.aggregation_option_id || !/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(parameterPattern) || parameterPattern.length > 512)) {
-        notify({ tone: 'error', title: 'Invalid aggregation option', message: 'Choose a valid configured CWMP aggregation option.' });
+      if (kind === 'category' && draft.id.startsWith('custom-') && (!draft.aggregation_option_id || !aggregationOptions().some((option) => option.id === draft.aggregation_option_id))) {
+        notify({ tone: 'error', title: 'Invalid aggregation option', message: 'Choose an aggregation source currently configured by an administrator.' });
         return null;
       }
       if (kind === 'recency' && draft.source !== 'last_inform') {
         notify({ tone: 'error', title: 'Invalid panel source', message: 'Contact recency must use Last Inform.' });
         return null;
       }
-      return { id: draft.id, title, kind, source: draft.source, aggregation_option_id: draft.source === 'custom_parameter' ? draft.aggregation_option_id : undefined, limit: draft.limit ?? 6, parameter_pattern: kind === 'category' && draft.source === 'custom_parameter' ? parameterPattern : '', thresholds: [] };
+      const aggregationOptionID = draft.source === 'configured_option' || draft.source === 'custom_parameter' ? draft.aggregation_option_id : undefined;
+      const configuredOption = aggregationOptions().find((option) => option.id === aggregationOptionID);
+      return {
+        id: draft.id, title, kind,
+        source: configuredOption ? 'configured_option' : draft.source,
+        aggregation_option_id: aggregationOptionID,
+        limit: draft.limit ?? 6,
+        parameter_pattern: configuredOption?.source === 'parameter' ? configuredOption.parameter_pattern : '',
+        thresholds: [],
+      };
     }
     if (!/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(parameterPattern) || parameterPattern.length > 512) {
       notify({ tone: 'error', title: 'Invalid parameter pattern', message: 'Enter a Device. or InternetGatewayDevice. parameter path. Use * as a wildcard.' });
@@ -652,7 +661,9 @@ const Dashboard: Component = () => {
             return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, 5 + index())} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel data-panel-section fleet-content-panel">
                 <div class="dashboard-configurable-heading"><h3>{config()?.title ?? panel.label}</h3><button type="button" class="icon-button" aria-label={`Configure ${panel.label} panel`} title="Configure panel" onClick={() => config() && openPanelSettings(config()!)}><Settings2 size={14} /></button></div>
-                <DistributionList data={panel.values ?? {}} limit={panel.limit} />
+                <Show when={['configured_option', 'custom_parameter'].includes(config()?.source ?? '') && !aggregationOptions().some((option) => option.id === config()?.aggregation_option_id)} fallback={<DistributionList data={panel.values ?? {}} limit={panel.limit} />}>
+                  <p class="py-4 text-center text-xs text-muted">This aggregation option is no longer configured. Choose an available option in panel settings.</p>
+                </Show>
               </section>
             </FleetPanelFrame>;
           }}</For>
@@ -665,24 +676,25 @@ const Dashboard: Component = () => {
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
               <Show when={panelDraft()?.id.startsWith('custom-')}><label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {
                 const kind = event.currentTarget.value as 'parameter' | 'category';
-                return { ...draft, kind, source: kind === 'category' ? 'manufacturer' : undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : draft.thresholds };
+                return { ...draft, kind, source: undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : draft.thresholds };
               })}><option value="parameter">Parameter thresholds</option><option value="category">Aggregation</option></select></label></Show>
               <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
               <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
             </Show>
             <Show when={(panelDraft()?.kind ?? 'parameter') !== 'parameter'}>
-              <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.source === 'custom_parameter' ? `custom:${panelDraft()?.aggregation_option_id}` : panelDraft()?.source ?? ''} onChange={(event) => updatePanelDraft((draft) => {
+              <Show when={panelDraft()?.id.startsWith('custom-')}><label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.aggregation_option_id && ['configured_option', 'custom_parameter'].includes(panelDraft()?.source ?? '') ? `aggregation:${panelDraft()?.aggregation_option_id}` : ''} onChange={(event) => updatePanelDraft((draft) => {
                 const selected = event.currentTarget.value;
-                if (selected.startsWith('custom:')) {
-                  const option = aggregationOptions().find((item) => item.id === selected.slice('custom:'.length));
-                  return { ...draft, source: 'custom_parameter', aggregation_option_id: option?.id, parameter_pattern: option?.parameter_pattern ?? '' };
+                if (selected.startsWith('aggregation:')) {
+                  const option = aggregationOptions().find((item) => item.id === selected.slice('aggregation:'.length));
+                  return { ...draft, source: 'configured_option', aggregation_option_id: option?.id, parameter_pattern: option?.source === 'parameter' ? option.parameter_pattern : '' };
                 }
                 return { ...draft, source: selected as DashboardPanelConfig['source'], aggregation_option_id: undefined, parameter_pattern: '' };
               })}>
-                <Show when={panelDraft()?.kind === 'category'}><option value="access_type">Access type</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><Show when={panelDraft()?.source === 'custom_parameter' && !aggregationOptions().some((option) => option.id === panelDraft()?.aggregation_option_id)}><option value={`custom:${panelDraft()?.aggregation_option_id}`}>{panelDraft()?.title} (no longer offered)</option></Show><For each={aggregationOptions()}>{(option) => <option value={`custom:${option.id}`}>{option.title}</option>}</For></Show>
-                <Show when={panelDraft()?.kind === 'recency'}><option value="last_inform">Last Inform</option></Show>
-              </select><span class="mt-1 block">Values are grouped and counted by the SQL backend.</span></label>
-              <Show when={panelDraft()?.kind === 'category' && panelDraft()?.source === 'custom_parameter'}><p class="text-xs text-muted">Each CPE contributes the latest matching value from the configured CWMP parameter. Sensitive values are excluded.</p></Show>
+                <option value="">Select a configured aggregation source</option>
+                <For each={aggregationOptions()}>{(option) => <option value={`aggregation:${option.id}`}>{option.title}</option>}</For>
+              </select><span class="mt-1 block">Only options configured by an administrator appear here.</span></label><Show when={aggregationOptions().length === 0}><p class="text-xs text-muted">No sources are configured yet. Ask an administrator to add one under General → Fleet aggregations.</p></Show></Show>
+              <Show when={!panelDraft()?.id.startsWith('custom-')}><p class="text-xs text-muted">Built-in aggregation: {panelDraft()?.source?.replaceAll('_', ' ') || 'Last Inform'}. The source is fixed.</p></Show>
+              <Show when={panelDraft()?.kind === 'category' && panelDraft()?.source === 'configured_option'}><p class="text-xs text-muted">Each CPE contributes its latest matching value; SQL groups and counts the results. Sensitive parameters are excluded.</p></Show>
               <Show when={panelDraft()?.kind === 'category'}>
                 <label class="block text-xs text-muted">Maximum categories<input type="number" min="1" max="100" class="input mt-1 w-full" value={panelDraft()?.limit ?? 6} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, limit: Number(event.currentTarget.value) }))} /></label>
               </Show>

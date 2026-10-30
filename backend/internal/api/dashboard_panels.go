@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,12 @@ type dashboardPanelConfig struct {
 type dashboardAggregationOption struct {
 	ID               string `json:"id"`
 	Title            string `json:"title"`
+	Source           string `json:"source"`
 	ParameterPattern string `json:"parameter_pattern"`
+}
+
+var dashboardAggregationSources = map[string]struct{}{
+	"access_type": {}, "manufacturer": {}, "product_class": {}, "parameter": {},
 }
 
 const dashboardAggregationOptionsSetting = "fleet_aggregation_options"
@@ -60,7 +66,11 @@ func validateDashboardAggregationOptionsJSON(raw string) (string, error) {
 		option := &options[index]
 		option.ID = strings.TrimSpace(option.ID)
 		option.Title = strings.TrimSpace(option.Title)
+		option.Source = strings.TrimSpace(option.Source)
 		option.ParameterPattern = strings.TrimSpace(option.ParameterPattern)
+		if option.Source == "" { // Existing catalogs stored only CWMP parameter paths.
+			option.Source = "parameter"
+		}
 		if !dashboardAggregationOptionIDRe.MatchString(option.ID) {
 			return "", errors.New("invalid Fleet aggregation option ID")
 		}
@@ -75,9 +85,16 @@ func validateDashboardAggregationOptionsJSON(raw string) (string, error) {
 		}
 		ids[option.ID] = struct{}{}
 		titles[strings.ToLower(option.Title)] = struct{}{}
-		pattern := option.ParameterPattern
-		if len(pattern) > 512 || strings.Count(pattern, "*") > 8 || !dashboardParameterPatternRe.MatchString(pattern) || validateParameterNames([]string{strings.ReplaceAll(pattern, "*", "X")}) != nil {
-			return "", errors.New("aggregation option parameter paths must be valid Device. or InternetGatewayDevice. paths")
+		if _, ok := dashboardAggregationSources[option.Source]; !ok {
+			return "", errors.New("choose a supported Fleet aggregation source")
+		}
+		if option.Source == "parameter" {
+			pattern := option.ParameterPattern
+			if len(pattern) > 512 || strings.Count(pattern, "*") > 8 || !dashboardParameterPatternRe.MatchString(pattern) || validateParameterNames([]string{strings.ReplaceAll(pattern, "*", "X")}) != nil {
+				return "", errors.New("aggregation option parameter paths must be valid Device. or InternetGatewayDevice. paths")
+			}
+		} else {
+			option.ParameterPattern = ""
 		}
 	}
 	encoded, err := json.Marshal(options)
@@ -141,6 +158,10 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 		if kind == "category" {
 			switch config.Source {
 			case "access_type", "manufacturer", "product_class":
+			case "configured_option":
+				if !dashboardAggregationOptionIDRe.MatchString(config.AggregationOptionID) {
+					return errors.New("select a configured aggregation option")
+				}
 			case "custom_parameter":
 				pattern := strings.TrimSpace(config.ParameterPattern)
 				if len(pattern) > 512 || strings.Count(pattern, "*") > 8 || !dashboardParameterPatternRe.MatchString(pattern) || validateParameterNames([]string{strings.ReplaceAll(pattern, "*", "X")}) != nil {
@@ -240,20 +261,31 @@ func (r *Router) handleGetDashboardPanels(w http.ResponseWriter, req *http.Reque
 }
 
 func (r *Router) handleGetDashboardAggregationOptions(w http.ResponseWriter, req *http.Request) {
-	setting, err := r.settingsRepo.Get(req.Context(), dashboardAggregationOptionsSetting)
+	options, err := r.loadDashboardAggregationOptions(req.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to load Fleet aggregation options")
 		return
 	}
-	options := make([]dashboardAggregationOption, 0)
-	if setting != nil && setting.Value != "" {
-		validated, err := validateDashboardAggregationOptionsJSON(setting.Value)
-		if err != nil || json.Unmarshal([]byte(validated), &options) != nil {
-			respondError(w, http.StatusInternalServerError, "Stored Fleet aggregation options are invalid")
-			return
-		}
-	}
 	respondJSON(w, http.StatusOK, options)
+}
+
+func (r *Router) loadDashboardAggregationOptions(ctx context.Context) ([]dashboardAggregationOption, error) {
+	setting, err := r.settingsRepo.Get(ctx, dashboardAggregationOptionsSetting)
+	if err != nil {
+		return nil, err
+	}
+	options := make([]dashboardAggregationOption, 0)
+	if setting == nil || setting.Value == "" {
+		return options, nil
+	}
+	validated, err := validateDashboardAggregationOptionsJSON(setting.Value)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(validated), &options); err != nil {
+		return nil, err
+	}
+	return options, nil
 }
 
 func (r *Router) handleGetDashboardLayout(w http.ResponseWriter, req *http.Request) {
@@ -418,6 +450,8 @@ func (r *Router) handleDashboardPanelAnalytics(w http.ResponseWriter, req *http.
 		return
 	}
 	panels := make(map[string]map[string]int)
+	var aggregationOptions []dashboardAggregationOption
+	aggregationOptionsLoaded := false
 	for _, config := range configs {
 		if config.Kind == "" || config.Kind == "parameter" {
 			continue
@@ -428,8 +462,27 @@ func (r *Router) handleDashboardPanelAnalytics(w http.ResponseWriter, req *http.
 			values, err = r.deviceRepo.GetRecencyAnalytics(req.Context(), 10000)
 		} else {
 			source, pattern := config.Source, config.ParameterPattern
-			if source == "custom_parameter" {
-				source = "parameter"
+			if source == "configured_option" || source == "custom_parameter" {
+				if !aggregationOptionsLoaded {
+					aggregationOptions, err = r.loadDashboardAggregationOptions(req.Context())
+					if err != nil {
+						respondError(w, http.StatusInternalServerError, "Failed to load Fleet aggregation options")
+						return
+					}
+					aggregationOptionsLoaded = true
+				}
+				var option *dashboardAggregationOption
+				for index := range aggregationOptions {
+					if aggregationOptions[index].ID == config.AggregationOptionID {
+						option = &aggregationOptions[index]
+						break
+					}
+				}
+				if option == nil {
+					panels[config.ID] = map[string]int{}
+					continue
+				}
+				source, pattern = option.Source, option.ParameterPattern
 			}
 			values, err = r.deviceRepo.GetCategoricalAnalytics(req.Context(), source, pattern, 10000, config.Limit)
 		}

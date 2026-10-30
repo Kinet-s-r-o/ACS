@@ -83,9 +83,10 @@ export interface CompressionStatus {
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
 export type DashboardPanelKind = 'parameter' | 'category' | 'recency';
-export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'last_inform';
+export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'configured_option' | 'last_inform';
 export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; aggregation_option_id?: string; limit?: number; parameter_pattern: string; thresholds: DashboardThreshold[] }
-export interface DashboardAggregationOption { id: string; title: string; parameter_pattern: string }
+export type DashboardAggregationSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter';
+export interface DashboardAggregationOption { id: string; title: string; source: DashboardAggregationSource; parameter_pattern: string }
 export interface DashboardPanelLayout { order: number; width: number; height: number }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
