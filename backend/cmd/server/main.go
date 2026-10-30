@@ -285,7 +285,7 @@ func connectDatabase() (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	maxOpen, err := envInt("DB_MAX_OPEN_CONNS", 50, 1, 500)
+	maxOpen, err := envInt("DB_MAX_OPEN_CONNS", 30, 1, 500)
 	if err != nil {
 		return nil, err
 	}
