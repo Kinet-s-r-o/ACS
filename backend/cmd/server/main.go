@@ -358,6 +358,9 @@ func runAutoMigrate(db *gorm.DB) error {
 			return fmt.Errorf("migrate %T: %w", model, err)
 		}
 	}
+	if err := database.EnsureWANParameterIndex(context.Background(), db); err != nil {
+		return fmt.Errorf("create WAN parameter lookup index: %w", err)
+	}
 	if db.Migrator().HasIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type") {
 		if err := db.Migrator().DropIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type"); err != nil {
 			return fmt.Errorf("drop obsolete device lifecycle uniqueness index: %w", err)
