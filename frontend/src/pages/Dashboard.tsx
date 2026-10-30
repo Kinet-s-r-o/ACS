@@ -1,7 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, Index, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, RotateCcw } from 'lucide-solid';
-import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
 import { api, type DashboardAggregationOption, type DashboardPanelConfig, type DashboardPanelLayout, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
@@ -582,15 +581,14 @@ const Dashboard: Component = () => {
   };
   return (
     <div class="space-y-4">
-      <PageHeader
-        title="Fleet status"
-        description="Current fleet reachability, contact recency, health thresholds, and hardware mix."
-        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
-      >
-        <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
-        <Show when={panelConfigs().some((panel) => removableDefaultAggregationPanels.includes(panel.id) && panel.hidden)}><button type="button" class="btn btn-secondary text-xs" onClick={() => void restoreDefaultAggregationPanels()} disabled={savingPanel() || savedPanelConfigs.loading}><RotateCcw size={14} />Restore built-in panels</button></Show>
-        <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
-      </PageHeader>
+      <header aria-label="Fleet dashboard actions" class="flex min-h-0 flex-wrap items-center justify-end border-b border-subtle pb-2">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
+          <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
+          <Show when={panelConfigs().some((panel) => removableDefaultAggregationPanels.includes(panel.id) && panel.hidden)}><button type="button" class="btn btn-secondary text-xs" onClick={() => void restoreDefaultAggregationPanels()} disabled={savingPanel() || savedPanelConfigs.loading}><RotateCcw size={14} />Restore built-in panels</button></Show>
+          <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
+        </div>
+      </header>
 
       <Show when={!dashboard.loading && !dashboard()?.error && (stats()?.total ?? 0) === 0}>
         <div class="data-panel"><EmptyState
