@@ -53,10 +53,13 @@ const retentionTableGroups = [
 ];
 
 const RetentionSettings: Component = () => {
-  const { isFullAccess, hasPermission } = useAuth();
+  const { hasPermission } = useAuth();
   const { notify } = useFeedback();
   const [settings, { refetch }] = createResource(api.getSettings);
   const [tableStats, { refetch: refetchTableStats }] = createResource(api.getRetentionStats);
+  const [compression, { refetch: refetchCompression }] = createResource(api.getCompressionStatus);
+  const compressionState = () => compression.error ? undefined : compression();
+  const canWrite = () => hasPermission('settings.write');
   const [activeTab, setActiveTab] = createSignal<'retention' | 'statistics'>('retention');
   const [querySort, setQuerySort] = createSignal<{ column: DatabaseQuerySort; direction: SortDirection }>({ column: 'total_time', direction: 'desc' });
   const [queryFilters, setQueryFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.database-query-statements', {});
@@ -104,6 +107,15 @@ const RetentionSettings: Component = () => {
   const save = async (event: SubmitEvent) => {
     event.preventDefault();
     const values: Record<string, string> = { retention_enabled: value('retention_enabled') };
+    if (compressionState()?.available) {
+      const days = Number(value('compression_metric_after_days'));
+      if (!Number.isFinite(days) || days < 1 / 24 || days > 3650) {
+        notify({ tone: 'error', title: 'Invalid compression age', message: 'Enter between 1/24 day (one hour) and 3650 days. Fractions of a day are allowed.' });
+        return;
+      }
+      values.compression_metric_enabled = value('compression_metric_enabled');
+      values.compression_metric_after_days = String(days);
+    }
     for (const field of groups.flatMap(group => group.fields)) {
       const raw = value(field.key);
       const number = Number(raw);
@@ -117,6 +129,7 @@ const RetentionSettings: Component = () => {
     try {
       await api.updateSettings(values);
       await refetch();
+      await refetchCompression();
       setDraft({});
       notify({ tone: 'success', title: 'DB retention saved', message: 'Housekeeping will apply the settings within one minute.' });
     } catch (error) {
@@ -139,23 +152,53 @@ const RetentionSettings: Component = () => {
       <form class="space-y-5" onSubmit={save}>
         <div class="card p-5 space-y-3">
           <label for="retention-enabled" class="flex items-center gap-2 text-sm text-primary">
-            <input id="retention-enabled" type="checkbox" checked={value('retention_enabled') === 'true'} disabled={!isFullAccess() || saving()} onChange={event => update('retention_enabled', String(event.currentTarget.checked))} />
+            <input id="retention-enabled" type="checkbox" checked={value('retention_enabled') === 'true'} disabled={!canWrite() || saving()} onChange={event => update('retention_enabled', String(event.currentTarget.checked))} />
             Enable database housekeeping
           </label>
           <p class="text-xs text-muted">Set a retention period to 0 to keep that history indefinitely. Shorter periods permanently remove older records on the next cleanup. Disabling housekeeping stops future cleanup runs.</p>
           <p class="text-xs text-muted">Metrics are removed in whole TimescaleDB chunks, so actual retention can exceed the configured period. Cleanup runs have a five-minute time limit.</p>
         </div>
+        <section class="card p-5 space-y-4" aria-label="History compression" aria-busy={compression.loading}>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-sm font-medium text-secondary">History compression</h2>
+            <button type="button" class="btn btn-secondary text-xs" disabled={compression.loading} onClick={() => void refetchCompression()}>Refresh compression status</button>
+          </div>
+          <Show when={compression.error}><ResourceError title="Compression status is unavailable" description="Retry loading the database compression status." onRetry={() => void refetchCompression()} /></Show>
+          <Show when={compressionState() && !compressionState()?.available}><p class="text-xs text-muted" role="status">{compressionState()?.reason}</p></Show>
+          <label for="compression-metric-enabled" class="flex items-center gap-2 text-sm text-primary">
+            <input id="compression-metric-enabled" type="checkbox" checked={value('compression_metric_enabled') === 'true'} disabled={!canWrite() || saving() || !compressionState()?.available} onChange={event => update('compression_metric_enabled', String(event.currentTarget.checked))} />
+            Enable automatic metric history compression
+          </label>
+          <div class="max-w-sm">
+            <label for="compression-metric-after-days" class="block text-xs text-muted mb-1.5">Compress metric data older than (days)</label>
+            <input id="compression-metric-after-days" type="number" class="input w-full" min={1 / 24} max="3650" step="any" required value={value('compression_metric_after_days')} disabled={!canWrite() || saving() || !compressionState()?.available} aria-describedby="compression-age-description" onInput={event => update('compression_metric_after_days', event.currentTarget.value)} />
+            <p id="compression-age-description" class="text-xs text-muted mt-1.5">Fractions of a day are allowed. The existing default is 2 hours (1/12 day). Entire data chunks must be older than this age before they are compressed.</p>
+          </div>
+          <p class="text-xs text-muted">Applies independently of database housekeeping. Settings are applied within one minute; compression then runs in the background. Disabling it stops future compression and keeps already compressed history readable.</p>
+          <p class="text-xs text-muted">Aggregates need a longer delay to preserve their refresh window: at least 8 days for 5-minute aggregates, 31 days for hourly aggregates, and 366 days for daily aggregates. History deleted sooner by retention will not be compressed.</p>
+          <Show when={compressionState()?.available}>
+            <div class="space-y-2" aria-label="Actual compression policies"><For each={compressionState()?.tables}>{table => <div class="flex flex-wrap justify-between gap-2 border-t border-subtle pt-2 text-xs">
+              <span class="text-secondary">{table.label}</span>
+              <span class="text-muted">{!table.present ? 'Not available' : table.scheduled ? `Enabled · after ${table.after_days.toLocaleString(undefined, { maximumFractionDigits: 4 })} days` : 'Automatic compression off'} · {table.compressed_chunks}/{table.total_chunks} chunks compressed</span>
+            </div>}</For></div>
+          </Show>
+          <div class="border-t border-subtle pt-3 space-y-2">
+            <h3 class="text-sm font-medium text-secondary">Operational history</h3>
+            <p class="text-xs text-muted">PostgreSQL automatically compresses eligible large text and JSON values in the existing tables. This preserves searching and does not use an age threshold. The metric compression switch does not change operational history.</p>
+            <For each={compressionState()?.operational}>{table => <p class="text-xs text-muted">{retentionTableGroups[0].tables.find(item => item.table === table.table)?.label ?? table.table}: {table.compressible_columns > 0 ? `${table.compressible_columns} columns allow automatic large-value compression` : 'No columns configured for large-value compression'}</p>}</For>
+          </div>
+        </section>
         <For each={groups}>{group => <section class="card p-5">
           <h2 class="text-sm font-medium text-secondary mb-4">{group.title}</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
             <For each={group.fields}>{field => <div>
               <label for={field.key} class="block text-xs text-muted mb-1.5">{field.label}</label>
-              <input id={field.key} type="number" class="input w-full" min={field.min} max={field.max} step="1" required value={value(field.key)} disabled={!isFullAccess() || saving()} aria-describedby={`${field.key}-description`} onInput={event => update(field.key, event.currentTarget.value)} />
+              <input id={field.key} type="number" class="input w-full" min={field.min} max={field.max} step="1" required value={value(field.key)} disabled={!canWrite() || saving()} aria-describedby={`${field.key}-description`} onInput={event => update(field.key, event.currentTarget.value)} />
               <p id={`${field.key}-description`} class="text-xs text-muted mt-1.5">{field.description}</p>
             </div>}</For>
           </div>
         </section>}</For>
-        <Show when={isFullAccess()}><button type="submit" class="btn btn-primary" disabled={saving()}><Save size={14} />{saving() ? 'Saving…' : 'Save retention settings'}</button></Show>
+        <Show when={canWrite()}><button type="submit" class="btn btn-primary" disabled={saving()}><Save size={14} />{saving() ? 'Saving…' : 'Save retention settings'}</button></Show>
       </form>
     </Show>
     </div>

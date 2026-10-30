@@ -74,6 +74,12 @@ export interface FaultCounts { active: number; resolved: number; total: number }
 export interface DatabaseQueryStat { query_id: string; query: string; calls: number; rows: number; total_time_ms: number; mean_time_ms: number; shared_hit_blocks: number; shared_read_blocks: number; temp_read_blocks: number; temp_write_blocks: number }
 export type DatabaseQuerySort = 'query' | 'calls' | 'total_time' | 'mean_time' | 'rows' | 'shared_read_blocks' | 'shared_hit_blocks' | 'temp_blocks';
 export interface DatabaseStatistics { available: boolean; reason?: string; stats_reset?: string | null; queries: DatabaseQueryStat[] }
+export interface CompressionStatus {
+  available: boolean;
+  reason?: string;
+  tables: Array<{ table: string; label: string; present: boolean; compression_enabled: boolean; scheduled: boolean; after_days: number; minimum_days: number; compressed_chunks: number; total_chunks: number }>;
+  operational: Array<{ table: string; compressible_columns: number }>;
+}
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
 export interface DashboardPanelConfig { id: string; title: string; parameter_pattern: string; thresholds: DashboardThreshold[] }
@@ -249,6 +255,7 @@ export const api = {
   getSettings: () => request<Record<string, string>>('/settings'),
   getConnectionRequestSecret: () => request<{ value: string }>('/settings/connection-request-secret'),
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
+  getCompressionStatus: () => request<CompressionStatus>('/settings/retention/compression'),
   getDatabaseStatistics: (sort: DatabaseQuerySort = 'total_time', direction: 'asc' | 'desc' = 'desc', filters: Record<string, ColumnFilterState> = {}) => {
     const params = new URLSearchParams({ sort, direction, filters: JSON.stringify(filters) });
     return request<DatabaseStatistics>(`/settings/database/statistics?${params}`);

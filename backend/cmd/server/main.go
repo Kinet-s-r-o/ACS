@@ -84,6 +84,7 @@ func main() {
 	}
 	go runTaskRecovery(ctx, database.NewTaskRepository(db))
 	go database.RunRetentionMaintenance(ctx, db)
+	go database.RunCompressionMaintenance(ctx, db)
 
 	cwmpPort := os.Getenv("PORT")
 	if cwmpPort == "" {

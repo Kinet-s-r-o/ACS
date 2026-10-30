@@ -244,6 +244,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetSettings))
 	apiMux.HandleFunc("GET /settings/connection-request-secret", auth.RequireFullAccess(auth.RequirePermission(models.PermSettingsRead)(r.handleGetConnectionRequestSecret)))
 	apiMux.HandleFunc("GET /settings/retention/stats", auth.RequirePermission(models.PermSettingsRead)(r.handleRetentionStats))
+	apiMux.HandleFunc("GET /settings/retention/compression", auth.RequirePermission(models.PermSettingsRead)(r.handleCompressionStatus))
 	apiMux.HandleFunc("GET /settings/database/statistics", auth.RequirePermission(models.PermDatabaseStatsRead)(r.handleDatabaseStatistics))
 	apiMux.HandleFunc("PUT /settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleUpdateSettings))
 
@@ -1363,6 +1364,9 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 	}
 
 	result := database.RetentionDefaults()
+	for key, value := range database.CompressionDefaults() {
+		result[key] = value
+	}
 	for _, s := range settings {
 		if isSecretSetting(s.Key) && s.Value != "" {
 			result[s.Key] = "••••••••"
@@ -1398,6 +1402,18 @@ func (r *Router) handleRetentionStats(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	respondJSON(w, http.StatusOK, stats)
+}
+
+func (r *Router) handleCompressionStatus(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
+	defer cancel()
+	status, err := database.GetCompressionStatus(ctx, r.db)
+	if err != nil {
+		log.Printf("Error getting compression status: %v", err)
+		respondError(w, http.StatusServiceUnavailable, "Compression status is unavailable")
+		return
+	}
+	respondJSON(w, http.StatusOK, status)
 }
 
 func (r *Router) handleDatabaseStatistics(w http.ResponseWriter, req *http.Request) {
@@ -1447,6 +1463,13 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	}
 	for key := range database.RetentionDefaults() {
 		allowed[key] = true
+	}
+	for key := range database.CompressionDefaults() {
+		allowed[key] = true
+	}
+	if err := database.ValidateCompressionSettings(settings); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := database.ValidateRetentionSettings(settings); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
