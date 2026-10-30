@@ -55,6 +55,7 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
   { label: 'Settings', permissions: [
     { key: 'settings.read', label: 'Read', description: 'View system settings.' },
     { key: 'settings.write', label: 'Write', description: 'Change system settings.' },
+    { key: 'database.stats.read', label: 'Database statistics', description: 'View database query performance statistics and SQL text.' },
   ] },
   { label: 'Metrics', permissions: [
     { key: 'metrics.read', label: 'Read', description: 'View device metrics.' },

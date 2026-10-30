@@ -3,7 +3,7 @@ services:
   acs-postgres:
     image: timescale/timescaledb:latest-pg17
     restart: unless-stopped
-    command: postgres -c shared_preload_libraries=timescaledb
+    command: postgres -c shared_preload_libraries=timescaledb,pg_stat_statements
 
     environment:
       POSTGRES_DB: acs

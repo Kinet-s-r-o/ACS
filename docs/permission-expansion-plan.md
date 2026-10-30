@@ -2,7 +2,7 @@
 
 ## Current state
 
-Custom roles store permission keys as JSON. The catalog in `backend/internal/models/role.go` has 18 keys: `read` and `write` for users, roles, devices, firmwares, faults, provisioning, settings, metrics, and security. API routes enforce these keys; the role editor in `frontend/src/pages/RolesTab.tsx` exposes one checkbox per key. Unknown keys are rejected by the role API.
+Custom roles store permission keys as JSON. The catalog in `backend/internal/models/role.go` has domain `read` and `write` keys plus focused grants. API routes enforce these keys; the role editor in `frontend/src/pages/RolesTab.tsx` exposes one checkbox per key. Unknown keys are rejected by the role API.
 
 The main limitation is that `write` groups actions with different risk levels. For example, `devices.write` currently covers routine changes, device commands, credential changes, factory reset, snapshot restore, and deletion. A role cannot allow ordinary operation while withholding those higher-risk actions.
 
@@ -25,7 +25,7 @@ Finalize exact permission keys and route mapping before implementation. Avoid cr
 
 ## Implemented focused grants
 
-The first implementation adds these independently assignable grants: `devices.configure`, `devices.command`, `devices.reset`, `devices.delete`, `devices.credentials`, `devices.snapshots.write`, `devices.firmware`, `firmwares.manage`, `users.tokens`, `provisioning.rules.write`, and `provisioning.templates.write`. Existing domain `*.write` keys remain valid compatibility bundles and continue to authorize their former operations. The role editor lists both legacy bundles and focused grants with descriptions.
+The implementation adds these independently assignable grants: `devices.configure`, `devices.command`, `devices.reset`, `devices.delete`, `devices.credentials`, `devices.snapshots.write`, `devices.firmware`, `firmwares.manage`, `users.tokens`, `provisioning.rules.write`, `provisioning.templates.write`, and `database.stats.read`. Existing domain `*.write` keys remain valid compatibility bundles and continue to authorize their former operations. The database statistics grant is excluded from the read-only system role because it exposes normalized SQL text; the built-in admin receives it with the other `AllPermissions`. The role editor lists the grants with descriptions.
 
 ## Implementation sequence
 

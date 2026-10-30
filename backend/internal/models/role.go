@@ -18,6 +18,7 @@ const (
 	PermProvisioningWrite     = "provisioning.write"
 	PermSettingsRead          = "settings.read"
 	PermSettingsWrite         = "settings.write"
+	PermDatabaseStatsRead     = "database.stats.read"
 	PermMetricsRead           = "metrics.read"
 	PermMetricsWrite          = "metrics.write"
 	PermSecurityRead          = "security.read"
@@ -43,7 +44,7 @@ var AllPermissions = []string{
 	PermFirmwaresRead, PermFirmwaresWrite,
 	PermFaultsRead, PermFaultsWrite,
 	PermProvisioningRead, PermProvisioningWrite,
-	PermSettingsRead, PermSettingsWrite,
+	PermSettingsRead, PermSettingsWrite, PermDatabaseStatsRead,
 	PermMetricsRead, PermMetricsWrite,
 	PermSecurityRead, PermSecurityWrite,
 	PermDevicesConfigure, PermDevicesCommand, PermDevicesReset, PermDevicesDelete,

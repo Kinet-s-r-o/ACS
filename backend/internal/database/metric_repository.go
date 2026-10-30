@@ -821,8 +821,8 @@ func caTableForBucket(bucket string) string {
 }
 
 // SetupTimescaleDB creates the TimescaleDB extension, hypertable, continuous
-// aggregates, retention policies, and compression policy. All statements are
-// idempotent (IF NOT EXISTS / if_not_exists => TRUE).
+// aggregates, retention policies, and compression policy. It also attempts to
+// enable optional pg_stat_statements query tracking.
 func SetupTimescaleDB(db *gorm.DB) error {
 	statements := []string{
 		`CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
@@ -893,6 +893,9 @@ func SetupTimescaleDB(db *gorm.DB) error {
 		if err := db.Exec(stmt).Error; err != nil {
 			return fmt.Errorf("timescaledb setup: %w", err)
 		}
+	}
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS pg_stat_statements`).Error; err != nil {
+		log.Printf("WARNING: pg_stat_statements is unavailable; query statistics will be disabled: %v", err)
 	}
 	log.Println("TimescaleDB setup completed (hypertable, CAs, retention, compression)")
 

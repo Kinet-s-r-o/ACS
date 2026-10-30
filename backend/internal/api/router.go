@@ -242,6 +242,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetSettings))
 	apiMux.HandleFunc("GET /settings/connection-request-secret", auth.RequireFullAccess(auth.RequirePermission(models.PermSettingsRead)(r.handleGetConnectionRequestSecret)))
 	apiMux.HandleFunc("GET /settings/retention/stats", auth.RequirePermission(models.PermSettingsRead)(r.handleRetentionStats))
+	apiMux.HandleFunc("GET /settings/database/statistics", auth.RequirePermission(models.PermDatabaseStatsRead)(r.handleDatabaseStatistics))
 	apiMux.HandleFunc("PUT /settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleUpdateSettings))
 
 	// Faults endpoints
@@ -1287,6 +1288,18 @@ func (r *Router) handleRetentionStats(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		log.Printf("Error getting retention table stats: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to get database retention stats")
+		return
+	}
+	respondJSON(w, http.StatusOK, stats)
+}
+
+func (r *Router) handleDatabaseStatistics(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
+	defer cancel()
+	stats, err := database.GetDatabaseStatistics(ctx, r.db, req.URL.Query().Get("sort"))
+	if err != nil {
+		log.Printf("Error getting database query statistics: %v", err)
+		respondError(w, http.StatusServiceUnavailable, "Database query statistics are unavailable")
 		return
 	}
 	respondJSON(w, http.StatusOK, stats)

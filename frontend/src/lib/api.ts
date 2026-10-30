@@ -47,6 +47,8 @@ export interface DeviceSnapshot { id: number; device_id: number; name: string; m
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
 export interface Fault { id: number; device_id: number; serial_number: string; model_name?: string; software_version?: string; hardware_version?: string; manufacturer_oui?: string; fault_code: string; fault_string: string; parameter_name: string; resolved: boolean; created_at: string; resolved_at: string | null }
 export interface FaultCounts { active: number; resolved: number; total: number }
+export interface DatabaseQueryStat { query_id: string; query: string; calls: number; rows: number; total_time_ms: number; mean_time_ms: number; shared_hit_blocks: number; shared_read_blocks: number; temp_read_blocks: number; temp_write_blocks: number }
+export interface DatabaseStatistics { available: boolean; reason?: string; stats_reset?: string | null; queries: DatabaseQueryStat[] }
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
 export interface DashboardPanelConfig { id: string; title: string; parameter_pattern: string; thresholds: DashboardThreshold[] }
@@ -209,6 +211,7 @@ export const api = {
   getSettings: () => request<Record<string, string>>('/settings'),
   getConnectionRequestSecret: () => request<{ value: string }>('/settings/connection-request-secret'),
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
+  getDatabaseStatistics: (sort: 'total_time' | 'mean_time' | 'calls' = 'total_time') => request<DatabaseStatistics>(`/settings/database/statistics?sort=${sort}`),
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getUsers: () => request<User[]>('/users'),
   getAPITokens: (userId: number) => request<APIToken[]>(`/users/${userId}/api-tokens`),
