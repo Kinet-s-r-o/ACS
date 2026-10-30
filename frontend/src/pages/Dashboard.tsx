@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show, untrack, type Component, type JSX } from 'solid-js';
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
@@ -59,6 +59,14 @@ const FleetPanelFrame: Component<{
   children: JSX.Element;
 }> = (props) => {
   const [dragging, setDragging] = createSignal(false);
+  const [panelHeight, setPanelHeight] = createSignal(0);
+  let shell!: HTMLDivElement;
+  onMount(() => {
+    const observer = new ResizeObserver(() => setPanelHeight(shell.getBoundingClientRect().height));
+    observer.observe(shell);
+    setPanelHeight(shell.getBoundingClientRect().height);
+    onCleanup(() => observer.disconnect());
+  });
   let startWidth = props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width;
   const resizeStart = (event: PointerEvent, axis: 'x' | 'y') => {
     event.preventDefault();
@@ -151,13 +159,14 @@ const FleetPanelFrame: Component<{
   };
   const width = () => Math.max(30, Math.min(120, props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width));
   const occupiedColumns = () => Math.ceil(width());
+  const occupiedRows = () => Math.max(1, Math.ceil((panelHeight() + 16) / 8));
   const savedHeight = () => props.layout.height > 5 ? props.layout.height : 0;
   return <div
     class={`fleet-layout-panel ${dragging() ? 'is-dragging' : ''}`}
     data-fleet-panel-id={props.id}
-    style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};width:calc(${(width() / occupiedColumns()) * 100}% - var(--fleet-grid-line));--fleet-panel-height:${savedHeight()}px`}
+    style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};grid-row:span ${occupiedRows()};width:calc(${(width() / occupiedColumns()) * 100}% - var(--fleet-grid-line));--fleet-panel-height:${savedHeight()}px`}
   >
-    <div class="fleet-panel-shell">
+    <div class="fleet-panel-shell" ref={shell}>
       {props.children}
       <button type="button" class="fleet-panel-drag-handle" aria-label="Move panel" title="Drag to move panel" onPointerDown={dragStart}><GripVertical size={14} aria-hidden="true" /></button>
       <button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge to resize width" onPointerDown={(event) => resizeStart(event, 'x')} />
