@@ -41,6 +41,7 @@ const Tasks: Component = () => {
   const [selectedTasks, setSelectedTasks] = createSignal<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
+  const [statusFilter, setStatusFilter] = createSignal<string | 'all' | 'column'>('all');
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tasks', {});
   const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.tasks', { column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => { setTaskPage(0); setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
@@ -58,7 +59,7 @@ const Tasks: Component = () => {
   ]);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('global_tasks', 20);
   const [tasks, { refetch }] = createResource(
-    () => ({ page: taskPage(), size: taskPageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
+    () => ({ page: taskPage(), size: taskPageSize(), search: searchQuery(), sort: sortState(), filters: effectiveFilters() }),
     (query) => api.getTasks(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
   );
   const [taskDetails] = createResource(() => selectedTask()?.id, (id) => api.getTask(id));
@@ -67,9 +68,20 @@ const Tasks: Component = () => {
     const counts = { pending: 0, sent: 0, completed: 0, failed: 0, deleted: 0, total: 0 };
     const values = tasks()?.counts || {};
     for (const key of ['pending', 'sent', 'completed', 'failed', 'deleted'] as const) counts[key] = values[key] || 0;
-    counts.total = tasks()?.total || 0;
+    counts.total = counts.pending + counts.sent + counts.completed + counts.failed + counts.deleted;
     return counts;
   });
+
+  function effectiveFilters(): Record<string, ColumnFilterState> {
+    const filters = { ...columnFilters() };
+    if (statusFilter() === 'all') {
+      delete filters.status;
+      return filters;
+    }
+    if (statusFilter() === 'column') return filters;
+    filters.status = { logic: 'all', rules: [{ operator: 'equals', value: statusFilter() }] };
+    return filters;
+  }
 
   const filteredTasks = createMemo(() => tasks()?.tasks || []);
   const pagedTasks = filteredTasks;
@@ -81,10 +93,11 @@ const Tasks: Component = () => {
   });
 
   const exportTasksCSV = async () => {
-    const firstPage = await api.getTasks(500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+    const filters = effectiveFilters();
+    const firstPage = await api.getTasks(500, 0, { search: searchQuery(), sort: sortState(), filters });
     const rowsToExport = [...firstPage.tasks];
     for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
-      const nextPage = await api.getTasks(500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+      const nextPage = await api.getTasks(500, offset, { search: searchQuery(), sort: sortState(), filters });
       rowsToExport.push(...nextPage.tasks);
       if (!nextPage.tasks.length) break;
     }
@@ -116,6 +129,7 @@ const Tasks: Component = () => {
   };
 
   const applyFilter = (column: string, state: ColumnFilterState | null) => {
+    if (column === 'status') setStatusFilter('column');
     setColumnFilters(previous => {
       const next = { ...previous };
       if (state) next[column] = state;
@@ -184,20 +198,15 @@ const Tasks: Component = () => {
 
   return (
     <div class="space-y-5">
-      <PageHeader title="CWMP tasks" description="Task history across all CPE devices.">
-        <button type="button" class="btn btn-secondary" onClick={() => void refetch()} disabled={tasks.loading}>
-          <RefreshCw size={14} class={tasks.loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </PageHeader>
+      <PageHeader title="CWMP tasks" description="Task history across all CPE devices." />
 
-      <dl class="ops-register task-register" aria-label="CWMP task status register" aria-busy={tasks.loading}>
-        <div class="ops-register-cell is-warning"><dt>Pending</dt><dd>{taskCounts().pending}</dd><small>Waiting to be sent</small></div>
-        <div class="ops-register-cell"><dt>Sent</dt><dd>{taskCounts().sent}</dd><small>Dispatched to CPE</small></div>
-        <div class="ops-register-cell is-online"><dt>Completed</dt><dd>{taskCounts().completed}</dd><small>Successfully finished</small></div>
-        <div class="ops-register-cell is-offline"><dt>Failed</dt><dd>{taskCounts().failed}</dd><small>Require review</small></div>
-        <div class="ops-register-cell"><dt>Deleted</dt><dd>{taskCounts().deleted}</dd><small>Cancelled before dispatch</small></div>
-        <div class="ops-register-cell"><dt>Total tasks</dt><dd>{taskCounts().total}</dd><small>All CWMP tasks</small></div>
+      <dl class="ops-register task-register" aria-label="CWMP task status filters" aria-busy={tasks.loading}>
+        <button type="button" class="ops-register-cell task-filter-card is-warning" onClick={() => { setStatusFilter('pending'); setTaskPage(0); }} aria-pressed={statusFilter() === 'pending'}><span class="task-filter-label">Pending</span><strong class="task-filter-count">{taskCounts().pending}</strong><span class="task-filter-description">Waiting to be sent</span></button>
+        <button type="button" class="ops-register-cell task-filter-card" onClick={() => { setStatusFilter('sent'); setTaskPage(0); }} aria-pressed={statusFilter() === 'sent'}><span class="task-filter-label">Sent</span><strong class="task-filter-count">{taskCounts().sent}</strong><span class="task-filter-description">Dispatched to CPE</span></button>
+        <button type="button" class="ops-register-cell task-filter-card is-online" onClick={() => { setStatusFilter('completed'); setTaskPage(0); }} aria-pressed={statusFilter() === 'completed'}><span class="task-filter-label">Completed</span><strong class="task-filter-count">{taskCounts().completed}</strong><span class="task-filter-description">Successfully finished</span></button>
+        <button type="button" class="ops-register-cell task-filter-card is-offline" onClick={() => { setStatusFilter('failed'); setTaskPage(0); }} aria-pressed={statusFilter() === 'failed'}><span class="task-filter-label">Failed</span><strong class="task-filter-count">{taskCounts().failed}</strong><span class="task-filter-description">Require review</span></button>
+        <button type="button" class="ops-register-cell task-filter-card" onClick={() => { setStatusFilter('deleted'); setTaskPage(0); }} aria-pressed={statusFilter() === 'deleted'}><span class="task-filter-label">Deleted</span><strong class="task-filter-count">{taskCounts().deleted}</strong><span class="task-filter-description">Cancelled before dispatch</span></button>
+        <button type="button" class="ops-register-cell task-filter-card" onClick={() => { setStatusFilter('all'); setTaskPage(0); }} aria-pressed={statusFilter() === 'all'}><span class="task-filter-label">Total tasks</span><strong class="task-filter-count">{taskCounts().total}</strong><span class="task-filter-description">All CWMP tasks</span></button>
       </dl>
 
       <Show when={isFullAccess() && selectedTasks().size > 0}>
@@ -220,6 +229,9 @@ const Tasks: Component = () => {
                 <button type="button" onClick={() => { setSearchQuery(''); setTaskPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button>
               </Show>
             </div>
+            <button type="button" class="icon-button" onClick={() => void refetch()} disabled={tasks.loading} title="Refresh CWMP tasks" aria-label="Refresh CWMP tasks">
+              <RefreshCw size={15} class={tasks.loading ? 'animate-spin' : ''} aria-hidden="true" />
+            </button>
             <button
               type="button"
               class="icon-button"

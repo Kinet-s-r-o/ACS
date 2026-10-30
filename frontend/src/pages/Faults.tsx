@@ -171,12 +171,7 @@ const Faults: Component = () => {
 
   return (
     <div class="space-y-6">
-      <PageHeader title="Fault center" description="Investigate and resolve device-side protocol failures.">
-        <button onClick={() => { refetch(); refetchStats(); }} class="btn btn-secondary" disabled={faults.loading || stats.loading}>
-          <RefreshCw size={14} />
-          Refresh
-        </button>
-      </PageHeader>
+      <PageHeader title="Fault center" description="Investigate and resolve device-side protocol failures." />
 
       <Show when={faults.error || stats.error}>
         <div class="card"><ResourceError title="Fault data is unavailable" description="ACS could not read the protocol fault register. Retry the request without changing the selected filter." onRetry={() => { refetch(); refetchStats(); }} /></div>
@@ -228,6 +223,9 @@ const Faults: Component = () => {
                 <button type="button" onClick={() => { setSearchQuery(''); setFaultPage(0); }} class="input-clear" aria-label="Clear fault search"><X size={12} /></button>
               </Show>
             </div>
+            <button type="button" class="icon-button" onClick={() => { void refetch(); void refetchStats(); }} disabled={faults.loading || stats.loading} title="Refresh CWMP faults" aria-label="Refresh CWMP faults">
+              <RefreshCw size={15} class={faults.loading || stats.loading ? 'animate-spin' : ''} aria-hidden="true" />
+            </button>
             <button
               type="button"
               class="icon-button"
