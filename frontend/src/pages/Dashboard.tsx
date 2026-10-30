@@ -418,6 +418,7 @@ const Dashboard: Component = () => {
           <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={panelAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchPanelAnalytics()} /></div>
         </Show>
 
+        <div class="fleet-panel-toolbar"><div><h2>Fleet panels</h2><p>Drag panels to move them. Use the corner handle to resize.</p></div><button type="button" class="btn btn-secondary" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}><Plus size={14} />Add panel</button></div>
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
         <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel} onResize={resizePanel}>
         <section class="data-panel">
