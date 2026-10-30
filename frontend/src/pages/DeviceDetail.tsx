@@ -123,7 +123,7 @@ const DeviceDetail: Component = () => {
   const [faultPage, setFaultPage] = createSignal(0);
   const { pageSize: faultPageSize, changePageSize: changeFaultPageSize } = usePageSize('device_faults', 20);
   const [deviceFaultColumnFilters, setDeviceFaultColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.faults`, {});
-  const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'time', direction: 'desc' });
   const [faultSearch, setFaultSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.faults`);
 
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
