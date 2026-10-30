@@ -55,7 +55,7 @@ const FleetPanelFrame: Component<{
   return <div
     class="fleet-layout-panel"
     draggable
-    style={{ order: props.layout.order, 'grid-column': `span ${props.layout.width}`, 'grid-row': `span ${props.layout.height}` }}
+    style={`order:${props.layout.order};grid-column:span ${props.layout.width};grid-row:span ${props.layout.height}`}
     onDragStart={(event) => { event.dataTransfer?.setData('text/plain', props.id); event.dataTransfer!.effectAllowed = 'move'; }}
     onDragOver={(event) => event.preventDefault()}
     onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer?.getData('text/plain'); if (source && source !== props.id) props.onMove(source, props.id); }}
