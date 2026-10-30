@@ -510,7 +510,7 @@ const Dashboard: Component = () => {
         description="Current fleet reachability, contact recency, health thresholds, and hardware mix."
         status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
-        <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading}><RefreshCw size={14} />Refresh fleet data</button>
+        <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
         <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
       </PageHeader>
 
