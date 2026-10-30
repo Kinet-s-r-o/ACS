@@ -39,13 +39,11 @@ const FleetPanelFrame: Component<{
   children: JSX.Element;
 }> = (props) => {
   const [dragging, setDragging] = createSignal(false);
-  let startX = 0;
   let startWidth = props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width;
   const resizeStart = (event: PointerEvent, axis: 'x' | 'y') => {
     event.preventDefault();
     event.stopPropagation();
     const startPointer = axis === 'x' ? event.clientX : event.clientY;
-    startX = startPointer;
     startWidth = axis === 'x' ? (props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width) : ((event.currentTarget as HTMLElement).closest('.fleet-panel-shell')?.getBoundingClientRect().height ?? 0);
     const grid = (event.currentTarget as HTMLElement).closest('.fleet-dashboard-grid');
     const columnStep = grid ? grid.getBoundingClientRect().width / 120 : 10;
@@ -95,7 +93,7 @@ const FleetPanelFrame: Component<{
       const target = document.elementFromPoint(current.clientX, current.clientY)?.closest<HTMLElement>('.fleet-layout-panel');
       const targetID = target?.dataset.fleetPanelId && target.dataset.fleetPanelId !== props.id ? target.dataset.fleetPanelId : '';
       document.querySelectorAll('.fleet-layout-panel.is-drop-target').forEach((panel) => panel.classList.remove('is-drop-target'));
-      if (targetID) {
+      if (targetID && target) {
         target.classList.add('is-drop-target');
         if (targetID !== previousTarget) props.onMove(props.id, targetID);
       }
