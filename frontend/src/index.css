@@ -283,9 +283,9 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fleet-layout-panel.is-drop-target { outline: 2px dashed rgb(var(--primary)); outline-offset: 2px; }
 .fleet-panel-shell { position: relative; height: auto; min-height: 0; }
 .fleet-panel-drag-handle { position: absolute; top: 10px; left: 10px; z-index: 4; display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; color: rgb(var(--text-muted)); background: rgb(var(--surface) / .92); cursor: grab; font-size: 17px; line-height: 1; touch-action: none; }
-.fleet-layout-panel[data-fleet-panel-id^="custom-"] .fleet-panel-drag-handle { top: 0; left: 0; border-color: transparent; background: transparent; }
-.fleet-layout-panel[data-fleet-panel-id^="custom-"] .dashboard-configurable-heading > .icon-button,
-.fleet-layout-panel[data-fleet-panel-id^="custom-"] .dashboard-configurable-heading > .icon-button:hover { border-color: transparent; }
+.fleet-layout-panel .fleet-panel-drag-handle { top: 0; left: 0; border-color: transparent; background: transparent; }
+.fleet-layout-panel .icon-button,
+.fleet-layout-panel .icon-button:hover { border-color: transparent; }
 .fleet-panel-drag-handle:active { cursor: grabbing; }
 .fleet-panel-drag-handle:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; }
 .fleet-layout-panel:hover { z-index: 2; }
