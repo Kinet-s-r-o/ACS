@@ -37,6 +37,11 @@ export type DeviceGrowthInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | '
 export interface DeviceGrowthPoint { timestamp: string; count: number; online: number }
 export interface DeviceGrowth { interval: DeviceGrowthInterval; points: DeviceGrowthPoint[] }
 export interface DeviceListResponse { devices: Device[]; total: number; limit: number; offset: number }
+export interface DeviceListOptions {
+  search?: string;
+  sort?: { column: string; direction: 'asc' | 'desc' } | null;
+  filters?: Record<string, ColumnFilterState>;
+}
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
 export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
 export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number }
@@ -136,9 +141,15 @@ export async function requestBlob(endpoint: string, options: RequestInit = {}): 
 
 export const api = {
   health: () => request<{ status: string }>('/health'),
-  getDevices: (limit = 50, offset = 0, columns?: string[]) => {
+  getDevices: (limit = 50, offset = 0, columns?: string[], options?: DeviceListOptions) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (columns) params.set('columns', columns.join(','));
+    if (options?.search?.trim()) params.set('search', options.search.trim());
+    if (options?.sort) {
+      params.set('sort', options.sort.column);
+      params.set('direction', options.sort.direction);
+    }
+    if (options?.filters && Object.keys(options.filters).length > 0) params.set('filters', JSON.stringify(options.filters));
     return request<DeviceListResponse>(`/devices?${params}`);
   },
   getWANInterfaces: () => request<WANInterface[]>('/wan-interfaces'),

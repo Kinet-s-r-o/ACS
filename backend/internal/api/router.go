@@ -381,6 +381,16 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusBadRequest, "Invalid inventory columns")
 		return
 	}
+	filters, err := database.ParseDeviceInventoryFilters(query.Get("filters"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid inventory filters")
+		return
+	}
+	search := strings.TrimSpace(query.Get("search"))
+	if len(search) > 256 {
+		respondError(w, http.StatusBadRequest, "Inventory search is too long")
+		return
+	}
 	limit := 50
 	offset := 0
 
@@ -395,8 +405,31 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 			offset = parsed
 		}
 	}
+	sortColumn := query.Get("sort")
+	if sortColumn != "" && !map[string]bool{
+		"serial_number": true, "manufacturer": true, "model": true, "ip_address": true,
+		"rx_power": true, "uptime": true, "status": true, "last_inform": true,
+		"tags": true, "software_version": true, "hardware_version": true,
+		"manufacturer_oui": true, "active_faults": true,
+	}[sortColumn] {
+		respondError(w, http.StatusBadRequest, "Invalid inventory sort column")
+		return
+	}
+	direction := strings.ToLower(query.Get("direction"))
+	if direction == "" {
+		direction = "asc"
+	}
+	if direction != "asc" && direction != "desc" {
+		respondError(w, http.StatusBadRequest, "Invalid inventory sort direction")
+		return
+	}
+	claims := auth.GetUserFromContext(req.Context())
+	includeSensitive := claims != nil && claims.Role == models.RoleFull
 
-	devices, total, err := r.deviceRepo.List(req.Context(), limit, offset)
+	devices, total, err := r.deviceRepo.ListInventory(req.Context(), database.DeviceInventoryQuery{
+		Limit: limit, Offset: offset, Search: search, Sort: sortColumn, Direction: direction,
+		Filters: filters, IncludeSensitive: includeSensitive,
+	})
 	if err != nil {
 		log.Printf("Error listing devices: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list devices")

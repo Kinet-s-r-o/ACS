@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
+import { createResource, createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
 import { Download, Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device } from '../lib/api';
@@ -10,7 +10,7 @@ import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
-import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import type { ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
@@ -76,6 +76,7 @@ const Devices: Component = () => {
   const activeTab = () => searchParams.tab === 'wans' ? 'wans' : 'cpes';
   const [page, setPage] = createSignal(0);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.devices');
+  const [debouncedSearch, setDebouncedSearch] = createSignal(searchQuery());
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [inventoryColumnSelection, setInventoryColumnSelection] = createSignal<string>();
   const [summoningAll, setSummoningAll] = createSignal(false);
@@ -116,25 +117,37 @@ const Devices: Component = () => {
     }
   });
 
+  createEffect(() => {
+    const query = searchQuery();
+    const timer = setTimeout(() => setDebouncedSearch(query), 250);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   const [deviceList, { refetch }] = createResource(
-    inventoryColumnSelection,
-    async columnSelection => {
-      const requestedColumns = JSON.parse(columnSelection) as string[];
-      const firstPage = await api.getDevices(500, 0, requestedColumns);
-      const devices = [...firstPage.devices];
-      for (let offset = devices.length; offset < firstPage.total; offset += 500) {
-        const nextPage = await api.getDevices(500, offset, requestedColumns);
-        devices.push(...nextPage.devices);
-        if (nextPage.devices.length === 0) break;
-      }
-      return { devices, total: firstPage.total };
+    () => {
+      const columns = inventoryColumnSelection();
+      if (columns === undefined) return undefined;
+      return JSON.stringify({
+        page: page(), pageSize: pageSize(), columns,
+        search: debouncedSearch(), sort: sortBy(), filters: columnFilters(),
+      });
+    },
+    request => {
+      const options = JSON.parse(request) as {
+        page: number; pageSize: number; columns: string; search: string;
+        sort: { column: string; direction: 'asc' | 'desc' } | null;
+        filters: Record<string, ColumnFilterState>;
+      };
+      return api.getDevices(options.pageSize, options.page * options.pageSize, JSON.parse(options.columns) as string[], {
+        search: options.search, sort: options.sort, filters: options.filters,
+      });
     },
   );
   const [tagCatalog] = createResource(api.getTags);
 
   const getDeviceTagLabels = (device: Device) => (device.tags || []).map(id => tagCatalog()?.find(tag => tag.id === id)?.name || id).join(', ');
 
-  const totalPages = () => Math.ceil(sortedDevices().length / pageSize());
+  const totalPages = () => Math.ceil((deviceList()?.total ?? 0) / pageSize());
 
   const visibleColumns = createMemo(() =>
     columns().filter(c => c.visible).sort((a, b) => a.order - b.order)
@@ -256,140 +269,12 @@ const Devices: Component = () => {
     }
   };
 
-  const getFilterValue = (device: Device, colId: string): string => {
-    switch (colId) {
-      case 'serial_number': return device.serial_number || '';
-      case 'manufacturer': return device.manufacturer || '';
-      case 'model': return device.model_name || device.product_class || '';
-      case 'product_class': return device.product_class || '';
-      case 'ip_address': return device.ip_address || '';
-      case 'rx_power': {
-        const rx = getRxPower(device);
-        return rx.value === '-' ? '' : rx.value;
-      }
-      case 'uptime': {
-        const uptime = getUptimeSeconds(device);
-        return uptime === null ? '' : String(uptime);
-      }
-      case 'ppp_username': return getPppUsername(device) === '-' ? '' : getPppUsername(device);
-      case 'status': return device.online ? 'Online' : 'Offline';
-      case 'last_inform': return device.last_inform || '';
-      case 'tags': return getDeviceTagLabels(device);
-      case 'software_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
-      case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
-      case 'manufacturer_oui': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI') === '-' ? '' : getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
-      case 'active_faults': return String(device.active_faults ?? 0);
-      default: return '';
-    }
-  };
-
-  const filterDevices = (source: Device[]) => {
-    let devices = source;
-    const query = searchQuery().toLowerCase().trim();
-    if (query) {
-      devices = devices.filter(d => {
-        return (
-          d.serial_number?.toLowerCase().includes(query) ||
-          d.manufacturer?.toLowerCase().includes(query) ||
-          d.model_name?.toLowerCase().includes(query) ||
-          d.product_class?.toLowerCase().includes(query) ||
-          d.ip_address?.toLowerCase().includes(query) ||
-          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion').toLowerCase().includes(query) ||
-          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.HardwareVersion').toLowerCase().includes(query) ||
-          getDeviceInfoParameter(d, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI').toLowerCase().includes(query) ||
-          String(d.active_faults ?? 0).includes(query)
-        );
-      });
-    }
-    return applyColumnFilters(devices, columnFilters(), getFilterValue);
-  };
-
-  const filteredDevices = createMemo(() => filterDevices(deviceList()?.devices || []));
-
   const activeFilterCount = createMemo(() => Object.keys(columnFilters()).length);
   const hasInventoryFilter = createMemo(() => Boolean(searchQuery().trim()) || activeFilterCount() > 0);
-
-  const sortDevices = (source: Device[]) => {
-    const devices = [...source];
-    const sort = sortBy();
-    if (!sort) return devices;
-    
-    return devices.sort((a, b) => {
-      let aVal: any, bVal: any;
-      
-      switch (sort.column) {
-        case 'serial_number':
-          aVal = a.serial_number || '';
-          bVal = b.serial_number || '';
-          break;
-        case 'manufacturer':
-          aVal = a.manufacturer || '';
-          bVal = b.manufacturer || '';
-          break;
-        case 'model':
-          aVal = a.model_name || a.product_class || '';
-          bVal = b.model_name || b.product_class || '';
-          break;
-        case 'ip_address':
-          aVal = a.ip_address || '';
-          bVal = b.ip_address || '';
-          break;
-        case 'rx_power':
-          aVal = Number.parseFloat(getRxPower(a).value);
-          bVal = Number.parseFloat(getRxPower(b).value);
-          if (!Number.isFinite(aVal)) aVal = Number.NEGATIVE_INFINITY;
-          if (!Number.isFinite(bVal)) bVal = Number.NEGATIVE_INFINITY;
-          break;
-        case 'uptime':
-          aVal = getUptimeSeconds(a) ?? -1;
-          bVal = getUptimeSeconds(b) ?? -1;
-          break;
-        case 'status':
-          aVal = a.online ? 1 : 0;
-          bVal = b.online ? 1 : 0;
-          break;
-        case 'last_inform':
-          aVal = a.last_inform ? new Date(a.last_inform).getTime() : 0;
-          bVal = b.last_inform ? new Date(b.last_inform).getTime() : 0;
-          break;
-        case 'tags':
-          aVal = getDeviceTagLabels(a);
-          bVal = getDeviceTagLabels(b);
-          break;
-        case 'software_version':
-          aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
-          bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
-          break;
-        case 'hardware_version':
-          aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
-          bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
-          break;
-        case 'manufacturer_oui':
-          aVal = getDeviceInfoParameter(a, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
-          bVal = getDeviceInfoParameter(b, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
-          break;
-        case 'active_faults':
-          aVal = a.active_faults ?? 0;
-          bVal = b.active_faults ?? 0;
-          break;
-        default:
-          return 0;
-      }
-      
-      if (typeof aVal === 'string') {
-        const comparison = aVal.localeCompare(bVal);
-        return sort.direction === 'asc' ? comparison : -comparison;
-      }
-      
-      if (aVal === bVal) return 0;
-      return sort.direction === 'asc' ? (aVal < bVal ? -1 : 1) : (aVal > bVal ? -1 : 1);
-    });
-  };
-
-  const sortedDevices = createMemo(() => sortDevices(filteredDevices()));
-  const pagedDevices = createMemo(() => sortedDevices().slice(page() * pageSize(), (page() + 1) * pageSize()));
+  const sortedDevices = createMemo(() => deviceList()?.devices || []);
+  const pagedDevices = sortedDevices;
   createEffect(() => {
-    const maxPage = Math.max(0, Math.ceil(sortedDevices().length / pageSize()) - 1);
+    const maxPage = Math.max(0, Math.ceil((deviceList()?.total ?? 0) / pageSize()) - 1);
     if (page() > maxPage) setPage(maxPage);
   });
 
@@ -397,11 +282,13 @@ const Devices: Component = () => {
     if (exportingDevices() || !deviceList()) return;
     setExportingDevices(true);
     try {
-      const total = deviceList()?.total ?? 0;
       const allDevices: Device[] = [];
       const requestedColumns = visibleColumns().map(column => column.id);
-      for (let offset = 0; offset < total; offset += 100) {
-        const response = await api.getDevices(100, offset, requestedColumns);
+      const options = { search: searchQuery(), sort: sortBy(), filters: columnFilters() };
+      const firstPage = await api.getDevices(100, 0, requestedColumns, options);
+      allDevices.push(...firstPage.devices);
+      for (let offset = 100; offset < firstPage.total; offset += 100) {
+        const response = await api.getDevices(100, offset, requestedColumns, options);
         allDevices.push(...response.devices);
         if (response.devices.length === 0) break;
       }
@@ -428,7 +315,7 @@ const Devices: Component = () => {
         }
       };
       const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-      const rows = sortDevices(filterDevices(allDevices)).map(device => exportColumns.map(column => getExportValue(device, column.id)));
+      const rows = allDevices.map(device => exportColumns.map(column => getExportValue(device, column.id)));
       const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...rows]
         .map(row => row.map(escapeCsvValue).join(','))
         .join('\r\n') + '\r\n';
@@ -531,7 +418,7 @@ const Devices: Component = () => {
 
       <Show when={!deviceList.error}><div class="card overflow-hidden">
         <div class="table-panel-toolbar">
-          <span><strong>{pagedDevices().length}</strong> shown · <strong>{sortedDevices().length}</strong> matching CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
+          <span><strong>{pagedDevices().length}</strong> shown · <strong>{deviceList()?.total ?? 0}</strong> matching CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
           <div class="flex items-center gap-2">
             <Show when={hasInventoryFilter()}>
               <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); setPage(0); }}>Clear search and filters</button>
@@ -627,16 +514,16 @@ const Devices: Component = () => {
                 fallback={<><TableSkeleton cols={visibleColumns().length + 1} /><TableSkeleton cols={visibleColumns().length + 1} /><TableSkeleton cols={visibleColumns().length + 1} /></>}
               >
                 <Show
-                  when={sortedDevices().length}
+                  when={deviceList()?.total ?? 0}
                   fallback={
                     <tr>
                       <td colspan={visibleColumns().length + 1} class="px-4 py-12 text-center">
                         <EmptyState
                           compact
                           icon={<RouterIcon size={22} />}
-                          title={searchQuery() ? 'No CPEs match this search' : 'No CPEs have registered'}
-                          description={searchQuery() ? 'Change the serial, model, vendor, or IP search to return to the current inventory.' : 'CPEs appear after their first CWMP Inform reaches ACS. Verify the published endpoint and device ACS URL.'}
-                          action={searchQuery() ? <button type="button" class="btn btn-secondary" onClick={() => setSearchQuery('')}>Clear search</button> : undefined}
+                          title={hasInventoryFilter() ? 'No CPEs match the current search or filters' : 'No CPEs have registered'}
+                          description={hasInventoryFilter() ? 'Change or clear the current search and column filters to see matching CPEs.' : 'CPEs appear after their first CWMP Inform reaches ACS. Verify the published endpoint and device ACS URL.'}
+                          action={hasInventoryFilter() ? <button type="button" class="btn btn-secondary" onClick={() => { setSearchQuery(''); setColumnFilters({}); setPage(0); }}>Clear search and filters</button> : undefined}
                         />
                       </td>
                     </tr>
@@ -663,7 +550,7 @@ const Devices: Component = () => {
         </div>
       </div></Show>
 
-      <Pagination page={page()} totalPages={totalPages()} totalItems={sortedDevices().length} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
+      <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
       </Show>
     </div>
   );
