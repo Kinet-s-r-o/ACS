@@ -49,6 +49,10 @@ const Faults: Component = () => {
     (query) => api.getFaults(query.filter, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
   );
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFaultPage(0); };
+  const selectFaultFilter = (nextFilter: 'all' | 'active' | 'resolved') => {
+    setFilter(nextFilter);
+    setFaultPage(0);
+  };
 
   const filteredFaults = createMemo(() => faults()?.faults || []);
   const pagedFaults = filteredFaults;
@@ -178,40 +182,21 @@ const Faults: Component = () => {
         <div class="card"><ResourceError title="Fault data is unavailable" description="ACS could not read the protocol fault register. Retry the request without changing the selected filter." onRetry={() => { refetch(); refetchStats(); }} /></div>
       </Show>
 
-      <dl class="ops-register fault-register" aria-label="Fault status register" aria-busy={stats.loading}>
-        <div class="ops-register-cell is-offline"><dt>Active faults</dt><dd>{stats()?.active ?? 0}</dd><small>Awaiting operator action</small></div>
-        <div class="ops-register-cell is-online"><dt>Resolved</dt><dd>{stats()?.resolved ?? 0}</dd><small>Closed fault records</small></div>
-        <div class="ops-register-cell"><dt>Total recorded</dt><dd>{stats()?.total ?? 0}</dd><small>All CWMP fault events</small></div>
-      </dl>
-
-      {/* Filter */}
-      <div class="flex gap-2">
-        <button 
-          onClick={() => setFilter('active')}
-          class={`px-4 py-2 rounded-md text-sm transition-fast ${
-            filter() === 'active' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-elevated text-secondary hover:bg-zinc-700'
-          }`}
-          aria-pressed={filter() === 'active'}
-        >
-          Active
+      <div class="ops-register fault-register" role="group" aria-label="Filter CWMP faults" aria-busy={stats.loading}>
+        <button type="button" class="ops-register-cell fault-filter-card is-offline" onClick={() => selectFaultFilter('active')} aria-pressed={filter() === 'active'}>
+          <span class="fault-filter-label">Active faults</span>
+          <strong class="fault-filter-count">{stats()?.active ?? 0}</strong>
+          <span class="fault-filter-description">Awaiting operator action</span>
         </button>
-        <button 
-          onClick={() => setFilter('resolved')}
-          class={`px-4 py-2 rounded-md text-sm transition-fast ${
-            filter() === 'resolved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-elevated text-secondary hover:bg-zinc-700'
-          }`}
-          aria-pressed={filter() === 'resolved'}
-        >
-          Resolved
+        <button type="button" class="ops-register-cell fault-filter-card is-online" onClick={() => selectFaultFilter('resolved')} aria-pressed={filter() === 'resolved'}>
+          <span class="fault-filter-label">Resolved</span>
+          <strong class="fault-filter-count">{stats()?.resolved ?? 0}</strong>
+          <span class="fault-filter-description">Closed fault records</span>
         </button>
-        <button 
-          onClick={() => setFilter('all')}
-          class={`px-4 py-2 rounded-md text-sm transition-fast ${
-            filter() === 'all' ? 'bg-zinc-600 text-primary' : 'bg-elevated text-secondary hover:bg-zinc-700'
-          }`}
-          aria-pressed={filter() === 'all'}
-        >
-          All
+        <button type="button" class="ops-register-cell fault-filter-card" onClick={() => selectFaultFilter('all')} aria-pressed={filter() === 'all'}>
+          <span class="fault-filter-label">Total recorded</span>
+          <strong class="fault-filter-count">{stats()?.total ?? 0}</strong>
+          <span class="fault-filter-description">All CWMP fault events</span>
         </button>
       </div>
 

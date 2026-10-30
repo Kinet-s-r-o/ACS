@@ -197,6 +197,14 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .ops-register-cell.is-offline dd { color: rgb(var(--error-text)); }
 .ops-register-cell.is-warning dd { color: rgb(var(--warning-text)); }
 .ops-register-cell.is-text dd { font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; font-size: 15px; line-height: 1.2; }
+.fault-filter-card { position: relative; width: 100%; border: 1px solid transparent; color: rgb(var(--text-primary)); text-align: left; cursor: pointer; transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease; }
+.fault-filter-card:hover { background: rgb(var(--bg-hover)); }
+.fault-filter-card[aria-pressed="true"]::after { position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--accent)); content: ""; }
+.fault-filter-label { display: block; color: rgb(var(--text-muted)); font-size: 11px; }
+.fault-filter-count { display: block; margin-top: 7px; color: rgb(var(--text-primary)); font-family: "IBM Plex Mono", monospace; font-size: 24px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.fault-filter-card.is-online .fault-filter-count { color: rgb(var(--success-text)); }
+.fault-filter-card.is-offline .fault-filter-count { color: rgb(var(--error-text)); }
+.fault-filter-description { display: block; margin-top: 7px; color: rgb(var(--text-muted)); font-size: 10px; }
 
 .data-panel { background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); }
 .table-scroll { max-height: calc(100vh - 280px); overflow-y: auto; }
