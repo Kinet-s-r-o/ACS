@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, For, Show } from 'solid-js';
-import { Save } from 'lucide-solid';
+import { Download, Save } from 'lucide-solid';
 import { api, type DatabaseQuerySort } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -78,6 +78,29 @@ const RetentionSettings: Component = () => {
     else delete next[column];
     return next;
   });
+  const exportQueryStatsCSV = () => {
+    const headers = ['Statement', 'Calls', 'Total ms', 'Average ms', 'Rows', 'Shared reads', 'Shared hits', 'Temp blocks'];
+    const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = (queryStats()?.queries ?? []).map(query => [
+      query.query || `Query ${query.query_id} (text unavailable)`,
+      query.calls,
+      query.total_time_ms,
+      query.mean_time_ms,
+      query.rows,
+      query.shared_read_blocks,
+      query.shared_hit_blocks,
+      query.temp_read_blocks + query.temp_write_blocks,
+    ]);
+    const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(escapeCsvValue).join(',')).join('\r\n') + '\r\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'query-execution.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
   const save = async (event: SubmitEvent) => {
     event.preventDefault();
     const values: Record<string, string> = { retention_enabled: value('retention_enabled') };
@@ -165,6 +188,7 @@ const RetentionSettings: Component = () => {
             <div><h2 class="text-sm font-medium text-secondary">Query execution</h2><p class="text-xs text-muted mt-1">Aggregated timings for up to 50 statements in the current database. Select a column heading to sort; select it again to reverse the order.</p></div>
             <div class="flex gap-2">
               <Show when={Object.keys(queryFilters()).length > 0}><button type="button" class="btn btn-secondary text-xs" onClick={() => setQueryFilters({})}>Clear filters</button></Show>
+              <button type="button" class="btn btn-secondary text-xs" onClick={exportQueryStatsCSV} disabled={queryStats.loading || (queryStats()?.queries.length ?? 0) === 0} title="Export query execution as CSV"><Download size={14} aria-hidden="true" />Export CSV</button>
               <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchQueryStats()} disabled={queryStats.loading}>Refresh</button>
             </div>
           </div>
