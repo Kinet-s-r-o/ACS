@@ -462,7 +462,7 @@ const Devices: Component = () => {
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults', 'created_at'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'ppp_username', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults', 'created_at'].includes(col.id);
                     const currentSort = () => sortBy();
                     const isSorted = () => currentSort()?.column === col.id;
                     

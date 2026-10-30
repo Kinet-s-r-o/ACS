@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/matrix8412/acs/internal/models"
-	"gorm.io/gorm"
 )
 
 type DeviceInventoryFilterRule struct {
@@ -152,7 +151,7 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 	}
 	var devices []*models.Device
 	err := query.Select("devices.*, " + inventoryActiveFaultsExpression + " AS active_faults").
-		Order(gorm.Expr(sortExpression + " " + direction + nullOrdering)).
+		Order(sortExpression + " " + direction + nullOrdering).
 		Order("devices.id ASC").Limit(options.Limit).Offset(options.Offset).Find(&devices).Error
 	if err != nil {
 		return nil, 0, err

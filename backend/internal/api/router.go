@@ -417,8 +417,9 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 	}
 	sortColumn := query.Get("sort")
 	if sortColumn != "" && !map[string]bool{
-		"serial_number": true, "manufacturer": true, "model": true, "ip_address": true,
-		"rx_power": true, "uptime": true, "status": true, "last_inform": true,
+		"serial_number": true, "manufacturer": true, "model": true, "product_class": true, "ip_address": true,
+		"ppp_username": true,
+		"rx_power":     true, "uptime": true, "status": true, "last_inform": true,
 		"tags": true, "software_version": true, "hardware_version": true,
 		"manufacturer_oui": true, "active_faults": true, "created_at": true,
 	}[sortColumn] {
