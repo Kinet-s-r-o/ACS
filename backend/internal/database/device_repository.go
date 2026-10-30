@@ -709,7 +709,7 @@ type AnalyticsDistributionRow struct {
 	Total   int     `gorm:"column:total"`
 }
 
-func (r *DeviceRepository) GetCategoricalAnalytics(ctx context.Context, source string, maxDevices, limit int) (map[string]int, error) {
+func (r *DeviceRepository) GetCategoricalAnalytics(ctx context.Context, source, parameterPattern string, maxDevices, limit int) (map[string]int, error) {
 	if maxDevices < 1 {
 		maxDevices = 10000
 	}
@@ -731,12 +731,34 @@ func (r *DeviceRepository) GetCategoricalAnalytics(ctx context.Context, source s
 		) SELECT CASE WHEN UPPER(latest.value) LIKE '%GPON%' THEN 'GPON' WHEN UPPER(latest.value) LIKE '%EPON%' THEN 'EPON'
 			WHEN UPPER(latest.value) LIKE '%ETH%' THEN 'Ethernet' ELSE 'Other' END AS label,
 			COUNT(*) AS count FROM sampled LEFT JOIN latest ON latest.device_id = sampled.id GROUP BY 1 ORDER BY count DESC, label LIMIT ?`,
+		"parameter": `WITH sampled AS MATERIALIZED (
+			SELECT id FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
+		), latest AS MATERIALIZED (
+			SELECT DISTINCT ON (p.device_id) p.device_id, NULLIF(BTRIM(p.value), '') AS value
+			FROM device_parameters p JOIN sampled s ON s.id = p.device_id
+			WHERE p.name ILIKE ? ESCAPE '!'
+				AND p.name NOT ILIKE '%password%' AND p.name NOT ILIKE '%passphrase%'
+				AND p.name NOT ILIKE '%presharedkey%' AND p.name NOT ILIKE '%pre_shared_key%'
+				AND p.name NOT ILIKE '%privatekey%' AND p.name NOT ILIKE '%secret%'
+				AND p.name NOT ILIKE '%connectionrequestusername%' AND p.name NOT ILIKE '%.username'
+				AND p.value NOT LIKE 'enc:v1:%' AND LENGTH(BTRIM(p.value)) <= 128
+			ORDER BY p.device_id, p.updated_at DESC, p.name
+		)
+		SELECT COALESCE(latest.value, 'Unknown') AS label, COUNT(*) AS count
+		FROM sampled s LEFT JOIN latest ON latest.device_id = s.id
+		GROUP BY 1 ORDER BY count DESC, label LIMIT ?`,
 	}
 	query, ok := queries[source]
 	if !ok {
 		return nil, fmt.Errorf("invalid analytics category source")
 	}
-	rows, err := r.db.WithContext(ctx).Raw(query, maxDevices, limit).Rows()
+	args := []interface{}{maxDevices}
+	if source == "parameter" {
+		parameterPattern = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_", "*", "%").Replace(parameterPattern)
+		args = append(args, parameterPattern)
+	}
+	args = append(args, limit)
+	rows, err := r.db.WithContext(ctx).Raw(query, args...).Rows()
 	if err != nil {
 		return nil, err
 	}

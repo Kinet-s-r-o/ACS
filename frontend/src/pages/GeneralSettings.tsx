@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, Show } from 'solid-js';
-import { Save, Settings as SettingsIcon } from 'lucide-solid';
-import { api } from '../lib/api';
+import { createEffect, createResource, createSignal, For, Show } from 'solid-js';
+import { Plus, Save, Settings as SettingsIcon, Trash2 } from 'lucide-solid';
+import { api, type DashboardAggregationOption } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
 import { ResourceError } from '../components/ResourceState';
@@ -15,7 +15,19 @@ const GeneralSettings: Component = () => {
   const [settings, { refetch }] = createResource(() => api.getSettings());
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
-  const [activeSection, setActiveSection] = createSignal<'general' | 'ui'>('general');
+  const [activeSection, setActiveSection] = createSignal<'general' | 'ui' | 'aggregations'>('general');
+  const [aggregationOptions, setAggregationOptions] = createSignal<DashboardAggregationOption[]>([]);
+
+  createEffect(() => {
+    const raw = settings()?.fleet_aggregation_options;
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as DashboardAggregationOption[];
+      setAggregationOptions(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setAggregationOptions([]);
+    }
+  });
 
   const getValue = (key: string) => {
     const defaults: Record<string, string> = { ui_transitions_enabled: 'false', ui_transition_style: 'fade-slide', ui_transition_duration: '250' };
@@ -104,6 +116,33 @@ const GeneralSettings: Component = () => {
     }
   };
 
+  const addAggregationOption = () => setAggregationOptions((current) => [...current, {
+    id: `aggregation-${crypto.randomUUID()}`,
+    title: '',
+    parameter_pattern: '',
+  }]);
+
+  const updateAggregationOption = (id: string, field: 'title' | 'parameter_pattern', value: string) => setAggregationOptions((current) => current.map((option) => option.id === id ? { ...option, [field]: value } : option));
+
+  const saveAggregationOptions = async () => {
+    const options = aggregationOptions().map((option) => ({ ...option, title: option.title.trim(), parameter_pattern: option.parameter_pattern.trim() }));
+    if (options.some((option) => !option.title || !option.parameter_pattern)) {
+      notify({ tone: 'error', title: 'Complete each aggregation option', message: 'Every option needs a name and a CWMP parameter path.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.updateSettings({ fleet_aggregation_options: JSON.stringify(options) });
+      setAggregationOptions(options);
+      refetch();
+      notify({ tone: 'success', title: 'Aggregation options saved', message: 'Operators can now select these options when creating Fleet panels.' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Aggregation options were not saved', message: 'The previous options remain active.', detail: (error as Error).message, persistent: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div class="space-y-5">
       <PageHeader title="General" description="System-wide defaults and general configuration." />
@@ -112,6 +151,7 @@ const GeneralSettings: Component = () => {
         <div class="mb-5 flex gap-1 border-b border-subtle" role="tablist" aria-label="General settings sections">
           <button type="button" role="tab" aria-selected={activeSection() === 'general'} onClick={() => setActiveSection('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General</button>
           <button type="button" role="tab" aria-selected={activeSection() === 'ui'} onClick={() => setActiveSection('ui')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'ui' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>UI settings</button>
+          <button type="button" role="tab" aria-selected={activeSection() === 'aggregations'} onClick={() => setActiveSection('aggregations')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'aggregations' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Fleet aggregations</button>
         </div>
         <Show when={activeSection() === 'general'}>
         <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
@@ -243,6 +283,25 @@ const GeneralSettings: Component = () => {
                 </label>
               </div>
               <div class="border-t border-subtle pt-4"><button type="button" onClick={() => void handleSaveUISettings()} disabled={saving() || !isFullAccess()} class="btn btn-primary"><Save size={14} />{saving() ? 'Saving settings…' : 'Save UI settings'}</button></div>
+            </div>
+          </Show>
+        </Show>
+        <Show when={activeSection() === 'aggregations'}>
+          <h2 class="text-sm font-medium text-secondary mb-2 flex items-center gap-2"><SettingsIcon size={14} />Fleet aggregation options</h2>
+          <p class="text-muted text-xs mb-4">Define named CWMP parameter dimensions. Fleet panels group the latest matching value per CPE and count each group in SQL. Existing panels keep their saved parameter path if an option is later changed or removed.</p>
+          <Show when={settings.error}><ResourceError title="Aggregation settings are unavailable" description="ACS could not read the current Fleet aggregation options. Retry before making changes." onRetry={() => refetch()} /></Show>
+          <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-10 w-full" /> : undefined}>
+            <div class="space-y-3">
+              <Show when={aggregationOptions().length === 0}><p class="rounded border border-subtle p-3 text-xs text-muted">No custom aggregation options are configured. The built-in manufacturer, product class, and access type options remain available.</p></Show>
+              <For each={aggregationOptions()}>{(option) => <div class="grid gap-3 rounded border border-subtle p-3 sm:grid-cols-[minmax(12rem,1fr)_minmax(18rem,2fr)_auto] sm:items-end">
+                <label class="block text-xs text-muted">Option name<input class="input mt-1 w-full" maxlength={48} value={option.title} onInput={(event) => updateAggregationOption(option.id, 'title', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Region" /></label>
+                <label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={option.parameter_pattern} onInput={(event) => updateAggregationOption(option.id, 'parameter_pattern', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Device.DeviceInfo.X_VENDOR.Region" /><span class="mt-1 block">Use * for dynamic sections. Sensitive parameter names are excluded.</span></label>
+                <button type="button" class="btn btn-secondary text-rose-400" onClick={() => setAggregationOptions((current) => current.filter((item) => item.id !== option.id))} disabled={!isFullAccess()} aria-label={`Remove ${option.title || 'unnamed'} aggregation option`}><Trash2 size={14} />Remove</button>
+              </div>}</For>
+              <div class="flex flex-wrap gap-2 pt-2">
+                <button type="button" class="btn btn-secondary" onClick={addAggregationOption} disabled={!isFullAccess() || aggregationOptions().length >= 30}><Plus size={14} />Add aggregation option</button>
+                <button type="button" class="btn btn-primary" onClick={() => void saveAggregationOptions()} disabled={!isFullAccess() || saving()}><Save size={14} />{saving() ? 'Saving…' : 'Save aggregation options'}</button>
+              </div>
             </div>
           </Show>
         </Show>

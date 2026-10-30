@@ -83,8 +83,9 @@ export interface CompressionStatus {
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
 export type DashboardPanelKind = 'parameter' | 'category' | 'recency';
-export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'last_inform';
-export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; limit?: number; parameter_pattern: string; thresholds: DashboardThreshold[] }
+export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'last_inform';
+export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; aggregation_option_id?: string; limit?: number; parameter_pattern: string; thresholds: DashboardThreshold[] }
+export interface DashboardAggregationOption { id: string; title: string; parameter_pattern: string }
 export interface DashboardPanelLayout { order: number; width: number; height: number }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
@@ -195,6 +196,7 @@ export const api = {
   getDeviceParameterDistribution: (body: DashboardParameterDistributionRequest, signal?: AbortSignal) => request<DashboardParameterDistribution>('/devices/analytics/distribution', { method: 'POST', body: JSON.stringify(body), signal: signal ?? AbortSignal.timeout(30_000) }),
   getDashboardPanelAnalytics: (panels: DashboardPanelConfig[]) => request<{ panels: Record<string, Record<string, number>> }>('/devices/analytics/panels', { method: 'POST', body: JSON.stringify(panels), signal: AbortSignal.timeout(30_000) }),
   getDashboardPanels: () => request<DashboardPanelConfig[]>('/dashboard/panels'),
+  getDashboardAggregationOptions: () => request<DashboardAggregationOption[]>('/dashboard/aggregation-options'),
   saveDashboardPanels: (panels: DashboardPanelConfig[]) => request<DashboardPanelConfig[]>('/dashboard/panels', { method: 'PUT', body: JSON.stringify(panels) }),
   getDashboardLayout: () => request<Record<string, DashboardPanelLayout>>('/dashboard/layout'),
   saveDashboardLayout: (layout: Record<string, DashboardPanelLayout>) => request<Record<string, DashboardPanelLayout>>('/dashboard/layout', { method: 'PUT', body: JSON.stringify(layout) }),

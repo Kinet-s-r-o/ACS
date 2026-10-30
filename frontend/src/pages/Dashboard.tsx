@@ -4,7 +4,7 @@ import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical } from 'lucide
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
-import { api, type DashboardPanelConfig, type DashboardPanelLayout, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
+import { api, type DashboardAggregationOption, type DashboardPanelConfig, type DashboardPanelLayout, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
 import { useFeedback } from '../components/Feedback';
 import { formatDateTime } from '../lib/dateTime';
 import { useAuth } from '../lib/auth';
@@ -164,6 +164,7 @@ const FleetPanelFrame: Component<{
   return <div
     class={`fleet-layout-panel ${dragging() ? 'is-dragging' : ''}`}
     data-fleet-panel-id={props.id}
+    data-dynamic-style
     style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};grid-row:span ${occupiedRows()};width:calc(${(width() / occupiedColumns()) * 100}% - var(--fleet-grid-line));--fleet-panel-height:${savedHeight()}px`}
   >
     <div class="fleet-panel-shell" ref={shell}>
@@ -306,6 +307,8 @@ const Dashboard: Component = () => {
   const { confirm, notify } = useFeedback();
   const { user, isFullAccess, hasPermission } = useAuth();
   const [savedPanelConfigs, { mutate: setSavedPanelConfigs, refetch: refetchPanelConfigs }] = createResource(loadDashboardPanelConfigs);
+  const [loadedAggregationOptions] = createResource(api.getDashboardAggregationOptions);
+  const aggregationOptions = (): DashboardAggregationOption[] => loadedAggregationOptions() ?? [];
   const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs.error ? [] : savedPanelConfigs() ?? []));
   const [panelDraft, setPanelDraft] = createSignal<DashboardPanelDraft | null>(null);
   const [showCopyUsers, setShowCopyUsers] = createSignal(false);
@@ -421,15 +424,19 @@ const Dashboard: Component = () => {
       return null;
     }
     if (kind !== 'parameter') {
-      if (kind === 'category' && !['access_type', 'manufacturer', 'product_class'].includes(draft.source ?? '')) {
+      if (kind === 'category' && !['access_type', 'manufacturer', 'product_class', 'custom_parameter'].includes(draft.source ?? '')) {
         notify({ tone: 'error', title: 'Invalid panel source', message: 'Choose a supported category source.' });
+        return null;
+      }
+      if (kind === 'category' && draft.source === 'custom_parameter' && (!draft.aggregation_option_id || !/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(parameterPattern) || parameterPattern.length > 512)) {
+        notify({ tone: 'error', title: 'Invalid aggregation option', message: 'Choose a valid configured CWMP aggregation option.' });
         return null;
       }
       if (kind === 'recency' && draft.source !== 'last_inform') {
         notify({ tone: 'error', title: 'Invalid panel source', message: 'Contact recency must use Last Inform.' });
         return null;
       }
-      return { id: draft.id, title, kind, source: draft.source, limit: draft.limit ?? 6, parameter_pattern: '', thresholds: [] };
+      return { id: draft.id, title, kind, source: draft.source, aggregation_option_id: draft.source === 'custom_parameter' ? draft.aggregation_option_id : undefined, limit: draft.limit ?? 6, parameter_pattern: kind === 'category' && draft.source === 'custom_parameter' ? parameterPattern : '', thresholds: [] };
     }
     if (!/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(parameterPattern) || parameterPattern.length > 512) {
       notify({ tone: 'error', title: 'Invalid parameter pattern', message: 'Enter a Device. or InternetGatewayDevice. parameter path. Use * as a wildcard.' });
@@ -653,17 +660,29 @@ const Dashboard: Component = () => {
         </div>
       </Show>
       <Show when={panelDraft()}>
-        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<div class="flex w-full items-center justify-between gap-3"><Show when={panelDraft()?.id.startsWith('custom-')}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
+        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex w-full items-center justify-between gap-3"><Show when={panelDraft()?.id.startsWith('custom-')}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
-            <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
+              <Show when={panelDraft()?.id.startsWith('custom-')}><label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {
+                const kind = event.currentTarget.value as 'parameter' | 'category';
+                return { ...draft, kind, source: kind === 'category' ? 'manufacturer' : undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : draft.thresholds };
+              })}><option value="parameter">Parameter thresholds</option><option value="category">Aggregation</option></select></label></Show>
+              <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
               <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
             </Show>
             <Show when={(panelDraft()?.kind ?? 'parameter') !== 'parameter'}>
-              <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.source ?? ''} onChange={(event) => updatePanelDraft((draft) => ({ ...draft, source: event.currentTarget.value as DashboardPanelConfig['source'] }))}>
-                <Show when={panelDraft()?.kind === 'category'}><option value="access_type">Access type</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option></Show>
+              <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.source === 'custom_parameter' ? `custom:${panelDraft()?.aggregation_option_id}` : panelDraft()?.source ?? ''} onChange={(event) => updatePanelDraft((draft) => {
+                const selected = event.currentTarget.value;
+                if (selected.startsWith('custom:')) {
+                  const option = aggregationOptions().find((item) => item.id === selected.slice('custom:'.length));
+                  return { ...draft, source: 'custom_parameter', aggregation_option_id: option?.id, parameter_pattern: option?.parameter_pattern ?? '' };
+                }
+                return { ...draft, source: selected as DashboardPanelConfig['source'], aggregation_option_id: undefined, parameter_pattern: '' };
+              })}>
+                <Show when={panelDraft()?.kind === 'category'}><option value="access_type">Access type</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><Show when={panelDraft()?.source === 'custom_parameter' && !aggregationOptions().some((option) => option.id === panelDraft()?.aggregation_option_id)}><option value={`custom:${panelDraft()?.aggregation_option_id}`}>{panelDraft()?.title} (no longer offered)</option></Show><For each={aggregationOptions()}>{(option) => <option value={`custom:${option.id}`}>{option.title}</option>}</For></Show>
                 <Show when={panelDraft()?.kind === 'recency'}><option value="last_inform">Last Inform</option></Show>
               </select><span class="mt-1 block">Values are grouped and counted by the SQL backend.</span></label>
+              <Show when={panelDraft()?.kind === 'category' && panelDraft()?.source === 'custom_parameter'}><p class="text-xs text-muted">Each CPE contributes the latest matching value from the configured CWMP parameter. Sensitive values are excluded.</p></Show>
               <Show when={panelDraft()?.kind === 'category'}>
                 <label class="block text-xs text-muted">Maximum categories<input type="number" min="1" max="100" class="input mt-1 w-full" value={panelDraft()?.limit ?? 6} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, limit: Number(event.currentTarget.value) }))} /></label>
               </Show>

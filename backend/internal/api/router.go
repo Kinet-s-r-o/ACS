@@ -173,6 +173,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("PUT /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateUser))
 	apiMux.HandleFunc("DELETE /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleDeleteUser))
 	apiMux.HandleFunc("GET /dashboard/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDashboardPanels))
+	apiMux.HandleFunc("GET /dashboard/aggregation-options", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDashboardAggregationOptions))
 	apiMux.HandleFunc("PUT /dashboard/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleSaveDashboardPanels))
 	apiMux.HandleFunc("GET /dashboard/layout", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDashboardLayout))
 	apiMux.HandleFunc("PUT /dashboard/layout", auth.RequirePermission(models.PermDevicesRead)(r.handleSaveDashboardLayout))
@@ -1465,7 +1466,8 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"overview_poll_interval": true, "full_tree_poll_interval": true,
 		"auto_refresh_interval":  true,
 		"ui_transitions_enabled": true, "ui_transition_style": true,
-		"ui_transition_duration": true,
+		"ui_transition_duration":           true,
+		dashboardAggregationOptionsSetting: true,
 	}
 	for key := range database.RetentionDefaults() {
 		allowed[key] = true
@@ -1489,6 +1491,14 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		if isSecretSetting(key) && value == "••••••••" {
 			delete(settings, key)
 		}
+	}
+	if raw, ok := settings[dashboardAggregationOptionsSetting]; ok {
+		validated, err := validateDashboardAggregationOptionsJSON(raw)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		settings[dashboardAggregationOptionsSetting] = validated
 	}
 	for _, key := range []string{"firmware_base_url"} {
 		if raw, ok := settings[key]; ok {
