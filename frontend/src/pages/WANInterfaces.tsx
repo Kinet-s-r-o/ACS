@@ -100,15 +100,15 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
         </PageHeader>
       </Show>
 
-      <div class="card p-4">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="card overflow-hidden">
+        <div class="table-panel-toolbar">
           <div class="flex items-center gap-2 text-sm text-secondary">
             <Network size={16} />
             <Show when={!interfaces()?.preparing} fallback={<span>Preparing WAN inventory…</span>}>
               <span><strong>{pagedInterfaces().length}</strong> visible on this page · <strong>{interfaces()?.total ?? 0}</strong> total WANs</span>
             </Show>
           </div>
-          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div class="flex items-center gap-2">
             <label class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input class="input w-full pl-9!" value={searchQuery()} onInput={(event) => { setPage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search WAN interfaces" aria-label="Search WAN interfaces" />
@@ -125,13 +125,11 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
             </button>
           </div>
         </div>
-      </div>
 
-      <Show when={!interfaces.error} fallback={<div class="card"><ResourceError title="WAN interfaces are unavailable" description="The aggregated WAN interface list could not be loaded." onRetry={() => void refetch()} /></div>}>
-        <Show when={!interfaces.loading} fallback={<div class="card p-6"><div class="skeleton h-6 w-48 mb-4" /><div class="skeleton h-10 w-full" /></div>}>
-          <Show when={!interfaces()?.preparing && filteredInterfaces().length > 0} fallback={<div class="card"><Show when={interfaces()?.preparing} fallback={<EmptyState icon={<Network size={22} />} title="No WAN interfaces found" description={searchQuery() ? 'Try a different search term.' : 'No stored WAN interface data is available for the CPE inventory.'} />}><div class="p-6 text-sm text-secondary" role="status">Existing WAN interfaces are being prepared. This page will update automatically.</div></Show></div>}>
-            <div class="card overflow-hidden">
-              <div class="overflow-x-auto">
+        <Show when={!interfaces.error} fallback={<div class="p-4"><ResourceError title="WAN interfaces are unavailable" description="The aggregated WAN interface list could not be loaded." onRetry={() => void refetch()} /></div>}>
+          <Show when={!interfaces.loading} fallback={<div class="p-6"><div class="skeleton h-6 w-48 mb-4" /><div class="skeleton h-10 w-full" /></div>}>
+            <Show when={!interfaces()?.preparing && filteredInterfaces().length > 0} fallback={<div class="p-6"><Show when={interfaces()?.preparing} fallback={<EmptyState icon={<Network size={22} />} title="No WAN interfaces found" description={searchQuery() ? 'Try a different search term.' : 'No stored WAN interface data is available for the CPE inventory.'} />}><div class="text-sm text-secondary" role="status">Existing WAN interfaces are being prepared. This page will update automatically.</div></Show></div>}>
+              <div class="overflow-x-auto table-scroll">
                 <table class="data-table w-full min-w-[760px] text-sm">
                   <thead class="opaque-table-header">
                     <tr class="border-b border-subtle">
@@ -200,11 +198,11 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                   </tbody>
                 </table>
               </div>
-            </div>
-            <Pagination page={page()} totalPages={totalPages()} totalItems={interfaces()?.total || 0} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
+              <Pagination page={page()} totalPages={totalPages()} totalItems={interfaces()?.total || 0} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
+            </Show>
           </Show>
         </Show>
-      </Show>
+      </div>
     </div>
   );
 };
