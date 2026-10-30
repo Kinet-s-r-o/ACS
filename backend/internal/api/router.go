@@ -1296,7 +1296,7 @@ func (r *Router) handleRetentionStats(w http.ResponseWriter, req *http.Request) 
 func (r *Router) handleDatabaseStatistics(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
 	defer cancel()
-	stats, err := database.GetDatabaseStatistics(ctx, r.db, req.URL.Query().Get("sort"))
+	stats, err := database.GetDatabaseStatistics(ctx, r.db, req.URL.Query().Get("sort"), req.URL.Query().Get("direction"))
 	if err != nil {
 		log.Printf("Error getting database query statistics: %v", err)
 		respondError(w, http.StatusServiceUnavailable, "Database query statistics are unavailable")

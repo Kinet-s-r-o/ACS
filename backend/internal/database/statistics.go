@@ -29,7 +29,7 @@ type DatabaseStatistics struct {
 
 // GetDatabaseStatistics reads per-query execution data only when the optional
 // pg_stat_statements extension is installed in the current database.
-func GetDatabaseStatistics(ctx context.Context, db *gorm.DB, sortBy string) (DatabaseStatistics, error) {
+func GetDatabaseStatistics(ctx context.Context, db *gorm.DB, sortBy, direction string) (DatabaseStatistics, error) {
 	result := DatabaseStatistics{Queries: make([]DatabaseQueryStat, 0)}
 	var extension struct {
 		Installed bool
@@ -58,13 +58,22 @@ func GetDatabaseStatistics(ctx context.Context, db *gorm.DB, sortBy string) (Dat
 	}
 	result.StatsReset = reset.At
 
-	orderBy := map[string]string{
-		"total_time": "total_exec_time DESC",
-		"mean_time":  "mean_exec_time DESC",
-		"calls":      "calls DESC",
+	orderColumn := map[string]string{
+		"query":              "query",
+		"calls":              "calls",
+		"total_time":         "total_exec_time",
+		"mean_time":          "mean_exec_time",
+		"rows":               "rows",
+		"shared_read_blocks": "shared_blks_read",
+		"shared_hit_blocks":  "shared_blks_hit",
+		"temp_blocks":        "(temp_blks_read + temp_blks_written)",
 	}[sortBy]
-	if orderBy == "" {
-		orderBy = "total_exec_time DESC"
+	if orderColumn == "" {
+		orderColumn = "total_exec_time"
+	}
+	orderDirection := map[string]string{"asc": "ASC", "desc": "DESC"}[direction]
+	if orderDirection == "" {
+		orderDirection = "DESC"
 	}
 	query := `SELECT COALESCE(queryid::text, '') AS query_id, COALESCE(LEFT(query, 4000), '') AS query, calls, rows,
 		total_exec_time AS total_time_ms, mean_exec_time AS mean_time_ms,
@@ -72,7 +81,7 @@ func GetDatabaseStatistics(ctx context.Context, db *gorm.DB, sortBy string) (Dat
 		temp_blks_read AS temp_read_blocks, temp_blks_written AS temp_write_blocks
 		FROM pg_stat_statements
 		WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-		ORDER BY ` + orderBy + `
+		ORDER BY ` + orderColumn + ` ` + orderDirection + `
 		LIMIT 50`
 	if err := db.WithContext(ctx).Raw(query).Scan(&result.Queries).Error; err != nil {
 		return result, fmt.Errorf("read pg_stat_statements: %w", err)

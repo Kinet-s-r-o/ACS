@@ -6,6 +6,9 @@ import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
 import { ResourceError } from '../components/ResourceState';
 import { useFeedback } from '../components/Feedback';
+import SortableHeader from '../components/SortableHeader';
+import type { SortDirection } from '../lib/sorting';
+import type { DatabaseQuerySort } from '../lib/api';
 
 const groups = [
   { title: 'Housekeeping', fields: [
@@ -53,15 +56,19 @@ const RetentionSettings: Component = () => {
   const [settings, { refetch }] = createResource(api.getSettings);
   const [tableStats, { refetch: refetchTableStats }] = createResource(api.getRetentionStats);
   const [activeTab, setActiveTab] = createSignal<'retention' | 'statistics'>('retention');
-  const [querySort, setQuerySort] = createSignal<'total_time' | 'mean_time' | 'calls'>('total_time');
+  const [querySort, setQuerySort] = createSignal<{ column: DatabaseQuerySort; direction: SortDirection }>({ column: 'total_time', direction: 'desc' });
   const [queryStats, { refetch: refetchQueryStats }] = createResource(
     () => activeTab() === 'statistics' && hasPermission('database.stats.read') ? querySort() : undefined,
-    sort => sort ? api.getDatabaseStatistics(sort) : Promise.resolve(undefined),
+    sort => sort ? api.getDatabaseStatistics(sort.column, sort.direction) : Promise.resolve(undefined),
   );
   const [draft, setDraft] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
   const value = (key: string) => draft()[key] ?? settings()?.[key] ?? '';
   const update = (key: string, next: string) => setDraft(previous => ({ ...previous, [key]: next }));
+  const handleQuerySort = (column: string) => setQuerySort(current => ({
+    column: column as DatabaseQuerySort,
+    direction: current.column === column && current.direction === 'desc' ? 'asc' : 'desc',
+  }));
   const save = async (event: SubmitEvent) => {
     event.preventDefault();
     const values: Record<string, string> = { retention_enabled: value('retention_enabled') };
@@ -146,13 +153,8 @@ const RetentionSettings: Component = () => {
         <Show when={hasPermission('database.stats.read')}>
         <section class="card p-5 space-y-4">
           <div class="flex flex-wrap items-end justify-between gap-3">
-            <div><h2 class="text-sm font-medium text-secondary">Query execution</h2><p class="text-xs text-muted mt-1">Aggregated timings for up to 50 statements in the current database.</p></div>
-            <div class="flex items-end gap-2">
-              <label class="text-xs text-muted">Order by<select class="input mt-1 block" value={querySort()} onChange={event => setQuerySort(event.currentTarget.value as 'total_time' | 'mean_time' | 'calls')}>
-                <option value="total_time">Total execution time</option><option value="mean_time">Average execution time</option><option value="calls">Call count</option>
-              </select></label>
-              <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchQueryStats()} disabled={queryStats.loading}>Refresh</button>
-            </div>
+            <div><h2 class="text-sm font-medium text-secondary">Query execution</h2><p class="text-xs text-muted mt-1">Aggregated timings for up to 50 statements in the current database. Select a column heading to sort; select it again to reverse the order.</p></div>
+            <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchQueryStats()} disabled={queryStats.loading}>Refresh</button>
           </div>
           <p class="text-xs text-muted">Query timings are cumulative since the last statistics reset. SQL text is normalized by PostgreSQL and may be unavailable if the database account cannot view it.</p>
           <Show when={!queryStats.error} fallback={<ResourceError title="Query statistics are unavailable" description="Check database permissions and retry." onRetry={() => void refetchQueryStats()} />}>
@@ -160,7 +162,14 @@ const RetentionSettings: Component = () => {
               <Show when={(queryStats()?.queries.length ?? 0) > 0} fallback={<p class="text-sm text-muted">No statement statistics are available yet.</p>}>
                 <p class="text-xs text-muted">Last reset: {queryStats()?.stats_reset ? new Date(queryStats()!.stats_reset!).toLocaleString() : 'unknown'}</p>
                 <div class="overflow-x-auto border border-subtle rounded"><table class="w-full text-xs text-left"><thead class="bg-surface text-muted"><tr>
-                  <th class="sticky left-0 z-10 bg-surface p-2 min-w-72">Statement</th><th class="p-2 text-right">Calls</th><th class="p-2 text-right">Total ms</th><th class="p-2 text-right">Average ms</th><th class="p-2 text-right">Rows</th><th class="p-2 text-right">Shared reads</th><th class="p-2 text-right">Shared hits</th><th class="p-2 text-right">Temp blocks</th>
+                  <th scope="col" class="sticky left-0 z-10 bg-surface p-2 min-w-72"><SortableHeader column="query" label="Statement" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="calls" label="Calls" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="total_time" label="Total ms" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="mean_time" label="Average ms" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="rows" label="Rows" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="shared_read_blocks" label="Shared reads" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="shared_hit_blocks" label="Shared hits" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
+                  <th scope="col" class="p-2 text-right"><SortableHeader column="temp_blocks" label="Temp blocks" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} class="justify-end" /></th>
                 </tr></thead><tbody><For each={queryStats()?.queries}>{query => <tr class="border-t border-subtle align-top">
                   <td class="sticky left-0 z-10 bg-surface p-2 min-w-72"><details><summary class="cursor-pointer text-primary">{query.query ? query.query.slice(0, 160) : `Query ${query.query_id} (text unavailable)`}</summary><pre class="mt-2 max-w-[70vw] overflow-x-auto whitespace-pre-wrap break-all font-mono text-muted">{query.query || 'SQL text is not available to the application database role.'}</pre></details></td>
                   <td class="p-2 text-right font-mono tabular-nums">{query.calls.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{query.total_time_ms.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td><td class="p-2 text-right font-mono tabular-nums">{query.mean_time_ms.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td class="p-2 text-right font-mono tabular-nums">{query.rows.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{query.shared_read_blocks.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{query.shared_hit_blocks.toLocaleString()}</td><td class="p-2 text-right font-mono tabular-nums">{(query.temp_read_blocks + query.temp_write_blocks).toLocaleString()}</td>
