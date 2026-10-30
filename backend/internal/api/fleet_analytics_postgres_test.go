@@ -32,6 +32,7 @@ func TestFleetAnalyticsPostgres(t *testing.T) {
 	for _, p := range []models.DeviceParameter{
 		{DeviceID: 1, Name: "Device.A.UpTime", Value: " 100 ", UpdatedAt: now},
 		{DeviceID: 1, Name: "Device.B.UpTime", Value: "200", UpdatedAt: now},
+		{DeviceID: 1, Name: "InternetGatewayDevice.DeviceInfo.UpTime", Value: "300", UpdatedAt: now},
 		{DeviceID: 1, Name: "Device.Old.UpTime", Value: "10", UpdatedAt: old},
 		{DeviceID: 1, Name: "Device.Invalid.UpTime", Value: "not a number", UpdatedAt: now.Add(time.Minute)},
 		{DeviceID: 1, Name: "Device.Overflow.UpTime", Value: "1e999", UpdatedAt: now.Add(time.Minute)},
@@ -85,6 +86,7 @@ func TestFleetAnalyticsPostgres(t *testing.T) {
 		missing int
 	}{
 		{"Device.*uptime", 100, 1, 1, 1},
+		{"InternetGatewayDevice.DeviceInfo.UpTime", 350, 1, 0, 2},
 		{"Device.*Temp*", 10, 1, 0, 2},
 		{"Device.*RxPower", -19, 1, 0, 2},
 		{"Device.*Secret*", 1000, 0, 0, 3},

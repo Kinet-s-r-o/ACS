@@ -38,10 +38,7 @@ func EnsureAnalyticsParameterIndex(ctx context.Context, db *gorm.DB) error {
 	if result.Error != nil {
 		return result.Error
 	}
-	if result.RowsAffected > 0 {
-		if index.Valid {
-			return nil
-		}
+	if result.RowsAffected > 0 && !index.Valid {
 		// An interrupted concurrent build leaves an unusable index with the same name.
 		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS idx_device_parameters_name_trgm`).Error; err != nil {
 			return err
