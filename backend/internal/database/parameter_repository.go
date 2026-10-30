@@ -268,6 +268,47 @@ func (r *ParameterRepository) GetByDeviceIDMatching(ctx context.Context, deviceI
 	return r.getByDeviceID(ctx, deviceID, prefixes, names)
 }
 
+// GetByDeviceIDDynamicBranches returns cached parameters below configured
+// dynamic object branches without loading unrelated device parameters.
+func (r *ParameterRepository) GetByDeviceIDDynamicBranches(ctx context.Context, deviceID int64, branches []string) ([]models.DeviceParameter, error) {
+	prefixes := make([]string, 0, len(branches))
+	seen := make(map[string]struct{}, len(branches))
+	for _, branch := range branches {
+		trimmed := strings.TrimSpace(branch)
+		parts := strings.Split(strings.TrimSuffix(trimmed, "."), ".")
+		prefix := trimmed
+		for index, part := range parts {
+			if part == "*" {
+				prefix = strings.Join(parts[:index], ".") + "."
+				break
+			}
+		}
+		if prefix != "" && prefix != "." {
+			if _, exists := seen[prefix]; !exists {
+				seen[prefix] = struct{}{}
+				prefixes = append(prefixes, prefix)
+			}
+		}
+	}
+	if len(prefixes) == 0 {
+		return nil, nil
+	}
+	params, err := r.getByDeviceID(ctx, deviceID, prefixes, nil)
+	if err != nil {
+		return nil, err
+	}
+	filtered := params[:0]
+	for _, param := range params {
+		for _, branch := range branches {
+			if DynamicParameterBranchMatches(branch, param.Name) {
+				filtered = append(filtered, param)
+				break
+			}
+		}
+	}
+	return filtered, nil
+}
+
 func (r *ParameterRepository) getByDeviceID(ctx context.Context, deviceID int64, prefixes, names []string) ([]models.DeviceParameter, error) {
 	var params []models.DeviceParameter
 	query := r.db.WithContext(ctx).Where("device_id = ?", deviceID)

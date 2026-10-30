@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2104,6 +2105,23 @@ func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, 
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to get detail parameters")
 		return
+	}
+	if err == nil && template != nil && len(template.DynamicParameterBranches) > 0 {
+		dynamicParams, dynamicErr := r.parameterRepo.GetByDeviceIDDynamicBranches(req.Context(), device.ID, template.DynamicParameterBranches)
+		if dynamicErr != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to get dynamic detail parameters")
+			return
+		}
+		known := make(map[string]struct{}, len(params)+len(dynamicParams))
+		for _, param := range params {
+			known[param.Name] = struct{}{}
+		}
+		for _, param := range dynamicParams {
+			if _, exists := known[param.Name]; !exists {
+				params = append(params, param)
+			}
+		}
+		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
 	}
 	redactSensitiveParameters(req, params)
 	respondJSON(w, http.StatusOK, params)

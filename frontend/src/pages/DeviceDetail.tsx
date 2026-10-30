@@ -1612,7 +1612,7 @@ const DeviceDetail: Component = () => {
     const valueByName = new Map(params.map(parameter => [parameter.name, parameter.value]));
     const hosts: Array<{ index: number; hostname: string; ip: string; ipv6: string; mac: string; negRate: string; interface: string; rssi?: string }> = [];
     
-    const hostPaths = [...new Set(params.map(p => p.name.match(/^InternetGatewayDevice\.LANDevice\.\d+\.Hosts\.Host\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
+    const hostPaths = [...new Set(params.map(p => p.name.match(/^(?:InternetGatewayDevice|Device)\.LANDevice\.\d+\.Hosts\.Host\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
 
     const getInterfaceName = (path: string) => {
       const prefix = path.replace(/\.+$/, '');
@@ -1683,7 +1683,7 @@ const DeviceDetail: Component = () => {
       });
     });
 
-    const assocPaths = [...new Set(params.map(p => p.name.match(/^InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.\d+\.AssociatedDevice\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
+    const assocPaths = [...new Set(params.map(p => p.name.match(/^(?:InternetGatewayDevice|Device)\.LANDevice\.\d+\.WLANConfiguration\.\d+\.AssociatedDevice\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
     const macKey = (mac: string) => {
       const normalized = mac.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
       return normalized.length >= 12 ? normalized : '';
