@@ -463,27 +463,28 @@ const Devices: Component = () => {
                 <For each={visibleColumns()}>
                   {(col) => {
                     const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults', 'created_at'].includes(col.id);
-                    const currentSort = sortBy();
-                    const isSorted = currentSort?.column === col.id;
+                    const currentSort = () => sortBy();
+                    const isSorted = () => currentSort()?.column === col.id;
                     
                     return (
-                      <th class="text-left whitespace-nowrap" aria-sort={isSorted ? (currentSort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
+                      <th class="text-left whitespace-nowrap" aria-sort={isSorted() ? (currentSort()?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
                         <div class="flex items-center gap-1.5">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
                               if (isSortable) handleSort(col.id);
                             }}
                             class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${
-                              isSorted ? 'text-sky-400' : 'text-muted'
+                              isSorted() ? 'text-sky-400' : 'text-muted'
                             } ${isSortable ? 'hover:text-primary cursor-pointer' : 'cursor-default'}`}
                             disabled={!isSortable}
                           >
                             {col.label}
                             <Show when={isSortable}>
-                              {isSorted ? (
-                                currentSort?.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                              {isSorted() ? (
+                                currentSort()?.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
                               ) : (
                                 <ArrowUpDown size={10} class="opacity-50" />
                               )}
