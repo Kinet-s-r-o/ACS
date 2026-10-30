@@ -415,7 +415,7 @@ const Devices: Component = () => {
             <Show when={hasInventoryFilter()}>
               <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); setPage(0); }}>Clear search and filters</button>
             </Show>
-            <div class="relative">
+            <div class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               <input
                 id="device-search"
@@ -424,7 +424,7 @@ const Devices: Component = () => {
                 onInput={(e) => { setSearchQuery(e.currentTarget.value); setPage(0); }}
                 placeholder="Search CPEs..."
                 aria-label="Search CPEs by serial, model, vendor, or IP"
-                class="input pl-9! w-56 text-sm"
+                class="input w-full pl-9!"
               />
               <Show when={searchQuery()}>
                 <button type="button" onClick={() => { setSearchQuery(''); setPage(0); }} class="input-clear" aria-label="Clear CPE search">
