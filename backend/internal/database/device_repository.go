@@ -602,31 +602,35 @@ func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int)
 	FROM sampled_devices d
 	LEFT JOIN LATERAL (
 		SELECT COALESCE(SUM(CASE
-			WHEN LENGTH(BTRIM(p.value)) <= 20 AND BTRIM(p.value) ~ ?
-				AND BTRIM(p.value)::numeric BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
-			THEN BTRIM(p.value)::bigint ELSE 0 END), 0) AS wifi_stations
+			WHEN LENGTH(BTRIM(p.value)) <= 20 AND BTRIM(p.value) ~ ? THEN
+				CASE WHEN BTRIM(p.value)::numeric BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
+					THEN BTRIM(p.value)::bigint ELSE 0 END
+			ELSE 0 END), 0) AS wifi_stations
 		FROM device_parameters p
 		WHERE p.device_id = d.id AND (p.name LIKE '%TotalAssociations%' OR p.name LIKE '%AssociatedDeviceNumberOfEntries%')
 	) station_counts ON TRUE
 	LEFT JOIN LATERAL (
 		SELECT p.value FROM device_parameters p
 		WHERE p.device_id = d.id AND (p.name LIKE '%RXPower%' OR p.name LIKE '%RxPower%')
-			AND LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
-			AND BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+			AND CASE WHEN LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
+				THEN BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+				ELSE FALSE END
 		ORDER BY p.updated_at DESC, p.name LIMIT 1
 	) rx ON TRUE
 	LEFT JOIN LATERAL (
 		SELECT p.value FROM device_parameters p
 		WHERE p.device_id = d.id AND (p.name LIKE '%Temperature%' OR p.name LIKE '%Temp%')
-			AND LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
-			AND BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+			AND CASE WHEN LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
+				THEN BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+				ELSE FALSE END
 		ORDER BY p.updated_at DESC, p.name LIMIT 1
 	) temp ON TRUE
 	LEFT JOIN LATERAL (
 		SELECT p.value FROM device_parameters p
 		WHERE p.device_id = d.id AND p.name LIKE '%UpTime'
-			AND LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
-			AND BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+			AND CASE WHEN LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
+				THEN BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+				ELSE FALSE END
 		ORDER BY p.updated_at DESC, p.name LIMIT 1
 	) uptime ON TRUE
 	LEFT JOIN LATERAL (
@@ -634,7 +638,7 @@ func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int)
 		WHERE p.device_id = d.id AND (p.name LIKE '%PONMode%' OR p.name LIKE '%AccessType%') AND p.value <> ''
 		ORDER BY p.updated_at DESC, p.name LIMIT 1
 	) access_type ON TRUE
-	LEFT JOIN station_counts ON station_counts.device_id = d.id`
+	`
 	var devices []FleetAnalyticsDevice
 	args := []interface{}{maxDevices, analyticsIntegerValuePattern, analyticsNumericValuePattern, analyticsNumericValuePattern, analyticsNumericValuePattern}
 	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&devices).Error
@@ -696,8 +700,9 @@ func (r *DeviceRepository) GetParameterDistribution(ctx context.Context, pattern
 			AND dp.name NOT ILIKE '%secret%'
 			AND dp.name NOT ILIKE '%connectionrequestusername%'
 			AND dp.name NOT ILIKE '%.username'
-			AND LENGTH(BTRIM(dp.value)) <= 256 AND BTRIM(dp.value) ~ ?
-			AND BTRIM(dp.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+			AND CASE WHEN LENGTH(BTRIM(dp.value)) <= 256 AND BTRIM(dp.value) ~ ?
+				THEN BTRIM(dp.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
+				ELSE FALSE END
 			ORDER BY dp.updated_at DESC, dp.name
 			LIMIT 1
 		) candidate ON TRUE
