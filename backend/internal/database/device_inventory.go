@@ -36,7 +36,7 @@ var inventoryColumns = map[string]bool{
 	"serial_number": true, "manufacturer": true, "model": true, "product_class": true,
 	"ip_address": true, "ppp_username": true, "rx_power": true, "uptime": true,
 	"status": true, "last_inform": true, "tags": true, "software_version": true,
-	"hardware_version": true, "manufacturer_oui": true, "active_faults": true,
+	"hardware_version": true, "manufacturer_oui": true, "active_faults": true, "created_at": true,
 }
 
 func ParseDeviceInventoryFilters(value string) (map[string]DeviceInventoryColumnFilter, error) {
@@ -216,6 +216,8 @@ func inventorySortExpression(column string, includeSensitive bool) (string, bool
 		return "devices.online", true
 	case "last_inform":
 		return "devices.last_inform", true
+	case "created_at":
+		return "devices.created_at", true
 	case "tags":
 		return inventoryTagExpression(), true
 	case "software_version":

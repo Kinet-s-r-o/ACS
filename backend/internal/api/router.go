@@ -412,7 +412,7 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		"serial_number": true, "manufacturer": true, "model": true, "ip_address": true,
 		"rx_power": true, "uptime": true, "status": true, "last_inform": true,
 		"tags": true, "software_version": true, "hardware_version": true,
-		"manufacturer_oui": true, "active_faults": true,
+		"manufacturer_oui": true, "active_faults": true, "created_at": true,
 	}[sortColumn] {
 		respondError(w, http.StatusBadRequest, "Invalid inventory sort column")
 		return
@@ -510,7 +510,7 @@ func parseInventoryColumns(values []string, supplied bool) ([]string, error) {
 		"serial_number": true, "manufacturer": true, "model": true, "product_class": true,
 		"ip_address": true, "ppp_username": true, "rx_power": true, "uptime": true,
 		"status": true, "last_inform": true, "tags": true, "software_version": true,
-		"hardware_version": true, "manufacturer_oui": true, "active_faults": true,
+		"hardware_version": true, "manufacturer_oui": true, "active_faults": true, "created_at": true,
 	}
 	requested := make([]string, 0, len(values))
 	for _, value := range values {

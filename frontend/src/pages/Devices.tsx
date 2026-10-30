@@ -41,6 +41,7 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'hardware_version', label: 'Hardware Version', visible: true, order: 12 },
   { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true, order: 13 },
   { id: 'active_faults', label: 'CWMP faults', visible: true, order: 14 },
+  { id: 'created_at', label: 'Created at', visible: true, order: 15 },
 ];
 const inventoryParameterColumns = new Set([
   'ip_address', 'ppp_username', 'rx_power', 'uptime',
@@ -254,6 +255,8 @@ const Devices: Component = () => {
         );
       case 'last_inform':
         return <span class="text-muted text-xs" title={formatDateTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
+      case 'created_at':
+        return <span class="text-muted text-xs">{formatDateTime(device.created_at)}</span>;
       case 'tags':
         return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasAnyPermission('devices.configure', 'devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
       case 'software_version':
@@ -306,6 +309,7 @@ const Devices: Component = () => {
           case 'uptime': return getUptime(device);
           case 'status': return device.online ? 'Online' : 'Offline';
           case 'last_inform': return device.last_inform || '';
+          case 'created_at': return device.created_at || '';
           case 'tags': return getDeviceTagLabels(device);
           case 'software_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion');
           case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
@@ -458,7 +462,7 @@ const Devices: Component = () => {
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults', 'created_at'].includes(col.id);
                     const currentSort = sortBy();
                     const isSorted = currentSort?.column === col.id;
                     
