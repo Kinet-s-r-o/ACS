@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
-import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical } from 'lucide-solid';
+import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, RotateCcw } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
@@ -24,6 +24,7 @@ interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
 
 type FleetPanelLayout = DashboardPanelLayout;
 type FleetLayout = Record<string, FleetPanelLayout>;
+const removableDefaultAggregationPanels = ['accessType', 'manufacturer', 'productClass'];
 
 const defaultFleetLayout: FleetLayout = {
   growth: { order: 0, width: 60, height: 2 }, contactRecency: { order: 1, width: 60, height: 2 },
@@ -343,7 +344,7 @@ const Dashboard: Component = () => {
   const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
   const [panelAnalytics, { refetch: refetchPanelAnalytics }] = createResource(
     () => savedPanelConfigs() ? normalizeDashboardPanels(savedPanelConfigs() ?? []) : undefined,
-    (panels) => loadFleetData(() => api.getDashboardPanelAnalytics(panels)),
+    (panels) => loadFleetData(() => api.getDashboardPanelAnalytics(panels.filter((panel) => !panel.hidden))),
   );
   const stats = createMemo(() => dashboard()?.data);
   const onlinePercent = createMemo(() => {
@@ -506,27 +507,46 @@ const Dashboard: Component = () => {
   };
   const deletePanel = async () => {
     const panel = panelDraft();
-    if (!panel?.id.startsWith('custom-')) return;
+    const isCustom = panel?.id.startsWith('custom-') ?? false;
+    const isDefaultAggregation = panel ? removableDefaultAggregationPanels.includes(panel.id) : false;
+    if (!panel || (!isCustom && !isDefaultAggregation)) return;
     if (!await confirm({
       title: `Remove “${panel.title}” panel?`,
-      description: 'This removes the custom panel and its saved layout from your Fleet dashboard. Copies already shared with other users stay on their dashboards.',
+      description: isCustom
+        ? 'This removes the custom panel and its saved layout from your Fleet dashboard. Copies already shared with other users stay on their dashboards.'
+        : 'This hides the built-in panel from your Fleet dashboard. You can restore the built-in aggregation panels later.',
       confirmLabel: 'Remove panel',
       tone: 'danger',
     })) return;
     setSavingPanel(true);
     try {
-      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? []).filter((item) => item.id !== panel.id);
+      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? [])
+        .filter((item) => !isCustom || item.id !== panel.id)
+        .map((item) => isDefaultAggregation && item.id === panel.id ? { ...item, hidden: true } : item);
       const saved = await api.saveDashboardPanels(panels);
       setSavedPanelConfigs(saved);
-      setFleetLayout((current) => {
-        const next = { ...current };
-        delete next[panel.id];
-        return next;
-      });
+      if (isCustom) setFleetLayout((current) => {
+          const next = { ...current };
+          delete next[panel.id];
+          return next;
+        });
       closePanelSettings();
-      notify({ tone: 'success', title: 'Custom panel removed', message: `“${panel.title}” was removed from your Fleet dashboard.` });
+      notify({ tone: 'success', title: isCustom ? 'Custom panel removed' : 'Built-in panel hidden', message: `“${panel.title}” is no longer shown on your Fleet dashboard.` });
     } catch (error) {
       notify({ tone: 'error', title: 'Could not remove panel', message: 'The panel remains on your Fleet dashboard.', detail: (error as Error).message, persistent: true });
+    } finally {
+      setSavingPanel(false);
+    }
+  };
+  const restoreDefaultAggregationPanels = async () => {
+    setSavingPanel(true);
+    try {
+      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? []).map((panel) => removableDefaultAggregationPanels.includes(panel.id) ? { ...panel, hidden: false } : panel);
+      const saved = await api.saveDashboardPanels(panels);
+      setSavedPanelConfigs(saved);
+      notify({ tone: 'success', title: 'Built-in panels restored' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not restore built-in panels', detail: (error as Error).message, persistent: true });
     } finally {
       setSavingPanel(false);
     }
@@ -554,6 +574,7 @@ const Dashboard: Component = () => {
         status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
         <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
+        <Show when={panelConfigs().some((panel) => removableDefaultAggregationPanels.includes(panel.id) && panel.hidden)}><button type="button" class="btn btn-secondary text-xs" onClick={() => void restoreDefaultAggregationPanels()} disabled={savingPanel() || savedPanelConfigs.loading}><RotateCcw size={14} />Restore built-in panels</button></Show>
         <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
       </PageHeader>
 
@@ -656,7 +677,7 @@ const Dashboard: Component = () => {
             { id: 'accessType', label: 'Access type', values: panelAnalytics()!.data!.panels.accessType, limit: panelConfigs().find((config) => config.id === 'accessType')?.limit ?? 6 },
             { id: 'manufacturer', label: 'Manufacturer', values: panelAnalytics()!.data!.panels.manufacturer, limit: panelConfigs().find((config) => config.id === 'manufacturer')?.limit ?? 6 },
             { id: 'productClass', label: 'Product class', values: panelAnalytics()!.data!.panels.productClass, limit: panelConfigs().find((config) => config.id === 'productClass')?.limit ?? 6 },
-          ]}>{(panel, index) => {
+          ].filter((panel) => !panelConfigs().find((config) => config.id === panel.id)?.hidden)}>{(panel, index) => {
             const config = () => panelConfigs().find((item) => item.id === panel.id);
             return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, 5 + index())} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel data-panel-section fleet-content-panel">
@@ -671,7 +692,7 @@ const Dashboard: Component = () => {
         </div>
       </Show>
       <Show when={panelDraft()}>
-        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex w-full items-center justify-between gap-3"><Show when={panelDraft()?.id.startsWith('custom-')}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
+        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex w-full items-center justify-between gap-3"><Show when={panelDraft()?.id.startsWith('custom-') || removableDefaultAggregationPanels.includes(panelDraft()?.id ?? '')}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
               <Show when={panelDraft()?.id.startsWith('custom-')}><label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {

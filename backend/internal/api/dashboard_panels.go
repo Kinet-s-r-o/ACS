@@ -29,6 +29,7 @@ type dashboardPanelConfig struct {
 	Kind                string                    `json:"kind,omitempty"`
 	Source              string                    `json:"source,omitempty"`
 	AggregationOptionID string                    `json:"aggregation_option_id,omitempty"`
+	Hidden              bool                      `json:"hidden,omitempty"`
 	Limit               int                       `json:"limit,omitempty"`
 	ParameterPattern    string                    `json:"parameter_pattern"`
 	Thresholds          []dashboardPanelThreshold `json:"thresholds"`
