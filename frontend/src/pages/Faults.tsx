@@ -10,12 +10,12 @@ import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
-import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import type { ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
-import { sortRows, type SortDirection } from '../lib/sorting';
+import type { SortDirection } from '../lib/sorting';
 import { formatDateTime } from '../lib/dateTime';
 
 const Faults: Component = () => {
@@ -26,24 +26,10 @@ const Faults: Component = () => {
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedFaults, setSelectedFaults] = createSignal<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
-  const [faults, { refetch }] = createResource(
-    () => filter(),
-    async (selected) => {
-      const firstPage = await api.getFaults(selected, 500, 0);
-      const allFaults = [...firstPage.faults];
-      for (let offset = allFaults.length; offset < firstPage.total; offset += 500) {
-        const nextPage = await api.getFaults(selected, 500, offset);
-        allFaults.push(...nextPage.faults);
-        if (nextPage.faults.length === 0) break;
-      }
-      return { ...firstPage, faults: allFaults };
-    }
-  );
-
   const [stats, { refetch: refetchStats }] = createResource(() => api.getFaultStats());
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.faults', {});
   const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.faults', { column: 'created_at', direction: 'desc' });
-  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const handleSort = (column: string) => { setFaultPage(0); setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const { columns, isVisible, toggle } = useColumnVisibility('faults', [
     { id: 'serial_number', label: 'Device', visible: true },
     { id: 'model_name', label: 'Model', visible: true },
@@ -58,51 +44,27 @@ const Faults: Component = () => {
   ]);
   const [faultPage, setFaultPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('faults', 20);
+  const [faults, { refetch }] = createResource(
+    () => ({ filter: filter(), page: faultPage(), size: pageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
+    (query) => api.getFaults(query.filter, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
+  );
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFaultPage(0); };
 
-  const getFilterValue = (fault: { serial_number: string; model_name?: string; software_version?: string; hardware_version?: string; manufacturer_oui?: string; fault_code: string; fault_string: string; parameter_name: string; created_at: string; resolved: boolean }, colId: string): string => {
-    switch (colId) {
-      case 'serial_number': return fault.serial_number || '';
-      case 'model_name': return fault.model_name || '';
-      case 'fault_code': return fault.fault_code || '';
-      case 'fault_string': return fault.fault_string || '';
-      case 'parameter_name': return fault.parameter_name || '';
-      case 'created_at': return fault.created_at || '';
-      case 'resolved': return fault.resolved ? 'Resolved' : 'Active';
-      case 'software_version': return fault.software_version || '';
-      case 'hardware_version': return fault.hardware_version || '';
-      case 'manufacturer_oui': return fault.manufacturer_oui || '';
-      default: return '';
+  const filteredFaults = createMemo(() => faults()?.faults || []);
+  const pagedFaults = filteredFaults;
+  const faultTotalPages = createMemo(() => Math.ceil((faults()?.total || 0) / pageSize()));
+
+  const exportFaultsCSV = async () => {
+    const firstPage = await api.getFaults(filter(), 500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+    const rowsToExport = [...firstPage.faults];
+    for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
+      const nextPage = await api.getFaults(filter(), 500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+      rowsToExport.push(...nextPage.faults);
+      if (!nextPage.faults.length) break;
     }
-  };
-
-  const filteredFaults = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
-    const all = (faults()?.faults || []).filter(fault => !query || [
-      fault.serial_number,
-      fault.model_name || '',
-      fault.fault_code,
-      fault.fault_string,
-      fault.parameter_name || '',
-      fault.created_at,
-      fault.resolved ? 'Resolved' : 'Active',
-      fault.software_version || '',
-      fault.hardware_version || '',
-      fault.manufacturer_oui || '',
-    ].some(value => value.toLowerCase().includes(query)));
-    return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), sortState().column, sortState().direction, getFilterValue);
-  });
-  const pagedFaults = createMemo(() => {
-    const all = filteredFaults();
-    const start = faultPage() * pageSize();
-    return all.slice(start, start + pageSize());
-  });
-  const faultTotalPages = createMemo(() => Math.ceil(filteredFaults().length / pageSize()));
-
-  const exportFaultsCSV = () => {
     const headers = ['Device', 'Model', 'Code', 'Message', 'Parameter', 'Time', 'Status', 'Software Version', 'Hardware Version', 'Manufacturer OUI'];
     const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const rows = filteredFaults().map(fault => [
+    const rows = rowsToExport.map(fault => [
       fault.serial_number,
       fault.model_name || '',
       fault.fault_code,

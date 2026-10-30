@@ -9,12 +9,12 @@ import ColumnFilter from '../components/ColumnFilter';
 import Pagination from '../components/Pagination';
 import ColumnVisibility from '../components/ColumnVisibility';
 import { EmptyState, ResourceError } from '../components/ResourceState';
-import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import type { ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import SortableHeader from '../components/SortableHeader';
-import { sortRows, type SortDirection } from '../lib/sorting';
+import type { SortDirection } from '../lib/sorting';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
@@ -43,7 +43,7 @@ const Tasks: Component = () => {
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tasks', {});
   const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.tasks', { column: 'created_at', direction: 'desc' });
-  const handleSort = (column: string) => setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const handleSort = (column: string) => { setTaskPage(0); setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const [taskPage, setTaskPage] = createSignal(0);
   const { columns: taskColumns, isVisible: isTaskColumnVisible, toggle: toggleTaskColumn } = useColumnVisibility('global_tasks', [
     { id: 'serial_number', label: 'Serial number', visible: true },
@@ -57,72 +57,40 @@ const Tasks: Component = () => {
     { id: 'error', label: 'Error', visible: true },
   ]);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('global_tasks', 20);
-  const [tasks, { refetch }] = createResource(api.getTasks);
+  const [tasks, { refetch }] = createResource(
+    () => ({ page: taskPage(), size: taskPageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
+    (query) => api.getTasks(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
+  );
   const [taskDetails] = createResource(() => selectedTask()?.id, (id) => api.getTask(id));
   const [deletingTask, setDeletingTask] = createSignal<number | null>(null);
   const taskCounts = createMemo(() => {
     const counts = { pending: 0, sent: 0, completed: 0, failed: 0, deleted: 0, total: 0 };
-    for (const task of tasks() || []) {
-      counts.total += 1;
-      if (task.status in counts && task.status !== 'total') counts[task.status as keyof Omit<typeof counts, 'total'>] += 1;
-    }
+    const values = tasks()?.counts || {};
+    for (const key of ['pending', 'sent', 'completed', 'failed', 'deleted'] as const) counts[key] = values[key] || 0;
+    counts.total = tasks()?.total || 0;
     return counts;
   });
 
-  const filteredTasks = createMemo(() => {
-    let all = tasks() || [];
-    const query = searchQuery().toLowerCase().trim();
-    if (query) {
-      all = all.filter(task => [task.serial_number, task.type, formatTriggerEvents(task.trigger_events), task.status, task.created_by || '', task.deleted_by || '', task.error_message || '']
-        .some(value => value.toLowerCase().includes(query)));
-    }
-    const filtered = applyColumnFilters(all, columnFilters(), (task, column) => {
-      switch (column) {
-        case 'serial_number': return task.serial_number;
-        case 'type': return task.type;
-        case 'trigger_event': return formatTriggerEvents(task.trigger_events);
-        case 'status': return task.status;
-        case 'created_at': return task.created_at;
-        case 'completed_at': return task.completed_at || '';
-        case 'created_by': return task.created_by || '';
-        case 'deleted_by': return task.deleted_by || '';
-        case 'error': return task.error_message || '';
-        default: return '';
-      }
-    });
-    return sortRows(filtered, sortState().column, sortState().direction, (task, column) => {
-      switch (column) {
-        case 'serial_number': return task.serial_number;
-        case 'type': return task.type;
-        case 'trigger_event': return formatTriggerEvents(task.trigger_events);
-        case 'status': return task.status;
-        case 'created_at': return task.created_at;
-        case 'completed_at': return task.completed_at || '';
-        case 'created_by': return task.created_by || '';
-        case 'deleted_by': return task.deleted_by || '';
-        case 'error': return task.error_message || '';
-        default: return '';
-      }
-    });
-  });
-
-  const pagedTasks = createMemo(() => {
-    const all = filteredTasks();
-    const start = taskPage() * taskPageSize();
-    return all.slice(start, start + taskPageSize());
-  });
-
-  const totalPages = createMemo(() => Math.ceil(filteredTasks().length / taskPageSize()));
+  const filteredTasks = createMemo(() => tasks()?.tasks || []);
+  const pagedTasks = filteredTasks;
+  const totalPages = createMemo(() => Math.ceil((tasks()?.total || 0) / taskPageSize()));
   const selectableTasks = createMemo(() => pagedTasks().filter(task => task.status === 'pending'));
   const allPageSelected = createMemo(() => {
     const page = selectableTasks();
     return page.length > 0 && page.every(task => selectedTasks().has(task.id));
   });
 
-  const exportTasksCSV = () => {
+  const exportTasksCSV = async () => {
+    const firstPage = await api.getTasks(500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+    const rowsToExport = [...firstPage.tasks];
+    for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
+      const nextPage = await api.getTasks(500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+      rowsToExport.push(...nextPage.tasks);
+      if (!nextPage.tasks.length) break;
+    }
     const headers = ['Serial number', 'Type', 'Trigger event', 'Status', 'Created', 'Completed', 'Created by', 'Deleted by', 'Error'];
     const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const rows = filteredTasks().map(task => [
+    const rows = rowsToExport.map(task => [
       task.serial_number,
       task.type,
       formatTriggerEvents(task.trigger_events),

@@ -8,7 +8,7 @@ import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
-import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import type { ColumnFilterState } from '../lib/filters';
 import { statusBadgeClass } from '../lib/lanFields';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { usePageSize } from '../lib/usePageSize';
@@ -43,29 +43,12 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
     { id: 'mac_address', label: 'MAC address', visible: true },
   ]);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.wan-interfaces', {});
-  const [interfaces, { refetch }] = createResource(api.getWANInterfaces);
-
-  const filteredInterfaces = createMemo(() => {
-    const query = searchQuery().trim().toLowerCase();
-    let rows = interfaces() || [];
-    if (query) {
-      rows = rows.filter(row => [row.serial_number, row.name, row.type, row.status, row.ip_address, row.mac_address]
-        .some(value => value.toLowerCase().includes(query)));
-    }
-    return applyColumnFilters(rows, columnFilters(), (row, columnId) => row[columnId as keyof typeof row] || '');
-  });
-
-  const sortedInterfaces = createMemo(() => {
-    const rows = [...filteredInterfaces()];
-    const sort = sortBy();
-    if (!sort) return rows;
-    return rows.sort((a, b) => {
-      const aValue = a[sort.column as keyof typeof a] || '';
-      const bValue = b[sort.column as keyof typeof b] || '';
-      const comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
-      return sort.direction === 'asc' ? comparison : -comparison;
-    });
-  });
+  const [interfaces, { refetch }] = createResource(
+    () => ({ page: page(), size: pageSize(), search: searchQuery(), sort: sortBy(), filters: columnFilters() }),
+    (query) => api.getWANInterfaces(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
+  );
+  const filteredInterfaces = createMemo(() => interfaces()?.items || []);
+  const sortedInterfaces = filteredInterfaces;
 
   const handleSort = (column: string) => {
     setPage(0);
@@ -77,14 +60,21 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
     }
   };
 
-  const pagedInterfaces = createMemo(() => sortedInterfaces().slice(page() * pageSize(), (page() + 1) * pageSize()));
-  const totalPages = createMemo(() => Math.ceil(sortedInterfaces().length / pageSize()));
+  const pagedInterfaces = filteredInterfaces;
+  const totalPages = createMemo(() => Math.ceil((interfaces()?.total || 0) / pageSize()));
 
-  const exportInterfacesCSV = () => {
+  const exportInterfacesCSV = async () => {
+    const firstPage = await api.getWANInterfaces(500, 0, { search: searchQuery(), sort: sortBy(), filters: columnFilters() });
+    const rowsToExport = [...firstPage.items];
+    for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
+      const nextPage = await api.getWANInterfaces(500, offset, { search: searchQuery(), sort: sortBy(), filters: columnFilters() });
+      rowsToExport.push(...nextPage.items);
+      if (!nextPage.items.length) break;
+    }
     const exportColumns = columns().filter(column => column.visible);
     const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const rows = sortedInterfaces().map(row => exportColumns.map(column => row[column.id as keyof typeof row] || ''));
-    const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...rows]
+    const csvRows = rowsToExport.map(row => exportColumns.map(column => row[column.id as keyof typeof row] || ''));
+    const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...csvRows]
       .map(row => row.map(escapeCsvValue).join(','))
       .join('\r\n') + '\r\n';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -112,7 +102,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center gap-2 text-sm text-secondary">
             <Network size={16} />
-            <span><strong>{pagedInterfaces().length}</strong> visible on this page · <strong>{interfaces()?.length ?? 0}</strong> total WANs</span>
+            <span><strong>{pagedInterfaces().length}</strong> visible on this page · <strong>{interfaces()?.total ?? 0}</strong> total WANs</span>
           </div>
           <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <label class="relative block w-full sm:w-72">
@@ -207,7 +197,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                 </table>
               </div>
             </div>
-            <Pagination page={page()} totalPages={totalPages()} totalItems={sortedInterfaces().length} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
+            <Pagination page={page()} totalPages={totalPages()} totalItems={interfaces()?.total || 0} pageSize={pageSize()} onPageChange={setPage} storageKey="wan-interfaces" onPageSizeChange={(size) => { changePageSize(size); setPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
           </Show>
         </Show>
       </Show>

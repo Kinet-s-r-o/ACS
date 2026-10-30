@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/matrix8412/acs/internal/models"
@@ -49,6 +50,61 @@ func (r *TaskRepository) ListWithDevices(ctx context.Context) ([]TaskListItem, e
 		Order("tasks.created_at DESC, tasks.id DESC").
 		Find(&tasks).Error
 	return tasks, err
+}
+
+func (r *TaskRepository) ListWithDevicesPage(ctx context.Context, limit, offset int, search, sort, direction string, filters map[string]TableColumnFilter) ([]TaskListItem, int, error) {
+	query := r.db.WithContext(ctx).Table("tasks").Joins("JOIN devices ON devices.id = tasks.device_id")
+	expressions := map[string]string{
+		"serial_number": "devices.serial_number", "type": "tasks.type", "trigger_event": "tasks.trigger_events::text",
+		"status": "tasks.status", "created_at": "tasks.created_at::text", "completed_at": "tasks.completed_at::text",
+		"created_by": "tasks.created_by", "deleted_by": "tasks.deleted_by", "error": "tasks.error_message",
+	}
+	query = applySearchTerms(query, search, []string{
+		"devices.serial_number", "tasks.type", "tasks.trigger_events::text", "tasks.status",
+		"tasks.created_by", "tasks.deleted_by", "tasks.error_message",
+	})
+	var err error
+	query, err = ApplyTableColumnFilters(query, filters, expressions, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	sortColumns := map[string]string{
+		"serial_number": "devices.serial_number", "type": "tasks.type", "trigger_event": "tasks.trigger_events::text",
+		"status": "tasks.status", "created_at": "tasks.created_at", "completed_at": "tasks.completed_at",
+		"created_by": "tasks.created_by", "deleted_by": "tasks.deleted_by", "error": "tasks.error_message",
+	}
+	order := sortColumns[sort]
+	if order == "" {
+		order, direction = "tasks.created_at", "desc"
+	}
+	if direction != "asc" && direction != "desc" {
+		return nil, 0, fmt.Errorf("invalid task sort direction")
+	}
+	var tasks []TaskListItem
+	err = query.Select("tasks.id, tasks.device_id, tasks.type, tasks.trigger_events, tasks.status, tasks.error_message, tasks.created_at, tasks.sent_at, tasks.completed_at, tasks.created_by, tasks.deleted_by, devices.serial_number").
+		Order(order + " " + strings.ToUpper(direction) + " NULLS LAST").Order("tasks.id DESC").
+		Limit(limit).Offset(offset).Find(&tasks).Error
+	return tasks, int(total), err
+}
+
+func (r *TaskRepository) GetGlobalCounts(ctx context.Context) (map[models.TaskStatus]int64, error) {
+	type row struct {
+		Status models.TaskStatus
+		Count  int64
+	}
+	var rows []row
+	if err := r.db.WithContext(ctx).Model(&models.Task{}).Select("status, COUNT(*) AS count").Group("status").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	counts := map[models.TaskStatus]int64{}
+	for _, item := range rows {
+		counts[item.Status] = item.Count
+	}
+	return counts, nil
 }
 
 func (r *TaskRepository) GetWithDevice(ctx context.Context, id int64) (*TaskWithDevice, error) {
@@ -191,6 +247,44 @@ func (r *TaskRepository) GetByDeviceID(ctx context.Context, deviceID int64, limi
 		redactGetTaskResult(task)
 	}
 	return tasks, nil
+}
+
+func (r *TaskRepository) GetByDeviceIDPage(ctx context.Context, deviceID int64, limit, offset int, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Task, int, error) {
+	query := r.db.WithContext(ctx).Model(&models.Task{}).Where("device_id = ?", deviceID)
+	expressions := map[string]string{
+		"type": "type", "trigger_event": "trigger_events::text", "status": "status", "created_at": "created_at::text",
+		"completed_at": "completed_at::text", "created_by": "created_by", "deleted_by": "deleted_by", "error": "error_message",
+	}
+	query = applySearchTerms(query, search, []string{"type", "trigger_events::text", "status", "created_by", "error_message"})
+	var err error
+	query, err = ApplyTableColumnFilters(query, filters, expressions, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	sortColumns := map[string]string{
+		"type": "type", "trigger_event": "trigger_events::text", "status": "status", "created_at": "created_at",
+		"completed_at": "completed_at", "created_by": "created_by", "deleted_by": "deleted_by", "error": "error_message",
+	}
+	order := sortColumns[sort]
+	if order == "" {
+		order, direction = "created_at", "desc"
+	}
+	if direction != "asc" && direction != "desc" {
+		return nil, 0, fmt.Errorf("invalid task sort direction")
+	}
+	var tasks []*models.Task
+	err = query.Order(order + " " + strings.ToUpper(direction) + " NULLS LAST").Order("id DESC").Limit(limit).Offset(offset).Find(&tasks).Error
+	if err == nil {
+		for _, task := range tasks {
+			redactSetTaskPayload(task)
+			redactGetTaskResult(task)
+		}
+	}
+	return tasks, int(total), err
 }
 
 func (r *TaskRepository) CountByDeviceID(ctx context.Context, deviceID int64) (map[models.TaskStatus]int64, error) {

@@ -28,7 +28,7 @@ import WanSettingsModal from '../components/WanSettingsModal';
 import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import SortableHeader from '../components/SortableHeader';
-import { sortRows, type SortDirection } from '../lib/sorting';
+import type { SortDirection } from '../lib/sorting';
 import { formatDateTime } from '../lib/dateTime';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 
@@ -115,20 +115,31 @@ const DeviceDetail: Component = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' || searchParams.tab === 'log' ? searchParams.tab : 'overview';
 
+  const [taskPage, setTaskPage] = createSignal(0);
+  const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('device_tasks', 20);
+  const [taskColumnFilters, setTaskColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.tasks`, {});
+  const [taskSort, setTaskSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [taskSearch, setTaskSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.tasks`);
+  const [faultPage, setFaultPage] = createSignal(0);
+  const { pageSize: faultPageSize, changePageSize: changeFaultPageSize } = usePageSize('device_faults', 20);
+  const [deviceFaultColumnFilters, setDeviceFaultColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.faults`, {});
+  const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
+  const [faultSearch, setFaultSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.faults`);
+
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
   const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
-  const taskSource = () => activeTab() === 'tasks' || featureRefreshTaskID() !== null ? serial() : false;
+  const taskSource = () => activeTab() === 'tasks' || featureRefreshTaskID() !== null ? ({ serial: serial(), page: taskPage(), size: taskPageSize(), search: taskSearch(), sort: taskSort(), filters: taskColumnFilters() }) : false;
   const [systemSettings] = createResource(api.getSettings);
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
-  const [tasks, { refetch: refetchTaskRows }] = createResource(taskSource, api.getDeviceTasks);
+  const [tasks, { refetch: refetchTaskRows }] = createResource(taskSource, query => api.getDeviceTasksPage(query.serial, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }));
   const [deviceTaskCounts, { refetch: refetchDeviceTaskCounts }] = createResource(serial, api.getDeviceTaskCounts);
   const refetchTasks = async () => {
     const [taskRows] = await Promise.all([refetchTaskRows(), refetchDeviceTaskCounts()]);
     return taskRows;
   };
   const [snapshots, { refetch: refetchSnapshots }] = createResource(() => activeTab() === 'snapshots' ? serial() : false, api.getDeviceSnapshots);
-  const [deviceFaults, { refetch: refetchFaultRows }] = createResource(() => activeTab() === 'faults' ? serial() : false, api.getDeviceFaults);
+  const [deviceFaults, { refetch: refetchFaultRows }] = createResource(() => activeTab() === 'faults' ? ({ serial: serial(), page: faultPage(), size: faultPageSize(), search: faultSearch(), sort: faultSort(), filters: deviceFaultColumnFilters() }) : false, query => api.getDeviceFaultsPage(query.serial, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }));
   const [deviceFaultCounts, { refetch: refetchFaultCounts }] = createResource(serial, api.getDeviceFaultCounts);
   const refetchDeviceFaults = async () => {
     const [faultRows] = await Promise.all([refetchFaultRows(), refetchFaultCounts()]);
@@ -204,7 +215,7 @@ const DeviceDetail: Component = () => {
     if (taskID === null) return;
     const refresh = async () => {
       const [rows] = await Promise.all([refetchTasks(), loadDeviceParameters()]);
-      const status = rows?.find(task => task.id === taskID)?.status;
+      const status = rows?.items.find(task => task.id === taskID)?.status;
       if (status === 'completed' || status === 'failed') setFeatureRefreshTaskID(null);
     };
     const interval = window.setInterval(() => void refresh(), 4000);
@@ -225,12 +236,9 @@ const DeviceDetail: Component = () => {
   });
   const [statsInterface, setStatsInterface] = createSignal<{ type: 'wan' | 'lan'; name: string; path: string } | null>(null);
   const [interfaceMetricDefs] = createResource(() => statsInterface() ? serial() : false, api.getDeviceInterfaceMetricDefinitions);
-  const [taskPage, setTaskPage] = createSignal(0);
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
-  const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('device_tasks', 20);
   const handleTaskPageSizeChange = (size: number) => { changeTaskPageSize(size); setTaskPage(0); };
-  const [taskColumnFilters, setTaskColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.tasks`, {});
   const { columns: deviceTaskColumns, isVisible: isDeviceTaskColumnVisible, toggle: toggleDeviceTaskColumn } = useColumnVisibility('device_tasks', [
     { id: 'type', label: 'Type', visible: true },
     { id: 'trigger_event', label: 'Trigger event', visible: true },
@@ -241,76 +249,17 @@ const DeviceDetail: Component = () => {
     { id: 'deleted_by', label: 'Deleted by', visible: true },
     { id: 'error', label: 'Error', visible: true },
   ]);
-  const [deviceFaultColumnFilters, setDeviceFaultColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.faults`, {});
-  const [taskSort, setTaskSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
-  const [faultSort, setFaultSort] = createSignal<{ column: string | null; direction: SortDirection }>({ column: 'created_at', direction: 'desc' });
-  const toggleSort = (setSort: typeof setTaskSort) => (column: string) => setSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
-  const [taskSearch, setTaskSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.tasks`);
-  const [faultSearch, setFaultSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.faults`);
+  const toggleSort = (setSort: typeof setTaskSort, setPage: (page: number) => void) => (column: string) => { setPage(0); setSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
+  const updateTaskFilter = (column: string, state: ColumnFilterState | null) => { setTaskColumnFilters(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; }); setTaskPage(0); };
+  const updateDeviceFaultFilter = (column: string, state: ColumnFilterState | null) => { setDeviceFaultColumnFilters(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; }); setFaultPage(0); };
   const [hostSearch, setHostSearch] = createPersistedSignal(`acs.search.device.${encodeURIComponent(serial())}.hosts`);
-  const filteredTasks = createMemo(() => {
-    let all = tasks() || [];
-    const query = taskSearch().toLowerCase().trim();
-    if (query) {
-      all = all.filter(t =>
-        t.type?.toLowerCase().includes(query) ||
-        formatTaskTriggerEvents(t.trigger_events).toLowerCase().includes(query) ||
-        t.status?.toLowerCase().includes(query) ||
-        t.created_by?.toLowerCase().includes(query) ||
-        t.error_message?.toLowerCase().includes(query)
-      );
-    }
-    const filtered = applyColumnFilters(all, taskColumnFilters(), (t, colId) => {
-      switch (colId) {
-        case 'type': return t.type || '';
-        case 'trigger_event': return formatTaskTriggerEvents(t.trigger_events);
-        case 'status': return t.status || '';
-        case 'created_at': return t.created_at || '';
-        case 'completed_at': return t.completed_at || '';
-        case 'created_by': return t.created_by || '';
-        case 'error': return t.error_message || '';
-        default: return '';
-      }
-    });
-    return sortRows(filtered, taskSort().column, taskSort().direction, (t, key) => key === 'type' ? t.type : key === 'trigger_event' ? formatTaskTriggerEvents(t.trigger_events) : key === 'status' ? t.status : key === 'created_at' ? t.created_at : key === 'completed_at' ? t.completed_at || '' : key === 'created_by' ? t.created_by || '' : key === 'error' ? t.error_message || '' : t.deleted_by || '');
-  });
-  const pagedTasks = createMemo(() => {
-    const all = filteredTasks();
-    const start = taskPage() * taskPageSize();
-    return all.slice(start, start + taskPageSize());
-  });
-  const taskTotalPages = createMemo(() => Math.ceil(filteredTasks().length / taskPageSize()));
-  const [faultPage, setFaultPage] = createSignal(0);
-  const { pageSize: faultPageSize, changePageSize: changeFaultPageSize } = usePageSize('device_faults', 20);
+  const filteredTasks = createMemo(() => tasks()?.items || []);
+  const pagedTasks = filteredTasks;
+  const taskTotalPages = createMemo(() => Math.ceil((tasks()?.total || 0) / taskPageSize()));
   const handleFaultPageSizeChange = (size: number) => { changeFaultPageSize(size); setFaultPage(0); };
-  const filteredDeviceFaults = createMemo(() => {
-    let all = deviceFaults() || [];
-    const query = faultSearch().toLowerCase().trim();
-    if (query) {
-      all = all.filter(f =>
-        f.fault_code?.toLowerCase().includes(query) ||
-        f.fault_string?.toLowerCase().includes(query) ||
-        f.parameter_name?.toLowerCase().includes(query)
-      );
-    }
-    const filtered = applyColumnFilters(all, deviceFaultColumnFilters(), (f, colId) => {
-      switch (colId) {
-        case 'code': return f.fault_code || '';
-        case 'message': return f.fault_string || '';
-        case 'parameter': return f.parameter_name || '';
-        case 'time': return f.created_at || '';
-        case 'status': return f.resolved ? 'Resolved' : 'Active';
-        default: return '';
-      }
-    });
-    return sortRows(filtered, faultSort().column, faultSort().direction, (f, key) => key === 'code' ? f.fault_code : key === 'message' ? f.fault_string : key === 'parameter' ? f.parameter_name : key === 'time' ? f.created_at : key === 'status' ? (f.resolved ? 'Resolved' : 'Active') : '');
-  });
-  const pagedDeviceFaults = createMemo(() => {
-    const all = filteredDeviceFaults();
-    const start = faultPage() * faultPageSize();
-    return all.slice(start, start + faultPageSize());
-  });
-  const deviceFaultTotalPages = createMemo(() => Math.ceil(filteredDeviceFaults().length / faultPageSize()));
+  const filteredDeviceFaults = createMemo(() => deviceFaults()?.items || []);
+  const pagedDeviceFaults = filteredDeviceFaults;
+  const deviceFaultTotalPages = createMemo(() => Math.ceil((deviceFaults()?.total || 0) / faultPageSize()));
   const unresolvedFaultCount = createMemo(() => deviceFaultCounts()?.active || 0);
   const pendingTaskCount = createMemo(() => (deviceTaskCounts()?.pending || 0) + (deviceTaskCounts()?.sent || 0));
   const [autoRefreshTick, setAutoRefreshTick] = createSignal(0);
@@ -3002,55 +2951,55 @@ const DeviceDetail: Component = () => {
             </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
-                <h2 class="flex items-center gap-2 text-sm font-medium text-secondary"><ClipboardList size={16} class="text-sky-400" />CWMP tasks ({tasks()?.length || 0})</h2>
+                <h2 class="flex items-center gap-2 text-sm font-medium text-secondary"><ClipboardList size={16} class="text-sky-400" />CWMP tasks ({tasks()?.total || 0})</h2>
                 <div class="relative">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                  <input type="text" value={taskSearch()} onInput={(e) => setTaskSearch(e.currentTarget.value)} placeholder="Search tasks…" class="input pl-9! w-48 text-sm" />
+                  <input type="text" value={taskSearch()} onInput={(e) => { setTaskPage(0); setTaskSearch(e.currentTarget.value); }} placeholder="Search tasks…" class="input pl-9! w-48 text-sm" />
                   <Show when={taskSearch()}>
-                    <button onClick={() => setTaskSearch('')} class="input-clear" aria-label="Clear search"><X size={12} /></button>
+                    <button onClick={() => { setTaskPage(0); setTaskSearch(''); }} class="input-clear" aria-label="Clear search"><X size={12} /></button>
                   </Show>
                 </div>
               </div>
               <Show when={!tasks.loading} fallback={<div class="p-5 space-y-2" aria-label="Loading CPE task history"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /></div>}>
-              <Show when={(tasks()?.length || 0) > 0} fallback={<EmptyState compact title="No remote tasks have been queued" description="Reboot, parameter, firmware, and connection-request operations will appear here after an operator creates them." />}>
+              <Show when={(tasks()?.total || 0) > 0} fallback={<EmptyState compact title="No remote tasks have been queued" description="Reboot, parameter, firmware, and connection-request operations will appear here after an operator creates them." />}>
                 <div class="table-scroll">
                   <table class="data-table w-full text-sm min-w-[980px]">
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
                         <Show when={isDeviceTaskColumnVisible('type')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="type" label="Type" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="type" label="Type" active={taskColumnFilters()['type'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['type'] = s; else delete n['type']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="type" label="Type" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="type" label="Type" active={taskColumnFilters()['type'] || null} onApply={(s) => updateTaskFilter('type', s)} />
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('trigger_event')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="trigger_event" label="Trigger event" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="trigger_event" label="Trigger event" active={taskColumnFilters()['trigger_event'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['trigger_event'] = s; else delete n['trigger_event']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="trigger_event" label="Trigger event" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="trigger_event" label="Trigger event" active={taskColumnFilters()['trigger_event'] || null} onApply={(s) => updateTaskFilter('trigger_event', s)} />
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="status" label="Status" active={taskColumnFilters()['status'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="status" label="Status" active={taskColumnFilters()['status'] || null} onApply={(s) => updateTaskFilter('status', s)} />
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('created_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Created" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="created_at" label="Created" active={taskColumnFilters()['created_at'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Created" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="created_at" label="Created" active={taskColumnFilters()['created_at'] || null} onApply={(s) => updateTaskFilter('created_at', s)} />
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('completed_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="completed_at" label="Completed" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="completed_at" label="Completed" active={taskColumnFilters()['completed_at'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['completed_at'] = s; else delete n['completed_at']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="completed_at" label="Completed" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="completed_at" label="Completed" active={taskColumnFilters()['completed_at'] || null} onApply={(s) => updateTaskFilter('completed_at', s)} />
                           </div>
                         </th></Show>
                         <Show when={isDeviceTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="Created by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="created_by" label="Created by" active={taskColumnFilters()['created_by'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_by'] = s; else delete n['created_by']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="Created by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="created_by" label="Created by" active={taskColumnFilters()['created_by'] || null} onApply={(s) => updateTaskFilter('created_by', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} /></th></Show>
+                        <Show when={isDeviceTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} /></th></Show>
                         <Show when={isDeviceTaskColumnVisible('error')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                          <div class="flex items-center gap-1.5"><SortableHeader column="error" label="Error" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort)} />
-                            <ColumnFilter columnId="error" label="Error" active={taskColumnFilters()['error'] || null} onApply={(s) => { setTaskColumnFilters((prev) => { const n = { ...prev }; if (s) n['error'] = s; else delete n['error']; return n; }); }} />
+                          <div class="flex items-center gap-1.5"><SortableHeader column="error" label="Error" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
+                            <ColumnFilter columnId="error" label="Error" active={taskColumnFilters()['error'] || null} onApply={(s) => updateTaskFilter('error', s)} />
                           </div>
                         </th></Show>
                         <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
@@ -3093,7 +3042,7 @@ const DeviceDetail: Component = () => {
               </Show>
               </Show>
             </div>
-            <Pagination page={taskPage()} totalPages={taskTotalPages()} totalItems={filteredTasks().length} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="device_tasks" onPageSizeChange={handleTaskPageSizeChange} filters={taskColumnFilters()} onClearFilters={() => { setTaskColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { setTaskColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setTaskPage(0); }} />
+            <Pagination page={taskPage()} totalPages={taskTotalPages()} totalItems={tasks()?.total || 0} pageSize={taskPageSize()} onPageChange={setTaskPage} storageKey="device_tasks" onPageSizeChange={handleTaskPageSizeChange} filters={taskColumnFilters()} onClearFilters={() => { setTaskColumnFilters({}); setTaskPage(0); }} onRemoveFilter={(columnId) => { const next = { ...taskColumnFilters() }; delete next[columnId]; setTaskColumnFilters(next); setTaskPage(0); }} />
             </Show>
 
             {/* Task Detail Dialog */}
@@ -3160,7 +3109,7 @@ const DeviceDetail: Component = () => {
               <div class="p-5 border-b border-subtle flex items-center justify-between">
                 <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
                   <AlertTriangle size={14} />
-                  CWMP Faults ({deviceFaults()?.length || 0})
+                  CWMP Faults ({deviceFaults()?.total || 0})
                 </h2>
                 <div class="flex items-center gap-3">
                   <Show when={isFullAccess() && selectedDeviceFaults().size > 0}>
@@ -3171,15 +3120,15 @@ const DeviceDetail: Component = () => {
                   </Show>
                   <div class="relative">
                     <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                    <input type="text" value={faultSearch()} onInput={(e) => setFaultSearch(e.currentTarget.value)} placeholder="Search faults…" class="input pl-9! w-48 text-sm" />
+                    <input type="text" value={faultSearch()} onInput={(e) => { setFaultPage(0); setFaultSearch(e.currentTarget.value); }} placeholder="Search faults…" class="input pl-9! w-48 text-sm" />
                     <Show when={faultSearch()}>
-                      <button onClick={() => setFaultSearch('')} class="input-clear" aria-label="Clear search"><X size={12} /></button>
+                      <button onClick={() => { setFaultPage(0); setFaultSearch(''); }} class="input-clear" aria-label="Clear search"><X size={12} /></button>
                     </Show>
                   </div>
                 </div>
               </div>
               <Show when={deviceFaults.loading} fallback={
-                <Show when={(deviceFaults()?.length || 0) > 0} fallback={
+                <Show when={(deviceFaults()?.total || 0) > 0} fallback={
                   <EmptyState compact icon={<AlertTriangle size={22} />} title="No CWMP faults recorded for this device" description="Protocol faults will appear here when the device reports a CWMP error during a session." />
                 }>
                   <div class="table-scroll">
@@ -3193,28 +3142,28 @@ const DeviceDetail: Component = () => {
                             </th>
                           </Show>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5"><SortableHeader column="code" label="Code" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
-                              <ColumnFilter columnId="code" label="Code" numeric active={deviceFaultColumnFilters()['code'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['code'] = s; else delete n['code']; return n; }); }} />
+                            <div class="flex items-center gap-1.5"><SortableHeader column="code" label="Code" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
+                              <ColumnFilter columnId="code" label="Code" numeric active={deviceFaultColumnFilters()['code'] || null} onApply={(s) => updateDeviceFaultFilter('code', s)} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5"><SortableHeader column="message" label="Message" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
-                              <ColumnFilter columnId="message" label="Message" active={deviceFaultColumnFilters()['message'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['message'] = s; else delete n['message']; return n; }); }} />
+                            <div class="flex items-center gap-1.5"><SortableHeader column="message" label="Message" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
+                              <ColumnFilter columnId="message" label="Message" active={deviceFaultColumnFilters()['message'] || null} onApply={(s) => updateDeviceFaultFilter('message', s)} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5"><SortableHeader column="parameter" label="Parameter" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
-                              <ColumnFilter columnId="parameter" label="Parameter" active={deviceFaultColumnFilters()['parameter'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['parameter'] = s; else delete n['parameter']; return n; }); }} />
+                            <div class="flex items-center gap-1.5"><SortableHeader column="parameter" label="Parameter" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
+                              <ColumnFilter columnId="parameter" label="Parameter" active={deviceFaultColumnFilters()['parameter'] || null} onApply={(s) => updateDeviceFaultFilter('parameter', s)} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5"><SortableHeader column="time" label="Time" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
-                              <ColumnFilter columnId="time" label="Time" active={deviceFaultColumnFilters()['time'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['time'] = s; else delete n['time']; return n; }); }} />
+                            <div class="flex items-center gap-1.5"><SortableHeader column="time" label="Time" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
+                              <ColumnFilter columnId="time" label="Time" active={deviceFaultColumnFilters()['time'] || null} onApply={(s) => updateDeviceFaultFilter('time', s)} />
                             </div>
                           </th>
                           <th class="text-left px-4 py-2 text-xs font-medium text-muted">
-                            <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort)} />
-                              <ColumnFilter columnId="status" label="Status" active={deviceFaultColumnFilters()['status'] || null} onApply={(s) => { setDeviceFaultColumnFilters((prev) => { const n = { ...prev }; if (s) n['status'] = s; else delete n['status']; return n; }); }} />
+                            <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
+                              <ColumnFilter columnId="status" label="Status" active={deviceFaultColumnFilters()['status'] || null} onApply={(s) => updateDeviceFaultFilter('status', s)} />
                             </div>
                           </th>
                           <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
@@ -3313,7 +3262,7 @@ const DeviceDetail: Component = () => {
                 <div class="p-5 space-y-2" aria-label="Loading CWMP faults"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /></div>
               </Show>
             </div>
-            <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={filteredDeviceFaults().length} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setDeviceFaultColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
+            <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={deviceFaults()?.total || 0} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { const next = { ...deviceFaultColumnFilters() }; delete next[columnId]; setDeviceFaultColumnFilters(next); setFaultPage(0); }} />
             </Show>
 
             <Show when={activeTab() === 'log'}>

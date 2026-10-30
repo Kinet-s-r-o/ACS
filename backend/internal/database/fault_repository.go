@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/matrix8412/acs/internal/models"
@@ -10,6 +12,51 @@ import (
 
 type FaultRepository struct {
 	db *gorm.DB
+}
+
+func (r *FaultRepository) ListPage(ctx context.Context, limit, offset int, resolved *bool, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Fault, int, error) {
+	query := r.db.WithContext(ctx).Table("faults f").Joins("JOIN devices d ON f.device_id = d.id")
+	if resolved != nil {
+		query = query.Where("f.resolved = ?", *resolved)
+	}
+	expressions := map[string]string{
+		"serial_number": "d.serial_number", "model_name": "COALESCE(NULLIF(d.model_name, ''), d.product_class, '')",
+		"fault_code": "f.fault_code", "fault_string": "f.fault_string", "parameter_name": "f.parameter_name",
+		"created_at": "f.created_at::text", "resolved": "CASE WHEN f.resolved THEN 'Resolved' ELSE 'Active' END",
+		"software_version": "COALESCE(d.software_version, '')", "hardware_version": "COALESCE(d.hardware_version, '')",
+		"manufacturer_oui": "COALESCE(d.oui, '')",
+	}
+	query = applySearchTerms(query, search, []string{
+		"d.serial_number", "COALESCE(NULLIF(d.model_name, ''), d.product_class, '')", "f.fault_code",
+		"f.fault_string", "f.parameter_name", "f.created_at::text", "CASE WHEN f.resolved THEN 'Resolved' ELSE 'Active' END",
+		"COALESCE(d.software_version, '')", "COALESCE(d.hardware_version, '')", "COALESCE(d.oui, '')",
+	})
+	var err error
+	query, err = ApplyTableColumnFilters(query, filters, expressions, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	sortColumns := map[string]string{
+		"serial_number": "d.serial_number", "model_name": "COALESCE(NULLIF(d.model_name, ''), d.product_class, '')",
+		"fault_code": "f.fault_code", "fault_string": "f.fault_string", "parameter_name": "f.parameter_name",
+		"created_at": "f.created_at", "resolved": "f.resolved", "software_version": "d.software_version",
+		"hardware_version": "d.hardware_version", "manufacturer_oui": "d.oui",
+	}
+	order := sortColumns[sort]
+	if order == "" {
+		order, direction = "f.created_at", "desc"
+	}
+	if direction != "asc" && direction != "desc" {
+		return nil, 0, fmt.Errorf("invalid fault sort direction")
+	}
+	var faults []*models.Fault
+	err = query.Select("f.id, f.device_id, d.serial_number, COALESCE(NULLIF(d.model_name, ''), d.product_class, '') AS model_name, COALESCE(d.software_version, '') AS software_version, COALESCE(d.hardware_version, '') AS hardware_version, COALESCE(d.oui, '') AS manufacturer_oui, f.fault_code, f.fault_string, f.parameter_name, f.resolved, f.created_at, f.resolved_at").
+		Order(order + " " + strings.ToUpper(direction) + " NULLS LAST").Order("f.id DESC").Limit(limit).Offset(offset).Scan(&faults).Error
+	return faults, int(total), err
 }
 
 func NewFaultRepository(db *gorm.DB) *FaultRepository {
@@ -58,6 +105,35 @@ func (r *FaultRepository) GetByDeviceID(ctx context.Context, deviceID int64) ([]
 		Order("f.created_at DESC").
 		Scan(&faults).Error
 	return faults, err
+}
+
+func (r *FaultRepository) GetByDeviceIDPage(ctx context.Context, deviceID int64, limit, offset int, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Fault, int, error) {
+	query := r.db.WithContext(ctx).Table("faults f").Where("f.device_id = ?", deviceID)
+	expressions := map[string]string{
+		"code": "f.fault_code", "message": "f.fault_string", "parameter": "f.parameter_name",
+		"time": "f.created_at::text", "status": "CASE WHEN f.resolved THEN 'Resolved' ELSE 'Active' END",
+	}
+	query = applySearchTerms(query, search, []string{"f.fault_code", "f.fault_string", "f.parameter_name"})
+	var err error
+	query, err = ApplyTableColumnFilters(query, filters, expressions, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	sortColumns := map[string]string{"code": "f.fault_code", "message": "f.fault_string", "parameter": "f.parameter_name", "time": "f.created_at", "status": "f.resolved"}
+	order := sortColumns[sort]
+	if order == "" {
+		order, direction = "f.created_at", "desc"
+	}
+	if direction != "asc" && direction != "desc" {
+		return nil, 0, fmt.Errorf("invalid fault sort direction")
+	}
+	var faults []*models.Fault
+	err = query.Select("f.*").Order(order + " " + strings.ToUpper(direction) + " NULLS LAST").Order("f.id DESC").Limit(limit).Offset(offset).Scan(&faults).Error
+	return faults, int(total), err
 }
 
 func (r *FaultRepository) GetStatsByDeviceID(ctx context.Context, deviceID int64) (map[string]int, error) {

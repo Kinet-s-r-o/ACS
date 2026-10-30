@@ -8,10 +8,10 @@ import { api } from '../lib/api';
 import ColumnFilter from '../components/ColumnFilter';
 import Pagination from '../components/Pagination';
 import ColumnVisibility from '../components/ColumnVisibility';
-import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import type { ColumnFilterState } from '../lib/filters';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 import SortableHeader from '../components/SortableHeader';
-import { sortRows, type SortDirection } from '../lib/sorting';
+import type { SortDirection } from '../lib/sorting';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
 import { usePageSize } from '../lib/usePageSize';
@@ -21,16 +21,6 @@ const Security: Component = () => {
   const [overview, { refetch: refetchOverview }] = createResource(() => api.getSecurityOverview());
   const [auditPage, setAuditPage] = createSignal(0);
   const { pageSize: auditPageSize, changePageSize: changeAuditPageSize } = usePageSize('security_audit', 20);
-  const [audit, { refetch: refetchAudit }] = createResource(async () => {
-    const firstPage = await api.getAuditLogs(500, 0);
-    const entries = [...firstPage.entries];
-    for (let offset = entries.length; offset < firstPage.total; offset += 500) {
-      const nextPage = await api.getAuditLogs(500, offset);
-      entries.push(...nextPage.entries);
-      if (nextPage.entries.length === 0) break;
-    }
-    return { ...firstPage, entries };
-  });
   const [blocked, { refetch: refetchBlocked }] = createResource(() => api.getBlockedDevices());
   const [serial, setSerial] = createSignal('');
   const [reason, setReason] = createSignal('');
@@ -40,6 +30,10 @@ const Security: Component = () => {
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.security', {});
   const [auditSearch, setAuditSearch] = createPersistedSignal('acs.search.security.audit');
   const [auditSort, setAuditSort] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.security-audit', { column: 'created_at', direction: 'desc' });
+  const [audit, { refetch: refetchAudit }] = createResource(
+    () => ({ page: auditPage(), size: auditPageSize(), search: auditSearch(), sort: auditSort(), filters: columnFilters() }),
+    (query) => api.getAuditLogs(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
+  );
   const handleAuditSort = (column: string) => { setAuditPage(0); setAuditSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const updateAuditFilter = (columnId: string, state: ColumnFilterState | null) => {
     setAuditPage(0);
@@ -59,33 +53,9 @@ const Security: Component = () => {
     { id: 'status', label: 'HTTP status', visible: true },
   ]);
 
-  const getFilterValue = (entry: { created_at: string; username: string; action: string; resource: string; ip_address: string; status: number }, colId: string): string => {
-    switch (colId) {
-      case 'created_at': return entry.created_at || '';
-      case 'username': return entry.username || '';
-      case 'action': return entry.action || '';
-      case 'resource': return entry.resource || '';
-      case 'ip_address': return entry.ip_address || '';
-      case 'status': return String(entry.status || '');
-      default: return '';
-    }
-  };
-
-  const filteredAudit = createMemo(() => {
-    let all = audit()?.entries || [];
-    const query = auditSearch().toLowerCase().trim();
-    if (query) {
-      all = all.filter(e =>
-        e.username?.toLowerCase().includes(query) ||
-        e.action?.toLowerCase().includes(query) ||
-        e.resource?.toLowerCase().includes(query) ||
-        e.ip_address?.toLowerCase().includes(query)
-      );
-    }
-    return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), auditSort().column, auditSort().direction, getFilterValue);
-  });
-  const pagedAudit = createMemo(() => filteredAudit().slice(auditPage() * auditPageSize(), (auditPage() + 1) * auditPageSize()));
-  const auditTotalPages = createMemo(() => Math.ceil(filteredAudit().length / auditPageSize()));
+  const filteredAudit = createMemo(() => audit()?.entries || []);
+  const pagedAudit = filteredAudit;
+  const auditTotalPages = createMemo(() => Math.ceil((audit()?.total || 0) / auditPageSize()));
 
   const refreshAll = () => { refetchOverview(); refetchAudit(); refetchBlocked(); };
   const blockDevice = async (event: SubmitEvent) => {

@@ -42,6 +42,22 @@ export interface DeviceListOptions {
   sort?: { column: string; direction: 'asc' | 'desc' } | null;
   filters?: Record<string, ColumnFilterState>;
 }
+export interface TableQueryOptions {
+  search?: string;
+  sort?: { column: string | null; direction: 'asc' | 'desc' } | null;
+  filters?: Record<string, ColumnFilterState>;
+}
+export interface TablePage<T> { items: T[]; total: number; limit: number; offset: number }
+const tableQuery = (limit: number, offset: number, options?: TableQueryOptions) => {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (options?.search?.trim()) params.set('search', options.search.trim());
+  if (options?.sort?.column) {
+    params.set('sort', options.sort.column);
+    params.set('direction', options.sort.direction);
+  }
+  if (options?.filters && Object.keys(options.filters).length > 0) params.set('filters', JSON.stringify(options.filters));
+  return params;
+};
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
 export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
 export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number }
@@ -152,8 +168,8 @@ export const api = {
     if (options?.filters && Object.keys(options.filters).length > 0) params.set('filters', JSON.stringify(options.filters));
     return request<DeviceListResponse>(`/devices?${params}`);
   },
-  getWANInterfaces: () => request<WANInterface[]>('/wan-interfaces'),
-  getTasks: () => request<GlobalTask[]>('/tasks'),
+  getWANInterfaces: (limit = 20, offset = 0, options?: TableQueryOptions) => request<TablePage<WANInterface>>(`/wan-interfaces?${tableQuery(limit, offset, options)}`),
+  getTasks: (limit = 20, offset = 0, options?: TableQueryOptions) => request<{ tasks: GlobalTask[]; total: number; limit: number; offset: number; counts: Record<string, number> }>(`/tasks?${tableQuery(limit, offset, options)}`),
   getTask: (id: number) => request<GlobalTask>(`/tasks/${id}`),
   deletePendingTask: (id: number) => request<{ status: string }>(`/tasks/${id}`, { method: 'DELETE' }),
   deletePendingTasks: (ids: number[]) => request<{ deleted: number }>('/tasks/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
@@ -186,6 +202,7 @@ export const api = {
     return request<DeviceLogPage>(`/device/${encodeURIComponent(query.serial)}/logs?${params.toString()}`);
   },
   getDeviceTasks: (serial: string) => request<Task[]>(`/device/${encodeURIComponent(serial)}/tasks`),
+  getDeviceTasksPage: (serial: string, limit = 20, offset = 0, options?: TableQueryOptions) => request<TablePage<Task>>(`/device/${encodeURIComponent(serial)}/tasks/page?${tableQuery(limit, offset, options)}`),
   getDeviceTaskCounts: (serial: string) => request<DeviceTaskCounts>(`/device/${encodeURIComponent(serial)}/task-counts`),
   getDeviceSnapshots: (serial: string) => request<DeviceSnapshot[]>(`/device/${encodeURIComponent(serial)}/snapshots`),
   getDeviceSnapshot: (serial: string, id: number) => request<DeviceSnapshot>(`/device/${encodeURIComponent(serial)}/snapshots/${id}`),
@@ -193,6 +210,7 @@ export const api = {
   restoreDeviceSnapshot: (serial: string, id: number, parameters?: string[]) => request<{ task: Task; restored: number }>(`/device/${encodeURIComponent(serial)}/snapshots/${id}/restore`, { method: 'POST', body: JSON.stringify({ parameters }) }),
   deleteDeviceSnapshot: (serial: string, id: number) => request<{ status: string }>(`/device/${encodeURIComponent(serial)}/snapshots/${id}`, { method: 'DELETE' }),
   getDeviceFaults: (serial: string) => request<Fault[]>(`/device/${encodeURIComponent(serial)}/faults`),
+  getDeviceFaultsPage: (serial: string, limit = 20, offset = 0, options?: TableQueryOptions) => request<TablePage<Fault>>(`/device/${encodeURIComponent(serial)}/faults/page?${tableQuery(limit, offset, options)}`),
   getDeviceFaultCounts: (serial: string) => request<FaultCounts>(`/device/${encodeURIComponent(serial)}/fault-counts`),
   getParameterValues: (serial: string, parameters: string[]) => request<Task>(`/device/${encodeURIComponent(serial)}/get-parameters`, { method: 'POST', body: JSON.stringify({ parameters }) }),
   setParameterValues: (serial: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/set-parameters`, { method: 'POST', body: JSON.stringify({ parameters }) }),
@@ -216,9 +234,10 @@ export const api = {
   },
   deleteFirmware: (id: number) => request<{ status: string }>(`/firmwares/${id}`, { method: 'DELETE' }),
 
-  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 500, offset = 0) => {
-    const resolved = filter === 'all' ? '' : `&resolved=${filter === 'resolved'}`;
-    return request<{ faults: Fault[]; total: number; limit: number; offset: number }>(`/faults?limit=${limit}&offset=${offset}${resolved}`);
+  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 20, offset = 0, options?: TableQueryOptions) => {
+    const params = tableQuery(limit, offset, options);
+    if (filter !== 'all') params.set('resolved', String(filter === 'resolved'));
+    return request<{ faults: Fault[]; total: number; limit: number; offset: number }>(`/faults?${params}`);
   },
   getFaultStats: () => request<{ total: number; active: number; resolved: number }>('/faults/stats'),
   resolveFault: (id: number) => request<{ status: string }>(`/faults/${id}/resolve`, { method: 'POST' }),
@@ -288,7 +307,7 @@ export const api = {
   },
 
   getSecurityOverview: () => request<{ total_users: number; full_access_admins: number; recorded_failures: number; jwt_configured: boolean; login_rate_limit_enabled: boolean; cors_restricted: boolean; audit_logging_enabled: boolean }>('/security/overview'),
-  getAuditLogs: (limit = 100, offset = 0) => request<{ entries: AuditLog[]; total: number; limit: number; offset: number }>(`/audit-logs?limit=${limit}&offset=${offset}`),
+  getAuditLogs: (limit = 20, offset = 0, options?: TableQueryOptions) => request<{ entries: AuditLog[]; total: number; limit: number; offset: number }>(`/audit-logs?${tableQuery(limit, offset, options)}`),
   getBlockedDevices: () => request<BlockedDevice[]>('/blocked-devices'),
   blockDevice: (serialNumber: string, reason: string) => request<BlockedDevice>('/blocked-devices', { method: 'POST', body: JSON.stringify({ serial_number: serialNumber, reason }) }),
   unblockDevice: (serialNumber: string) => request<{ status: string }>(`/blocked-devices/${encodeURIComponent(serialNumber)}`, { method: 'DELETE' }),

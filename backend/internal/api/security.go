@@ -444,8 +444,12 @@ func (r *Router) handleSecurityOverview(w http.ResponseWriter, req *http.Request
 }
 
 func (r *Router) handleListAuditLogs(w http.ResponseWriter, req *http.Request) {
-	limit, offset := parsePagination(req, 50, 500)
-	entries, total, err := r.auditRepo.List(req.Context(), limit, offset)
+	options, err := parseTableQuery(req, "created_at", "username", "action", "resource", "ip_address", "status")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid audit query")
+		return
+	}
+	entries, total, err := r.auditRepo.ListPage(req.Context(), options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to list audit logs")
 		return
@@ -453,8 +457,8 @@ func (r *Router) handleListAuditLogs(w http.ResponseWriter, req *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"entries": entries,
 		"total":   total,
-		"limit":   limit,
-		"offset":  offset,
+		"limit":   options.Limit,
+		"offset":  options.Offset,
 	})
 }
 

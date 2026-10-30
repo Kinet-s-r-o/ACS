@@ -215,6 +215,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /device/{serial}/parameter-view", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceParameterViewBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/logs", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceLogsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/tasks/page", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksPageBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/task-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTaskCountsBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesRead)(r.handleListSnapshotsBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/snapshots", auth.RequireAnyPermission(models.PermDevicesSnapshots, models.PermDevicesWrite)(r.handleCreateSnapshotBySerial))
@@ -222,6 +223,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /device/{serial}/snapshots/{id}/restore", auth.RequireAnyPermission(models.PermDevicesSnapshots, models.PermDevicesWrite)(r.handleRestoreSnapshotBySerial))
 	apiMux.HandleFunc("DELETE /device/{serial}/snapshots/{id}", auth.RequireAnyPermission(models.PermDevicesSnapshots, models.PermDevicesWrite)(r.handleDeleteSnapshotBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/faults", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceFaultsBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/faults/page", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceFaultsPageBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/fault-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceFaultCountsBySerial))
 	apiMux.HandleFunc("PUT /device/{serial}/tags", auth.RequireAnyPermission(models.PermDevicesConfigure, models.PermDevicesWrite)(r.handleSetDeviceTagsBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/get-parameters", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleGetParameterValuesBySerial))
@@ -453,6 +455,46 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+type tableQueryOptions struct {
+	Limit, Offset int
+	Search        string
+	Sort          string
+	Direction     string
+	Filters       map[string]database.TableColumnFilter
+}
+
+func parseTableQuery(req *http.Request, columns ...string) (tableQueryOptions, error) {
+	limit, offset := parsePagination(req, 20, 500)
+	query := req.URL.Query()
+	search := strings.TrimSpace(query.Get("search"))
+	if len(search) > 256 {
+		return tableQueryOptions{}, fmt.Errorf("search is too long")
+	}
+	filters, err := database.ParseTableColumnFilters(query.Get("filters"), columns)
+	if err != nil {
+		return tableQueryOptions{}, err
+	}
+	sortColumn := query.Get("sort")
+	allowed := false
+	for _, column := range columns {
+		if sortColumn == column {
+			allowed = true
+			break
+		}
+	}
+	if sortColumn != "" && !allowed {
+		return tableQueryOptions{}, fmt.Errorf("invalid sort column")
+	}
+	direction := strings.ToLower(query.Get("direction"))
+	if direction == "" {
+		direction = "asc"
+	}
+	if direction != "asc" && direction != "desc" {
+		return tableQueryOptions{}, fmt.Errorf("invalid sort direction")
+	}
+	return tableQueryOptions{Limit: limit, Offset: offset, Search: search, Sort: sortColumn, Direction: direction, Filters: filters}, nil
+}
+
 func parseInventoryColumns(values []string, supplied bool) ([]string, error) {
 	if !supplied {
 		return []string{"ip_address", "rx_power", "uptime", "software_version", "hardware_version", "manufacturer_oui"}, nil
@@ -523,25 +565,40 @@ func filterInventoryParameters(parameters []models.DeviceParameter, columns []st
 }
 
 func (r *Router) handleListWANInterfaces(w http.ResponseWriter, req *http.Request) {
-	interfaces, err := r.deviceRepo.ListWANInterfaces(req.Context())
+	options, err := parseTableQuery(req, "serial_number", "name", "type", "status", "ip_address", "mac_address")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid WAN interface query")
+		return
+	}
+	interfaces, total, err := r.deviceRepo.ListWANInterfacesPage(req.Context(), options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing WAN interfaces: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list WAN interfaces")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, interfaces)
+	respondJSON(w, http.StatusOK, map[string]interface{}{"items": interfaces, "total": total, "limit": options.Limit, "offset": options.Offset})
 }
 
 func (r *Router) handleListTasks(w http.ResponseWriter, req *http.Request) {
-	tasks, err := r.taskRepo.ListWithDevices(req.Context())
+	options, err := parseTableQuery(req, "serial_number", "type", "trigger_event", "status", "created_at", "completed_at", "created_by", "deleted_by", "error")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid task query")
+		return
+	}
+	tasks, total, err := r.taskRepo.ListWithDevicesPage(req.Context(), options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing tasks: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list tasks")
 		return
 	}
-
-	respondJSON(w, http.StatusOK, tasks)
+	counts, err := r.taskRepo.GetGlobalCounts(req.Context())
+	if err != nil {
+		log.Printf("Error counting tasks: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to count tasks")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"tasks": tasks, "total": total, "limit": options.Limit, "offset": options.Offset, "counts": counts})
 }
 
 func (r *Router) handleGetTask(w http.ResponseWriter, req *http.Request) {
@@ -2148,6 +2205,25 @@ func (r *Router) handleGetDeviceTasksBySerial(w http.ResponseWriter, req *http.R
 	respondJSON(w, http.StatusOK, tasks)
 }
 
+func (r *Router) handleGetDeviceTasksPageBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	options, err := parseTableQuery(req, "type", "trigger_event", "status", "created_at", "completed_at", "created_by", "deleted_by", "error")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid device task query")
+		return
+	}
+	tasks, total, err := r.taskRepo.GetByDeviceIDPage(req.Context(), device.ID, options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get device tasks")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"items": tasks, "total": total, "limit": options.Limit, "offset": options.Offset})
+}
+
 func (r *Router) handleGetDeviceTaskCountsBySerial(w http.ResponseWriter, req *http.Request) {
 	device, err := r.parseDeviceBySerial(req)
 	if err != nil || device == nil {
@@ -2419,6 +2495,25 @@ func (r *Router) handleGetDeviceFaultsBySerial(w http.ResponseWriter, req *http.
 		return
 	}
 	respondJSON(w, http.StatusOK, faults)
+}
+
+func (r *Router) handleGetDeviceFaultsPageBySerial(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	options, err := parseTableQuery(req, "code", "message", "parameter", "time", "status")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid device fault query")
+		return
+	}
+	faults, total, err := r.faultRepo.GetByDeviceIDPage(req.Context(), device.ID, options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get device faults")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"items": faults, "total": total, "limit": options.Limit, "offset": options.Offset})
 }
 
 func (r *Router) handleGetDeviceFaultCountsBySerial(w http.ResponseWriter, req *http.Request) {
@@ -2821,26 +2916,22 @@ func validateFirmwareCompatibility(device *models.Device, firmware *models.Firmw
 
 // Fault handlers
 func (r *Router) handleListFaults(w http.ResponseWriter, req *http.Request) {
-	limit := 50
-	offset := 0
+	options, err := parseTableQuery(req, "serial_number", "model_name", "fault_code", "fault_string", "parameter_name", "created_at", "resolved", "software_version", "hardware_version", "manufacturer_oui")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid fault query")
+		return
+	}
 	var resolved *bool
-
-	if l := req.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if o := req.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
 	if rs := req.URL.Query().Get("resolved"); rs != "" {
-		val := rs == "true"
+		val, err := strconv.ParseBool(rs)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid fault state")
+			return
+		}
 		resolved = &val
 	}
 
-	faults, total, err := r.faultRepo.List(req.Context(), limit, offset, resolved)
+	faults, total, err := r.faultRepo.ListPage(req.Context(), options.Limit, options.Offset, resolved, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing faults: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list faults")
@@ -2850,8 +2941,8 @@ func (r *Router) handleListFaults(w http.ResponseWriter, req *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"faults": faults,
 		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"limit":  options.Limit,
+		"offset": options.Offset,
 	})
 }
 

@@ -379,6 +379,52 @@ func (r *DeviceRepository) ListWANInterfaces(ctx context.Context) ([]models.WANI
 	return interfaces, nil
 }
 
+func (r *DeviceRepository) ListWANInterfacesPage(ctx context.Context, limit, offset int, search, sortColumn, direction string, filters map[string]TableColumnFilter) ([]models.WANInterface, int, error) {
+	const rowsSQL = `WITH interface_paths AS (
+		SELECT DISTINCT dp.device_id,
+			regexp_replace(dp.name, '(\.(WANPPPConnection|WANIPConnection)\.[0-9]+)\..*$', '\1.') AS interface_path
+		FROM device_parameters dp
+		WHERE dp.name ~ '^InternetGatewayDevice\.WANDevice\.[0-9]+\.WANConnectionDevice\.[0-9]+\.(WANPPPConnection|WANIPConnection)\.[0-9]+\.'
+	), wan_rows AS (
+		SELECT d.serial_number,
+			COALESCE(NULLIF(MAX(p.value) FILTER (WHERE p.name = i.interface_path || 'Name'), ''), i.interface_path) AS name,
+			COALESCE(NULLIF(MAX(p.value) FILTER (WHERE p.name = i.interface_path || 'ConnectionType'), ''), '-') AS type,
+			COALESCE(NULLIF(MAX(p.value) FILTER (WHERE p.name = i.interface_path || 'ConnectionStatus'), ''), '-') AS status,
+			COALESCE(NULLIF(MAX(p.value) FILTER (WHERE p.name LIKE i.interface_path || '%' AND p.name LIKE '%ExternalIPAddress'), ''),
+				NULLIF(MAX(p.value) FILTER (WHERE p.name LIKE i.interface_path || '%' AND p.name LIKE '%IPAddress'), ''), '-') AS ip_address,
+			COALESCE(NULLIF(MAX(p.value) FILTER (WHERE p.name LIKE i.interface_path || '%' AND (p.name LIKE '%MACAddress' OR p.name LIKE '%MAC')), ''), '-') AS mac_address
+		FROM interface_paths i
+		JOIN devices d ON d.id = i.device_id
+		LEFT JOIN device_parameters p ON p.device_id = i.device_id AND p.name LIKE i.interface_path || '%'
+		GROUP BY d.serial_number, i.interface_path
+	)
+	SELECT * FROM wan_rows`
+	query := r.db.WithContext(ctx).Table("(" + rowsSQL + ") AS w")
+	expressions := map[string]string{"serial_number": "w.serial_number", "name": "w.name", "type": "w.type", "status": "w.status", "ip_address": "w.ip_address", "mac_address": "w.mac_address"}
+	query = applySearchTerms(query, search, []string{"w.serial_number", "w.name", "w.type", "w.status", "w.ip_address", "w.mac_address"})
+	var err error
+	query, err = ApplyTableColumnFilters(query, filters, expressions, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	sortColumns := map[string]string{"serial_number": "w.serial_number", "name": "w.name", "type": "w.type", "status": "w.status", "ip_address": "w.ip_address", "mac_address": "w.mac_address"}
+	order := sortColumns[sortColumn]
+	if order == "" {
+		order, direction = "w.serial_number", "asc"
+	}
+	if direction != "asc" && direction != "desc" {
+		return nil, 0, fmt.Errorf("invalid WAN interface sort direction")
+	}
+	var interfaces []models.WANInterface
+	err = query.Select("w.serial_number, w.name, w.type, w.status, w.ip_address, w.mac_address").
+		Order(order + " " + strings.ToUpper(direction)).Order("w.serial_number ASC").Limit(limit).Offset(offset).Scan(&interfaces).Error
+	return interfaces, int(total), err
+}
+
 func (r *DeviceRepository) GetStats(ctx context.Context) (*models.DeviceStats, error) {
 	stats := &models.DeviceStats{}
 	var total, online, offline int64
