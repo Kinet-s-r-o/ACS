@@ -594,21 +594,20 @@ func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int)
 	query := `WITH sampled_devices AS MATERIALIZED (
 		SELECT id, manufacturer, product_class, model_name, last_inform
 		FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
-	), station_counts AS (
-		SELECT p.device_id, SUM(CASE
-			WHEN LENGTH(BTRIM(p.value)) <= 20 AND BTRIM(p.value) ~ ?
-				AND BTRIM(p.value)::numeric BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
-			THEN BTRIM(p.value)::bigint ELSE 0 END) AS wifi_stations
-		FROM device_parameters p
-		JOIN sampled_devices d ON d.id = p.device_id
-		WHERE p.name LIKE '%TotalAssociations%' OR p.name LIKE '%AssociatedDeviceNumberOfEntries%'
-		GROUP BY p.device_id
 	)
 	SELECT d.manufacturer, d.product_class, d.model_name, d.last_inform,
 		rx.value AS rx_power_value, temp.value AS temperature_value,
 		uptime.value AS uptime_value, access_type.value AS access_type_value,
 		COALESCE(station_counts.wifi_stations, 0) AS wifi_stations
 	FROM sampled_devices d
+	LEFT JOIN LATERAL (
+		SELECT COALESCE(SUM(CASE
+			WHEN LENGTH(BTRIM(p.value)) <= 20 AND BTRIM(p.value) ~ ?
+				AND BTRIM(p.value)::numeric BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
+			THEN BTRIM(p.value)::bigint ELSE 0 END), 0) AS wifi_stations
+		FROM device_parameters p
+		WHERE p.device_id = d.id AND (p.name LIKE '%TotalAssociations%' OR p.name LIKE '%AssociatedDeviceNumberOfEntries%')
+	) station_counts ON TRUE
 	LEFT JOIN LATERAL (
 		SELECT p.value FROM device_parameters p
 		WHERE p.device_id = d.id AND (p.name LIKE '%RXPower%' OR p.name LIKE '%RxPower%')
