@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
+import { createMemo, createResource, createSignal, For, onCleanup, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2 } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
@@ -112,11 +112,44 @@ const DistributionList: Component<DistributionListProps> = (props) => {
   );
 };
 
+async function loadFleetData<T>(fetcher: () => Promise<T>) {
+  try {
+    return { data: await fetcher(), fetchedAt: new Date(), error: undefined };
+  } catch (error) {
+    return { data: undefined, fetchedAt: undefined, error: error instanceof Error ? error.message : 'The request failed. Retry loading the data.' };
+  }
+}
+
+const ParameterDistribution: Component<{ config: DashboardPanelConfig; refreshKey: number }> = (props) => {
+  let controller: AbortController | undefined;
+  onCleanup(() => controller?.abort());
+  const [result, { refetch }] = createResource(
+    () => ({ config: props.config, refreshKey: props.refreshKey }),
+    ({ config }) => {
+      controller?.abort();
+      controller = new AbortController();
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
+      return loadFleetData(() => api.getDeviceParameterDistribution({
+        parameter_pattern: config.parameter_pattern,
+        thresholds: config.thresholds.map(({ label, max }) => ({ label, max })),
+      }, signal));
+    },
+  );
+  const colors = () => Object.fromEntries([
+    ...props.config.thresholds.map((threshold) => [threshold.label, threshold.color]), ['N/A', 'gray'],
+  ]) as Record<string, DashboardThresholdColor>;
+  return <Show when={!result.loading} fallback={<p class="py-4 text-xs text-muted" role="status">Loading distribution…</p>}>
+    <Show when={!result()?.error} fallback={<ResourceError title="Distribution is unavailable" description={result()?.error ?? 'Retry loading this panel.'} onRetry={() => refetch()} />}>
+      <DistributionList data={result()?.data?.distribution ?? {}} colors={colors()} />
+    </Show>
+  </Show>;
+};
+
 const Dashboard: Component = () => {
   const { notify } = useFeedback();
   const { user, isFullAccess, hasPermission } = useAuth();
-  const [savedPanelConfigs, { mutate: setSavedPanelConfigs }] = createResource(loadDashboardPanelConfigs);
-  const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs() ?? []));
+  const [savedPanelConfigs, { mutate: setSavedPanelConfigs, refetch: refetchPanelConfigs }] = createResource(loadDashboardPanelConfigs);
+  const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs.error ? [] : savedPanelConfigs() ?? []));
   const [panelDraft, setPanelDraft] = createSignal<DashboardPanelDraft | null>(null);
   const [showCopyUsers, setShowCopyUsers] = createSignal(false);
   const [selectedRecipientIDs, setSelectedRecipientIDs] = createSignal<number[]>([]);
@@ -125,34 +158,14 @@ const Dashboard: Component = () => {
   const [refreshKey, setRefreshKey] = createSignal(0);
   const canCopyPanels = () => isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
-  const [dashboard, { refetch }] = createResource(async () => {
-    const [stats, analytics] = await Promise.all([api.getDeviceStats(), api.getDeviceAnalytics()]);
-    return { stats, analytics, fetchedAt: new Date() };
-  });
-  const [parameterDistributions] = createResource(panelConfigs, async (configs) => {
-    const results = await Promise.all(configs.map(async (config) => {
-      try {
-        const result = await api.getDeviceParameterDistribution({
-          parameter_pattern: config.parameter_pattern,
-          thresholds: config.thresholds.map(({ label, max }) => ({ label, max })),
-        });
-        return [config.id, result.distribution] as const;
-      } catch {
-        return [config.id, {}] as const;
-      }
-    }));
-    return Object.fromEntries(results) as Record<string, Record<string, number>>;
-  });
-  const stats = createMemo(() => dashboard()?.stats);
-  const analytics = createMemo(() => dashboard()?.analytics);
+  const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
+  const [fleetAnalytics, { refetch: refetchAnalytics }] = createResource(() => loadFleetData(api.getDeviceAnalytics));
+  const stats = createMemo(() => dashboard()?.data);
+  const analytics = createMemo(() => fleetAnalytics()?.data);
   const onlinePercent = createMemo(() => {
     const total = stats()?.total ?? 0;
     return total > 0 ? Math.round(((stats()?.online ?? 0) / total) * 1000) / 10 : 0;
   });
-  const panelDistribution = (id: DashboardPanelConfig['id']) => parameterDistributions()?.[id] ?? {};
-  const panelColors = (config: DashboardPanelConfig) => Object.fromEntries([
-    ...config.thresholds.map((threshold) => [threshold.label, threshold.color]), ['N/A', 'gray'],
-  ]) as Record<string, DashboardThresholdColor>;
   const openPanelSettings = (config: DashboardPanelConfig) => {
     setShowCopyUsers(false);
     setSelectedRecipientIDs([]);
@@ -171,7 +184,7 @@ const Dashboard: Component = () => {
       thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
     });
   };
-  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); };
+  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); refetchAnalytics(); };
   const closePanelSettings = () => { setPanelDraft(null); setShowCopyUsers(false); setSelectedRecipientIDs([]); };
   const updatePanelDraft = (update: (draft: DashboardPanelDraft) => DashboardPanelDraft) => setPanelDraft((draft) => draft ? update(draft) : draft);
   const updateThreshold = (index: number, field: 'label' | 'max', value: string) => updatePanelDraft((draft) => ({
@@ -280,12 +293,12 @@ const Dashboard: Component = () => {
       <PageHeader
         title="Fleet status"
         description="Current fleet reachability, contact recency, health thresholds, and hardware mix."
-        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
+        status={<span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || fleetAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>}
       >
-        <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading}><RefreshCw size={14} />Refresh fleet data</button>
+        <button type="button" class="btn btn-secondary" onClick={refreshDashboard} disabled={dashboard.loading || fleetAnalytics.loading}><RefreshCw size={14} />Refresh fleet data</button>
       </PageHeader>
 
-      <Show when={!dashboard.loading && !dashboard.error && (stats()?.total ?? 0) === 0}>
+      <Show when={!dashboard.loading && !dashboard()?.error && (stats()?.total ?? 0) === 0}>
         <div class="data-panel"><EmptyState
           icon={<Router size={22} />}
           title="No CPEs have reported to ACS"
@@ -294,7 +307,7 @@ const Dashboard: Component = () => {
         /></div>
       </Show>
 
-      <Show when={!dashboard.loading && !dashboard.error && (analytics()?.total ?? 0) > (analytics()?.sampled ?? 0)}>
+      <Show when={(analytics()?.total ?? 0) > (analytics()?.sampled ?? 0)}>
         <div class="px-4 py-3 border border-amber-500/30 text-amber-400 text-xs">
           Analytics use the most recent {analytics()?.sampled.toLocaleString()} of {analytics()?.total.toLocaleString()} devices; fleet totals remain exact.
         </div>
@@ -307,11 +320,11 @@ const Dashboard: Component = () => {
         <div class="data-panel"><div class="data-panel-body space-y-3"><div class="skeleton h-3 w-40" /><div class="skeleton h-5 w-full" /><div class="skeleton h-5 w-4/5" /></div></div>
       </Show>
 
-      <Show when={dashboard.error}>
+      <Show when={dashboard()?.error}>
         <div class="data-panel"><ResourceError title="Fleet telemetry is unavailable" description="ACS could not read the current device statistics. Confirm the API and database are reachable, then retry." onRetry={() => refetch()} /></div>
       </Show>
 
-      <Show when={!dashboard.loading && !dashboard.error && (stats()?.total ?? 0) > 0}>
+      <Show when={(stats()?.total ?? 0) > 0}>
         <dl class="ops-register fleet-register" aria-label="Fleet status register">
           <div class="ops-register-cell">
             <dt>Managed devices</dt>
@@ -335,6 +348,11 @@ const Dashboard: Component = () => {
           </div>
         </dl>
 
+        <Show when={fleetAnalytics.loading}><p class="text-xs text-muted" role="status">Loading fleet analytics…</p></Show>
+        <Show when={fleetAnalytics()?.error}>
+          <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={fleetAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchAnalytics()} /></div>
+        </Show>
+
         <section class="data-panel">
           <div class="data-panel-header">
             <div><h2>Device growth</h2><p>Active CPE count at the end of each period, including registrations and deletions.</p></div>
@@ -352,20 +370,23 @@ const Dashboard: Component = () => {
           <div class="data-panel-body"><DeviceGrowthChart interval={growthInterval()} refreshKey={refreshKey()} /></div>
         </section>
 
-        <section class="data-panel">
+        <Show when={analytics()}><section class="data-panel">
           <div class="data-panel-header">
             <div><h2>Contact recency</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
           </div>
           <div class="data-panel-body">
             <DistributionList data={analytics()?.lastInform ?? {}} semantic />
           </div>
-        </section>
+        </section></Show>
 
         <section class="data-panel">
           <div class="data-panel-header">
             <div><h2>Device health distributions</h2><p>Threshold buckets derived from the latest sampled parameter values.</p></div>
             <button type="button" class="icon-button dashboard-add-panel" aria-label="Add parameter panel" title={panelConfigs().length >= 12 ? 'Panel limit reached' : 'Add parameter panel'} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} onClick={addPanel}><Plus size={15} /></button>
           </div>
+          <Show when={savedPanelConfigs.loading}><p class="data-panel-body text-xs text-muted" role="status">Loading panel settings…</p></Show>
+          <Show when={savedPanelConfigs.error}><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></Show>
+          <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
           <div class="dashboard-health-grid">
             <For each={panelConfigs()}>{(config) => (
               <div class="data-panel-section">
@@ -373,13 +394,14 @@ const Dashboard: Component = () => {
                   <h3>{config.title}</h3>
                   <button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" disabled={savedPanelConfigs.loading} onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button>
                 </div>
-                <DistributionList data={panelDistribution(config.id)} colors={panelColors(config)} />
+                <ParameterDistribution config={config} refreshKey={refreshKey()} />
               </div>
             )}</For>
           </div>
+          </Show>
         </section>
 
-        <section class="data-panel">
+        <Show when={analytics()}><section class="data-panel">
           <div class="data-panel-header">
             <div><h2>Inventory composition</h2><p>Access technology, manufacturer, and product-class concentration.</p></div>
           </div>
@@ -397,7 +419,7 @@ const Dashboard: Component = () => {
               <DistributionList data={analytics()?.productClasses ?? {}} limit={6} />
             </div>
           </div>
-        </section>
+        </section></Show>
       </Show>
       <Show when={panelDraft()}>
         <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, CWMP parameter path, and ordered numeric thresholds with colors." size="large" onClose={closePanelSettings} actions={<><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></>}>
