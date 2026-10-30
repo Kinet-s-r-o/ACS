@@ -4,7 +4,6 @@ import { A, useSearchParams } from '@solidjs/router';
 import { Download, Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
@@ -353,63 +352,52 @@ const Devices: Component = () => {
     }
   };
 
+  const summonVisibleCPEs = async () => {
+    const list = sortedDevices();
+    if (list.length === 0 || summoningAll()) return;
+    setSummoningAll(true);
+    try {
+      const results = await Promise.all(list.map(async (device) => {
+        let taskQueued = false;
+        try {
+          let parameters = device.parameters || [];
+          try {
+            parameters = await api.getDeviceParameters(device.serial_number);
+          } catch {
+            // Use the inventory snapshot when the stored parameter tree cannot be read.
+          }
+          const hasTR181 = parameters.some(parameter => parameter.name.startsWith('Device.'));
+          await api.getParameterValues(device.serial_number, [hasTR181 ? 'Device.' : 'InternetGatewayDevice.']);
+          taskQueued = true;
+          const connectionRequest = await api.connectionRequest(device.serial_number);
+          return { taskQueued, requestAccepted: connectionRequest.status === 'success' };
+        } catch {
+          return { taskQueued, requestAccepted: false };
+        }
+      }));
+      const queuedCount = results.filter(result => result.taskQueued).length;
+      const acceptedCount = results.filter(result => result.requestAccepted).length;
+      const failureCount = list.length - queuedCount;
+      notify({
+        tone: failureCount > 0 ? 'error' : 'success',
+        title: failureCount > 0 ? 'CWMP tasks partially queued' : 'CWMP tasks queued',
+        message: `${queuedCount} of ${list.length} visible CPEs have a CWMP refresh task queued. ${acceptedCount} connection request${acceptedCount === 1 ? '' : 's'} accepted.${failureCount > 0 ? ` ${failureCount} require individual review.` : ''}`,
+        persistent: failureCount > 0,
+      });
+      await refetch();
+    } finally {
+      setSummoningAll(false);
+    }
+  };
+
   return (
     <div class="space-y-5">
-      <PageHeader title="CPE inventory" description="Search, inspect, and operate registered TR-069 endpoints.">
-        <div class="flex gap-2">
-          <Show when={isFullAccess()}><button
-            onClick={async () => {
-              const list = sortedDevices();
-              if (list.length === 0 || summoningAll()) return;
-              setSummoningAll(true);
-              try {
-                const results = await Promise.all(list.map(async (device) => {
-                  let taskQueued = false;
-                  try {
-                    let parameters = device.parameters || [];
-                    try {
-                      parameters = await api.getDeviceParameters(device.serial_number);
-                    } catch {
-                      // Use the inventory snapshot when the stored parameter tree cannot be read.
-                    }
-                    const hasTR181 = parameters.some(parameter => parameter.name.startsWith('Device.'));
-                    await api.getParameterValues(device.serial_number, [hasTR181 ? 'Device.' : 'InternetGatewayDevice.']);
-                    taskQueued = true;
-                    const connectionRequest = await api.connectionRequest(device.serial_number);
-                    return { taskQueued, requestAccepted: connectionRequest.status === 'success' };
-                  } catch {
-                    return { taskQueued, requestAccepted: false };
-                  }
-                }));
-                const queuedCount = results.filter(result => result.taskQueued).length;
-                const acceptedCount = results.filter(result => result.requestAccepted).length;
-                const failureCount = list.length - queuedCount;
-                notify({
-                  tone: failureCount > 0 ? 'error' : 'success',
-                  title: failureCount > 0 ? 'CWMP tasks partially queued' : 'CWMP tasks queued',
-                  message: `${queuedCount} of ${list.length} visible CPEs have a CWMP refresh task queued. ${acceptedCount} connection request${acceptedCount === 1 ? '' : 's'} accepted.${failureCount > 0 ? ` ${failureCount} require individual review.` : ''}`,
-                  persistent: failureCount > 0,
-                });
-                await refetch();
-              } finally {
-                setSummoningAll(false);
-              }
-            }}
-            disabled={summoningAll()}
-            class="btn btn-secondary"
-            aria-label="Summon visible CPEs"
-            title="Summon visible CPEs"
-          >
-            <Send size={14} class={summoningAll() ? 'animate-pulse' : ''} />
-            <span class="hidden sm:inline">{summoningAll() ? 'Summoning...' : 'Summon visible CPEs'}</span>
-          </button></Show>
-        </div>
-      </PageHeader>
-
-      <nav role="tablist" class="tab-bar" aria-label="CPE inventory sections">
-        <button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button>
-        <button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button>
-      </nav>
+      <div class="flex items-center justify-between gap-3 border-b border-subtle">
+        <nav role="tablist" class="tab-bar min-w-0 flex-1 border-b-0" aria-label="CPE inventory sections">
+          <button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button>
+          <button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button>
+        </nav>
+      </div>
 
       <Show when={activeTab() === 'wans'}>
         <WANInterfaces embedded />
@@ -444,6 +432,12 @@ const Devices: Component = () => {
                 </button>
               </Show>
             </div>
+            <Show when={isFullAccess()}>
+              <button type="button" onClick={() => void summonVisibleCPEs()} disabled={summoningAll()} class="btn btn-secondary shrink-0" aria-label="Summon visible CPEs" title="Summon visible CPEs">
+                <Send size={14} class={summoningAll() ? 'animate-pulse' : ''} />
+                <span class="hidden sm:inline">{summoningAll() ? 'Summoning...' : 'Summon visible CPEs'}</span>
+              </button>
+            </Show>
             <button
               type="button"
               class="icon-button"
