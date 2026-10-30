@@ -421,7 +421,7 @@ const Dashboard: Component = () => {
         <div class="fleet-panel-toolbar"><div><h2>Fleet panels</h2><p>Drag panels to move them. Use the corner handle to resize.</p></div><button type="button" class="btn btn-secondary" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}><Plus size={14} />Add panel</button></div>
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
         <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel} onResize={resizePanel}>
-        <section class="data-panel">
+        <section class="data-panel fleet-content-panel">
           <div class="data-panel-header">
             <div><h2>Device growth</h2><p>Active CPE count at the end of each period, including registrations and deletions.</p></div>
             <div class="flex flex-wrap justify-end gap-1" role="group" aria-label="Device growth interval">
@@ -439,7 +439,7 @@ const Dashboard: Component = () => {
         </section>
         </FleetPanelFrame>
 
-        <Show when={panelAnalytics()?.data}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel">
+        <Show when={panelAnalytics()?.data}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel fleet-content-panel">
           <div class="data-panel-header">
             <div><h2>{panelConfigs().find((config) => config.id === 'contactRecency')?.title ?? 'Contact recency'}</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
             <button type="button" class="icon-button" aria-label="Configure contact recency panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'contactRecency'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button>
@@ -451,49 +451,34 @@ const Dashboard: Component = () => {
           </div>
         </section></FleetPanelFrame></Show>
 
-        <section class="fleet-panel-health-group">
-          <div class="data-panel-header">
-            <div><h2>Device health distributions</h2><p>Threshold buckets derived from the latest sampled parameter values.</p></div>
-            <button type="button" class="icon-button dashboard-add-panel" aria-label="Add parameter panel" title={panelConfigs().length >= 12 ? 'Panel limit reached' : 'Add parameter panel'} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} onClick={addPanel}><Plus size={15} /></button>
-          </div>
-          <Show when={savedPanelConfigs.loading}><p class="data-panel-body text-xs text-muted" role="status">Loading panel settings…</p></Show>
-          <Show when={savedPanelConfigs.error}><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></Show>
-          <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
-          <div class="dashboard-health-grid">
-            <For each={panelConfigs().filter((config) => (config.kind ?? 'parameter') === 'parameter')}>{(config, index) => (
-              <FleetPanelFrame id={config.id} layout={layoutFor(config.id, 8 + index())} onMove={movePanel} onResize={resizePanel}>
+        <Show when={savedPanelConfigs.loading}><div class="fleet-layout-status" role="status">Loading dashboard panels…</div></Show>
+        <Show when={savedPanelConfigs.error}><div class="fleet-layout-status"><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></div></Show>
+        <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
+          <For each={panelConfigs().filter((config) => (config.kind ?? 'parameter') === 'parameter')}>{(config, index) => (
+            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, 2 + index())} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel fleet-content-panel">
-                <div class="dashboard-configurable-heading">
-                  <h3>{config.title}</h3>
-                  <button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" disabled={savedPanelConfigs.loading} onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button>
-                </div>
+                <div class="dashboard-configurable-heading"><h3>{config.title}</h3><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></div>
                 <div class="data-panel-body"><ParameterDistribution config={config} refreshKey={refreshKey()} /></div>
               </section>
-              </FleetPanelFrame>
-            )}</For>
-          </div>
-          </Show>
-        </section>
+            </FleetPanelFrame>
+          )}</For>
+        </Show>
 
-        <Show when={panelAnalytics()?.data}><section class="fleet-panel-inventory-group">
-          <div class="data-panel-header">
-            <div><h2>Inventory composition</h2><p>Access technology, manufacturer, and product-class concentration.</p></div>
-          </div>
-          <div class="inventory-grid">
-            <FleetPanelFrame id="accessType" layout={layoutFor('accessType')} onMove={movePanel} onResize={resizePanel}><div class="data-panel data-panel-section fleet-content-panel">
-              <div class="dashboard-configurable-heading"><h3>{panelConfigs().find((config) => config.id === 'accessType')?.title ?? 'Access type'}</h3><button type="button" class="icon-button" aria-label="Configure access type panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'accessType'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button></div>
-              <DistributionList data={panelAnalytics()!.data!.panels.accessType ?? {}} limit={panelConfigs().find((config) => config.id === 'accessType')?.limit ?? 6} />
-            </div></FleetPanelFrame>
-            <FleetPanelFrame id="manufacturer" layout={layoutFor('manufacturer')} onMove={movePanel} onResize={resizePanel}><div class="data-panel data-panel-section fleet-content-panel">
-              <div class="dashboard-configurable-heading"><h3>{panelConfigs().find((config) => config.id === 'manufacturer')?.title ?? 'Manufacturer'}</h3><button type="button" class="icon-button" aria-label="Configure manufacturer panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'manufacturer'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button></div>
-              <DistributionList data={panelAnalytics()!.data!.panels.manufacturer ?? {}} limit={panelConfigs().find((config) => config.id === 'manufacturer')?.limit ?? 6} />
-            </div></FleetPanelFrame>
-            <FleetPanelFrame id="productClass" layout={layoutFor('productClass')} onMove={movePanel} onResize={resizePanel}><div class="data-panel data-panel-section fleet-content-panel">
-              <div class="dashboard-configurable-heading"><h3>{panelConfigs().find((config) => config.id === 'productClass')?.title ?? 'Product class'}</h3><button type="button" class="icon-button" aria-label="Configure product class panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'productClass'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button></div>
-              <DistributionList data={panelAnalytics()!.data!.panels.productClass ?? {}} limit={panelConfigs().find((config) => config.id === 'productClass')?.limit ?? 6} />
-            </div></FleetPanelFrame>
-          </div>
-        </section></Show>
+        <Show when={panelAnalytics()?.data}>
+          <For each={[
+            { id: 'accessType', label: 'Access type', values: panelAnalytics()!.data!.panels.accessType, limit: panelConfigs().find((config) => config.id === 'accessType')?.limit ?? 6 },
+            { id: 'manufacturer', label: 'Manufacturer', values: panelAnalytics()!.data!.panels.manufacturer, limit: panelConfigs().find((config) => config.id === 'manufacturer')?.limit ?? 6 },
+            { id: 'productClass', label: 'Product class', values: panelAnalytics()!.data!.panels.productClass, limit: panelConfigs().find((config) => config.id === 'productClass')?.limit ?? 6 },
+          ]}>{(panel, index) => {
+            const config = () => panelConfigs().find((item) => item.id === panel.id);
+            return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, 5 + index())} onMove={movePanel} onResize={resizePanel}>
+              <section class="data-panel data-panel-section fleet-content-panel">
+                <div class="dashboard-configurable-heading"><h3>{config()?.title ?? panel.label}</h3><button type="button" class="icon-button" aria-label={`Configure ${panel.label} panel`} title="Configure panel" onClick={() => config() && openPanelSettings(config()!)}><Settings2 size={14} /></button></div>
+                <DistributionList data={panel.values ?? {}} limit={panel.limit} />
+              </section>
+            </FleetPanelFrame>;
+          }}</For>
+        </Show>
         </div>
       </Show>
       <Show when={panelDraft()}>
