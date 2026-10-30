@@ -104,6 +104,11 @@ func NewParameterRepository(db *gorm.DB) *ParameterRepository {
 }
 
 func (r *ParameterRepository) UpsertMany(ctx context.Context, deviceID int64, params []models.DeviceParameter) error {
+	if hasWANParameters(params) {
+		return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			return upsertMany(tx, deviceID, params)
+		})
+	}
 	for _, param := range params {
 		if param.Name == DeviceLogParameterName {
 			return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -153,8 +158,13 @@ func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter) er
 			return err
 		}
 		if deviceLog != "" {
-			return storeDeviceLog(db, deviceID, deviceLog)
+			if err := storeDeviceLog(db, deviceID, deviceLog); err != nil {
+				return err
+			}
 		}
+	}
+	if hasWANParameters(params) {
+		return refreshWANInterfacesForDevice(db, deviceID)
 	}
 	return nil
 }
@@ -183,7 +193,10 @@ func (r *ParameterRepository) SaveFullTreeParameters(ctx context.Context, device
 		if err := upsertMany(tx, deviceID, params); err != nil {
 			return err
 		}
-		return deleteStale(tx, deviceID, names)
+		if err := deleteStale(tx, deviceID, names); err != nil {
+			return err
+		}
+		return refreshWANInterfacesForDevice(tx, deviceID)
 	})
 }
 
@@ -213,7 +226,12 @@ func (r *ParameterRepository) UpsertWritable(ctx context.Context, deviceID int64
 // DeleteStale removes parameters absent from a successful full-tree fetch.
 // Never call it with a partial Inform or a targeted parameter response.
 func (r *ParameterRepository) DeleteStale(ctx context.Context, deviceID int64, currentNames []string) error {
-	return deleteStale(r.db.WithContext(ctx), deviceID, currentNames)
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := deleteStale(tx, deviceID, currentNames); err != nil {
+			return err
+		}
+		return refreshWANInterfacesForDevice(tx, deviceID)
+	})
 }
 
 func deleteStale(db *gorm.DB, deviceID int64, currentNames []string) error {
@@ -264,9 +282,15 @@ func (r *ParameterRepository) DeleteObjectParameters(ctx context.Context, device
 	if objectPath == "" || !strings.HasSuffix(objectPath, ".") {
 		return errors.New("invalid CWMP object path")
 	}
-	return r.db.WithContext(ctx).
-		Where("device_id = ? AND name LIKE ?", deviceID, objectPath+"%").
-		Delete(&models.DeviceParameter{}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("device_id = ? AND name LIKE ?", deviceID, objectPath+"%").Delete(&models.DeviceParameter{}).Error; err != nil {
+			return err
+		}
+		if strings.HasPrefix(objectPath, wanParameterPrefix) || strings.HasPrefix(wanParameterPrefix, objectPath) {
+			return refreshWANInterfacesForDevice(tx, deviceID)
+		}
+		return nil
+	})
 }
 
 // OverviewNames returns known parameters used by the device overview. New
@@ -314,7 +338,17 @@ func (r *ParameterRepository) ReplaceDynamicParameters(ctx context.Context, devi
 				}
 			}
 		}
-		return upsertMany(tx, deviceID, params)
+		if err := upsertMany(tx, deviceID, params); err != nil {
+			return err
+		}
+		if !hasWANParameters(params) {
+			for _, branch := range branches {
+				if strings.HasPrefix(branch, wanParameterPrefix) || strings.HasPrefix(wanParameterPrefix, branch) {
+					return refreshWANInterfacesForDevice(tx, deviceID)
+				}
+			}
+		}
+		return nil
 	})
 }
 

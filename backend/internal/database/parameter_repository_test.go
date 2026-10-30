@@ -131,7 +131,7 @@ func TestOverviewSelectionKeepsWanAndLanWhenHostsAreNumerous(t *testing.T) {
 
 func TestDeleteStaleRemovesMissingParameters(t *testing.T) {
 	db := openTestDB(t)
-	if err := db.AutoMigrate(&models.Device{}, &models.DeviceParameter{}); err != nil {
+	if err := db.AutoMigrate(&models.Device{}, &models.DeviceParameter{}, &models.WANInterfaceRecord{}); err != nil {
 		t.Fatalf("auto-migrate: %v", err)
 	}
 	ctx := context.Background()
@@ -143,6 +143,7 @@ func TestDeleteStaleRemovesMissingParameters(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_ = db.Where("device_id = ?", device.ID).Delete(&models.DeviceParameter{})
+		_ = db.Where("device_id = ?", device.ID).Delete(&models.WANInterfaceRecord{})
 		_ = db.Delete(&models.Device{}, device.ID)
 	})
 
@@ -156,6 +157,10 @@ func TestDeleteStaleRemovesMissingParameters(t *testing.T) {
 	}
 	if err := repo.UpsertMany(ctx, device.ID, initialParams); err != nil {
 		t.Fatalf("UpsertMany: %v", err)
+	}
+	var cached int64
+	if err := db.Model(&models.WANInterfaceRecord{}).Where("device_id = ?", device.ID).Count(&cached).Error; err != nil || cached != 3 {
+		t.Fatalf("cached WAN rows after upsert: count=%d error=%v", cached, err)
 	}
 
 	// Verify all 3 are present.
@@ -190,11 +195,14 @@ func TestDeleteStaleRemovesMissingParameters(t *testing.T) {
 			t.Fatal("stale WAN3 parameter was not deleted")
 		}
 	}
+	if err := db.Model(&models.WANInterfaceRecord{}).Where("device_id = ?", device.ID).Count(&cached).Error; err != nil || cached != 2 {
+		t.Fatalf("cached WAN rows after deletion: count=%d error=%v", cached, err)
+	}
 }
 
 func TestPartialInformKeepsUnreportedParameters(t *testing.T) {
 	db := openTestDB(t)
-	if err := db.AutoMigrate(&models.Device{}, &models.DeviceParameter{}); err != nil {
+	if err := db.AutoMigrate(&models.Device{}, &models.DeviceParameter{}, &models.WANInterfaceRecord{}); err != nil {
 		t.Fatalf("auto-migrate: %v", err)
 	}
 	ctx := context.Background()
@@ -206,6 +214,7 @@ func TestPartialInformKeepsUnreportedParameters(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_ = db.Where("device_id = ?", device.ID).Delete(&models.DeviceParameter{})
+		_ = db.Where("device_id = ?", device.ID).Delete(&models.WANInterfaceRecord{})
 		_ = db.Delete(&models.Device{}, device.ID)
 	})
 
@@ -256,7 +265,7 @@ func TestPartialInformKeepsUnreportedParameters(t *testing.T) {
 
 func TestDeleteStaleEmptyListIsNoop(t *testing.T) {
 	db := openTestDB(t)
-	if err := db.AutoMigrate(&models.Device{}, &models.DeviceParameter{}); err != nil {
+	if err := db.AutoMigrate(&models.Device{}, &models.DeviceParameter{}, &models.WANInterfaceRecord{}); err != nil {
 		t.Fatalf("auto-migrate: %v", err)
 	}
 	ctx := context.Background()
@@ -268,6 +277,7 @@ func TestDeleteStaleEmptyListIsNoop(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_ = db.Where("device_id = ?", device.ID).Delete(&models.DeviceParameter{})
+		_ = db.Where("device_id = ?", device.ID).Delete(&models.WANInterfaceRecord{})
 		_ = db.Delete(&models.Device{}, device.ID)
 	})
 

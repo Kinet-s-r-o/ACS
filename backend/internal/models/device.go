@@ -51,6 +51,18 @@ type WANInterface struct {
 	MACAddress   string `json:"mac_address"`
 }
 
+type WANInterfaceRecord struct {
+	DeviceID   int64  `gorm:"primaryKey;autoIncrement:false"`
+	Path       string `gorm:"primaryKey"`
+	Name       string
+	Type       string
+	Status     string
+	IPAddress  string
+	MACAddress string
+}
+
+func (WANInterfaceRecord) TableName() string { return "wan_interfaces" }
+
 type DeviceParameter struct {
 	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
 	DeviceID  int64     `json:"device_id" gorm:"uniqueIndex:idx_device_parameters_unique,priority:1;not null"`

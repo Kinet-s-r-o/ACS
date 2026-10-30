@@ -328,6 +328,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.Device{},
 		&models.DeviceLifecycleEvent{},
 		&models.DeviceParameter{},
+		&models.WANInterfaceRecord{},
 		&models.DeviceLogEntry{},
 		&models.Task{},
 		&models.User{},
@@ -360,6 +361,9 @@ func runAutoMigrate(db *gorm.DB) error {
 	}
 	if err := database.EnsureWANParameterIndex(context.Background(), db); err != nil {
 		return fmt.Errorf("create WAN parameter lookup index: %w", err)
+	}
+	if err := database.BackfillWANInterfaces(context.Background(), db); err != nil {
+		return fmt.Errorf("backfill WAN interface cache: %w", err)
 	}
 	if db.Migrator().HasIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type") {
 		if err := db.Migrator().DropIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type"); err != nil {
