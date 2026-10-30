@@ -91,7 +91,7 @@ const RetentionSettings: Component = () => {
       query.shared_hit_blocks,
       query.temp_read_blocks + query.temp_write_blocks,
     ]);
-    const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(escapeCsvValue).join(',')).join('\r\n') + '\r\n';
+    const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(escapeCsvValue).join(';')).join('\r\n') + '\r\n';
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a');
     link.href = url;
