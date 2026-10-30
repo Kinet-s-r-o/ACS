@@ -48,8 +48,19 @@ const FleetPanelFrame: Component<{
     startWidth = props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width;
     const grid = (event.currentTarget as HTMLElement).closest('.fleet-dashboard-grid');
     const columnStep = grid ? grid.getBoundingClientRect().width / 120 : 10;
-    const move = (current: PointerEvent) => props.onResize(props.id, Math.max(30, Math.min(120, startWidth + (current.clientX - startX) / Math.max(1, columnStep))));
-    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+    let currentWidth = startWidth;
+    grid?.classList.add('is-resizing');
+    const move = (current: PointerEvent) => {
+      currentWidth = Math.max(30, Math.min(120, startWidth + (current.clientX - startX) / Math.max(1, columnStep)));
+      props.onResize(props.id, currentWidth);
+    };
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      grid?.classList.remove('is-resizing');
+      props.onResize(props.id, Math.max(30, Math.min(120, Math.round(currentWidth))));
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end, { once: true });
     window.addEventListener('pointercancel', end, { once: true });
