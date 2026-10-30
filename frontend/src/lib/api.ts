@@ -48,6 +48,7 @@ export interface TableQueryOptions {
   filters?: Record<string, ColumnFilterState>;
 }
 export interface TablePage<T> { items: T[]; total: number; limit: number; offset: number }
+export interface WANInterfacePage extends TablePage<WANInterface> { preparing?: boolean }
 const tableQuery = (limit: number, offset: number, options?: TableQueryOptions) => {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (options?.search?.trim()) params.set('search', options.search.trim());
@@ -168,7 +169,7 @@ export const api = {
     if (options?.filters && Object.keys(options.filters).length > 0) params.set('filters', JSON.stringify(options.filters));
     return request<DeviceListResponse>(`/devices?${params}`);
   },
-  getWANInterfaces: (limit = 20, offset = 0, options?: TableQueryOptions) => request<TablePage<WANInterface>>(`/wan-interfaces?${tableQuery(limit, offset, options)}`),
+  getWANInterfaces: (limit = 20, offset = 0, options?: TableQueryOptions) => request<WANInterfacePage>(`/wan-interfaces?${tableQuery(limit, offset, options)}`),
   getTasks: (limit = 20, offset = 0, options?: TableQueryOptions) => request<{ tasks: GlobalTask[]; total: number; limit: number; offset: number; counts: Record<string, number> }>(`/tasks?${tableQuery(limit, offset, options)}`),
   getTask: (id: number) => request<GlobalTask>(`/tasks/${id}`),
   deletePendingTask: (id: number) => request<{ status: string }>(`/tasks/${id}`, { method: 'DELETE' }),

@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
+import { createMemo, createResource, createSignal, For, onCleanup, Show } from 'solid-js';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, ExternalLink, Network, Search } from 'lucide-solid';
 import { A } from '@solidjs/router';
 import { api } from '../lib/api';
@@ -47,6 +47,8 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
     () => ({ page: page(), size: pageSize(), search: searchQuery(), sort: sortBy(), filters: columnFilters() }),
     (query) => api.getWANInterfaces(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
   );
+  const poll = window.setInterval(() => { if (interfaces()?.preparing) void refetch(); }, 5000);
+  onCleanup(() => window.clearInterval(poll));
   const filteredInterfaces = createMemo(() => interfaces()?.items || []);
   const sortedInterfaces = filteredInterfaces;
 
@@ -102,7 +104,9 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center gap-2 text-sm text-secondary">
             <Network size={16} />
-            <span><strong>{pagedInterfaces().length}</strong> visible on this page · <strong>{interfaces()?.total ?? 0}</strong> total WANs</span>
+            <Show when={!interfaces()?.preparing} fallback={<span>Preparing WAN inventory…</span>}>
+              <span><strong>{pagedInterfaces().length}</strong> visible on this page · <strong>{interfaces()?.total ?? 0}</strong> total WANs</span>
+            </Show>
           </div>
           <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <label class="relative block w-full sm:w-72">
@@ -125,7 +129,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
 
       <Show when={!interfaces.error} fallback={<div class="card"><ResourceError title="WAN interfaces are unavailable" description="The aggregated WAN interface list could not be loaded." onRetry={() => void refetch()} /></div>}>
         <Show when={!interfaces.loading} fallback={<div class="card p-6"><div class="skeleton h-6 w-48 mb-4" /><div class="skeleton h-10 w-full" /></div>}>
-          <Show when={filteredInterfaces().length > 0} fallback={<div class="card"><EmptyState icon={<Network size={22} />} title="No WAN interfaces found" description={searchQuery() ? 'Try a different search term.' : 'No stored WAN interface data is available for the CPE inventory.'} /></div>}>
+          <Show when={!interfaces()?.preparing && filteredInterfaces().length > 0} fallback={<div class="card"><Show when={interfaces()?.preparing} fallback={<EmptyState icon={<Network size={22} />} title="No WAN interfaces found" description={searchQuery() ? 'Try a different search term.' : 'No stored WAN interface data is available for the CPE inventory.'} />}><div class="p-6 text-sm text-secondary" role="status">Existing WAN interfaces are being prepared. This page will update automatically.</div></Show></div>}>
             <div class="card overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="data-table w-full min-w-[760px] text-sm">

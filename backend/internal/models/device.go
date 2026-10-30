@@ -63,6 +63,13 @@ type WANInterfaceRecord struct {
 
 func (WANInterfaceRecord) TableName() string { return "wan_interfaces" }
 
+type WANInterfaceBackfillState struct {
+	ID       int  `gorm:"primaryKey;autoIncrement:false"`
+	Complete bool `gorm:"not null"`
+}
+
+func (WANInterfaceBackfillState) TableName() string { return "wan_interface_backfill_state" }
+
 type DeviceParameter struct {
 	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
 	DeviceID  int64     `json:"device_id" gorm:"uniqueIndex:idx_device_parameters_unique,priority:1;not null"`

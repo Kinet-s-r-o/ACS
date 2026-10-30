@@ -570,6 +570,16 @@ func (r *Router) handleListWANInterfaces(w http.ResponseWriter, req *http.Reques
 		respondError(w, http.StatusBadRequest, "Invalid WAN interface query")
 		return
 	}
+	ready, err := database.WANInterfaceCacheReady(req.Context(), r.db)
+	if err != nil {
+		log.Printf("Error checking WAN interface inventory readiness: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to check WAN interface inventory")
+		return
+	}
+	if !ready {
+		respondJSON(w, http.StatusOK, map[string]interface{}{"items": []models.WANInterface{}, "total": 0, "limit": options.Limit, "offset": options.Offset, "preparing": true})
+		return
+	}
 	interfaces, total, err := r.deviceRepo.ListWANInterfacesPage(req.Context(), options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing WAN interfaces: %v", err)

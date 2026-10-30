@@ -58,6 +58,10 @@ func main() {
 	if err := runAutoMigrate(db); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
+	wanBackfillNeeded, err := database.PrepareWANInterfaceBackfill(ctx, db)
+	if err != nil {
+		log.Fatalf("WAN interface cache initialization failed: %v", err)
+	}
 	if count, err := database.NewParameterRepository(db).EncryptLegacySensitiveValues(ctx); err != nil {
 		log.Fatalf("Sensitive parameter migration failed: %v", err)
 	} else if count > 0 {
@@ -137,6 +141,19 @@ func main() {
 			log.Fatalf("API server failed: %v", err)
 		}
 	}()
+	if wanBackfillNeeded {
+		go func() {
+			log.Println("Preparing WAN interface inventory in the background...")
+			if err := database.EnsureWANParameterIndex(ctx, db); err != nil {
+				log.Printf("WAN parameter index creation failed: %v", err)
+			}
+			if err := database.BackfillWANInterfaces(ctx, db); err != nil {
+				log.Printf("WAN interface inventory preparation failed: %v", err)
+				return
+			}
+			log.Println("WAN interface inventory preparation completed")
+		}()
+	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -329,6 +346,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.DeviceLifecycleEvent{},
 		&models.DeviceParameter{},
 		&models.WANInterfaceRecord{},
+		&models.WANInterfaceBackfillState{},
 		&models.DeviceLogEntry{},
 		&models.Task{},
 		&models.User{},
@@ -358,12 +376,6 @@ func runAutoMigrate(db *gorm.DB) error {
 		if err := db.AutoMigrate(model); err != nil {
 			return fmt.Errorf("migrate %T: %w", model, err)
 		}
-	}
-	if err := database.EnsureWANParameterIndex(context.Background(), db); err != nil {
-		return fmt.Errorf("create WAN parameter lookup index: %w", err)
-	}
-	if err := database.BackfillWANInterfaces(context.Background(), db); err != nil {
-		return fmt.Errorf("backfill WAN interface cache: %w", err)
 	}
 	if db.Migrator().HasIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type") {
 		if err := db.Migrator().DropIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type"); err != nil {

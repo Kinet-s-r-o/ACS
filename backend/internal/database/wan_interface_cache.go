@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -88,15 +89,36 @@ func buildWANInterfaceRecords(deviceID int64, parameters []models.DeviceParamete
 	return rows
 }
 
-func BackfillWANInterfaces(ctx context.Context, db *gorm.DB) error {
+func PrepareWANInterfaceBackfill(ctx context.Context, db *gorm.DB) (bool, error) {
+	var state models.WANInterfaceBackfillState
+	err := db.WithContext(ctx).First(&state, 1).Error
+	if err == nil {
+		return !state.Complete, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
 	var existing int64
-	if err := db.WithContext(ctx).Model(&models.WANInterfaceRecord{}).Limit(1).Count(&existing).Error; err != nil {
-		return err
+	if err := db.WithContext(ctx).Model(&models.WANInterfaceRecord{}).Count(&existing).Error; err != nil {
+		return false, err
 	}
-	if existing > 0 {
-		return nil
+	state = models.WANInterfaceBackfillState{ID: 1, Complete: existing > 0}
+	if err := db.WithContext(ctx).Create(&state).Error; err != nil {
+		return false, err
 	}
-	return db.WithContext(ctx).Exec(`WITH parsed AS (
+	return !state.Complete, nil
+}
+
+func WANInterfaceCacheReady(ctx context.Context, db *gorm.DB) (bool, error) {
+	var state models.WANInterfaceBackfillState
+	if err := db.WithContext(ctx).First(&state, 1).Error; err != nil {
+		return false, err
+	}
+	return state.Complete, nil
+}
+
+func BackfillWANInterfaces(ctx context.Context, db *gorm.DB) error {
+	if err := db.WithContext(ctx).Exec(`WITH parsed AS (
 		SELECT dp.device_id,
 			regexp_replace(dp.name, '(\.(WANPPPConnection|WANIPConnection)\.[0-9]+)\..*$', '\1.') AS path,
 			dp.name, dp.value
@@ -114,5 +136,8 @@ func BackfillWANInterfaces(ctx context.Context, db *gorm.DB) error {
 	)
 	INSERT INTO wan_interfaces (device_id, path, name, type, status, ip_address, mac_address)
 	SELECT device_id, path, name, type, status, ip_address, mac_address FROM wan_rows WHERE true
-	ON CONFLICT (device_id, path) DO NOTHING`).Error
+	ON CONFLICT (device_id, path) DO NOTHING`).Error; err != nil {
+		return err
+	}
+	return db.WithContext(ctx).Model(&models.WANInterfaceBackfillState{}).Where("id = ?", 1).Update("complete", true).Error
 }
