@@ -284,6 +284,7 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .btn-secondary:hover:not(:disabled) { color: rgb(var(--text-primary)); background: rgb(var(--bg-hover)); }
 .btn-danger { color: rgb(var(--error-text)); background: rgb(var(--error) / .08); border-color: rgb(var(--error) / .24); }
 .input { width: 100%; min-height: 36px; padding: 7px 10px; color: rgb(var(--text-primary)); background: rgb(var(--bg-base) / .45); border: 1px solid rgb(var(--border-default)); border-radius: 3px; font-size: 12px; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.compression-age-unit { width: 7rem; flex: 0 0 7rem; }
 .device-search-input { padding-right: 2rem; padding-left: 2.5rem; }
 .input-clear { position: absolute; top: 50%; right: 2px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: var(--radius-control); transform: translateY(-50%); }
 .input-clear:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }

@@ -186,7 +186,7 @@ const RetentionSettings: Component = () => {
                 const amount = Number(event.currentTarget.value);
                 update('compression_metric_after_days', String(compressionAgeUnit() === 'hours' ? amount / 24 : amount));
               }} />
-              <select class="input w-28" aria-label="Compression age unit" value={compressionAgeUnit()} disabled={!canWrite() || saving() || !compressionState()?.available} onChange={event => setCompressionAgeUnitOverride(event.currentTarget.value as 'hours' | 'days')}>
+              <select class="input compression-age-unit" aria-label="Compression age unit" value={compressionAgeUnit()} disabled={!canWrite() || saving() || !compressionState()?.available} onChange={event => setCompressionAgeUnitOverride(event.currentTarget.value as 'hours' | 'days')}>
                 <option value="hours">Hours</option>
                 <option value="days">Days</option>
               </select>
