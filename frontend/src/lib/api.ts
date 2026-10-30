@@ -318,9 +318,9 @@ export const api = {
   createInterfaceMetric: (templateId: number, body: Pick<InterfaceMetricDefinition, 'name' | 'description' | 'interface_type' | 'parameter_pattern' | 'unit' | 'source' | 'unit_scale' | 'color' | 'group' | 'chart_type' | 'transform' | 'multiplier' | 'active'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics`, { method: 'POST', body: JSON.stringify(body) }),
   updateInterfaceMetric: (templateId: number, id: number, body: Pick<InterfaceMetricDefinition, 'name' | 'description' | 'interface_type' | 'parameter_pattern' | 'unit' | 'source' | 'unit_scale' | 'color' | 'group' | 'chart_type' | 'transform' | 'multiplier' | 'active'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteInterfaceMetric: (templateId: number, id: number) => request<{ status: string }>(`/provisioning/templates/${templateId}/interface-metrics/${id}`, { method: 'DELETE' }),
-  getDeviceInterfaceMetric: (serial: string, metricId: number, parameterName: string, hours = 24) => {
+  getDeviceInterfaceMetric: (serial: string, metricId: number, parameterName: string, hours = 24, bucket = '15min') => {
     const from = new Date(Date.now() - hours * 3600_000).toISOString();
-    return request<{ samples: InterfaceMetricSample[] }>(`/device/${encodeURIComponent(serial)}/interface-metrics?metric_id=${metricId}&parameter_name=${encodeURIComponent(parameterName)}&from=${from}`);
+    return request<{ samples?: InterfaceMetricSample[]; aggregates?: AggregatedMetric[] }>(`/device/${encodeURIComponent(serial)}/interface-metrics?metric_id=${metricId}&parameter_name=${encodeURIComponent(parameterName)}&bucket=${bucket}&from=${from}`);
   },
 
   getSecurityOverview: () => request<{ total_users: number; full_access_admins: number; recorded_failures: number; jwt_configured: boolean; login_rate_limit_enabled: boolean; cors_restricted: boolean; audit_logging_enabled: boolean }>('/security/overview'),
@@ -342,7 +342,7 @@ export const api = {
   createMetricDefinition: (body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>('/metrics/definitions', { method: 'POST', body: JSON.stringify(body) }),
   updateMetricDefinition: (id: number, body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>(`/metrics/definitions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteMetricDefinition: (id: number) => request<{ status: string }>(`/metrics/definitions/${id}`, { method: 'DELETE' }),
-  getDeviceMetrics: (serial: string, metricId: number, bucket = '5min', hours = 24) => {
+  getDeviceMetrics: (serial: string, metricId: number, bucket = '15min', hours = 24) => {
     const from = new Date(Date.now() - hours * 3600_000).toISOString();
     return request<{ samples?: MetricSample[]; aggregates?: AggregatedMetric[] }>(`/device/${encodeURIComponent(serial)}/metrics?metric_id=${metricId}&bucket=${bucket}&from=${from}`);
   },

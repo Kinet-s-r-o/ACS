@@ -68,13 +68,21 @@ func TestCompressionPoliciesTimescale(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, table := range []string{"metric_samples", "interface_metric_samples"} {
-		exec("CREATE TABLE " + table + " (device_id text, metric_id bigint, timestamp timestamptz NOT NULL, value double precision)")
-		exec("SELECT create_hypertable('" + table + "', 'timestamp', chunk_time_interval => INTERVAL '1 day')")
-		exec("ALTER TABLE " + table + " SET (timescaledb.compress=true, timescaledb.compress_segmentby='device_id,metric_id', timescaledb.compress_orderby='timestamp DESC')")
-	}
-	for _, aggregate := range []struct{ name, bucket string }{{"metric_samples_5min", "5 minutes"}, {"metric_samples_1h", "1 hour"}, {"metric_samples_1d", "1 day"}} {
-		exec("CREATE MATERIALIZED VIEW " + aggregate.name + " WITH (timescaledb.continuous) AS SELECT time_bucket(INTERVAL '" + aggregate.bucket + "', timestamp) AS bucket, device_id, metric_id, AVG(value) AS value FROM metric_samples GROUP BY 1,2,3 WITH NO DATA")
+	exec("CREATE TABLE metric_samples (device_id text, metric_id bigint, timestamp timestamptz NOT NULL, value double precision)")
+	exec("SELECT create_hypertable('metric_samples', 'timestamp', chunk_time_interval => INTERVAL '1 day')")
+	exec("ALTER TABLE metric_samples SET (timescaledb.compress=true, timescaledb.compress_segmentby='device_id,metric_id', timescaledb.compress_orderby='timestamp DESC')")
+	exec("CREATE TABLE interface_metric_samples (device_id text, metric_id bigint, parameter_name text, timestamp timestamptz NOT NULL, value double precision)")
+	exec("SELECT create_hypertable('interface_metric_samples', 'timestamp', chunk_time_interval => INTERVAL '1 day')")
+	exec("ALTER TABLE interface_metric_samples SET (timescaledb.compress=true, timescaledb.compress_segmentby='device_id,metric_id,parameter_name', timescaledb.compress_orderby='timestamp DESC')")
+	for _, aggregate := range []struct{ name, bucket, source, grouping string }{
+		{"metric_samples_15min", "15 minutes", "metric_samples", "device_id,metric_id"},
+		{"metric_samples_1h", "1 hour", "metric_samples", "device_id,metric_id"},
+		{"metric_samples_1d", "1 day", "metric_samples", "device_id,metric_id"},
+		{"interface_metric_samples_15min", "15 minutes", "interface_metric_samples", "device_id,metric_id,parameter_name"},
+		{"interface_metric_samples_1h", "1 hour", "interface_metric_samples", "device_id,metric_id,parameter_name"},
+		{"interface_metric_samples_1d", "1 day", "interface_metric_samples", "device_id,metric_id,parameter_name"},
+	} {
+		exec("CREATE MATERIALIZED VIEW " + aggregate.name + " WITH (timescaledb.continuous) AS SELECT time_bucket(INTERVAL '" + aggregate.bucket + "', timestamp) AS bucket, " + aggregate.grouping + ", AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value, COUNT(*) AS sample_count FROM " + aggregate.source + " GROUP BY 1," + aggregate.grouping + " WITH NO DATA")
 		exec("SELECT add_continuous_aggregate_policy('" + aggregate.name + "', start_offset => INTERVAL '7 days', end_offset => INTERVAL '1 day', schedule_interval => INTERVAL '1 day')")
 	}
 	exec("CREATE TABLE device_logs (message text)")
@@ -98,7 +106,7 @@ func TestCompressionPoliciesTimescale(t *testing.T) {
 	apply()
 	first := status()
 	for i, row := range first.Tables {
-		want := []float64{2, 2, 8, 31, 366}[i]
+		want := []float64{2, 2, 8, 31, 366, 8, 31, 366}[i]
 		if !row.Present || !row.Scheduled || !row.CompressionEnabled || row.AfterDays != want {
 			t.Fatalf("unexpected policy: %+v", row)
 		}

@@ -68,12 +68,14 @@ func TestRetentionCleanupSQL(t *testing.T) {
 		"DELETE FROM device_logs WHERE id IN (SELECT id FROM device_logs WHERE received_at < '2026-10-18 12:00:00' ORDER BY id LIMIT 250)",
 		"ORDER BY id LIMIT 250",
 		"drop_chunks(CAST('metric_samples' AS regclass), older_than => CAST('2026-10-22 06:00:00' AS timestamptz))",
+		"drop_chunks(CAST('metric_samples_15min' AS regclass), older_than => CAST('2026-10-15 12:00:00' AS timestamptz))",
+		"drop_chunks(CAST('interface_metric_samples_15min' AS regclass), older_than => CAST('2026-10-15 12:00:00' AS timestamptz))",
 	} {
 		if !strings.Contains(queries, required) {
 			t.Errorf("missing %s in SQL:\n%s", required, queries)
 		}
 	}
-	if strings.Contains(queries, "device_snapshots") || strings.Contains(queries, "interface_metric_samples") {
+	if strings.Contains(queries, "device_snapshots") || strings.Contains(queries, "drop_chunks(CAST('interface_metric_samples' AS regclass)") {
 		t.Fatal("zero retention must not delete snapshots or interface metrics")
 	}
 	log.queries = nil

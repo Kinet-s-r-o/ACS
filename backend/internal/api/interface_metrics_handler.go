@@ -73,6 +73,16 @@ func (r *Router) handleGetDeviceInterfaceMetric(w http.ResponseWriter, req *http
 		respondError(w, http.StatusNotFound, "Interface metric not found")
 		return
 	}
+	bucket := req.URL.Query().Get("bucket")
+	if bucket == "" {
+		bucket = "raw"
+	}
+	switch bucket {
+	case "raw", "15min", "5min", "1h", "1d":
+	default:
+		respondError(w, http.StatusBadRequest, "Unsupported interface metric bucket")
+		return
+	}
 	from, to := time.Now().Add(-24*time.Hour), time.Now()
 	if value := req.URL.Query().Get("from"); value != "" {
 		if parsed, parseErr := time.Parse(time.RFC3339, value); parseErr == nil {
@@ -88,12 +98,33 @@ func (r *Router) handleGetDeviceInterfaceMetric(w http.ResponseWriter, req *http
 	if multiplier <= 0 {
 		multiplier = 1
 	}
-	samples, err := r.metricRepo.QueryInterfaceMetric(req.Context(), device.ID, metricID, parameterName, from, to, def.Transform == "rate", multiplier)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to query interface metric samples")
+	if bucket == "raw" {
+		samples, err := r.metricRepo.QueryInterfaceMetric(req.Context(), device.ID, metricID, parameterName, from, to, def.Transform == "rate", multiplier)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to query interface metric samples")
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{"samples": samples})
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"samples": samples})
+	var aggregates []models.AggregatedMetric
+	if def.Transform == "rate" {
+		aggregates, err = r.metricRepo.QueryAggregatedInterfaceMetricRate(req.Context(), device.ID, metricID, parameterName, from, to, bucket, multiplier)
+	} else {
+		aggregates, err = r.metricRepo.QueryAggregatedInterfaceMetric(req.Context(), device.ID, metricID, parameterName, from, to, bucket, multiplier)
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to query aggregated interface metric samples")
+		return
+	}
+	if len(aggregates) == 0 {
+		samples, rawErr := r.metricRepo.QueryInterfaceMetric(req.Context(), device.ID, metricID, parameterName, from, to, def.Transform == "rate", multiplier)
+		if rawErr == nil && len(samples) > 0 {
+			respondJSON(w, http.StatusOK, map[string]interface{}{"samples": samples})
+			return
+		}
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"aggregates": aggregates})
 }
 
 func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Request) {

@@ -17,20 +17,24 @@ type retentionSetting struct {
 }
 
 var retentionSettings = map[string]retentionSetting{
-	"retention_interval_hours":        {24, 1, 168},
-	"retention_batch_size":            {1000, 100, 10000},
-	"retention_max_batches":           {100, 1, 1000},
-	"retention_audit_days":            {180, 0, 3650},
-	"retention_resolved_fault_days":   {90, 0, 3650},
-	"retention_completed_task_days":   {90, 0, 3650},
-	"retention_failed_task_days":      {90, 0, 3650},
-	"retention_snapshot_days":         {0, 0, 3650},
-	"retention_device_log_days":       {30, 0, 3650},
-	"retention_metric_hours":          {6, 0, 87600},
-	"retention_interface_metric_days": {0, 0, 3650},
-	"retention_metric_5min_days":      {7, 0, 3650},
-	"retention_metric_1h_days":        {30, 0, 3650},
-	"retention_metric_1d_days":        {365, 0, 3650},
+	"retention_interval_hours":              {24, 1, 168},
+	"retention_batch_size":                  {1000, 100, 10000},
+	"retention_max_batches":                 {100, 1, 1000},
+	"retention_audit_days":                  {180, 0, 3650},
+	"retention_resolved_fault_days":         {90, 0, 3650},
+	"retention_completed_task_days":         {90, 0, 3650},
+	"retention_failed_task_days":            {90, 0, 3650},
+	"retention_snapshot_days":               {0, 0, 3650},
+	"retention_device_log_days":             {30, 0, 3650},
+	"retention_metric_hours":                {6, 0, 87600},
+	"retention_interface_metric_days":       {0, 0, 3650},
+	"retention_interface_metric_15min_days": {7, 0, 3650},
+	"retention_interface_metric_1h_days":    {30, 0, 3650},
+	"retention_interface_metric_1d_days":    {365, 0, 3650},
+	"retention_metric_5min_days":            {7, 0, 3650}, // Kept as a stable setting key for 15-minute aggregates.
+	"retention_metric_legacy_5min_days":     {7, 0, 3650}, // Temporary cleanup window for the retired 5-minute aggregate.
+	"retention_metric_1h_days":              {30, 0, 3650},
+	"retention_metric_1d_days":              {365, 0, 3650},
 }
 
 func RetentionDefaults() map[string]string {
@@ -74,6 +78,13 @@ type RetentionTableStats struct {
 func GetRetentionTableStats(ctx context.Context, db *gorm.DB) ([]RetentionTableStats, error) {
 	stats := make([]RetentionTableStats, 0, len(retentionRules))
 	for _, rule := range retentionRules {
+		var exists bool
+		if err := db.WithContext(ctx).Raw("SELECT to_regclass(?) IS NOT NULL", rule.table).Scan(&exists).Error; err != nil {
+			return nil, fmt.Errorf("check retention table %s: %w", rule.table, err)
+		}
+		if !exists {
+			continue
+		}
 		var row RetentionTableStats
 		var query string
 		var args []interface{}
@@ -116,7 +127,11 @@ var retentionRules = []retentionRule{
 	{"retention_device_log_days", "device_logs", "received_at < ?", 24 * time.Hour, false},
 	{"retention_metric_hours", "metric_samples", "", time.Hour, true},
 	{"retention_interface_metric_days", "interface_metric_samples", "", 24 * time.Hour, true},
-	{"retention_metric_5min_days", "metric_samples_5min", "", 24 * time.Hour, true},
+	{"retention_interface_metric_15min_days", "interface_metric_samples_15min", "", 24 * time.Hour, true},
+	{"retention_interface_metric_1h_days", "interface_metric_samples_1h", "", 24 * time.Hour, true},
+	{"retention_interface_metric_1d_days", "interface_metric_samples_1d", "", 24 * time.Hour, true},
+	{"retention_metric_5min_days", "metric_samples_15min", "", 24 * time.Hour, true},
+	{"retention_metric_legacy_5min_days", "metric_samples_5min", "", 24 * time.Hour, true}, // Cleanup for pre-15-minute installs.
 	{"retention_metric_1h_days", "metric_samples_1h", "", 24 * time.Hour, true},
 	{"retention_metric_1d_days", "metric_samples_1d", "", 24 * time.Hour, true},
 }
@@ -137,6 +152,15 @@ func runRetentionCleanup(ctx context.Context, db *gorm.DB, values map[string]str
 		}
 		cutoff := now.Add(-time.Duration(age) * rule.unit)
 		if rule.chunks {
+			if rule.table == "metric_samples_5min" {
+				var exists bool
+				if err := db.WithContext(ctx).Raw("SELECT to_regclass(?) IS NOT NULL", rule.table).Scan(&exists).Error; err != nil {
+					return fmt.Errorf("check legacy retention table %s: %w", rule.table, err)
+				}
+				if !exists {
+					continue
+				}
+			}
 			if err := db.WithContext(ctx).Exec("SELECT drop_chunks(CAST(? AS regclass), older_than => CAST(? AS timestamptz))", rule.table, cutoff).Error; err != nil {
 				return fmt.Errorf("retention %s: %w", rule.table, err)
 			}

@@ -24,9 +24,9 @@ interface MetricChartProps {
 const DEFAULT_PALETTE = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb923c'];
 
 const BUCKET_OPTIONS: Array<{ label: string; value: string; hours: number }> = [
-  { label: '1h', value: '5min', hours: 1 },
-  { label: '6h', value: '5min', hours: 6 },
-  { label: '24h', value: '5min', hours: 24 },
+  { label: '1h', value: '15min', hours: 1 },
+  { label: '6h', value: '15min', hours: 6 },
+  { label: '24h', value: '15min', hours: 24 },
   { label: '7d', value: '1h', hours: 168 },
   { label: '30d', value: '1d', hours: 720 },
   { label: '365d', value: '1d', hours: 8760 },
@@ -100,7 +100,7 @@ const metricChartPoints = (result: { samples?: MetricSample[]; aggregates?: Aggr
   if (aggregates.length === 0) {
     return (result.samples ?? []).map((sample) => ({ timestamp: new Date(sample.timestamp).getTime(), value: sample.value, min: sample.value, max: sample.value }));
   }
-  const bucketMs = bucket === '1h' ? 60 * 60_000 : bucket === '1d' ? 24 * 60 * 60_000 : 5 * 60_000;
+  const bucketMs = bucket === '1h' ? 60 * 60_000 : bucket === '1d' ? 24 * 60 * 60_000 : 15 * 60_000;
   const lastAggregateEnd = Math.max(...aggregates.map((aggregate) => new Date(aggregate.timestamp).getTime())) + bucketMs;
   const tail = (result.samples ?? [])
     .filter((sample) => new Date(sample.timestamp).getTime() >= lastAggregateEnd)
@@ -129,7 +129,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
         q.ids.map(async (id) => {
           const result = await api.getDeviceMetrics(q.serial, id, q.bucket, q.hours);
           if (q.bucket === 'raw' || !result.aggregates?.length) return result;
-          const tailHours = q.bucket === '5min' ? 0.25 : q.bucket === '1h' ? 6 : 24;
+          const tailHours = q.bucket === '15min' ? 0.25 : q.bucket === '1h' ? 6 : 24;
           try {
             const recent = await api.getDeviceMetrics(q.serial, id, 'raw', tailHours);
             return { ...result, samples: recent.samples ?? [] };
@@ -427,6 +427,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
           {BUCKET_OPTIONS.map((opt) => (
             <button
               onClick={() => handleBucketChange(opt)}
+              aria-pressed={bucket().value === opt.value && bucket().hours === opt.hours}
               class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${bucket().value === opt.value && bucket().hours === opt.hours ? 'bg-sky-500/20 text-sky-400' : 'text-muted hover:text-secondary'}`}
             >
               {opt.label}

@@ -378,6 +378,58 @@ func (r *MetricRepository) QueryInterfaceMetric(ctx context.Context, deviceID, m
 	return samples, err
 }
 
+func (r *MetricRepository) QueryAggregatedInterfaceMetric(ctx context.Context, deviceID, metricID int64, parameterName string, from, to time.Time, bucket string, multiplier float64) ([]models.AggregatedMetric, error) {
+	table := interfaceMetricCATableForBucket(bucket)
+	if table == "" {
+		return nil, fmt.Errorf("unsupported interface metric bucket: %s", bucket)
+	}
+	var rows []models.AggregatedMetric
+	query := fmt.Sprintf(`
+		SELECT time_bucket AS "timestamp", avg_value * $6 AS "avg", min_value * $6 AS "min", max_value * $6 AS "max", sample_count AS "count"
+		FROM %s
+		WHERE device_id = $1 AND metric_id = $2 AND parameter_name = $3 AND time_bucket BETWEEN $4 AND $5
+		ORDER BY time_bucket ASC`, table)
+	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, parameterName, from, to, multiplier).Scan(&rows).Error
+	return rows, err
+}
+
+// QueryAggregatedInterfaceMetricRate calculates counter deltas in SQL before
+// grouping them into the requested interval, matching the classic metric path.
+func (r *MetricRepository) QueryAggregatedInterfaceMetricRate(ctx context.Context, deviceID, metricID int64, parameterName string, from, to time.Time, bucket string, multiplier float64) ([]models.AggregatedMetric, error) {
+	var interval string
+	switch bucket {
+	case "15min", "5min":
+		interval = "15 minutes"
+	case "1h":
+		interval = "1 hour"
+	case "1d":
+		interval = "1 day"
+	default:
+		return nil, fmt.Errorf("unsupported interface metric bucket: %s", bucket)
+	}
+	query := fmt.Sprintf(`
+		WITH deltas AS (
+			SELECT timestamp,
+				CASE
+					WHEN LAG(value) OVER w IS NULL THEN 0
+					WHEN value < LAG(value) OVER w THEN 0
+					ELSE (value - LAG(value) OVER w)
+						 / GREATEST(EXTRACT(EPOCH FROM (timestamp - LAG(timestamp) OVER w)), 1)
+				END * $5 AS value
+			FROM interface_metric_samples
+			WHERE device_id = $1 AND metric_id = $2 AND parameter_name = $3 AND timestamp <= $6
+			WINDOW w AS (ORDER BY timestamp)
+		), bucketed AS (
+			SELECT time_bucket(INTERVAL '%s', timestamp) AS time_bucket, value
+			FROM deltas WHERE timestamp BETWEEN $4 AND $6
+		)
+		SELECT time_bucket AS "timestamp", AVG(value) AS "avg", MIN(value) AS "min", MAX(value) AS "max", COUNT(*) AS "count"
+		FROM bucketed GROUP BY time_bucket ORDER BY time_bucket ASC`, interval)
+	var rows []models.AggregatedMetric
+	err := r.db.WithContext(ctx).Raw(query, deviceID, metricID, parameterName, from, multiplier, to).Scan(&rows).Error
+	return rows, err
+}
+
 func (r *MetricRepository) interfaceMetricDefinitions(ctx context.Context, deviceType string, activeOnly bool) ([]models.MetricDefinition, error) {
 	template, err := r.TemplateForDeviceType(ctx, deviceType)
 	if err != nil {
@@ -444,8 +496,8 @@ func (r *MetricRepository) QueryRawRate(ctx context.Context, deviceID, metricID 
 func (r *MetricRepository) QueryAggregatedRate(ctx context.Context, deviceID, metricID int64, from, to time.Time, bucket string, multiplier float64) ([]models.AggregatedMetric, error) {
 	var interval string
 	switch bucket {
-	case "5min":
-		interval = "5 minutes"
+	case "15min", "5min":
+		interval = "15 minutes"
 	case "1h":
 		interval = "1 hour"
 	case "1d":
@@ -822,12 +874,25 @@ func deviceTypeMatches(deviceType, pattern string) bool {
 // caTableForBucket maps a bucket name to its continuous aggregate table.
 func caTableForBucket(bucket string) string {
 	switch bucket {
-	case "5min":
-		return "metric_samples_5min"
+	case "15min", "5min":
+		return "metric_samples_15min"
 	case "1h":
 		return "metric_samples_1h"
 	case "1d":
 		return "metric_samples_1d"
+	default:
+		return ""
+	}
+}
+
+func interfaceMetricCATableForBucket(bucket string) string {
+	switch bucket {
+	case "15min", "5min":
+		return "interface_metric_samples_15min"
+	case "1h":
+		return "interface_metric_samples_1h"
+	case "1d":
+		return "interface_metric_samples_1d"
 	default:
 		return ""
 	}
@@ -841,10 +906,10 @@ func SetupTimescaleDB(db *gorm.DB) error {
 		`CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
 		`SELECT create_hypertable('metric_samples', 'timestamp', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day')`,
 		`SELECT create_hypertable('interface_metric_samples', 'timestamp', if_not_exists => TRUE, migrate_data => TRUE, chunk_time_interval => INTERVAL '1 day')`,
-		`CREATE MATERIALIZED VIEW IF NOT EXISTS metric_samples_5min
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS metric_samples_15min
 		 WITH (timescaledb.continuous) AS
 		 SELECT
-			time_bucket(INTERVAL '5 minutes', "timestamp") AS time_bucket,
+			time_bucket(INTERVAL '15 minutes', "timestamp") AS time_bucket,
 			device_id,
 			metric_id,
 			AVG(value)  AS avg_value,
@@ -852,7 +917,22 @@ func SetupTimescaleDB(db *gorm.DB) error {
 			MAX(value)  AS max_value,
 			COUNT(*)    AS sample_count
 		 FROM metric_samples
-		 GROUP BY time_bucket, device_id, metric_id`,
+		 GROUP BY time_bucket, device_id, metric_id
+		 WITH NO DATA`,
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS interface_metric_samples_15min
+		 WITH (timescaledb.continuous) AS
+		 SELECT
+			time_bucket(INTERVAL '15 minutes', "timestamp") AS time_bucket,
+			device_id,
+			metric_id,
+			parameter_name,
+			AVG(value) AS avg_value,
+			MIN(value) AS min_value,
+			MAX(value) AS max_value,
+			COUNT(*) AS sample_count
+		 FROM interface_metric_samples
+		 GROUP BY time_bucket, device_id, metric_id, parameter_name
+		 WITH NO DATA`,
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS metric_samples_1h
 		 WITH (timescaledb.continuous) AS
 		 SELECT
@@ -865,6 +945,20 @@ func SetupTimescaleDB(db *gorm.DB) error {
 			COUNT(*)    AS sample_count
 		 FROM metric_samples
 		 GROUP BY time_bucket, device_id, metric_id`,
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS interface_metric_samples_1h
+		 WITH (timescaledb.continuous) AS
+		 SELECT
+			time_bucket(INTERVAL '1 hour', "timestamp") AS time_bucket,
+			device_id,
+			metric_id,
+			parameter_name,
+			AVG(value) AS avg_value,
+			MIN(value) AS min_value,
+			MAX(value) AS max_value,
+			COUNT(*) AS sample_count
+		 FROM interface_metric_samples
+		 GROUP BY time_bucket, device_id, metric_id, parameter_name
+		 WITH NO DATA`,
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS metric_samples_1d
 		 WITH (timescaledb.continuous) AS
 		 SELECT
@@ -877,12 +971,32 @@ func SetupTimescaleDB(db *gorm.DB) error {
 			COUNT(*)    AS sample_count
 		 FROM metric_samples
 		 GROUP BY time_bucket, device_id, metric_id`,
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS interface_metric_samples_1d
+		 WITH (timescaledb.continuous) AS
+		 SELECT
+			time_bucket(INTERVAL '1 day', "timestamp") AS time_bucket,
+			device_id,
+			metric_id,
+			parameter_name,
+			AVG(value) AS avg_value,
+			MIN(value) AS min_value,
+			MAX(value) AS max_value,
+			COUNT(*) AS sample_count
+		 FROM interface_metric_samples
+		 GROUP BY time_bucket, device_id, metric_id, parameter_name
+		 WITH NO DATA`,
 		// The settings-driven housekeeping worker owns retention for these tables.
 		`SELECT remove_retention_policy('metric_samples', if_exists => TRUE)`,
 		`SELECT remove_retention_policy('interface_metric_samples', if_exists => TRUE)`,
 		`SELECT remove_retention_policy('metric_samples_5min', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('metric_samples_15min', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('interface_metric_samples_15min', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('interface_metric_samples_1h', if_exists => TRUE)`,
+		`SELECT remove_retention_policy('interface_metric_samples_1d', if_exists => TRUE)`,
 		`SELECT remove_retention_policy('metric_samples_1h', if_exists => TRUE)`,
 		`SELECT remove_retention_policy('metric_samples_1d', if_exists => TRUE)`,
+		`SELECT remove_continuous_aggregate_policy('metric_samples_5min', if_exists => TRUE)`,
+		`SELECT remove_compression_policy('metric_samples_5min', if_exists => TRUE)`,
 		`ALTER TABLE metric_samples SET (
 			timescaledb.compress = TRUE,
 			timescaledb.compress_segmentby = 'device_id, metric_id',
@@ -895,9 +1009,12 @@ func SetupTimescaleDB(db *gorm.DB) error {
 		)`,
 
 		// Continuous aggregate refresh policies — without these the CAs stay empty.
-		`SELECT add_continuous_aggregate_policy('metric_samples_5min', start_offset => INTERVAL '7 days', end_offset => INTERVAL '5 minutes', schedule_interval => INTERVAL '5 minutes', if_not_exists => TRUE)`,
+		`SELECT add_continuous_aggregate_policy('metric_samples_15min', start_offset => INTERVAL '7 days', end_offset => INTERVAL '15 minutes', schedule_interval => INTERVAL '5 minutes', if_not_exists => TRUE)`,
+		`SELECT add_continuous_aggregate_policy('interface_metric_samples_15min', start_offset => INTERVAL '7 days', end_offset => INTERVAL '15 minutes', schedule_interval => INTERVAL '5 minutes', if_not_exists => TRUE)`,
 		`SELECT add_continuous_aggregate_policy('metric_samples_1h', start_offset => INTERVAL '30 days', end_offset => INTERVAL '1 hour', schedule_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
+		`SELECT add_continuous_aggregate_policy('interface_metric_samples_1h', start_offset => INTERVAL '30 days', end_offset => INTERVAL '1 hour', schedule_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
 		`SELECT add_continuous_aggregate_policy('metric_samples_1d', start_offset => INTERVAL '365 days', end_offset => INTERVAL '1 day', schedule_interval => INTERVAL '1 day', if_not_exists => TRUE)`,
+		`SELECT add_continuous_aggregate_policy('interface_metric_samples_1d', start_offset => INTERVAL '365 days', end_offset => INTERVAL '1 day', schedule_interval => INTERVAL '1 day', if_not_exists => TRUE)`,
 	}
 
 	for _, stmt := range statements {
@@ -912,7 +1029,9 @@ func SetupTimescaleDB(db *gorm.DB) error {
 
 	// One-time backfill: refresh any data that accumulated before the policy existed.
 	// Non-fatal — a fresh DB or lock contention should not prevent startup.
-	for _, ca := range []string{"metric_samples_5min", "metric_samples_1h", "metric_samples_1d"} {
+	// Interface materializations can be much larger than classic metric data.
+	// Their policies backfill asynchronously to avoid blocking API startup.
+	for _, ca := range []string{"metric_samples_15min", "metric_samples_1h", "metric_samples_1d"} {
 		if err := db.Exec(fmt.Sprintf("SELECT refresh_continuous_aggregate('%s', NULL, NULL)", ca)).Error; err != nil {
 			log.Printf("WARNING: backfill %s failed (non-fatal): %v", ca, err)
 		}

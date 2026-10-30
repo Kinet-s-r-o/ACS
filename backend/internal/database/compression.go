@@ -36,9 +36,12 @@ var compressionTables = []struct {
 }{
 	{"metric_samples", "Raw metric samples", 1.0 / 24, false},
 	{"interface_metric_samples", "Interface metric samples", 1.0 / 24, false},
-	{"metric_samples_5min", "5-minute aggregates", 8, true},
+	{"metric_samples_15min", "15-minute aggregates", 8, true},
 	{"metric_samples_1h", "Hourly aggregates", 31, true},
 	{"metric_samples_1d", "Daily aggregates", 366, true},
+	{"interface_metric_samples_15min", "Interface 15-minute aggregates", 8, true},
+	{"interface_metric_samples_1h", "Interface hourly aggregates", 31, true},
+	{"interface_metric_samples_1d", "Interface daily aggregates", 366, true},
 }
 
 type CompressionTableStatus struct {

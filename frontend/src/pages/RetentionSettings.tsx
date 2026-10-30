@@ -28,10 +28,15 @@ const groups = [
   ] },
   { title: 'Metric history', fields: [
     { key: 'retention_metric_hours', label: 'Raw metric samples (hours)', min: 0, max: 87600, description: 'Retention of individual device metric samples.' },
-    { key: 'retention_interface_metric_days', label: 'Interface metric samples (days)', min: 0, max: 3650, description: 'Retention of per-interface samples. Default: keep all samples.' },
-    { key: 'retention_metric_5min_days', label: '5-minute aggregates (days)', min: 0, max: 3650, description: 'Retention of metric values aggregated into 5-minute buckets.' },
+    { key: 'retention_metric_5min_days', label: '15-minute aggregates (days)', min: 0, max: 3650, description: 'Retention of metric values aggregated into 15-minute buckets.' },
     { key: 'retention_metric_1h_days', label: 'Hourly aggregates (days)', min: 0, max: 3650, description: 'Retention of metric values aggregated into hourly buckets.' },
     { key: 'retention_metric_1d_days', label: 'Daily aggregates (days)', min: 0, max: 3650, description: 'Retention of metric values aggregated into daily buckets.' },
+  ] },
+  { title: 'Interface metric history', fields: [
+    { key: 'retention_interface_metric_days', label: 'Raw interface metric samples (days)', min: 0, max: 3650, description: 'Retention of individual per-interface samples. 0 keeps all raw samples.' },
+    { key: 'retention_interface_metric_15min_days', label: '15-minute aggregates (days)', min: 0, max: 3650, description: 'Retention of per-interface values aggregated into 15-minute buckets.' },
+    { key: 'retention_interface_metric_1h_days', label: 'Hourly aggregates (days)', min: 0, max: 3650, description: 'Retention of per-interface values aggregated into hourly buckets.' },
+    { key: 'retention_interface_metric_1d_days', label: 'Daily aggregates (days)', min: 0, max: 3650, description: 'Retention of per-interface values aggregated into daily buckets.' },
   ] },
 ];
 
@@ -45,10 +50,15 @@ const retentionTableGroups = [
   ] },
   { title: 'Metric history', tables: [
     { table: 'metric_samples', label: 'Raw metric samples' },
-    { table: 'interface_metric_samples', label: 'Interface metric samples' },
-    { table: 'metric_samples_5min', label: '5-minute aggregates' },
+    { table: 'metric_samples_15min', label: '15-minute aggregates' },
     { table: 'metric_samples_1h', label: 'Hourly aggregates' },
     { table: 'metric_samples_1d', label: 'Daily aggregates' },
+  ] },
+  { title: 'Interface metric history', tables: [
+    { table: 'interface_metric_samples', label: 'Raw interface metric samples' },
+    { table: 'interface_metric_samples_15min', label: '15-minute aggregates' },
+    { table: 'interface_metric_samples_1h', label: 'Hourly aggregates' },
+    { table: 'interface_metric_samples_1d', label: 'Daily aggregates' },
   ] },
 ];
 
@@ -194,7 +204,7 @@ const RetentionSettings: Component = () => {
             <p id="compression-age-description" class="text-xs text-muted mt-1.5">The existing default is 2 hours. Entire data chunks must be older than this age before they are compressed.</p>
           </div>
           <p class="text-xs text-muted">Applies independently of database housekeeping. Settings are applied within one minute; compression then runs in the background. Disabling it stops future compression and keeps already compressed history readable.</p>
-          <p class="text-xs text-muted">Aggregates need a longer delay to preserve their refresh window: at least 8 days for 5-minute aggregates, 31 days for hourly aggregates, and 366 days for daily aggregates. History deleted sooner by retention will not be compressed.</p>
+          <p class="text-xs text-muted">Aggregates need a longer delay to preserve their refresh window: at least 8 days for 15-minute aggregates, 31 days for hourly aggregates, and 366 days for daily aggregates. History deleted sooner by retention will not be compressed.</p>
           <Show when={compressionState()?.available}>
             <div class="space-y-2" aria-label="Actual compression policies"><For each={compressionState()?.tables}>{table => <div class="flex flex-wrap justify-between gap-2 border-t border-subtle pt-2 text-xs">
               <span class="text-secondary">{table.label}</span>

@@ -206,7 +206,7 @@ func (r *Router) handleGetDeviceMetrics(w http.ResponseWriter, req *http.Request
 
 	bucket := q.Get("bucket")
 	if bucket == "" {
-		bucket = "5min"
+		bucket = "15min"
 	}
 
 	from := time.Now().Add(-24 * time.Hour)

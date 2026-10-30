@@ -17,6 +17,22 @@ interface Props {
   refreshKey?: number;
 }
 
+const BUCKET_OPTIONS: Array<{ label: string; value: string; hours: number }> = [
+  { label: '1h', value: '15min', hours: 1 },
+  { label: '6h', value: '15min', hours: 6 },
+  { label: '24h', value: '15min', hours: 24 },
+  { label: '7d', value: '1h', hours: 168 },
+  { label: '30d', value: '1d', hours: 720 },
+  { label: '365d', value: '1d', hours: 8760 },
+];
+
+const readStoredBucket = (serial: string, interfacePath: string) => {
+  try {
+    const label = localStorage.getItem(`acs_interface_metric_interval_${serial}_${interfacePath}`);
+    return BUCKET_OPTIONS.find(option => option.label === label) ?? BUCKET_OPTIONS[2];
+  } catch { return BUCKET_OPTIONS[2]; }
+};
+
 const matches = (pattern: string, name: string) => {
   const p = pattern.split('.');
   const n = name.split('.');
@@ -26,14 +42,23 @@ const matches = (pattern: string, name: string) => {
 const InterfaceMetricChart: Component<Props> = (props) => {
   const [element, setElement] = createSignal<HTMLDivElement>();
   const [selectedSeriesKey, setSelectedSeriesKey] = createSignal<string | null>(null);
+  const [bucket, setBucket] = createSignal(readStoredBucket(props.serial, props.interfacePath));
   let chart: echarts.ECharts | undefined;
   let observer: ResizeObserver | undefined;
   const requests = createMemo(() => props.definitions.flatMap(def =>
     props.parameterNames.filter(name => name.startsWith(props.interfacePath) && matches(def.parameter_pattern, name))
       .map(parameterName => ({ def, parameterName }))));
   const [results] = createResource(
-    () => ({ serial: props.serial, requests: requests().map(item => `${item.def.id}:${item.parameterName}`).join('|'), refreshKey: props.refreshKey ?? 0 }),
-    async () => Promise.all(requests().map(item => api.getDeviceInterfaceMetric(props.serial, item.def.id, item.parameterName, 24))),
+    () => ({ serial: props.serial, hours: bucket().hours, bucket: bucket().value, requests: requests().map(item => `${item.def.id}:${item.parameterName}`).join('|'), refreshKey: props.refreshKey ?? 0 }),
+    async query => Promise.all(requests().map(async item => {
+      const result = await api.getDeviceInterfaceMetric(query.serial, item.def.id, item.parameterName, query.hours, query.bucket);
+      if (query.bucket === 'raw' || !result.aggregates?.length) return result;
+      const tailHours = query.bucket === '15min' ? 0.25 : query.bucket === '1h' ? 6 : 24;
+      try {
+        const recent = await api.getDeviceInterfaceMetric(query.serial, item.def.id, item.parameterName, tailHours, 'raw');
+        return { ...result, samples: recent.samples ?? [] };
+      } catch { return result; }
+    })),
   );
   const chartData = createMemo(() => {
     const values = results();
@@ -41,21 +66,31 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     const summaries: { key: string; name: string; color: string; unit: string; min: number; avg: number; max: number }[] = [];
     const series = values.flatMap((result, index) => {
       const request = requests()[index];
-      if (!result.samples?.length) return [];
+      const aggregates = result.aggregates ?? [];
+      const samples = result.samples ?? [];
+      if (aggregates.length === 0 && samples.length === 0) return [];
       const key = `${request.def.id}:${request.parameterName}`;
-      const max = Math.max(...result.samples.map(sample => Math.abs(sample.value)));
+      const max = Math.max(0, ...aggregates.flatMap(sample => [Math.abs(sample.min), Math.abs(sample.max)]), ...samples.map(sample => Math.abs(sample.value)));
       const scale = computeUnitScale(max, request.def.unit_scale);
       const unit = effectiveUnit(request.def.unit, request.def.unit_scale, scale.suffix);
       const displayUnit = request.def.transform === 'rate' && request.def.unit_scale !== 'pps' && unit && !unit.endsWith('/s') ? `${unit}/s` : unit;
-      const scaledValues = result.samples.map(sample => sample.value / scale.divisor);
+      const bucketMs = bucket().value === '1h' ? 60 * 60_000 : bucket().value === '1d' ? 24 * 60 * 60_000 : 15 * 60_000;
+      const lastAggregateEnd = aggregates.length > 0
+        ? Math.max(...aggregates.map(sample => new Date(sample.timestamp).getTime())) + bucketMs
+        : Number.NEGATIVE_INFINITY;
+      const points = [
+        ...aggregates.map(sample => ({ timestamp: sample.timestamp, value: sample.avg, min: sample.min, max: sample.max, count: sample.count })),
+        ...samples.filter(sample => new Date(sample.timestamp).getTime() >= lastAggregateEnd).map(sample => ({ timestamp: sample.timestamp, value: sample.value, min: sample.value, max: sample.value, count: 1 })),
+      ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const totalCount = points.reduce((sum, point) => sum + point.count, 0);
       summaries.push({
         key,
         name: request.def.name,
         color: request.def.color || '#38bdf8',
         unit: displayUnit,
-        min: Math.min(...scaledValues),
-        avg: scaledValues.reduce((sum, value) => sum + value, 0) / scaledValues.length,
-        max: Math.max(...scaledValues),
+        min: Math.min(...points.map(point => point.min)) / scale.divisor,
+        avg: points.reduce((sum, point) => sum + point.value * point.count, 0) / Math.max(totalCount, 1) / scale.divisor,
+        max: Math.max(...points.map(point => point.max)) / scale.divisor,
       });
       return [{
         id: key,
@@ -64,7 +99,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
         showSymbol: false,
         itemStyle: { color: summaries[summaries.length - 1].color },
         lineStyle: { color: summaries[summaries.length - 1].color },
-        data: result.samples.map((sample, sampleIndex) => [new Date(sample.timestamp).getTime(), scaledValues[sampleIndex]]),
+        data: points.map(point => [new Date(point.timestamp).getTime(), point.value / scale.divisor]),
       }];
     });
     return { series, summaries };
@@ -77,6 +112,10 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     return { series: series.filter(item => item.id === selected), summaries: summaries.filter(item => item.key === selected) };
   });
   const unitLabel = createMemo(() => [...new Set(visibleChartData().summaries.map(item => item.unit).filter(Boolean))].join(' / '));
+  const changeBucket = (option: typeof BUCKET_OPTIONS[number]) => {
+    setBucket(option);
+    try { localStorage.setItem(`acs_interface_metric_interval_${props.serial}_${props.interfacePath}`, option.label); } catch { /* Ignore unavailable local storage. */ }
+  };
 
   createEffect(() => {
     const el = element();
@@ -123,6 +162,9 @@ const InterfaceMetricChart: Component<Props> = (props) => {
   onCleanup(() => { observer?.disconnect(); chart?.dispose(); chart = undefined; });
 
   return <div class="space-y-2">
+    <div class="flex justify-end gap-1" role="group" aria-label="Interface metric history range">
+      <For each={BUCKET_OPTIONS}>{option => <button type="button" class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${bucket().label === option.label ? 'bg-sky-500/20 text-sky-400' : 'text-muted hover:text-secondary'}`} aria-pressed={bucket().label === option.label} onClick={() => changeBucket(option)}>{option.label}</button>}</For>
+    </div>
     <Show when={results.loading}><div class="skeleton h-56 w-full" /></Show>
     <Show when={!results.loading && results.error}><p class="h-56 flex items-center justify-center text-sm text-rose-400">Could not load interface statistics.</p></Show>
     <Show when={!results.loading && !results.error && requests().length === 0}><p class="h-56 flex items-center justify-center text-sm text-muted">No configured metrics match this interface.</p></Show>
