@@ -1,6 +1,6 @@
 import { createMemo, createResource, createSignal, For, onCleanup, Show, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
-import { RefreshCw, Router, Settings2, Plus, Trash2 } from 'lucide-solid';
+import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
@@ -47,20 +47,23 @@ const FleetPanelFrame: Component<{
     event.stopPropagation();
     startX = event.clientX; startY = event.clientY;
     startWidth = props.layout.width; startHeight = props.layout.height;
-    const move = (current: PointerEvent) => props.onResize(props.id, Math.max(3, Math.min(12, startWidth + Math.round((current.clientX - startX) / 180))), Math.max(1, Math.min(5, startHeight + Math.round((current.clientY - startY) / 180))));
+    const grid = (event.currentTarget as HTMLElement).closest('.fleet-dashboard-grid');
+    const columnStep = grid ? (grid.getBoundingClientRect().width - 176) / 12 : 100;
+    const move = (current: PointerEvent) => props.onResize(props.id, Math.max(3, Math.min(12, startWidth + Math.round((current.clientX - startX) / Math.max(60, columnStep)))), Math.max(1, Math.min(5, startHeight + Math.round((current.clientY - startY) / 120))));
     const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
   };
   return <div
     class="fleet-layout-panel"
-    draggable
     style={`order:${props.layout.order};grid-column:span ${props.layout.width};grid-row:span ${props.layout.height}`}
-    onDragStart={(event) => { event.dataTransfer?.setData('text/plain', props.id); event.dataTransfer!.effectAllowed = 'move'; }}
     onDragOver={(event) => event.preventDefault()}
     onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer?.getData('text/plain'); if (source && source !== props.id) props.onMove(source, props.id); }}
   >
-    {props.children}
-    <span class="fleet-panel-resize" role="button" tabIndex={0} aria-label="Resize panel" title="Drag to resize" onPointerDown={resizeStart} />
+    <div class="fleet-panel-shell">
+      {props.children}
+      <button type="button" class="fleet-panel-drag-handle" draggable aria-label="Move panel" title="Drag to move panel" onDragStart={(event) => { event.stopPropagation(); event.dataTransfer?.setData('text/plain', props.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }}><GripVertical size={14} aria-hidden="true" /></button>
+      <span class="fleet-panel-resize" role="button" tabIndex={0} aria-label="Resize panel" title="Drag to resize" onPointerDown={resizeStart} />
+    </div>
   </div>;
 };
 
