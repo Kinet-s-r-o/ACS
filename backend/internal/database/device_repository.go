@@ -61,6 +61,23 @@ func EnsureAnalyticsParameterIndex(ctx context.Context, db *gorm.DB) error {
 		ON device_parameters (device_id, updated_at DESC, name) INCLUDE (value)`).Error; err != nil {
 		return err
 	}
+	var rxIndex struct{ Valid bool }
+	rxIndexResult := db.Raw(`SELECT indisvalid AS valid FROM pg_index
+		WHERE indexrelid = to_regclass('idx_device_parameters_device_rx_power')`).Scan(&rxIndex)
+	if rxIndexResult.Error != nil {
+		return rxIndexResult.Error
+	}
+	if rxIndexResult.RowsAffected > 0 && !rxIndex.Valid {
+		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS idx_device_parameters_device_rx_power`).Error; err != nil {
+			return err
+		}
+	}
+	if err := db.Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_device_rx_power
+		ON device_parameters (device_id, name) INCLUDE (value)
+		WHERE name LIKE '%RXPower%' OR name LIKE '%OpticalRxPower%' OR name LIKE '%OpticalReceivedPower%'
+			OR name LIKE '%TransceiverRxPower%' OR name LIKE '%ReceivedPower%'`).Error; err != nil {
+		return err
+	}
 	return db.Exec(`ANALYZE device_parameters (name)`).Error
 }
 

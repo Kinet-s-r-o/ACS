@@ -103,18 +103,23 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 		}
 		query = query.Where("("+strings.Join(searchExpressions, " OR ")+")", args...)
 	}
+	rxPowerJoinAdded := false
 	for column, filter := range options.Filters {
 		if len(filter.Rules) == 0 {
 			continue
 		}
-		expression, err := inventoryFilterExpression(column, options.IncludeSensitive)
+		if column == "rx_power" {
+			query = query.Joins(inventoryRXPowerLateralJoin())
+			rxPowerJoinAdded = true
+		}
+		expression, err := inventoryFilterExpression(column, options.IncludeSensitive, "inventory_rx_power.value")
 		if err != nil {
 			return nil, 0, err
 		}
 		ruleSQL := make([]string, 0, len(filter.Rules))
 		args := make([]interface{}, 0, len(filter.Rules)*2)
 		for _, rule := range filter.Rules {
-			sql, values, err := inventoryRuleSQL(expression, column, rule)
+			sql, values, err := inventoryRuleSQL(expression, column, rule, "inventory_rx_power.value")
 			if err != nil {
 				return nil, 0, err
 			}
@@ -140,6 +145,13 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 	sortExpression, ok := inventorySortExpression(sortColumn, options.IncludeSensitive)
 	if !ok {
 		return nil, 0, fmt.Errorf("invalid inventory sort column")
+	}
+	if sortColumn == "rx_power" {
+		if !rxPowerJoinAdded {
+			query = query.Joins(inventoryRXPowerLateralJoin())
+			rxPowerJoinAdded = true
+		}
+		_, sortExpression = inventoryRXExpressionsFor("inventory_rx_power.value")
 	}
 	direction := strings.ToUpper(options.Direction)
 	if direction != "ASC" && direction != "DESC" {
@@ -183,8 +195,22 @@ func inventoryTagExpression() string {
 	return `(SELECT COALESCE(string_agg(COALESCE(td.name, tags.tag_id), ', ' ORDER BY tags.ordinal), '') FROM jsonb_array_elements_text(COALESCE(devices.tags, '[]'::jsonb)) WITH ORDINALITY AS tags(tag_id, ordinal) LEFT JOIN tag_definitions td ON td.id = tags.tag_id)`
 }
 
+const inventoryRXPowerPredicate = `dp.name LIKE '%RXPower%' OR dp.name LIKE '%OpticalRxPower%' OR dp.name LIKE '%OpticalReceivedPower%' OR dp.name LIKE '%TransceiverRxPower%' OR dp.name LIKE '%ReceivedPower%'`
+
+func inventoryRXPowerLateralJoin() string {
+	return `LEFT JOIN LATERAL (
+		SELECT dp.value FROM device_parameters dp
+		WHERE dp.device_id = devices.id AND (` + inventoryRXPowerPredicate + `)
+		ORDER BY dp.name LIMIT 1
+	) AS inventory_rx_power ON TRUE`
+}
+
 func inventoryRXExpressions() (string, string) {
-	raw := `(SELECT dp.value FROM device_parameters dp WHERE dp.device_id = devices.id AND (dp.name LIKE '%RXPower%' OR dp.name LIKE '%OpticalRxPower%' OR dp.name LIKE '%OpticalReceivedPower%' OR dp.name LIKE '%TransceiverRxPower%' OR dp.name LIKE '%ReceivedPower%') ORDER BY dp.name LIMIT 1)`
+	raw := `(SELECT dp.value FROM device_parameters dp WHERE dp.device_id = devices.id AND (` + inventoryRXPowerPredicate + `) ORDER BY dp.name LIMIT 1)`
+	return inventoryRXExpressionsFor(raw)
+}
+
+func inventoryRXExpressionsFor(raw string) (string, string) {
 	numeric := `CASE WHEN ` + raw + ` ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$' THEN (` + raw + `)::double precision END`
 	converted := `CASE WHEN (` + numeric + `) <= 0 THEN (` + numeric + `) WHEN (` + numeric + `) < 10000 THEN 10 * ln((` + numeric + `) / 10000) / ln(10) WHEN abs(` + numeric + `) > 100 THEN (` + numeric + `) / 100 ELSE (` + numeric + `) END`
 	text := `CASE WHEN ` + raw + ` IS NULL THEN '-' WHEN (` + numeric + `) IS NULL THEN ` + raw + ` ELSE to_char(round((` + converted + `)::numeric, 2), 'FM999999999999990.00') END`
@@ -232,7 +258,7 @@ func inventorySortExpression(column string, includeSensitive bool) (string, bool
 	}
 }
 
-func inventoryFilterExpression(column string, includeSensitive bool) (string, error) {
+func inventoryFilterExpression(column string, includeSensitive bool, rxPowerValue string) (string, error) {
 	if !inventoryColumns[column] {
 		return "", fmt.Errorf("invalid inventory filter column")
 	}
@@ -243,7 +269,7 @@ func inventoryFilterExpression(column string, includeSensitive bool) (string, er
 		return `CASE WHEN devices.online THEN 'Online' ELSE 'Offline' END`, nil
 	}
 	if column == "rx_power" {
-		text, _ := inventoryRXExpressions()
+		text, _ := inventoryRXExpressionsFor(rxPowerValue)
 		return `CASE WHEN ` + text + ` = '-' THEN '' ELSE ` + text + ` END`, nil
 	}
 	expression, _ := inventorySortExpression(column, includeSensitive)
@@ -259,12 +285,12 @@ func inventoryFilterExpression(column string, includeSensitive bool) (string, er
 	}
 }
 
-func inventoryRuleSQL(expression, column string, rule DeviceInventoryFilterRule) (string, []interface{}, error) {
+func inventoryRuleSQL(expression, column string, rule DeviceInventoryFilterRule, rxPowerValue string) (string, []interface{}, error) {
 	if strings.HasPrefix(rule.Operator, "greater_than") || strings.HasPrefix(rule.Operator, "less_than") {
 		var numericExpression string
 		switch column {
 		case "rx_power":
-			_, numericExpression = inventoryRXExpressions()
+			_, numericExpression = inventoryRXExpressionsFor(rxPowerValue)
 		case "uptime":
 			raw := inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.UpTime")
 			numericExpression = `CASE WHEN ` + raw + ` ~ '^[0-9]+([.][0-9]+)?$' THEN (` + raw + `)::double precision END`
