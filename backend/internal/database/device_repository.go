@@ -27,6 +27,14 @@ func EnsureWANParameterIndex(ctx context.Context, db *gorm.DB) error {
 		WHERE name LIKE 'InternetGatewayDevice.WANDevice.%'`).Error
 }
 
+func EnsureAnalyticsParameterIndex(ctx context.Context, db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+	return db.WithContext(ctx).Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_device_updated_name
+		ON device_parameters (device_id, updated_at DESC, name)`).Error
+}
+
 type DeviceGrowthPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	Count     int64     `json:"count"`

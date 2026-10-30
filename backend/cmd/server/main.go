@@ -141,6 +141,14 @@ func main() {
 			log.Fatalf("API server failed: %v", err)
 		}
 	}()
+	go func() {
+		log.Println("Preparing fleet analytics parameter index in the background...")
+		if err := database.EnsureAnalyticsParameterIndex(ctx, db); err != nil {
+			log.Printf("Fleet analytics parameter index creation failed: %v", err)
+			return
+		}
+		log.Println("Fleet analytics parameter index is ready")
+	}()
 	if wanBackfillNeeded {
 		go func() {
 			log.Println("Preparing WAN interface inventory in the background...")
