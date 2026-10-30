@@ -35,31 +35,35 @@ const FleetPanelFrame: Component<{
   id: string;
   layout: FleetPanelLayout;
   onMove: (source: string, target: string) => void;
-  onResize: (id: string, width: number) => void;
+  onResize: (id: string, width: number, height?: number) => void;
   children: JSX.Element;
 }> = (props) => {
   const [dragging, setDragging] = createSignal(false);
   let startX = 0;
   let startWidth = props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width;
-  const resizeStart = (event: PointerEvent) => {
+  const resizeStart = (event: PointerEvent, axis: 'x' | 'y') => {
     event.preventDefault();
     event.stopPropagation();
-    startX = event.clientX;
-    startWidth = props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width;
+    const startPointer = axis === 'x' ? event.clientX : event.clientY;
+    startX = startPointer;
+    startWidth = axis === 'x' ? (props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width) : ((event.currentTarget as HTMLElement).closest('.fleet-panel-shell')?.getBoundingClientRect().height ?? 0);
     const grid = (event.currentTarget as HTMLElement).closest('.fleet-dashboard-grid');
     const columnStep = grid ? grid.getBoundingClientRect().width / 120 : 10;
     let currentWidth = startWidth;
     grid?.classList.add('is-resizing');
     const move = (current: PointerEvent) => {
-      currentWidth = Math.max(30, Math.min(120, startWidth + (current.clientX - startX) / Math.max(1, columnStep)));
-      props.onResize(props.id, currentWidth);
+      const delta = (axis === 'x' ? current.clientX : current.clientY) - startPointer;
+      currentWidth = axis === 'x' ? Math.max(30, Math.min(120, startWidth + delta / Math.max(1, columnStep))) : Math.max(80, startWidth + delta);
+      if (axis === 'x') props.onResize(props.id, currentWidth);
+      else props.onResize(props.id, props.layout.width, currentWidth);
     };
     const end = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
       grid?.classList.remove('is-resizing');
-      props.onResize(props.id, Math.max(30, Math.min(120, Math.round(currentWidth))));
+      if (axis === 'x') props.onResize(props.id, Math.max(30, Math.min(120, Math.round(currentWidth))));
+      else props.onResize(props.id, props.layout.width, Math.max(80, Math.round(currentWidth / 12) * 12));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end, { once: true });
@@ -70,20 +74,40 @@ const FleetPanelFrame: Component<{
     event.preventDefault();
     event.stopPropagation();
     setDragging(true);
-    let targetID = '';
+    const source = (event.currentTarget as HTMLElement).closest<HTMLElement>('.fleet-layout-panel');
+    if (!source) return;
+    const rect = source.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    const ghost = source.cloneNode(true) as HTMLElement;
+    ghost.classList.add('fleet-panel-drag-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    Object.assign(ghost.style, {
+      position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`,
+      margin: '0', zIndex: '10000', pointerEvents: 'none', opacity: '.92', boxShadow: '0 14px 36px rgb(0 0 0 / .38)',
+      transform: 'none', transition: 'none',
+    });
+    document.body.append(ghost);
+    let previousTarget = '';
     const move = (current: PointerEvent) => {
+      ghost.style.left = `${current.clientX - offsetX}px`;
+      ghost.style.top = `${current.clientY - offsetY}px`;
       const target = document.elementFromPoint(current.clientX, current.clientY)?.closest<HTMLElement>('.fleet-layout-panel');
-      targetID = target?.dataset.fleetPanelId && target.dataset.fleetPanelId !== props.id ? target.dataset.fleetPanelId : '';
+      const targetID = target?.dataset.fleetPanelId && target.dataset.fleetPanelId !== props.id ? target.dataset.fleetPanelId : '';
       document.querySelectorAll('.fleet-layout-panel.is-drop-target').forEach((panel) => panel.classList.remove('is-drop-target'));
-      if (targetID) target?.classList.add('is-drop-target');
+      if (targetID) {
+        target.classList.add('is-drop-target');
+        if (targetID !== previousTarget) props.onMove(props.id, targetID);
+      }
+      previousTarget = targetID;
     };
     const end = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
+      ghost.remove();
       document.querySelectorAll('.fleet-layout-panel.is-drop-target').forEach((panel) => panel.classList.remove('is-drop-target'));
       setDragging(false);
-      if (targetID) props.onMove(props.id, targetID);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end, { once: true });
@@ -91,15 +115,17 @@ const FleetPanelFrame: Component<{
   };
   const width = () => Math.max(30, Math.min(120, props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width));
   const occupiedColumns = () => Math.ceil(width());
+  const savedHeight = () => props.layout.height > 5 ? props.layout.height : 0;
   return <div
     class={`fleet-layout-panel ${dragging() ? 'is-dragging' : ''}`}
     data-fleet-panel-id={props.id}
-    style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};width:${(width() / occupiedColumns()) * 100}%`}
+    style={`order:${props.layout.order};grid-column:span ${occupiedColumns()};width:${(width() / occupiedColumns()) * 100}%;--fleet-panel-height:${savedHeight()}px`}
   >
     <div class="fleet-panel-shell">
       {props.children}
       <button type="button" class="fleet-panel-drag-handle" aria-label="Move panel" title="Drag to move panel" onPointerDown={dragStart}><GripVertical size={14} aria-hidden="true" /></button>
-      <button type="button" class="fleet-panel-resize" aria-label="Resize panel width" title="Drag edge to resize width" onPointerDown={resizeStart} />
+      <button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge to resize width" onPointerDown={(event) => resizeStart(event, 'x')} />
+      <button type="button" class="fleet-panel-resize-y" aria-label="Resize panel height" title="Drag bottom edge to resize height" onPointerDown={(event) => resizeStart(event, 'y')} />
     </div>
   </div>;
 };
@@ -276,9 +302,12 @@ const Dashboard: Component = () => {
   const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); refetchPanelAnalytics(); };
   const layoutFor = (id: string, fallbackOrder = 100): FleetPanelLayout => {
     const saved = fleetLayout()[id] ?? { order: fallbackOrder, width: 40, height: 2 };
-    return { ...saved, width: Math.max(30, Math.min(120, saved.width <= 12 ? saved.width * 10 : saved.width)) };
+    return { ...saved, width: Math.max(30, Math.min(120, saved.width <= 12 ? saved.width * 10 : saved.width)), height: saved.height > 5 ? saved.height : 0 };
   };
-  const resizePanel = (id: string, width: number) => setFleetLayout((current) => ({ ...current, [id]: { ...(current[id] ?? layoutFor(id)), width, height: 1 } }));
+  const resizePanel = (id: string, width: number, height?: number) => setFleetLayout((current) => {
+    const saved = current[id] ?? layoutFor(id);
+    return { ...current, [id]: { ...saved, width, ...(height === undefined ? {} : { height }) } };
+  });
   const movePanel = (source: string, target: string) => setFleetLayout((current) => {
     const sourceLayout = current[source] ?? layoutFor(source);
     const targetLayout = current[target] ?? layoutFor(target);
@@ -458,7 +487,7 @@ const Dashboard: Component = () => {
           <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={panelAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchPanelAnalytics()} /></div>
         </Show>
 
-        <div class="fleet-panel-toolbar"><div><h2>Fleet panels</h2><p>Drag panels by the grip to move them; drag the right edge to resize.</p></div><button type="button" class="btn btn-secondary" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}><Plus size={14} />Add panel</button></div>
+        <div class="fleet-panel-toolbar"><div><h2>Fleet panels</h2><p>Drag panels by the grip to move them; resize from the right or bottom edge.</p></div><button type="button" class="btn btn-secondary" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}><Plus size={14} />Add panel</button></div>
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
         <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel} onResize={resizePanel}>
         <section class="data-panel fleet-content-panel">
