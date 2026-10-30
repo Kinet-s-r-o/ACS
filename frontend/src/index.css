@@ -292,7 +292,9 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .input-reveal:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
 .input::placeholder { color: rgb(var(--text-muted)); }.input:focus { outline: 0; border-color: rgb(var(--accent)); box-shadow: 0 0 0 2px rgb(var(--accent) / .12); }
 .field-error { margin: 5px 0 0; color: rgb(var(--error-text)); font-size: 11px; line-height: 1.4; }
-select.input { appearance: auto; }
+select.input { appearance: auto; color-scheme: inherit; }
+select.input option, .filter-dropdown-select option { color: rgb(var(--text-primary)); background-color: rgb(var(--bg-surface)); }
+select.input option:checked, .filter-dropdown-select option:checked { color: rgb(var(--text-primary)); background-color: rgb(var(--bg-elevated)); }
 table { width: 100%; border-collapse: separate; border-spacing: 0; }
 table thead th { text-align: left; }
 table thead th > div { justify-content: flex-start; }
