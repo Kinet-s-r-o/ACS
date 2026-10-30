@@ -21,7 +21,16 @@ const Security: Component = () => {
   const [overview, { refetch: refetchOverview }] = createResource(() => api.getSecurityOverview());
   const [auditPage, setAuditPage] = createSignal(0);
   const { pageSize: auditPageSize, changePageSize: changeAuditPageSize } = usePageSize('security_audit', 20);
-  const [audit, { refetch: refetchAudit }] = createResource(() => ({ limit: auditPageSize(), offset: auditPage() * auditPageSize() }), ({ limit, offset }) => api.getAuditLogs(limit, offset));
+  const [audit, { refetch: refetchAudit }] = createResource(async () => {
+    const firstPage = await api.getAuditLogs(500, 0);
+    const entries = [...firstPage.entries];
+    for (let offset = entries.length; offset < firstPage.total; offset += 500) {
+      const nextPage = await api.getAuditLogs(500, offset);
+      entries.push(...nextPage.entries);
+      if (nextPage.entries.length === 0) break;
+    }
+    return { ...firstPage, entries };
+  });
   const [blocked, { refetch: refetchBlocked }] = createResource(() => api.getBlockedDevices());
   const [serial, setSerial] = createSignal('');
   const [reason, setReason] = createSignal('');
@@ -75,6 +84,8 @@ const Security: Component = () => {
     }
     return sortRows(applyColumnFilters(all, columnFilters(), getFilterValue), auditSort().column, auditSort().direction, getFilterValue);
   });
+  const pagedAudit = createMemo(() => filteredAudit().slice(auditPage() * auditPageSize(), (auditPage() + 1) * auditPageSize()));
+  const auditTotalPages = createMemo(() => Math.ceil(filteredAudit().length / auditPageSize()));
 
   const refreshAll = () => { refetchOverview(); refetchAudit(); refetchBlocked(); };
   const blockDevice = async (event: SubmitEvent) => {
@@ -148,13 +159,13 @@ const Security: Component = () => {
                 <Show when={isVisible('status')}><th class="text-right px-4 py-2.5"><div class="flex items-center gap-1.5"><SortableHeader column="status" label="HTTP status" sortBy={auditSort().column} direction={auditSort().direction} onSort={handleAuditSort} /><ColumnFilter columnId="status" label="HTTP status" numeric active={columnFilters()['status'] || null} onApply={(s) => updateAuditFilter('status', s)} /></div></th></Show>
                 <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
               </tr></thead>
-              <tbody><For each={filteredAudit()}>{(entry) => <tr class="border-t border-subtle"><Show when={isVisible('created_at')}><td class="px-4 py-2.5 whitespace-nowrap text-[10px] text-muted">{formatDate(entry.created_at)}</td></Show><Show when={isVisible('username')}><td class="px-4 py-2.5 text-xs">{entry.username || 'unknown'}</td></Show><Show when={isVisible('action')}><td class="px-4 py-2.5"><span class="font-mono text-[10px] text-sky-500">{entry.action}</span></td></Show><Show when={isVisible('resource')}><td class="px-4 py-2.5 font-mono text-[10px] text-secondary max-w-[210px] truncate" title={entry.resource}>{entry.resource}</td></Show><Show when={isVisible('ip_address')}><td class="px-4 py-2.5 font-mono text-[10px] text-muted">{entry.ip_address || '—'}</td></Show><Show when={isVisible('status')}><td class="px-4 py-2.5 text-right"><span class={`badge ${entry.status >= 400 ? 'badge-error' : 'badge-success'}`}>{entry.status}</span></td></Show><td class="px-2 py-2.5"></td></tr>}</For></tbody>
+              <tbody><For each={pagedAudit()}>{(entry) => <tr class="border-t border-subtle"><Show when={isVisible('created_at')}><td class="px-4 py-2.5 whitespace-nowrap text-[10px] text-muted">{formatDate(entry.created_at)}</td></Show><Show when={isVisible('username')}><td class="px-4 py-2.5 text-xs">{entry.username || 'unknown'}</td></Show><Show when={isVisible('action')}><td class="px-4 py-2.5"><span class="font-mono text-[10px] text-sky-500">{entry.action}</span></td></Show><Show when={isVisible('resource')}><td class="px-4 py-2.5 font-mono text-[10px] text-secondary max-w-[210px] truncate" title={entry.resource}>{entry.resource}</td></Show><Show when={isVisible('ip_address')}><td class="px-4 py-2.5 font-mono text-[10px] text-muted">{entry.ip_address || '—'}</td></Show><Show when={isVisible('status')}><td class="px-4 py-2.5 text-right"><span class={`badge ${entry.status >= 400 ? 'badge-error' : 'badge-success'}`}>{entry.status}</span></td></Show><td class="px-2 py-2.5"></td></tr>}</For></tbody>
             </table>
             <Show when={audit.loading}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
             <Show when={!audit.loading && !audit.error && (audit()?.total ?? 0) === 0}><EmptyState compact title="No operator security events are recorded" description="Authentication and mutation events will appear after operators begin using this deployment." /></Show>
           </div>
         </section>
-        <div class="xl:col-span-2"><Pagination page={auditPage()} totalPages={Math.ceil((audit()?.total ?? 0) / auditPageSize())} totalItems={audit()?.total ?? 0} pageSize={auditPageSize()} onPageChange={setAuditPage} storageKey="security_audit" onPageSizeChange={(size) => { changeAuditPageSize(size); setAuditPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setAuditPage(0); }} onRemoveFilter={(columnId) => { updateAuditFilter(columnId, null); }} /></div>
+        <div class="xl:col-span-2"><Pagination page={auditPage()} totalPages={auditTotalPages()} totalItems={filteredAudit().length} pageSize={auditPageSize()} onPageChange={setAuditPage} storageKey="security_audit" onPageSizeChange={(size) => { changeAuditPageSize(size); setAuditPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setAuditPage(0); }} onRemoveFilter={(columnId) => { updateAuditFilter(columnId, null); }} /></div>
       </div>
     </div>
   );

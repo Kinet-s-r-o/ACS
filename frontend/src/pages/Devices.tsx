@@ -109,15 +109,21 @@ const Devices: Component = () => {
     }
   });
 
-  const [deviceList, { refetch }] = createResource(
-    () => [page(), pageSize()],
-    ([p, l]) => api.getDevices(l, p * l)
-  );
+  const [deviceList, { refetch }] = createResource(async () => {
+    const firstPage = await api.getDevices(500, 0);
+    const devices = [...firstPage.devices];
+    for (let offset = devices.length; offset < firstPage.total; offset += 500) {
+      const nextPage = await api.getDevices(500, offset);
+      devices.push(...nextPage.devices);
+      if (nextPage.devices.length === 0) break;
+    }
+    return { devices, total: firstPage.total };
+  });
   const [tagCatalog] = createResource(api.getTags);
 
   const getDeviceTagLabels = (device: Device) => (device.tags || []).map(id => tagCatalog()?.find(tag => tag.id === id)?.name || id).join(', ');
 
-  const totalPages = () => Math.ceil((deviceList()?.total ?? 0) / pageSize());
+  const totalPages = () => Math.ceil(sortedDevices().length / pageSize());
 
   const visibleColumns = createMemo(() => 
     columns().filter(c => c.visible).sort((a, b) => a.order - b.order)
@@ -311,6 +317,12 @@ const Devices: Component = () => {
           aVal = a.ip_address || '';
           bVal = b.ip_address || '';
           break;
+        case 'rx_power':
+          aVal = Number.parseFloat(getRxPower(a).value);
+          bVal = Number.parseFloat(getRxPower(b).value);
+          if (!Number.isFinite(aVal)) aVal = Number.NEGATIVE_INFINITY;
+          if (!Number.isFinite(bVal)) bVal = Number.NEGATIVE_INFINITY;
+          break;
         case 'uptime':
           aVal = getUptimeSeconds(a) ?? -1;
           bVal = getUptimeSeconds(b) ?? -1;
@@ -352,11 +364,17 @@ const Devices: Component = () => {
         return sort.direction === 'asc' ? comparison : -comparison;
       }
       
-      return sort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      if (aVal === bVal) return 0;
+      return sort.direction === 'asc' ? (aVal < bVal ? -1 : 1) : (aVal > bVal ? -1 : 1);
     });
   };
 
   const sortedDevices = createMemo(() => sortDevices(filteredDevices()));
+  const pagedDevices = createMemo(() => sortedDevices().slice(page() * pageSize(), (page() + 1) * pageSize()));
+  createEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(sortedDevices().length / pageSize()) - 1);
+    if (page() > maxPage) setPage(maxPage);
+  });
 
   const exportDevicesCSV = async () => {
     if (exportingDevices() || !deviceList()) return;
@@ -413,6 +431,7 @@ const Devices: Component = () => {
   };
 
   const handleSort = (columnId: string) => {
+    setPage(0);
     const current = sortBy();
     if (current?.column === columnId) {
       if (current.direction === 'asc') {
@@ -494,10 +513,10 @@ const Devices: Component = () => {
 
       <Show when={!deviceList.error}><div class="card overflow-hidden">
         <div class="table-panel-toolbar">
-          <span><strong>{filteredDevices().length}</strong> visible on this page · <strong>{deviceList()?.total ?? 0}</strong> total CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
+          <span><strong>{pagedDevices().length}</strong> shown · <strong>{sortedDevices().length}</strong> matching CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
           <div class="flex items-center gap-2">
             <Show when={hasInventoryFilter()}>
-              <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); }}>Clear search and filters</button>
+              <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); setPage(0); }}>Clear search and filters</button>
             </Show>
             <div class="relative">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
@@ -505,13 +524,13 @@ const Devices: Component = () => {
                 id="device-search"
                 type="text"
                 value={searchQuery()}
-                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                onInput={(e) => { setSearchQuery(e.currentTarget.value); setPage(0); }}
                 placeholder="Search CPEs..."
                 aria-label="Search CPEs by serial, model, vendor, or IP"
                 class="input pl-9! w-56 text-sm"
               />
               <Show when={searchQuery()}>
-                <button type="button" onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear CPE search">
+                <button type="button" onClick={() => { setSearchQuery(''); setPage(0); }} class="input-clear" aria-label="Clear CPE search">
                   <X size={12} />
                 </button>
               </Show>
@@ -534,7 +553,7 @@ const Devices: Component = () => {
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'ip_address', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults'].includes(col.id);
                     const currentSort = sortBy();
                     const isSorted = currentSort?.column === col.id;
                     
@@ -567,6 +586,7 @@ const Devices: Component = () => {
                             numeric={['rx_power', 'uptime', 'active_faults'].includes(col.id)}
                             active={columnFilters()[col.id] || null}
                             onApply={(state) => {
+                              setPage(0);
                               setColumnFilters((prev) => {
                                 const next = { ...prev };
                                 if (state) next[col.id] = state;
@@ -604,7 +624,7 @@ const Devices: Component = () => {
                     </tr>
                   }
                 >
-                  <For each={sortedDevices()}>
+                  <For each={pagedDevices()}>
                     {(device, idx) => (
                       <tr class={`border-t border-subtle hover:bg-elevated transition-fast ${idx() % 2 === 1 ? 'bg-base/50' : ''}`}>
                         <For each={visibleColumns()}>
@@ -625,7 +645,7 @@ const Devices: Component = () => {
         </div>
       </div></Show>
 
-      <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => setColumnFilters({})} onRemoveFilter={(columnId) => setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; })} />
+      <Pagination page={page()} totalPages={totalPages()} totalItems={sortedDevices().length} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
       </Show>
     </div>
   );

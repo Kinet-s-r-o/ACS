@@ -28,7 +28,16 @@ const Faults: Component = () => {
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
   const [faults, { refetch }] = createResource(
     () => filter(),
-    (selected) => api.getFaults(selected, 500)
+    async (selected) => {
+      const firstPage = await api.getFaults(selected, 500, 0);
+      const allFaults = [...firstPage.faults];
+      for (let offset = allFaults.length; offset < firstPage.total; offset += 500) {
+        const nextPage = await api.getFaults(selected, 500, offset);
+        allFaults.push(...nextPage.faults);
+        if (nextPage.faults.length === 0) break;
+      }
+      return { ...firstPage, faults: allFaults };
+    }
   );
 
   const [stats, { refetch: refetchStats }] = createResource(() => api.getFaultStats());
