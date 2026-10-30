@@ -233,6 +233,23 @@ func (h *Handler) routeMessage(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 }
 
+func usesTemplatePrimaryIP(settings models.TemplateInventory) bool {
+	return settings.PrimaryIPMode == "parameter" || settings.PrimaryIPMode == "interface_name"
+}
+
+func informHasPrimaryIPData(parameters []ParameterValueStruct, settings models.TemplateInventory) bool {
+	for _, parameter := range parameters {
+		if settings.PrimaryIPMode == "parameter" && parameter.Name == settings.PrimaryIPParameter {
+			return true
+		}
+		if settings.PrimaryIPMode == "interface_name" && strings.HasPrefix(parameter.Name, "InternetGatewayDevice.WANDevice.") &&
+			(strings.HasSuffix(parameter.Name, ".ExternalIPAddress") || strings.HasSuffix(parameter.Name, ".IPAddress")) {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remoteAddr string) (interface{}, error) {
 	inform := envelope.Body.Inform
 	if inform == nil || inform.DeviceId.SerialNumber == "" {
@@ -261,12 +278,22 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 
 	var deviceID int64
+	var resolvedTemplate *models.ProvisioningTemplate
+	if h.provisioningRepo != nil {
+		template, err := h.provisioningRepo.ResolveTemplateForDevice(ctx, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass)
+		if err == nil {
+			resolvedTemplate = template
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("Error resolving template for Inform from %s: %v", inform.DeviceId.SerialNumber, err)
+		}
+	}
 
 	if h.deviceRepo != nil {
 		params := ExtractImportantParameters(inform.ParameterList.Parameters)
 
 		var ipAddrStr *string
-		if ip := params["ExternalIPAddress"]; ip != "" {
+		usesTemplateIP := resolvedTemplate != nil && usesTemplatePrimaryIP(resolvedTemplate.Inventory)
+		if ip := params["ExternalIPAddress"]; ip != "" && !usesTemplateIP {
 			ipAddrStr = &ip
 		}
 
@@ -292,6 +319,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			}
 		}
 
+		parametersSaved := len(inform.ParameterList.Parameters) == 0
 		if h.parameterRepo != nil && deviceID > 0 && len(inform.ParameterList.Parameters) > 0 {
 			// Inform is a partial update, not an inventory of the parameter tree.
 			paramsToSave := make([]models.DeviceParameter, 0, len(inform.ParameterList.Parameters))
@@ -305,6 +333,24 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			log.Printf("Inform from %s carries %d parameters", inform.DeviceId.SerialNumber, len(inform.ParameterList.Parameters))
 			if err := h.parameterRepo.SaveInformParameters(ctx, deviceID, paramsToSave); err != nil {
 				log.Printf("Error saving Inform parameters: %v", err)
+			} else {
+				parametersSaved = true
+			}
+		}
+		if parametersSaved && h.parameterRepo != nil && deviceID > 0 && resolvedTemplate != nil && usesTemplatePrimaryIP(resolvedTemplate.Inventory) && informHasPrimaryIPData(inform.ParameterList.Parameters, resolvedTemplate.Inventory) {
+			var cached []models.DeviceParameter
+			var err error
+			if resolvedTemplate.Inventory.PrimaryIPMode == "parameter" {
+				cached, err = h.parameterRepo.GetByDeviceIDMatching(ctx, deviceID, nil, []string{resolvedTemplate.Inventory.PrimaryIPParameter})
+			} else {
+				cached, err = h.parameterRepo.GetByDeviceIDMatching(ctx, deviceID, []string{"InternetGatewayDevice.WANDevice."}, nil)
+			}
+			if err != nil {
+				log.Printf("Error loading cached IP parameters for %s: %v", inform.DeviceId.SerialNumber, err)
+			} else if ip := database.SelectPrimaryIPAddress(cached, resolvedTemplate.Inventory, ""); ip != "" {
+				if err := h.deviceRepo.UpdateIPAddress(ctx, deviceID, ip); err != nil {
+					log.Printf("Error saving selected IP address for %s: %v", inform.DeviceId.SerialNumber, err)
+				}
 			}
 		}
 
@@ -352,37 +398,36 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 
 	dynamicBranches := []string(nil)
-	if deviceID > 0 && h.provisioningRepo != nil {
-		if template, err := h.provisioningRepo.ResolveTemplateForDevice(ctx, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass); err == nil {
-			dynamicBranches = append(dynamicBranches, template.DynamicParameterBranches...)
-			parameterValues := make(map[string]string, len(inform.ParameterList.Parameters))
-			for _, parameter := range inform.ParameterList.Parameters {
-				parameterValues[parameter.Name] = parameter.Value
-			}
-			applicationSecret := ""
-			applicationSecretLoaded := false
-			for _, variable := range template.Variables {
-				for _, step := range variable.Steps {
-					if step.Function == "hmac_sha256" && step.Args["key_source"] == "application" && h.settingsRepo != nil && !applicationSecretLoaded {
-						applicationSecretLoaded = true
-						setting, settingErr := h.settingsRepo.Get(ctx, "connection_request_password")
-						if settingErr != nil {
-							log.Printf("Could not load application HMAC secret for device %s", inform.DeviceId.SerialNumber)
-						} else if setting != nil {
-							applicationSecret = setting.Value
-						}
-						break
+	if deviceID > 0 && resolvedTemplate != nil {
+		template := resolvedTemplate
+		dynamicBranches = append(dynamicBranches, template.DynamicParameterBranches...)
+		parameterValues := make(map[string]string, len(inform.ParameterList.Parameters))
+		for _, parameter := range inform.ParameterList.Parameters {
+			parameterValues[parameter.Name] = parameter.Value
+		}
+		applicationSecret := ""
+		applicationSecretLoaded := false
+		for _, variable := range template.Variables {
+			for _, step := range variable.Steps {
+				if step.Function == "hmac_sha256" && step.Args["key_source"] == "application" && h.settingsRepo != nil && !applicationSecretLoaded {
+					applicationSecretLoaded = true
+					setting, settingErr := h.settingsRepo.Get(ctx, "connection_request_password")
+					if settingErr != nil {
+						log.Printf("Could not load application HMAC secret for device %s", inform.DeviceId.SerialNumber)
+					} else if setting != nil {
+						applicationSecret = setting.Value
 					}
-				}
-				if applicationSecretLoaded {
 					break
 				}
 			}
-			if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues, applicationSecret); err != nil {
-				log.Printf("Could not resolve provisioning variables for device %s: %v", inform.DeviceId.SerialNumber, err)
-			} else {
-				provisioningVariableValues = values
+			if applicationSecretLoaded {
+				break
 			}
+		}
+		if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues, applicationSecret); err != nil {
+			log.Printf("Could not resolve provisioning variables for device %s: %v", inform.DeviceId.SerialNumber, err)
+		} else {
+			provisioningVariableValues = values
 		}
 		var allRules []*models.ProvisioningRule
 

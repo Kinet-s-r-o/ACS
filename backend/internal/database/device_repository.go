@@ -143,6 +143,14 @@ func (r *DeviceRepository) UpdateFromParameters(ctx context.Context, deviceID in
 	return r.db.WithContext(ctx).Model(&models.Device{}).Where("id = ?", deviceID).Updates(updates).Error
 }
 
+func (r *DeviceRepository) UpdateIPAddress(ctx context.Context, deviceID int64, ipAddress string) error {
+	if ipAddress == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&models.Device{}).Where("id = ?", deviceID).
+		Update("ip_address", ipAddress).Error
+}
+
 func (r *DeviceRepository) GetBySerial(ctx context.Context, serialNumber string) (*models.Device, error) {
 	var device models.Device
 	err := r.db.WithContext(ctx).Where("serial_number = ?", serialNumber).First(&device).Error
@@ -188,9 +196,9 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 	return devices, int(total), nil
 }
 
-// LoadInventoryParameters fetches only parameter values used by the visible
-// inventory columns and the selected templates' IP address rules.
-func (r *DeviceRepository) LoadInventoryParameters(ctx context.Context, devices []*models.Device, templates []*models.ProvisioningTemplate, columns []string) error {
+// LoadInventoryParameters fetches only parameter values used by the requested
+// inventory columns. The selected IP address is stored on the device row.
+func (r *DeviceRepository) LoadInventoryParameters(ctx context.Context, devices []*models.Device, columns []string) error {
 	if len(devices) == 0 || len(columns) == 0 {
 		return nil
 	}
@@ -230,47 +238,6 @@ func (r *DeviceRepository) LoadInventoryParameters(ctx context.Context, devices 
 		if columnSet[entry.column] {
 			conditions = append(conditions, "name = ?")
 			args = append(args, entry.name)
-		}
-	}
-	if columnSet["ip_address"] {
-		parameterDevices := make(map[string][]int64)
-		interfaceDeviceIDs := make([]int64, 0)
-		for _, device := range devices {
-			manufacturer, productClass := "", ""
-			if device.Manufacturer != nil {
-				manufacturer = *device.Manufacturer
-			}
-			if device.ProductClass != nil {
-				productClass = *device.ProductClass
-			}
-			template := SelectProvisioningTemplate(templates, manufacturer, productClass)
-			if template == nil {
-				continue
-			}
-			switch template.Inventory.PrimaryIPMode {
-			case "parameter":
-				if name := template.Inventory.PrimaryIPParameter; name != "" {
-					parameterDevices[name] = append(parameterDevices[name], device.ID)
-				}
-			case "interface_name":
-				if template.Inventory.PrimaryIPInterfaceName != "" {
-					interfaceDeviceIDs = append(interfaceDeviceIDs, device.ID)
-				}
-			}
-		}
-		parameterNames := make([]string, 0, len(parameterDevices))
-		for name := range parameterDevices {
-			parameterNames = append(parameterNames, name)
-		}
-		sort.Strings(parameterNames)
-		for _, name := range parameterNames {
-			ids := parameterDevices[name]
-			conditions = append(conditions, "(device_id IN ? AND name = ?)")
-			args = append(args, ids, name)
-		}
-		if len(interfaceDeviceIDs) > 0 {
-			conditions = append(conditions, "(device_id IN ? AND name ~ ?)")
-			args = append(args, interfaceDeviceIDs, `^InternetGatewayDevice\.WANDevice\.[0-9]+\.WANConnectionDevice\.[0-9]+\.(WANPPPConnection|WANIPConnection)\.[0-9]+\.(Name|ExternalIPAddress|IPAddress)$`)
 		}
 	}
 	if len(conditions) == 0 {

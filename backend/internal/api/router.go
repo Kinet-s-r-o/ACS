@@ -396,48 +396,16 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	var templates []*models.ProvisioningTemplate
-	var templateErr error
-	if containsInventoryColumn(columns, "ip_address") {
-		templates, templateErr = r.provisioningRepo.ListTemplates(req.Context())
-		if templateErr != nil {
-			log.Printf("Error loading provisioning templates for device IP selection: %v", templateErr)
-			templates = nil
-		}
-	}
 	devices, total, err := r.deviceRepo.List(req.Context(), limit, offset)
 	if err != nil {
 		log.Printf("Error listing devices: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list devices")
 		return
 	}
-	if err := r.deviceRepo.LoadInventoryParameters(req.Context(), devices, templates, columns); err != nil {
+	if err := r.deviceRepo.LoadInventoryParameters(req.Context(), devices, columns); err != nil {
 		log.Printf("Error loading inventory parameters: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to load inventory parameters")
 		return
-	}
-	if templateErr == nil && containsInventoryColumn(columns, "ip_address") {
-		for _, device := range devices {
-			manufacturer, productClass := "", ""
-			if device.Manufacturer != nil {
-				manufacturer = *device.Manufacturer
-			}
-			if device.ProductClass != nil {
-				productClass = *device.ProductClass
-			}
-			if template := database.SelectProvisioningTemplate(templates, manufacturer, productClass); template != nil {
-				fallback := ""
-				if device.IPAddress != nil {
-					fallback = *device.IPAddress
-				}
-				selected := database.SelectPrimaryIPAddress(device.Parameters, template.Inventory, fallback)
-				if selected == "" {
-					device.IPAddress = nil
-				} else {
-					device.IPAddress = &selected
-				}
-			}
-		}
 	}
 	for _, device := range devices {
 		device.Parameters = filterInventoryParameters(device.Parameters, columns)
