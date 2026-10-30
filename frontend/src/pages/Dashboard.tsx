@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
+import { createEffect, createMemo, createResource, createSignal, For, Index, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, RotateCcw } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
@@ -757,14 +757,14 @@ const Dashboard: Component = () => {
             <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}><section aria-label="Thresholds">
               <div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-primary">Thresholds and colors</h3><button type="button" class="btn btn-secondary text-xs" onClick={addThreshold}><Plus size={13} />Add threshold</button></div>
               <div class="space-y-2">
-                <For each={panelDraft()?.thresholds ?? []}>{(threshold, index) => (
+                <Index each={panelDraft()?.thresholds ?? []}>{(threshold, index) => (
                   <div class="grid grid-cols-[minmax(0,1fr)_8rem_3.5rem_2rem] items-end gap-2">
-                    <label class="block min-w-0 text-xs text-muted">Label<input class="input mt-1 w-full" maxlength={48} value={threshold.label} onInput={(event) => updateThreshold(index(), 'label', event.currentTarget.value)} /></label>
-                    <label class="block text-xs text-muted">Maximum<input type="number" step="any" class="input mt-1 w-full" placeholder={index() === (panelDraft()?.thresholds.length ?? 1) - 1 ? 'No limit' : ''} value={threshold.max} onInput={(event) => updateThreshold(index(), 'max', event.currentTarget.value)} /></label>
-                    <label class="block text-xs text-muted">Color<select class="input mt-1 w-full" value={threshold.color} aria-label={`Color for ${threshold.label}`} onChange={(event) => updateThresholdColor(index(), event.currentTarget.value as DashboardThresholdColor)}><For each={thresholdColors}>{(color) => <option value={color.id}>{color.label}</option>}</For></select></label>
-                    <button type="button" class="icon-button text-rose-400" aria-label={`Remove threshold ${threshold.label}`} title="Remove threshold" disabled={(panelDraft()?.thresholds.length ?? 0) <= 1} onClick={() => removeThreshold(index())}><Trash2 size={14} /></button>
+                    <label class="block min-w-0 text-xs text-muted">Label<input class="input mt-1 w-full" maxlength={48} value={threshold().label} onInput={(event) => updateThreshold(index, 'label', event.currentTarget.value)} /></label>
+                    <label class="block text-xs text-muted">Maximum<input type="number" step="any" class="input mt-1 w-full" placeholder={index === (panelDraft()?.thresholds.length ?? 1) - 1 ? 'No limit' : ''} value={threshold().max} onInput={(event) => updateThreshold(index, 'max', event.currentTarget.value)} /></label>
+                    <label class="block text-xs text-muted">Color<select class="input mt-1 w-full" value={threshold().color} aria-label={`Color for ${threshold().label}`} onChange={(event) => updateThresholdColor(index, event.currentTarget.value as DashboardThresholdColor)}><For each={thresholdColors}>{(color) => <option value={color.id}>{color.label}</option>}</For></select></label>
+                    <button type="button" class="icon-button text-rose-400" aria-label={`Remove threshold ${threshold().label}`} title="Remove threshold" disabled={(panelDraft()?.thresholds.length ?? 0) <= 1} onClick={() => removeThreshold(index)}><Trash2 size={14} /></button>
                   </div>
-                )}</For>
+                )}</Index>
               </div>
               <p class="mt-2 text-xs text-muted">Buckets are checked in order using value ≤ maximum. Leave the final maximum empty to include all remaining values; missing or nonnumeric values appear as N/A.</p>
             </section></Show>
