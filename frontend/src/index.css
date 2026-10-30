@@ -228,7 +228,9 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 
 .distribution-list { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .distribution-row { display: grid; grid-template-columns: minmax(78px, 1fr) minmax(110px, 2fr) auto; align-items: center; gap: 10px; min-width: 0; }
-.distribution-label { overflow: hidden; color: rgb(var(--text-secondary)); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.distribution-label { overflow: hidden; color: rgb(var(--text-secondary)); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+[data-theme="dark"] .fleet-dashboard-grid .distribution-label,
+[data-theme="dark"] .fleet-dashboard-grid .distribution-value { color: #fff; }
 .distribution-progress { width: 100%; height: 12px; overflow: hidden; appearance: none; border: 1px solid rgb(var(--border-subtle)); border-radius: 2px; background: rgb(var(--bg-elevated)); box-shadow: inset 0 1px 2px rgb(15 23 42 / 14%), 0 1px 1px rgb(255 255 255 / 70%); }
 .distribution-progress::-webkit-progress-bar { background: rgb(var(--bg-elevated)); }
 .distribution-progress::-webkit-progress-value { background: rgb(var(--accent)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 38%), inset 0 -1px 0 rgb(15 23 42 / 15%), 0 1px 2px rgb(15 23 42 / 20%); }
@@ -274,7 +276,7 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fleet-panel-resize-x { top: 0; right: 0; width: 10px; height: 100%; cursor: ew-resize; }
 .fleet-panel-resize-y { right: 0; bottom: 0; left: 0; height: 10px; cursor: ns-resize; }
 .fleet-panel-resize-x:focus-visible, .fleet-panel-resize-y:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; }
-.distribution-value { min-width: 32px; color: rgb(var(--text-secondary)); font-family: "IBM Plex Mono", monospace; font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
+.distribution-value { min-width: 32px; color: rgb(var(--text-secondary)); font-family: "IBM Plex Mono", monospace; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 
 .login-context { display: grid; grid-template-columns: 118px 1fr; gap: 0; margin-top: 36px; border-top: 1px solid rgb(var(--border-default)); }
 .login-context dt, .login-context dd { margin: 0; padding: 10px 0; border-bottom: 1px solid rgb(var(--border-subtle)); font-size: 11px; }
