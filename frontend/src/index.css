@@ -210,6 +210,7 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .task-register .task-filter-card[aria-pressed="true"]::after { position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--accent)); content: ""; }
 .task-filter-label { display: block; color: rgb(var(--text-muted)); font-size: 11px; }
 .task-filter-count { display: block; margin-top: 7px; color: rgb(var(--text-primary)); font-family: "IBM Plex Mono", monospace; font-size: 24px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.task-filter-card.is-sent .task-filter-count { color: rgb(var(--accent)); }
 .task-filter-card.is-online .task-filter-count { color: rgb(var(--success-text)); }
 .task-filter-card.is-offline .task-filter-count { color: rgb(var(--error-text)); }
 .task-filter-card.is-warning .task-filter-count { color: rgb(var(--warning-text)); }
