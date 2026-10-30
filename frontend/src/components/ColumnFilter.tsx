@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show, For, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { Filter, Plus, X } from 'lucide-solid';
 import {
   type ColumnFilterState,
@@ -119,16 +120,17 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
         </Show>
       </button>
       <Show when={open()}>
-        <div
-          class="filter-dropdown"
-          ref={(el) => {
-            panelRef = el;
-            el.style.position = 'fixed';
-            positionPanel(el);
-            if (el) document.addEventListener('click', handleClickOutside);
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <Portal>
+          <div
+            class="filter-dropdown"
+            ref={(el) => {
+              panelRef = el;
+              el.style.position = 'fixed';
+              positionPanel(el);
+              document.addEventListener('click', handleClickOutside);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div class="filter-dropdown-header">
               <span class="filter-dropdown-title">{props.label}</span>
               <button type="button" class="filter-dropdown-close" onClick={() => setOpen(false)} aria-label="Close filter">
@@ -188,7 +190,8 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
                 Apply
               </button>
             </div>
-        </div>
+          </div>
+        </Portal>
       </Show>
     </>
   );
