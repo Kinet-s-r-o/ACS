@@ -255,6 +255,18 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .distribution-progress-gray::-moz-progress-bar { background: rgb(var(--text-muted)); }
 .dashboard-configurable-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .data-panel-section .dashboard-configurable-heading h3 { min-width: 0; margin: 0; }
+.fleet-dashboard-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 120px; gap: 16px; align-items: stretch; }
+.fleet-layout-panel { position: relative; min-width: 0; min-height: 0; transition: transform 160ms ease, box-shadow 160ms ease; }
+.fleet-layout-panel[draggable="true"] { cursor: grab; }
+.fleet-layout-panel[draggable="true"]:active { cursor: grabbing; }
+.fleet-layout-panel:hover { z-index: 2; }
+.fleet-content-panel { height: 100%; min-height: 0; overflow: auto; }
+.fleet-panel-health-group, .fleet-panel-inventory-group { display: contents; }
+.fleet-panel-health-group .dashboard-health-grid, .fleet-panel-inventory-group .inventory-grid { display: contents; }
+.fleet-panel-health-group > .data-panel-header, .fleet-panel-inventory-group > .data-panel-header { grid-column: 1 / -1; grid-row: span 8; }
+.fleet-panel-resize { position: absolute; right: 6px; bottom: 6px; width: 18px; height: 18px; cursor: nwse-resize; border-right: 2px solid rgb(var(--text-muted)); border-bottom: 2px solid rgb(var(--text-muted)); opacity: .55; z-index: 3; }
+.fleet-panel-resize:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; opacity: 1; }
+.fleet-panel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid rgb(var(--border-subtle)); background: rgb(var(--surface)); }
 .dashboard-add-panel { flex: 0 0 auto; color: rgb(var(--text-muted)); opacity: .8; }
 .dashboard-add-panel:hover:not(:disabled) { color: rgb(var(--text-primary)); opacity: 1; }
 .distribution-value { min-width: 32px; color: rgb(var(--text-secondary)); font-family: "IBM Plex Mono", monospace; font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -494,6 +506,15 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .inventory-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dashboard-health-grid .data-panel-section + .data-panel-section,
   .inventory-grid .data-panel-section + .data-panel-section { border-top: 0; border-left: 1px solid rgb(var(--border-subtle)); }
+}
+
+@media (max-width: 1023px) {
+  .fleet-dashboard-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .fleet-dashboard-grid { grid-template-columns: 1fr; grid-auto-rows: 120px; }
+  .fleet-layout-panel { grid-column: 1 / -1 !important; }
 }
 @media (min-width: 1536px) {
   .device-health-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
