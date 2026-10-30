@@ -207,32 +207,46 @@ const defaultDashboardPanels: DashboardPanelConfig[] = [
 ];
 
 const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => {
-  const defaults = defaultDashboardPanels.map((fallback) => {
-  const saved = Array.isArray(panels) ? panels.find((panel) => panel?.id === fallback.id) : undefined;
-  return saved && Array.isArray(saved.thresholds) ? { ...fallback, ...saved, thresholds: saved.thresholds } : fallback;
+  const savedPanels = Array.isArray(panels) ? panels : [];
+  const defaults = defaultDashboardPanels.flatMap((fallback) => {
+    const saved = savedPanels.find((panel) => panel?.id === fallback.id);
+    return saved
+      ? [{ ...fallback, ...saved, thresholds: Array.isArray(saved.thresholds) ? saved.thresholds : fallback.thresholds }]
+      : [];
   });
-  const custom = Array.isArray(panels) ? panels.filter((panel) => panel?.id?.startsWith('custom-') && !defaultDashboardPanels.some((fallback) => fallback.id === panel.id)) : [];
+  const custom = savedPanels.filter((panel) => panel?.id?.startsWith('custom-') && !defaultDashboardPanels.some((fallback) => fallback.id === panel.id));
   return [...defaults, ...custom];
 };
+
+const initializeDashboardPanels = (panels: DashboardPanelConfig[]) => normalizeDashboardPanels([
+  ...defaultDashboardPanels.filter((fallback) => !panels.some((panel) => panel.id === fallback.id)),
+  ...panels,
+]);
 
 const loadDashboardPanelConfigs = async (): Promise<DashboardPanelConfig[]> => {
   const remote = await api.getDashboardPanels();
   let legacyRaw: string | null = null;
   try { legacyRaw = localStorage.getItem('acs.dashboard.parameter-panels'); } catch { /* Local storage may be unavailable. */ }
-  if (remote.length > 0 || !legacyRaw) {
-    if (remote.length > 0) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
-    return remote;
+  let panels = remote;
+  if (remote.length === 0 && legacyRaw) {
+    try {
+      const legacy = JSON.parse(legacyRaw) as Array<Record<string, unknown>>;
+      panels = legacy.map((panel) => ({ ...panel, parameter_pattern: panel.parameter_pattern ?? panel.parameterPattern })) as DashboardPanelConfig[];
+    } catch {
+      panels = [];
+    }
   }
-  try {
-    const legacy = JSON.parse(legacyRaw) as Array<Record<string, unknown>>;
-    const converted = legacy.map((panel) => ({ ...panel, parameter_pattern: panel.parameter_pattern ?? panel.parameterPattern })) as DashboardPanelConfig[];
-    const migrated = normalizeDashboardPanels(converted);
-    const saved = await api.saveDashboardPanels(migrated);
-    try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
-    return saved;
-  } catch {
-    return remote;
+  const hasDefaultPanelState = panels.some((panel) => defaultDashboardPanels.some((fallback) => fallback.id === panel.id));
+  if (hasDefaultPanelState) {
+    if (legacyRaw) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
+    return panels;
   }
+
+  // Seed defaults once for new users and older accounts that only received a copied custom panel.
+  const initialized = initializeDashboardPanels(panels);
+  const saved = await api.saveDashboardPanels(initialized);
+  if (legacyRaw) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
+  return saved;
 };
 
 const semanticTone = (label: string) => {
