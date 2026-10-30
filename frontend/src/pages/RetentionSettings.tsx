@@ -69,8 +69,18 @@ const RetentionSettings: Component = () => {
   );
   const [draft, setDraft] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
+  const [compressionAgeUnitOverride, setCompressionAgeUnitOverride] = createSignal<'hours' | 'days' | null>(null);
   const value = (key: string) => draft()[key] ?? settings()?.[key] ?? '';
   const update = (key: string, next: string) => setDraft(previous => ({ ...previous, [key]: next }));
+  const compressionAgeUnit = () => compressionAgeUnitOverride() ?? (Number(value('compression_metric_after_days')) < 1 ? 'hours' : 'days');
+  const compressionAgeDisplay = () => {
+    const days = Number(value('compression_metric_after_days'));
+    const amount = compressionAgeUnit() === 'hours' ? days * 24 : days;
+    return Number.isFinite(amount) ? String(Number(amount.toPrecision(8))) : '';
+  };
+  const formatCompressionAge = (days: number) => days < 1
+    ? `${Number((days * 24).toPrecision(4))} hours`
+    : `${days.toLocaleString(undefined, { maximumFractionDigits: 2 })} days`;
   const handleQuerySort = (column: string) => setQuerySort(current => ({
     column: column as DatabaseQuerySort,
     direction: current.column === column && current.direction === 'desc' ? 'asc' : 'desc',
@@ -170,16 +180,25 @@ const RetentionSettings: Component = () => {
             Enable automatic metric history compression
           </label>
           <div class="max-w-sm">
-            <label for="compression-metric-after-days" class="block text-xs text-muted mb-1.5">Compress metric data older than (days)</label>
-            <input id="compression-metric-after-days" type="number" class="input w-full" min={1 / 24} max="3650" step="any" required value={value('compression_metric_after_days')} disabled={!canWrite() || saving() || !compressionState()?.available} aria-describedby="compression-age-description" onInput={event => update('compression_metric_after_days', event.currentTarget.value)} />
-            <p id="compression-age-description" class="text-xs text-muted mt-1.5">Fractions of a day are allowed. The existing default is 2 hours (1/12 day). Entire data chunks must be older than this age before they are compressed.</p>
+            <label for="compression-metric-after-days" class="block text-xs text-muted mb-1.5">Compress metric data older than</label>
+            <div class="flex gap-2">
+              <input id="compression-metric-after-days" type="number" class="input min-w-0 flex-1" min={compressionAgeUnit() === 'hours' ? 1 : 1 / 24} max={compressionAgeUnit() === 'hours' ? 87600 : 3650} step="any" required value={compressionAgeDisplay()} disabled={!canWrite() || saving() || !compressionState()?.available} aria-describedby="compression-age-description" onInput={event => {
+                const amount = Number(event.currentTarget.value);
+                update('compression_metric_after_days', String(compressionAgeUnit() === 'hours' ? amount / 24 : amount));
+              }} />
+              <select class="input w-28" aria-label="Compression age unit" value={compressionAgeUnit()} disabled={!canWrite() || saving() || !compressionState()?.available} onChange={event => setCompressionAgeUnitOverride(event.currentTarget.value as 'hours' | 'days')}>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </select>
+            </div>
+            <p id="compression-age-description" class="text-xs text-muted mt-1.5">The existing default is 2 hours. Entire data chunks must be older than this age before they are compressed.</p>
           </div>
           <p class="text-xs text-muted">Applies independently of database housekeeping. Settings are applied within one minute; compression then runs in the background. Disabling it stops future compression and keeps already compressed history readable.</p>
           <p class="text-xs text-muted">Aggregates need a longer delay to preserve their refresh window: at least 8 days for 5-minute aggregates, 31 days for hourly aggregates, and 366 days for daily aggregates. History deleted sooner by retention will not be compressed.</p>
           <Show when={compressionState()?.available}>
             <div class="space-y-2" aria-label="Actual compression policies"><For each={compressionState()?.tables}>{table => <div class="flex flex-wrap justify-between gap-2 border-t border-subtle pt-2 text-xs">
               <span class="text-secondary">{table.label}</span>
-              <span class="text-muted">{!table.present ? 'Not available' : table.scheduled ? `Enabled · after ${table.after_days.toLocaleString(undefined, { maximumFractionDigits: 4 })} days` : 'Automatic compression off'} · {table.compressed_chunks}/{table.total_chunks} chunks compressed</span>
+              <span class="text-muted">{!table.present ? 'Not available' : table.scheduled ? `Enabled · after ${formatCompressionAge(table.after_days)}` : 'Automatic compression off'} · {table.compressed_chunks}/{table.total_chunks} chunks compressed</span>
             </div>}</For></div>
           </Show>
           <div class="border-t border-subtle pt-3 space-y-2">
