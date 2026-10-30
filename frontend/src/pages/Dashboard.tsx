@@ -61,7 +61,7 @@ const FleetPanelFrame: Component<{
     onDrop={(event) => { event.preventDefault(); const source = event.dataTransfer?.getData('text/plain'); if (source && source !== props.id) props.onMove(source, props.id); }}
   >
     {props.children}
-    <span class="fleet-panel-resize" role="button" tabindex="0" aria-label="Resize panel" title="Drag to resize" onPointerDown={resizeStart} />
+    <span class="fleet-panel-resize" role="button" tabIndex={0} aria-label="Resize panel" title="Drag to resize" onPointerDown={resizeStart} />
   </div>;
 };
 
