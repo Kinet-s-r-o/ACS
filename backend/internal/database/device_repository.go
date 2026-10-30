@@ -177,7 +177,6 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 	err := r.db.WithContext(ctx).
 		Model(&models.Device{}).
 		Select("devices.*, (SELECT COUNT(*) FROM faults WHERE faults.device_id = devices.id AND faults.resolved = FALSE) AS active_faults").
-		Preload("Parameters", "name LIKE ? OR name LIKE ? OR name LIKE ? OR name = ? OR name = ? OR name = ? OR name = ?", "%RXPower%", "InternetGatewayDevice.WANDevice.%", "Device.IP.%", "InternetGatewayDevice.DeviceInfo.UpTime", "InternetGatewayDevice.DeviceInfo.SoftwareVersion", "InternetGatewayDevice.DeviceInfo.HardwareVersion", "InternetGatewayDevice.DeviceInfo.ManufacturerOUI").
 		Order("last_inform DESC NULLS LAST").
 		Limit(limit).
 		Offset(offset).
@@ -187,6 +186,109 @@ func (r *DeviceRepository) List(ctx context.Context, limit, offset int) ([]*mode
 	}
 
 	return devices, int(total), nil
+}
+
+// LoadInventoryParameters fetches only parameter values used by the visible
+// inventory columns and the selected templates' IP address rules.
+func (r *DeviceRepository) LoadInventoryParameters(ctx context.Context, devices []*models.Device, templates []*models.ProvisioningTemplate, columns []string) error {
+	if len(devices) == 0 || len(columns) == 0 {
+		return nil
+	}
+	columnSet := make(map[string]bool, len(columns))
+	for _, column := range columns {
+		columnSet[column] = true
+	}
+	deviceIDs := make([]int64, 0, len(devices))
+	deviceByID := make(map[int64]*models.Device, len(devices))
+	for _, device := range devices {
+		deviceIDs = append(deviceIDs, device.ID)
+		device.Parameters = nil
+		deviceByID[device.ID] = device
+	}
+	conditions := make([]string, 0, 12+len(devices))
+	args := make([]interface{}, 0, 16+len(devices)*2)
+	if columnSet["rx_power"] {
+		conditions = append(conditions, "name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ?")
+		args = append(args, "%RXPower%", "%OpticalRxPower%", "%OpticalReceivedPower%", "%TransceiverRxPower%", "%ReceivedPower%")
+	}
+	if columnSet["uptime"] {
+		conditions = append(conditions, "name = ?")
+		args = append(args, "InternetGatewayDevice.DeviceInfo.UpTime")
+	}
+	if columnSet["ppp_username"] {
+		conditions = append(conditions, "(name LIKE ? AND name LIKE ?)")
+		args = append(args, "%WANPPPConnection%", "%Username%")
+	}
+	for _, entry := range []struct {
+		column string
+		name   string
+	}{
+		{"software_version", "InternetGatewayDevice.DeviceInfo.SoftwareVersion"},
+		{"hardware_version", "InternetGatewayDevice.DeviceInfo.HardwareVersion"},
+		{"manufacturer_oui", "InternetGatewayDevice.DeviceInfo.ManufacturerOUI"},
+	} {
+		if columnSet[entry.column] {
+			conditions = append(conditions, "name = ?")
+			args = append(args, entry.name)
+		}
+	}
+	if columnSet["ip_address"] {
+		parameterDevices := make(map[string][]int64)
+		interfaceDeviceIDs := make([]int64, 0)
+		for _, device := range devices {
+			manufacturer, productClass := "", ""
+			if device.Manufacturer != nil {
+				manufacturer = *device.Manufacturer
+			}
+			if device.ProductClass != nil {
+				productClass = *device.ProductClass
+			}
+			template := SelectProvisioningTemplate(templates, manufacturer, productClass)
+			if template == nil {
+				continue
+			}
+			switch template.Inventory.PrimaryIPMode {
+			case "parameter":
+				if name := template.Inventory.PrimaryIPParameter; name != "" {
+					parameterDevices[name] = append(parameterDevices[name], device.ID)
+				}
+			case "interface_name":
+				if template.Inventory.PrimaryIPInterfaceName != "" {
+					interfaceDeviceIDs = append(interfaceDeviceIDs, device.ID)
+				}
+			}
+		}
+		parameterNames := make([]string, 0, len(parameterDevices))
+		for name := range parameterDevices {
+			parameterNames = append(parameterNames, name)
+		}
+		sort.Strings(parameterNames)
+		for _, name := range parameterNames {
+			ids := parameterDevices[name]
+			conditions = append(conditions, "(device_id IN ? AND name = ?)")
+			args = append(args, ids, name)
+		}
+		if len(interfaceDeviceIDs) > 0 {
+			conditions = append(conditions, "(device_id IN ? AND name ~ ?)")
+			args = append(args, interfaceDeviceIDs, `^InternetGatewayDevice\.WANDevice\.[0-9]+\.WANConnectionDevice\.[0-9]+\.(WANPPPConnection|WANIPConnection)\.[0-9]+\.(Name|ExternalIPAddress|IPAddress)$`)
+		}
+	}
+	if len(conditions) == 0 {
+		return nil
+	}
+	var parameters []models.DeviceParameter
+	if err := r.db.WithContext(ctx).Where("device_id IN ?", deviceIDs).
+		Where("("+strings.Join(conditions, " OR ")+")", args...).
+		Order("device_id ASC, name ASC").Find(&parameters).Error; err != nil {
+		return err
+	}
+	if err := decryptParameters(parameters); err != nil {
+		return err
+	}
+	for _, parameter := range parameters {
+		deviceByID[parameter.DeviceID].Parameters = append(deviceByID[parameter.DeviceID].Parameters, parameter)
+	}
+	return nil
 }
 
 // SelectPrimaryIPAddress applies the per-template inventory preference. The

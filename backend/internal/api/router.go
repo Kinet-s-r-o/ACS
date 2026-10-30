@@ -375,6 +375,12 @@ func (r *Router) handleMetaLogo(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query()
+	columns, err := parseInventoryColumns(query["columns"], query.Has("columns"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid inventory columns")
+		return
+	}
 	limit := 50
 	offset := 0
 
@@ -390,10 +396,14 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	templates, templateErr := r.provisioningRepo.ListTemplates(req.Context())
-	if templateErr != nil {
-		log.Printf("Error loading provisioning templates for device IP selection: %v", templateErr)
-		templates = nil
+	var templates []*models.ProvisioningTemplate
+	var templateErr error
+	if containsInventoryColumn(columns, "ip_address") {
+		templates, templateErr = r.provisioningRepo.ListTemplates(req.Context())
+		if templateErr != nil {
+			log.Printf("Error loading provisioning templates for device IP selection: %v", templateErr)
+			templates = nil
+		}
 	}
 	devices, total, err := r.deviceRepo.List(req.Context(), limit, offset)
 	if err != nil {
@@ -401,7 +411,12 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to list devices")
 		return
 	}
-	if templateErr == nil {
+	if err := r.deviceRepo.LoadInventoryParameters(req.Context(), devices, templates, columns); err != nil {
+		log.Printf("Error loading inventory parameters: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to load inventory parameters")
+		return
+	}
+	if templateErr == nil && containsInventoryColumn(columns, "ip_address") {
 		for _, device := range devices {
 			manufacturer, productClass := "", ""
 			if device.Manufacturer != nil {
@@ -425,9 +440,8 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	for _, device := range devices {
-		// Keep the list response limited to the overview fields. WAN
-		// parameters are only loaded server-side to resolve the selected IP.
-		device.Parameters = filterOverviewParameters(device.Parameters)
+		device.Parameters = filterInventoryParameters(device.Parameters, columns)
+		redactSensitiveParameters(req, device.Parameters)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -438,10 +452,69 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-func filterOverviewParameters(parameters []models.DeviceParameter) []models.DeviceParameter {
+func parseInventoryColumns(values []string, supplied bool) ([]string, error) {
+	if !supplied {
+		return []string{"ip_address", "rx_power", "uptime", "software_version", "hardware_version", "manufacturer_oui"}, nil
+	}
+	columnChars := 0
+	for _, value := range values {
+		columnChars += len(value)
+	}
+	if columnChars > 512 {
+		return nil, fmt.Errorf("inventory column list is too long")
+	}
+	allowed := map[string]bool{
+		"serial_number": true, "manufacturer": true, "model": true, "product_class": true,
+		"ip_address": true, "ppp_username": true, "rx_power": true, "uptime": true,
+		"status": true, "last_inform": true, "tags": true, "software_version": true,
+		"hardware_version": true, "manufacturer_oui": true, "active_faults": true,
+	}
+	requested := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		requested = append(requested, strings.Split(value, ",")...)
+	}
+	if len(requested) > len(allowed) {
+		return nil, fmt.Errorf("too many inventory columns")
+	}
+	columns := make([]string, 0, len(requested))
+	seen := make(map[string]bool, len(requested))
+	for _, value := range requested {
+		if !allowed[value] {
+			return nil, fmt.Errorf("unknown inventory column")
+		}
+		if !seen[value] {
+			seen[value] = true
+			columns = append(columns, value)
+		}
+	}
+	return columns, nil
+}
+
+func containsInventoryColumn(columns []string, column string) bool {
+	for _, current := range columns {
+		if current == column {
+			return true
+		}
+	}
+	return false
+}
+
+func filterInventoryParameters(parameters []models.DeviceParameter, columns []string) []models.DeviceParameter {
+	visible := make(map[string]bool, len(columns))
+	for _, column := range columns {
+		visible[column] = true
+	}
 	filtered := make([]models.DeviceParameter, 0, len(parameters))
 	for _, parameter := range parameters {
-		if strings.Contains(parameter.Name, "RXPower") || parameter.Name == "InternetGatewayDevice.DeviceInfo.UpTime" || parameter.Name == "InternetGatewayDevice.DeviceInfo.SoftwareVersion" || parameter.Name == "InternetGatewayDevice.DeviceInfo.HardwareVersion" || parameter.Name == "InternetGatewayDevice.DeviceInfo.ManufacturerOUI" {
+		if (visible["rx_power"] && (strings.Contains(parameter.Name, "RXPower") || strings.Contains(parameter.Name, "OpticalRxPower") || strings.Contains(parameter.Name, "OpticalReceivedPower") || strings.Contains(parameter.Name, "TransceiverRxPower") || strings.Contains(parameter.Name, "ReceivedPower"))) ||
+			(visible["uptime"] && parameter.Name == "InternetGatewayDevice.DeviceInfo.UpTime") ||
+			(visible["ppp_username"] && strings.Contains(parameter.Name, "WANPPPConnection") && strings.Contains(parameter.Name, "Username")) ||
+			(visible["software_version"] && parameter.Name == "InternetGatewayDevice.DeviceInfo.SoftwareVersion") ||
+			(visible["hardware_version"] && parameter.Name == "InternetGatewayDevice.DeviceInfo.HardwareVersion") ||
+			(visible["manufacturer_oui"] && parameter.Name == "InternetGatewayDevice.DeviceInfo.ManufacturerOUI") {
 			filtered = append(filtered, parameter)
 		}
 	}

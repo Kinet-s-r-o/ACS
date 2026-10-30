@@ -136,7 +136,11 @@ export async function requestBlob(endpoint: string, options: RequestInit = {}): 
 
 export const api = {
   health: () => request<{ status: string }>('/health'),
-  getDevices: (limit = 50, offset = 0) => request<DeviceListResponse>(`/devices?limit=${limit}&offset=${offset}`),
+  getDevices: (limit = 50, offset = 0, columns?: string[]) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (columns) params.set('columns', columns.join(','));
+    return request<DeviceListResponse>(`/devices?${params}`);
+  },
   getWANInterfaces: () => request<WANInterface[]>('/wan-interfaces'),
   getTasks: () => request<GlobalTask[]>('/tasks'),
   getTask: (id: number) => request<GlobalTask>(`/tasks/${id}`),

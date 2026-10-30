@@ -81,6 +81,7 @@ const Devices: Component = () => {
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
+  const inventoryColumnSelection = () => JSON.stringify(columns().filter(column => column.visible).map(column => column.id).sort());
 
   onMount(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -109,23 +110,28 @@ const Devices: Component = () => {
     }
   });
 
-  const [deviceList, { refetch }] = createResource(async () => {
-    const firstPage = await api.getDevices(500, 0);
-    const devices = [...firstPage.devices];
-    for (let offset = devices.length; offset < firstPage.total; offset += 500) {
-      const nextPage = await api.getDevices(500, offset);
-      devices.push(...nextPage.devices);
-      if (nextPage.devices.length === 0) break;
-    }
-    return { devices, total: firstPage.total };
-  });
+  const [deviceList, { refetch }] = createResource(
+    () => columns().length > 0 ? inventoryColumnSelection() : undefined,
+    async columnSelection => {
+      if (columnSelection === undefined) return { devices: [], total: 0 };
+      const requestedColumns = JSON.parse(columnSelection) as string[];
+      const firstPage = await api.getDevices(500, 0, requestedColumns);
+      const devices = [...firstPage.devices];
+      for (let offset = devices.length; offset < firstPage.total; offset += 500) {
+        const nextPage = await api.getDevices(500, offset, requestedColumns);
+        devices.push(...nextPage.devices);
+        if (nextPage.devices.length === 0) break;
+      }
+      return { devices, total: firstPage.total };
+    },
+  );
   const [tagCatalog] = createResource(api.getTags);
 
   const getDeviceTagLabels = (device: Device) => (device.tags || []).map(id => tagCatalog()?.find(tag => tag.id === id)?.name || id).join(', ');
 
   const totalPages = () => Math.ceil(sortedDevices().length / pageSize());
 
-  const visibleColumns = createMemo(() => 
+  const visibleColumns = createMemo(() =>
     columns().filter(c => c.visible).sort((a, b) => a.order - b.order)
   );
 
@@ -382,8 +388,9 @@ const Devices: Component = () => {
     try {
       const total = deviceList()?.total ?? 0;
       const allDevices: Device[] = [];
+      const requestedColumns = visibleColumns().map(column => column.id);
       for (let offset = 0; offset < total; offset += 100) {
-        const response = await api.getDevices(100, offset);
+        const response = await api.getDevices(100, offset, requestedColumns);
         allDevices.push(...response.devices);
         if (response.devices.length === 0) break;
       }
@@ -605,7 +612,7 @@ const Devices: Component = () => {
             </thead>
             <tbody>
               <Show
-                when={!deviceList.loading}
+                when={!deviceList.loading && deviceList()}
                 fallback={<><TableSkeleton cols={visibleColumns().length + 1} /><TableSkeleton cols={visibleColumns().length + 1} /><TableSkeleton cols={visibleColumns().length + 1} /></>}
               >
                 <Show
