@@ -165,6 +165,10 @@ func (w *SystemTaskWorker) process(ctx context.Context, systemTask *models.Syste
 }
 
 func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
+	bulkSettings, settingsErr := w.settingsRepo.GetBulkSummonSettings(ctx)
+	if settingsErr != nil {
+		log.Printf("Bulk summon contact timeout unavailable during reconciliation: %v", settingsErr)
+	}
 	for _, taskType := range []models.SystemTaskType{models.SystemTaskTypeSummonFromCPE, models.SystemTaskTypeBulkSummon} {
 		tasks, err := w.systemTaskRepo.Active(ctx, taskType)
 		if err != nil {
@@ -213,14 +217,30 @@ func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
 					return err
 				}
 			case models.TaskStatusPending, models.TaskStatusSent:
-				if !systemTaskTimedOut(systemTask, systemSummonTimeout) {
-					continue
-				}
-				message = "CPE did not complete the CWMP task within 120 seconds"
 				if status == models.TaskStatusPending {
-					if _, err := w.taskRepo.FailPending(ctx, *systemTask.CWMPTaskID, message); err != nil {
+					timeout := systemSummonTimeout
+					if taskType == models.SystemTaskTypeBulkSummon {
+						if settingsErr != nil {
+							continue
+						}
+						timeout = time.Duration(bulkSettings.ContactTimeoutSeconds) * time.Second
+					}
+					if !systemTaskTimedOut(systemTask, timeout) {
+						continue
+					}
+					message = fmt.Sprintf("CPE did not send an Inform within %d seconds", int(timeout/time.Second))
+					failedPending, err := w.taskRepo.FailPending(ctx, *systemTask.CWMPTaskID, message)
+					if err != nil {
 						return err
 					}
+					if !failedPending {
+						continue
+					}
+				} else {
+					if !systemTaskTimedOut(systemTask, systemSummonTimeout) {
+						continue
+					}
+					message = "CPE did not complete the CWMP task within 120 seconds"
 				}
 				if err := w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, message); err != nil {
 					return err

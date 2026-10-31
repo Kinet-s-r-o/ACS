@@ -46,7 +46,7 @@ const SystemTasks: Component = () => {
   );
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [settings, { refetch: refetchSettings }] = createResource(() => settingsOpen() && canConfigure() ? true : false, api.getBulkSummonSettings);
-  const [settingsForm, setSettingsForm] = createSignal<BulkSummonSettings>({ max_in_flight: 2, interval_seconds: 5 });
+  const [settingsForm, setSettingsForm] = createSignal<BulkSummonSettings>({ max_in_flight: 2, interval_seconds: 5, contact_timeout_seconds: 120 });
   const [savingSettings, setSavingSettings] = createSignal(false);
   const [busyAction, setBusyAction] = createSignal<string | null>(null);
 
@@ -100,6 +100,10 @@ const SystemTasks: Component = () => {
     }
     if (!Number.isInteger(value.interval_seconds) || value.interval_seconds < 1 || value.interval_seconds > 300) {
       notify({ tone: 'error', title: 'Invalid interval', message: 'Choose an interval from 1 to 300 seconds.' });
+      return;
+    }
+    if (!Number.isInteger(value.contact_timeout_seconds) || value.contact_timeout_seconds < 10 || value.contact_timeout_seconds > 3600) {
+      notify({ tone: 'error', title: 'Invalid CPE contact timeout', message: 'Choose a timeout from 10 to 3600 seconds.' });
       return;
     }
     setSavingSettings(true);
@@ -258,7 +262,7 @@ const SystemTasks: Component = () => {
       </div>
 
       <Show when={settingsOpen()}>
-        <Dialog title="Bulk Summon settings" description="Control how quickly the backend dispatches connection requests and how many CPEs it waits on at once." onClose={() => setSettingsOpen(false)} size="small" actions={<>
+        <Dialog title="Bulk Summon settings" description="Control dispatch pacing, concurrent CPEs, and how long each task waits for its CPE to connect." onClose={() => setSettingsOpen(false)} size="small" actions={<>
           <button type="button" class="btn btn-secondary" onClick={() => setSettingsOpen(false)} disabled={savingSettings()}>Cancel</button>
           <button type="button" class="btn btn-primary" onClick={() => void saveSettings()} disabled={savingSettings() || settings.loading}>{savingSettings() ? 'Saving…' : 'Save settings'}</button>
         </>}>
@@ -272,6 +276,10 @@ const SystemTasks: Component = () => {
               <label class="block text-xs text-secondary" for="bulk-summon-interval">Interval between CPEs (seconds)
                 <input id="bulk-summon-interval" type="number" min="1" max="300" step="1" class="input mt-1.5" value={settingsForm().interval_seconds} onInput={event => setSettingsForm(value => ({ ...value, interval_seconds: Number(event.currentTarget.value) }))} disabled={savingSettings()} />
                 <span class="block mt-1 text-muted">1–300 seconds between Bulk Summon dispatches. Defaults: 2 in flight, 5 seconds apart.</span>
+              </label>
+              <label class="block text-xs text-secondary" for="bulk-summon-contact-timeout">Wait for CPE contact (seconds)
+                <input id="bulk-summon-contact-timeout" type="number" min="10" max="3600" step="1" class="input mt-1.5" value={settingsForm().contact_timeout_seconds} onInput={event => setSettingsForm(value => ({ ...value, contact_timeout_seconds: Number(event.currentTarget.value) }))} disabled={savingSettings()} />
+                <span class="block mt-1 text-muted">10–3600 seconds. If no Inform arrives in time, the task fails and its pending CWMP task is cancelled. Default: 120 seconds.</span>
               </label>
             </div>
           </Show>

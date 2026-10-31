@@ -70,7 +70,7 @@ export type SystemTaskStatus = 'pending' | 'processing' | 'waiting' | 'completed
 export interface SystemTask { id: number; type: SystemTaskType; device_id: number; serial_number: string; cwmp_task_id?: number; status: SystemTaskStatus; attempts: number; error_message?: string; created_by: string; created_at: string; completed_at?: string }
 export type SystemTaskCounts = Record<SystemTaskStatus, number>;
 export interface SystemTaskSummary { summon_from_cpe: Partial<SystemTaskCounts>; bulk_summon: Partial<SystemTaskCounts> }
-export interface BulkSummonSettings { max_in_flight: number; interval_seconds: number }
+export interface BulkSummonSettings { max_in_flight: number; interval_seconds: number; contact_timeout_seconds: number }
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
 export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
