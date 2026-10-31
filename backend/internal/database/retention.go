@@ -27,7 +27,7 @@ var retentionSettings = map[string]retentionSetting{
 	"retention_snapshot_days":               {0, 0, 3650},
 	"retention_device_log_days":             {30, 0, 3650},
 	"retention_metric_hours":                {6, 0, 87600},
-	"retention_interface_metric_days":       {0, 0, 3650},
+	"retention_interface_metric_hours":      {24, 0, 87600},
 	"retention_interface_metric_15min_days": {7, 0, 3650},
 	"retention_interface_metric_1h_days":    {30, 0, 3650},
 	"retention_interface_metric_1d_days":    {365, 0, 3650},
@@ -35,6 +35,44 @@ var retentionSettings = map[string]retentionSetting{
 	"retention_metric_legacy_5min_days":     {7, 0, 3650}, // Temporary cleanup window for the retired 5-minute aggregate.
 	"retention_metric_1h_days":              {30, 0, 3650},
 	"retention_metric_1d_days":              {365, 0, 3650},
+}
+
+// MigrateInterfaceMetricRetentionSetting renames the original interface raw
+// retention key. The configured number is preserved and now represents hours,
+// matching raw metric retention and the intended 24-hour policy.
+func MigrateInterfaceMetricRetentionSetting(ctx context.Context, db *gorm.DB) error {
+	const legacyKey = "retention_interface_metric_days"
+	const currentKey = "retention_interface_metric_hours"
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var legacy Setting
+		err := tx.Where("key = ?", legacyKey).Take(&legacy).Error
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read legacy interface metric retention: %w", err)
+		}
+
+		var current Setting
+		err = tx.Where("key = ?", currentKey).Take(&current).Error
+		if err == gorm.ErrRecordNotFound {
+			if err := tx.Model(&Setting{}).Where("key = ?", legacyKey).Updates(map[string]interface{}{
+				"key":         currentKey,
+				"description": "Retention of raw per-interface metric samples in hours",
+			}).Error; err != nil {
+				return fmt.Errorf("rename interface metric retention setting: %w", err)
+			}
+			log.Printf("Migrated interface metric raw retention setting to hours (value %s)", legacy.Value)
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read current interface metric retention: %w", err)
+		}
+		if err := tx.Delete(&legacy).Error; err != nil {
+			return fmt.Errorf("remove legacy interface metric retention setting: %w", err)
+		}
+		return nil
+	})
 }
 
 func RetentionDefaults() map[string]string {
@@ -126,7 +164,7 @@ var retentionRules = []retentionRule{
 	{"retention_snapshot_days", "device_snapshots", "created_at < ?", 24 * time.Hour, false},
 	{"retention_device_log_days", "device_logs", "received_at < ?", 24 * time.Hour, false},
 	{"retention_metric_hours", "metric_samples", "", time.Hour, true},
-	{"retention_interface_metric_days", "interface_metric_samples", "", 24 * time.Hour, true},
+	{"retention_interface_metric_hours", "interface_metric_samples", "", time.Hour, true},
 	{"retention_interface_metric_15min_days", "interface_metric_samples_15min", "", 24 * time.Hour, true},
 	{"retention_interface_metric_1h_days", "interface_metric_samples_1h", "", 24 * time.Hour, true},
 	{"retention_interface_metric_1d_days", "interface_metric_samples_1d", "", 24 * time.Hour, true},

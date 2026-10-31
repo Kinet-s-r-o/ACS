@@ -33,7 +33,7 @@ const groups = [
     { key: 'retention_metric_1d_days', label: 'Daily aggregates (days)', min: 0, max: 3650, description: 'Retention of metric values aggregated into daily buckets.' },
   ] },
   { title: 'Interface metric history', fields: [
-    { key: 'retention_interface_metric_days', label: 'Raw interface metric samples (days)', min: 0, max: 3650, description: 'Retention of individual per-interface samples. 0 keeps all raw samples.' },
+    { key: 'retention_interface_metric_hours', label: 'Raw interface metric samples (hours)', min: 0, max: 87600, description: 'Retention of individual per-interface samples. 0 keeps all raw samples.' },
     { key: 'retention_interface_metric_15min_days', label: '15-minute aggregates (days)', min: 0, max: 3650, description: 'Retention of per-interface values aggregated into 15-minute buckets.' },
     { key: 'retention_interface_metric_1h_days', label: 'Hourly aggregates (days)', min: 0, max: 3650, description: 'Retention of per-interface values aggregated into hourly buckets.' },
     { key: 'retention_interface_metric_1d_days', label: 'Daily aggregates (days)', min: 0, max: 3650, description: 'Retention of per-interface values aggregated into daily buckets.' },
