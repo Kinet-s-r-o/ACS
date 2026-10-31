@@ -16,13 +16,16 @@ type FaultRepository struct {
 
 var watchdogFaultCodes = []string{"WATCHDOG_SUMMON_FAILED", "WATCHDOG_MARKED_OFFLINE"}
 
-func (r *FaultRepository) ListPage(ctx context.Context, limit, offset int, resolved *bool, watchdogOnly bool, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Fault, int, error) {
+func (r *FaultRepository) ListPage(ctx context.Context, limit, offset int, resolved *bool, faultGroup string, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Fault, int, error) {
 	query := r.db.WithContext(ctx).Table("faults f").Joins("JOIN devices d ON f.device_id = d.id")
 	if resolved != nil {
 		query = query.Where("f.resolved = ?", *resolved)
 	}
-	if watchdogOnly {
+	switch faultGroup {
+	case "watchdog":
 		query = query.Where("f.fault_code IN ?", watchdogFaultCodes)
+	case "cwmp":
+		query = query.Where("f.fault_code NOT IN ?", watchdogFaultCodes)
 	}
 	expressions := map[string]string{
 		"serial_number": "d.serial_number", "model_name": "COALESCE(NULLIF(d.model_name, ''), d.product_class, '')",
@@ -201,24 +204,35 @@ func (r *FaultRepository) DeleteMany(ctx context.Context, ids []int64) (int64, e
 
 func (r *FaultRepository) GetStats(ctx context.Context) (map[string]int, error) {
 	var active, resolved, total, activeWatchdog, resolvedWatchdog, totalWatchdog int64
-	query := r.db.WithContext(ctx).Model(&models.Fault{})
-	if err := query.Where("resolved = ?", false).Count(&active).Error; err != nil {
+	count := func(destination *int64, resolvedState *bool, watchdog bool) error {
+		query := r.db.WithContext(ctx).Model(&models.Fault{})
+		if resolvedState != nil {
+			query = query.Where("resolved = ?", *resolvedState)
+		}
+		if watchdog {
+			query = query.Where("fault_code IN ?", watchdogFaultCodes)
+		} else {
+			query = query.Where("fault_code NOT IN ?", watchdogFaultCodes)
+		}
+		return query.Count(destination).Error
+	}
+	activeState, resolvedState := false, true
+	if err := count(&active, &activeState, false); err != nil {
 		return nil, err
 	}
-	if err := query.Where("resolved = ?", true).Count(&resolved).Error; err != nil {
+	if err := count(&resolved, &resolvedState, false); err != nil {
 		return nil, err
 	}
-	if err := query.Count(&total).Error; err != nil {
+	if err := count(&total, nil, false); err != nil {
 		return nil, err
 	}
-	watchdogQuery := query.Where("fault_code IN ?", watchdogFaultCodes)
-	if err := watchdogQuery.Where("resolved = ?", false).Count(&activeWatchdog).Error; err != nil {
+	if err := count(&activeWatchdog, &activeState, true); err != nil {
 		return nil, err
 	}
-	if err := watchdogQuery.Where("resolved = ?", true).Count(&resolvedWatchdog).Error; err != nil {
+	if err := count(&resolvedWatchdog, &resolvedState, true); err != nil {
 		return nil, err
 	}
-	if err := watchdogQuery.Count(&totalWatchdog).Error; err != nil {
+	if err := count(&totalWatchdog, nil, true); err != nil {
 		return nil, err
 	}
 

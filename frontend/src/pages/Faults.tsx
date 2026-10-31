@@ -23,7 +23,7 @@ const Faults: Component = () => {
   const { isFullAccess } = useAuth();
   const { confirm, notify } = useFeedback();
   const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved'>('active');
-  const [watchdogOnly, setWatchdogOnly] = createSignal(false);
+  const [faultGroup, setFaultGroup] = createSignal<'cwmp' | 'watchdog'>('cwmp');
   const [activeView, setActiveView] = createSignal<FaultView>('active');
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.faults');
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
@@ -48,14 +48,14 @@ const Faults: Component = () => {
   const [faultPage, setFaultPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('faults', 20);
   const [faults, { refetch }] = createResource(
-    () => ({ filter: filter(), watchdogOnly: watchdogOnly(), page: faultPage(), size: pageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
-    (query) => api.getFaults(query.filter, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }, query.watchdogOnly)
+    () => ({ filter: filter(), faultGroup: faultGroup(), page: faultPage(), size: pageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
+    (query) => api.getFaults(query.filter, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }, query.faultGroup)
   );
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFaultPage(0); };
   const selectFaultFilter = (view: FaultView) => {
     const isWatchdog = view.endsWith('-watchdog');
     setActiveView(view);
-    setWatchdogOnly(isWatchdog);
+    setFaultGroup(isWatchdog ? 'watchdog' : 'cwmp');
     setFilter(isWatchdog ? view.slice(0, -9) as 'all' | 'active' | 'resolved' : view as 'all' | 'active' | 'resolved');
     setFaultPage(0);
   };
@@ -65,10 +65,10 @@ const Faults: Component = () => {
   const faultTotalPages = createMemo(() => Math.ceil((faults()?.total || 0) / pageSize()));
 
   const exportFaultsCSV = async () => {
-    const firstPage = await api.getFaults(filter(), 500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() }, watchdogOnly());
+    const firstPage = await api.getFaults(filter(), 500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() }, faultGroup());
     const rowsToExport = [...firstPage.faults];
     for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
-      const nextPage = await api.getFaults(filter(), 500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() }, watchdogOnly());
+      const nextPage = await api.getFaults(filter(), 500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() }, faultGroup());
       rowsToExport.push(...nextPage.faults);
       if (!nextPage.faults.length) break;
     }
@@ -93,7 +93,7 @@ const Faults: Component = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `cwmp-faults-${watchdogOnly() ? 'watchdog-' : ''}${filter()}.csv`;
+    link.download = `cwmp-faults-${faultGroup() === 'watchdog' ? 'watchdog-' : ''}${filter()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -265,8 +265,8 @@ const Faults: Component = () => {
           <Show when={filteredFaults().length > 0} fallback={
             <EmptyState
               icon={<AlertTriangle size={22} />}
-              title={(faults()?.faults?.length ?? 0) > 0 ? 'No CWMP faults match the current filters' : watchdogOnly() ? 'No watchdog events match this view' : filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
-              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear the search or a column filter to inspect more fault records.' : watchdogOnly() ? 'Change the panel filter to inspect other CWMP fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
+              title={(faults()?.faults?.length ?? 0) > 0 ? 'No CWMP faults match the current filters' : faultGroup() === 'watchdog' ? 'No watchdog events match this view' : filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
+              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear the search or a column filter to inspect more fault records.' : faultGroup() === 'watchdog' ? 'Change the panel filter to inspect other CWMP fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
               action={activeView() !== 'all' ? <button type="button" class="btn btn-secondary" onClick={() => selectFaultFilter('all')}>Show all fault records</button> : undefined}
             />
           }>

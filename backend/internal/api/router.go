@@ -2964,8 +2964,12 @@ func (r *Router) handleListFaults(w http.ResponseWriter, req *http.Request) {
 		resolved = &val
 	}
 
-	watchdogOnly := req.URL.Query().Get("watchdog") == "true"
-	faults, total, err := r.faultRepo.ListPage(req.Context(), options.Limit, options.Offset, resolved, watchdogOnly, options.Search, options.Sort, options.Direction, options.Filters)
+	faultGroup := req.URL.Query().Get("fault_group")
+	if faultGroup != "" && faultGroup != "all" && faultGroup != "cwmp" && faultGroup != "watchdog" {
+		respondError(w, http.StatusBadRequest, "Invalid fault group")
+		return
+	}
+	faults, total, err := r.faultRepo.ListPage(req.Context(), options.Limit, options.Offset, resolved, faultGroup, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing faults: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list faults")

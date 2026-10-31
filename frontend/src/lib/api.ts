@@ -251,10 +251,10 @@ export const api = {
   },
   deleteFirmware: (id: number) => request<{ status: string }>(`/firmwares/${id}`, { method: 'DELETE' }),
 
-  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 20, offset = 0, options?: TableQueryOptions, watchdogOnly = false) => {
+  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 20, offset = 0, options?: TableQueryOptions, faultGroup: 'all' | 'cwmp' | 'watchdog' = 'all') => {
     const params = tableQuery(limit, offset, options);
     if (filter !== 'all') params.set('resolved', String(filter === 'resolved'));
-    if (watchdogOnly) params.set('watchdog', 'true');
+    if (faultGroup !== 'all') params.set('fault_group', faultGroup);
     return request<{ faults: Fault[]; total: number; limit: number; offset: number }>(`/faults?${params}`);
   },
   getFaultStats: () => request<FaultStats>('/faults/stats'),
