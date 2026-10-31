@@ -209,6 +209,15 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fault-center-register .ops-register-cell { padding-inline: clamp(6px, 1vw, 16px); }
 .fault-filter-label { overflow-wrap: anywhere; }
 .fault-filter-count { font-size: clamp(16px, 2vw, 24px); }
+.system-task-group + .system-task-group { border-top: 1px solid rgb(var(--border-subtle)); }
+.system-task-group-header { display: flex; align-items: center; min-height: 50px; }
+.system-task-group-toggle { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 50px; padding: 8px 14px; color: rgb(var(--text-primary)); text-align: left; }
+.system-task-group-toggle:hover { background: rgb(var(--bg-hover)); }
+.system-task-group-toggle:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: -2px; }
+.system-task-group-title { flex: 0 0 145px; font-size: 12px; font-weight: 500; }
+.system-task-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.system-task-group-actions { display: flex; align-items: center; gap: 4px; padding: 0 10px; }
+.system-task-group-description { padding: 8px 16px; color: rgb(var(--text-muted)); background: rgb(var(--bg-base) / .45); border-top: 1px solid rgb(var(--border-subtle)); font-size: 11px; }
 .task-register .task-filter-card { position: relative; width: 100%; border: 1px solid transparent; color: rgb(var(--text-primary)); text-align: left; cursor: pointer; transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease; }
 .task-register .task-filter-card:hover { background: rgb(var(--bg-hover)); }
 .task-register .task-filter-card[aria-pressed="true"]::after { position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--accent)); content: ""; }
@@ -492,6 +501,11 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .data-table th:first-child, .data-table td:first-child { position: sticky; left: 0; z-index: 2; background: rgb(var(--bg-surface)); box-shadow: 1px 0 0 rgb(var(--border-subtle)); }
   .ops-attention-list { grid-template-columns: 1fr; }
   .device-detail-header { top: 58px; }
+  .system-task-group-header { align-items: flex-start; }
+  .system-task-group-toggle { align-items: flex-start; padding-top: 12px; }
+  .system-task-group-title { flex: 0 0 auto; min-width: 90px; }
+  .system-task-counts { gap: 4px; }
+  .system-task-group-actions { padding: 3px 6px; }
 }
 @media (min-width: 640px) {
   .service-state { display: flex; }

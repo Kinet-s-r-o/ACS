@@ -144,8 +144,8 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
   const handleSummon = async () => {
     setSummoning(true);
     try {
-      const result = await api.connectionRequest(props.serial);
-      notify({ tone: 'success', title: 'Device summoned', message: result.message });
+      await api.createSystemSummon(props.serial);
+      notify({ tone: 'info', title: 'Summon queued', message: 'The system task processor will contact the CPE shortly.' });
     } catch (err) {
       notify({ tone: 'error', title: 'Summon failed', detail: (err as Error).message, persistent: true });
     }

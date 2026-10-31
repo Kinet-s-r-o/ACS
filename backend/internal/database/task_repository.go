@@ -137,6 +137,53 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) error {
 	return nil
 }
 
+func (r *TaskRepository) CreateForSystemTask(ctx context.Context, systemTaskID int64, task *models.Task) error {
+	stored := *task
+	if err := encryptSetTaskPayload(&stored); err != nil {
+		return err
+	}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&stored).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&models.SystemTask{}).Where("id = ? AND status = ?", systemTaskID, models.SystemTaskStatusProcessing).
+			Update("cwmp_task_id", stored.ID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("system task %d is no longer processing", systemTaskID)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	plaintextPayload := task.Payload
+	*task = stored
+	task.Payload = plaintextPayload
+	return nil
+}
+
+func (r *TaskRepository) GetStatus(ctx context.Context, id int64) (models.TaskStatus, error) {
+	var task models.Task
+	err := r.db.WithContext(ctx).Select("status").First(&task, id).Error
+	return task.Status, err
+}
+
+func (r *TaskRepository) GetStatusAndError(ctx context.Context, id int64) (models.TaskStatus, string, error) {
+	var task models.Task
+	err := r.db.WithContext(ctx).Select("status", "error_message").First(&task, id).Error
+	return task.Status, task.ErrorMessage, err
+}
+
+func (r *TaskRepository) FailPending(ctx context.Context, id int64, message string) (bool, error) {
+	now := time.Now()
+	result := r.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND status = ?", id, models.TaskStatusPending).
+		Updates(map[string]interface{}{"status": models.TaskStatusFailed, "error_message": message, "completed_at": now})
+	return result.RowsAffected == 1, result.Error
+}
+
 // ClaimNextPending atomically reserves the oldest pending task for one CWMP
 // session. SKIP LOCKED prevents concurrent sessions from dispatching the same
 // command while keeping other devices independent.

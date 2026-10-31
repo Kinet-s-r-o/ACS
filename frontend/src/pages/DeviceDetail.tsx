@@ -887,16 +887,10 @@ const DeviceDetail: Component = () => {
   const handleSummon = async () => {
     setActionLoading('summon');
     try {
-      const hasTR181 = (parameters() || []).some(parameter => parameter.name.startsWith('Device.'));
-      const task = await api.getParameterValues(serial(), [hasTR181 ? 'Device.' : 'InternetGatewayDevice.']);
-      await api.connectionRequest(serial());
-      await waitForTask(task.id, 'Device parameter refresh');
-      await Promise.all([loadDeviceParameters(), refetchDevice(), refetchTasks(), refetchDeviceTaskCounts()]);
-      setAutoRefreshTick(value => value + 1);
-      showMessage('success', 'Device parameters and metrics refreshed.');
+      await api.createSystemSummon(serial(), true);
+      showMessage('success', 'Summon task queued. Track its progress in System settings → System tasks.');
     } catch (err) {
-      showMessage('error', 'Device refresh did not complete. Check the task result and CWMP faults, then retry.', (err as Error).message);
-      void refetchTasks();
+      showMessage('error', 'Could not queue the Summon task.', (err as Error).message);
     }
     setActionLoading(null);
   };

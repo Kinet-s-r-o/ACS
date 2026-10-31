@@ -128,6 +128,7 @@ func main() {
 	watchdog := cwmp.NewDeviceWatchdog(db)
 	cwmpHandler.SetWatchdog(watchdog)
 	go watchdog.Start(ctx)
+	go cwmp.NewSystemTaskWorker(db).Start(ctx)
 
 	go func() {
 		log.Printf("ACS CWMP server listening on %s", cwmpServer.Addr)
@@ -356,6 +357,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.WANInterfaceBackfillState{},
 		&models.DeviceLogEntry{},
 		&models.Task{},
+		&models.SystemTask{},
 		&models.User{},
 		&models.UserDashboardPanel{},
 		&models.UserDashboardLayout{},

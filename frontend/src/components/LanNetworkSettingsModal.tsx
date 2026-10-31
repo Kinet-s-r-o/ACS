@@ -163,8 +163,8 @@ const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props)
   const handleSummon = async () => {
     setSummoning(true);
     try {
-      const result = await api.connectionRequest(props.serial);
-      notify({ tone: 'success', title: 'Device summoned', message: result.message });
+      await api.createSystemSummon(props.serial);
+      notify({ tone: 'info', title: 'Summon queued', message: 'The system task processor will contact the CPE shortly.' });
     } catch (error) {
       notify({ tone: 'error', title: 'Summon failed', detail: (error as Error).message, persistent: true });
     } finally { setSummoning(false); }

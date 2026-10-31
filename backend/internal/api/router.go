@@ -29,7 +29,6 @@ import (
 	"github.com/matrix8412/acs/internal/cwmp"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
-	"github.com/matrix8412/acs/internal/netutil"
 	"gorm.io/gorm"
 )
 
@@ -38,6 +37,7 @@ type Router struct {
 	deviceRepo           *database.DeviceRepository
 	settingsRepo         *database.SettingsRepository
 	taskRepo             *database.TaskRepository
+	systemTaskRepo       *database.SystemTaskRepository
 	parameterRepo        *database.ParameterRepository
 	firmwareRepo         *database.FirmwareRepository
 	faultRepo            *database.FaultRepository
@@ -111,6 +111,7 @@ func NewRouter(db *gorm.DB) *Router {
 		deviceRepo:           database.NewDeviceRepository(db),
 		settingsRepo:         database.NewSettingsRepository(db),
 		taskRepo:             database.NewTaskRepository(db),
+		systemTaskRepo:       database.NewSystemTaskRepository(db),
 		parameterRepo:        database.NewParameterRepository(db),
 		firmwareRepo:         database.NewFirmwareRepository(db),
 		faultRepo:            database.NewFaultRepository(db),
@@ -192,6 +193,14 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /tasks/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetTask))
 	apiMux.HandleFunc("DELETE /tasks/{id}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleDeletePendingTask))
 	apiMux.HandleFunc("POST /tasks/bulk-delete", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleBulkDeletePendingTasks))
+	apiMux.HandleFunc("GET /system-tasks/summary", auth.RequirePermission(models.PermDevicesRead)(r.handleSystemTaskSummary))
+	apiMux.HandleFunc("GET /system-tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListSystemTasks))
+	apiMux.HandleFunc("POST /system-tasks/summon", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateSystemSummon))
+	apiMux.HandleFunc("POST /system-tasks/bulk-summon", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateBulkSummon))
+	apiMux.HandleFunc("POST /system-tasks/{id}/retry", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleRetrySystemTask))
+	apiMux.HandleFunc("DELETE /system-tasks/{type}/finished", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleClearFinishedSystemTasks))
+	apiMux.HandleFunc("GET /system-tasks/bulk-summon-settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetBulkSummonSettings))
+	apiMux.HandleFunc("PUT /system-tasks/bulk-summon-settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleSaveBulkSummonSettings))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/growth", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceGrowth))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
@@ -693,6 +702,176 @@ func (r *Router) handleBulkDeletePendingTasks(w http.ResponseWriter, req *http.R
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{"deleted": deleted, "deleted_by": claims.Username})
+}
+
+func (r *Router) handleSystemTaskSummary(w http.ResponseWriter, req *http.Request) {
+	counts, err := r.systemTaskRepo.Counts(req.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to count system tasks")
+		return
+	}
+	respondJSON(w, http.StatusOK, counts)
+}
+
+func (r *Router) handleListSystemTasks(w http.ResponseWriter, req *http.Request) {
+	taskType := models.SystemTaskType(req.URL.Query().Get("type"))
+	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon {
+		respondError(w, http.StatusBadRequest, "Invalid system task type")
+		return
+	}
+	options, err := parseTableQuery(req, "serial_number", "status", "attempts", "created_at", "created_by", "error")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid system task query")
+		return
+	}
+	items, total, err := r.systemTaskRepo.ListPage(req.Context(), taskType, options.Limit, options.Offset, options.Search, options.Sort, options.Direction)
+	if err != nil {
+		log.Printf("Error listing system tasks: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list system tasks")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"tasks": items, "total": total, "limit": options.Limit, "offset": options.Offset})
+}
+
+func (r *Router) handleCreateSystemSummon(w http.ResponseWriter, req *http.Request) {
+	var body struct {
+		SerialNumber      string `json:"serial_number"`
+		RefreshParameters bool   `json:"refresh_parameters"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || strings.TrimSpace(body.SerialNumber) == "" {
+		respondError(w, http.StatusBadRequest, "Invalid summon request")
+		return
+	}
+	device, err := r.deviceRepo.GetBySerial(req.Context(), strings.TrimSpace(body.SerialNumber))
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load CPE")
+		return
+	}
+	if device == nil {
+		respondError(w, http.StatusNotFound, "CPE not found")
+		return
+	}
+	claims := auth.GetUserFromContext(req.Context())
+	createdBy := "system"
+	if claims != nil {
+		createdBy = claims.Username
+	}
+	task := models.SystemTask{Type: models.SystemTaskTypeSummonFromCPE, DeviceID: device.ID, RefreshParameters: body.RefreshParameters, Status: models.SystemTaskStatusPending, CreatedBy: createdBy}
+	if err := r.systemTaskRepo.CreateMany(req.Context(), []models.SystemTask{task}); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to queue Summon task")
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]interface{}{"status": "queued", "count": 1})
+}
+
+func (r *Router) handleCreateBulkSummon(w http.ResponseWriter, req *http.Request) {
+	var body struct {
+		DeviceIDs []int64 `json:"device_ids"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || len(body.DeviceIDs) == 0 || len(body.DeviceIDs) > 500 {
+		respondError(w, http.StatusBadRequest, "Provide between 1 and 500 visible CPE IDs")
+		return
+	}
+	ids := make([]int64, 0, len(body.DeviceIDs))
+	seen := make(map[int64]struct{}, len(body.DeviceIDs))
+	for _, id := range body.DeviceIDs {
+		if id <= 0 {
+			respondError(w, http.StatusBadRequest, "Invalid CPE ID")
+			return
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	var devices []models.Device
+	if err := r.db.WithContext(req.Context()).Select("id").Where("id IN ?", ids).Find(&devices).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to validate selected CPEs")
+		return
+	}
+	if len(devices) != len(ids) {
+		respondError(w, http.StatusNotFound, "One or more selected CPEs no longer exist")
+		return
+	}
+	claims := auth.GetUserFromContext(req.Context())
+	createdBy := "system"
+	if claims != nil {
+		createdBy = claims.Username
+	}
+	tasks := make([]models.SystemTask, 0, len(ids))
+	for _, id := range ids {
+		tasks = append(tasks, models.SystemTask{Type: models.SystemTaskTypeBulkSummon, DeviceID: id, RefreshParameters: true, Status: models.SystemTaskStatusPending, CreatedBy: createdBy})
+	}
+	if err := r.systemTaskRepo.CreateMany(req.Context(), tasks); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to queue Bulk Summon tasks")
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]interface{}{"status": "queued", "count": len(tasks)})
+}
+
+func (r *Router) handleRetrySystemTask(w http.ResponseWriter, req *http.Request) {
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid system task ID")
+		return
+	}
+	updated, err := r.systemTaskRepo.RetryFailed(req.Context(), id)
+	if err != nil {
+		if strings.Contains(err.Error(), "linked CWMP task is still active") {
+			respondError(w, http.StatusConflict, "The linked CWMP task is still active")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "Failed to retry system task")
+		return
+	}
+	if !updated {
+		respondError(w, http.StatusConflict, "Only failed system tasks can be retried")
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+}
+
+func (r *Router) handleClearFinishedSystemTasks(w http.ResponseWriter, req *http.Request) {
+	taskType := models.SystemTaskType(req.PathValue("type"))
+	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon {
+		respondError(w, http.StatusBadRequest, "Invalid system task type")
+		return
+	}
+	deleted, err := r.systemTaskRepo.ClearFinished(req.Context(), taskType)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to clear finished system tasks")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]int64{"deleted": deleted})
+}
+
+func (r *Router) handleGetBulkSummonSettings(w http.ResponseWriter, req *http.Request) {
+	settings, err := r.settingsRepo.GetBulkSummonSettings(req.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to read Bulk Summon settings")
+		return
+	}
+	respondJSON(w, http.StatusOK, settings)
+}
+
+func (r *Router) handleSaveBulkSummonSettings(w http.ResponseWriter, req *http.Request) {
+	var settings database.BulkSummonSettings
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&settings); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid Bulk Summon settings")
+		return
+	}
+	if err := r.settingsRepo.SaveBulkSummonSettings(req.Context(), settings); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, settings)
 }
 
 func (r *Router) handleGetDevice(w http.ResponseWriter, req *http.Request) {
@@ -1290,77 +1469,20 @@ func (r *Router) handleConnectionRequest(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) executeConnectionRequest(w http.ResponseWriter, req *http.Request, device *models.Device) {
-	if device.ConnectionRequestURL == nil || *device.ConnectionRequestURL == "" {
-		respondError(w, http.StatusBadRequest, "Device has no connection request URL")
-		return
-	}
-	connReqURL := *device.ConnectionRequestURL
-	settings, err := r.settingsRepo.GetAll(req.Context())
+	result, err := cwmp.SendConnectionRequest(req.Context(), device, r.settingsRepo)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to load connection request settings")
-		return
-	}
-	globalUsername, globalPassword, useAuto := "", "", false
-	for _, setting := range settings {
-		switch setting.Key {
-		case "connection_request_username":
-			globalUsername = setting.Value
-		case "connection_request_password":
-			globalPassword = setting.Value
-		case "use_auto_conn_credentials":
-			useAuto = setting.Value == "true"
-		}
-	}
-	// Resolve per-device credentials
-	perDeviceMode, perDeviceUsername, perDevicePassword := "", "", ""
-	if device.ConnCredMode != nil {
-		perDeviceMode = *device.ConnCredMode
-	}
-	if device.ConnCredUsername != nil {
-		perDeviceUsername = *device.ConnCredUsername
-	}
-	if device.ConnCredPassword != nil && *device.ConnCredPassword != "" {
-		perDevicePassword, err = database.DecryptValue(*device.ConnCredPassword)
-		if err != nil {
-			respondError(w, http.StatusInternalServerError, "Failed to decrypt device credentials")
+		var requestErr *cwmp.ConnectionRequestError
+		if errors.As(err, &requestErr) {
+			respondError(w, requestErr.StatusCode, requestErr.Message)
 			return
 		}
-	}
-	username, password, err := netutil.ResolveConnCredentials(
-		device.SerialNumber, perDeviceMode, perDeviceUsername, perDevicePassword,
-		globalUsername, globalPassword, useAuto,
-	)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		respondError(w, http.StatusInternalServerError, "Failed to send connection request")
 		return
 	}
-
-	client, err := netutil.NewDeviceHTTPClient(connReqURL, username, password, 10*time.Second)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "Unsafe connection request URL: "+err.Error())
-		return
+	if result.Status == "failed" {
+		log.Printf("[ConnReq] %s failed: %s", device.SerialNumber, result.Message)
 	}
-	httpReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, connReqURL, nil)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to create connection request")
-		return
-	}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		log.Printf("[ConnReq] %s failed: %v", device.SerialNumber, err)
-		respondJSON(w, http.StatusOK, map[string]string{"status": "failed", "url": connReqURL, "message": "Device unreachable: " + err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		respondJSON(w, http.StatusOK, map[string]string{"status": "success", "url": connReqURL, "message": "Device will send Inform in a few seconds"})
-		return
-	}
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		respondJSON(w, http.StatusOK, map[string]string{"status": "auth_failed", "url": connReqURL, "message": "Connection request credentials were rejected by the device"})
-		return
-	}
-	respondJSON(w, http.StatusOK, map[string]string{"status": "unknown", "url": connReqURL, "message": "Device responded with status " + resp.Status})
+	respondJSON(w, http.StatusOK, result)
 }
 
 func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {

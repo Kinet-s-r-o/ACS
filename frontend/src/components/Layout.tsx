@@ -25,6 +25,7 @@ const navigation = [
     { href: '/security', label: 'Access controls', icon: ShieldCheck, fullOnly: true },
     { href: '/settings', label: 'System settings', icon: Settings, children: [
       { href: '/settings/general', label: 'General' },
+      { href: '/settings/system-tasks', label: 'System tasks', permission: 'devices.read' },
       { href: '/settings/retention', label: 'DB retention' },
       { href: '/settings/dictionaries', label: 'Dictionaries' },
       { href: '/settings/users', label: 'Users and Roles' },
@@ -44,6 +45,7 @@ const pageNames: Record<string, string> = {
   '/security': 'Security center',
   '/settings': 'System settings',
   '/settings/general': 'General',
+  '/settings/system-tasks': 'System tasks',
   '/settings/retention': 'DB retention',
   '/settings/dictionaries': 'Dictionaries',
   '/settings/users': 'Users and Roles',
@@ -70,9 +72,9 @@ const Layout: ParentComponent = (props) => {
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(localStorage.getItem('sidebar-collapsed') === 'true');
   const [desktopViewport, setDesktopViewport] = createSignal(window.matchMedia('(min-width: 1024px)').matches);
   const [apiOnline, setAPIOnline] = createSignal<boolean | null>(null);
-  const [settingsExpanded, setSettingsExpanded] = createSignal(false);
+  const [settingsExpanded, setSettingsExpanded] = createSignal(location.pathname.startsWith('/settings'));
   const [inventoryExpanded, setInventoryExpanded] = createSignal(false);
-  const { user, logout, isFullAccess } = useAuth();
+  const { user, logout, isFullAccess, hasPermission } = useAuth();
   let menuButton: HTMLButtonElement | undefined;
   let previousContentLocation = `${location.pathname}${location.search}`;
 
@@ -161,7 +163,7 @@ const Layout: ParentComponent = (props) => {
                         </Show>
                         <Show when={item.href === '/devices' ? inventoryExpanded() : settingsExpanded()}>
                           <div class="nav-submenu">
-                            <For each={item.children ?? []}>
+                            <For each={(item.children ?? []).filter(child => !('permission' in child) || !child.permission || hasPermission(child.permission))}>
                               {(child) => (
                                 <A href={child.href} onClick={() => setSidebarOpen(false)} class={`nav-link nav-link-sub ${isActive(child.href) ? 'is-active' : ''}`} aria-current={isActive(child.href) ? 'page' : undefined}>
                                   <span>{child.label}</span>
