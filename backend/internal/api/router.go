@@ -2964,7 +2964,8 @@ func (r *Router) handleListFaults(w http.ResponseWriter, req *http.Request) {
 		resolved = &val
 	}
 
-	faults, total, err := r.faultRepo.ListPage(req.Context(), options.Limit, options.Offset, resolved, options.Search, options.Sort, options.Direction, options.Filters)
+	watchdogOnly := req.URL.Query().Get("watchdog") == "true"
+	faults, total, err := r.faultRepo.ListPage(req.Context(), options.Limit, options.Offset, resolved, watchdogOnly, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing faults: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list faults")

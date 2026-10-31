@@ -71,6 +71,7 @@ export interface DeviceSnapshot { id: number; device_id: number; name: string; m
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
 export interface Fault { id: number; device_id: number; serial_number: string; model_name?: string; software_version?: string; hardware_version?: string; manufacturer_oui?: string; fault_code: string; fault_string: string; parameter_name: string; resolved: boolean; created_at: string; resolved_at: string | null }
 export interface FaultCounts { active: number; resolved: number; total: number }
+export interface FaultStats extends FaultCounts { active_watchdog: number; resolved_watchdog: number; total_watchdog: number }
 export interface DatabaseQueryStat { query_id: string; query: string; calls: number; rows: number; total_time_ms: number; mean_time_ms: number; shared_hit_blocks: number; shared_read_blocks: number; temp_read_blocks: number; temp_write_blocks: number }
 export type DatabaseQuerySort = 'query' | 'calls' | 'total_time' | 'mean_time' | 'rows' | 'shared_read_blocks' | 'shared_hit_blocks' | 'temp_blocks';
 export interface DatabaseStatistics { available: boolean; reason?: string; stats_reset?: string | null; queries: DatabaseQueryStat[] }
@@ -250,12 +251,13 @@ export const api = {
   },
   deleteFirmware: (id: number) => request<{ status: string }>(`/firmwares/${id}`, { method: 'DELETE' }),
 
-  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 20, offset = 0, options?: TableQueryOptions) => {
+  getFaults: (filter: 'all' | 'active' | 'resolved' = 'active', limit = 20, offset = 0, options?: TableQueryOptions, watchdogOnly = false) => {
     const params = tableQuery(limit, offset, options);
     if (filter !== 'all') params.set('resolved', String(filter === 'resolved'));
+    if (watchdogOnly) params.set('watchdog', 'true');
     return request<{ faults: Fault[]; total: number; limit: number; offset: number }>(`/faults?${params}`);
   },
-  getFaultStats: () => request<{ total: number; active: number; resolved: number }>('/faults/stats'),
+  getFaultStats: () => request<FaultStats>('/faults/stats'),
   resolveFault: (id: number) => request<{ status: string }>(`/faults/${id}/resolve`, { method: 'POST' }),
   deleteFault: (id: number) => request<{ status: string }>(`/faults/${id}`, { method: 'DELETE' }),
   deleteFaults: (ids: number[]) => request<{ deleted: number }>('/faults/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),

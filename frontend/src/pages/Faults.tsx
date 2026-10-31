@@ -19,9 +19,12 @@ import type { SortDirection } from '../lib/sorting';
 import { formatDateTime } from '../lib/dateTime';
 
 const Faults: Component = () => {
+  type FaultView = 'active' | 'resolved' | 'all' | 'active-watchdog' | 'resolved-watchdog' | 'all-watchdog';
   const { isFullAccess } = useAuth();
   const { confirm, notify } = useFeedback();
   const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved'>('active');
+  const [watchdogOnly, setWatchdogOnly] = createSignal(false);
+  const [activeView, setActiveView] = createSignal<FaultView>('active');
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.faults');
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedFaults, setSelectedFaults] = createSignal<Set<number>>(new Set());
@@ -45,12 +48,15 @@ const Faults: Component = () => {
   const [faultPage, setFaultPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('faults', 20);
   const [faults, { refetch }] = createResource(
-    () => ({ filter: filter(), page: faultPage(), size: pageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
-    (query) => api.getFaults(query.filter, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
+    () => ({ filter: filter(), watchdogOnly: watchdogOnly(), page: faultPage(), size: pageSize(), search: searchQuery(), sort: sortState(), filters: columnFilters() }),
+    (query) => api.getFaults(query.filter, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }, query.watchdogOnly)
   );
   const handlePageSizeChange = (size: number) => { changePageSize(size); setFaultPage(0); };
-  const selectFaultFilter = (nextFilter: 'all' | 'active' | 'resolved') => {
-    setFilter(nextFilter);
+  const selectFaultFilter = (view: FaultView) => {
+    const isWatchdog = view.endsWith('-watchdog');
+    setActiveView(view);
+    setWatchdogOnly(isWatchdog);
+    setFilter(isWatchdog ? view.slice(0, -9) as 'all' | 'active' | 'resolved' : view as 'all' | 'active' | 'resolved');
     setFaultPage(0);
   };
 
@@ -59,10 +65,10 @@ const Faults: Component = () => {
   const faultTotalPages = createMemo(() => Math.ceil((faults()?.total || 0) / pageSize()));
 
   const exportFaultsCSV = async () => {
-    const firstPage = await api.getFaults(filter(), 500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+    const firstPage = await api.getFaults(filter(), 500, 0, { search: searchQuery(), sort: sortState(), filters: columnFilters() }, watchdogOnly());
     const rowsToExport = [...firstPage.faults];
     for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
-      const nextPage = await api.getFaults(filter(), 500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() });
+      const nextPage = await api.getFaults(filter(), 500, offset, { search: searchQuery(), sort: sortState(), filters: columnFilters() }, watchdogOnly());
       rowsToExport.push(...nextPage.faults);
       if (!nextPage.faults.length) break;
     }
@@ -87,7 +93,7 @@ const Faults: Component = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `cwmp-faults-${filter()}.csv`;
+    link.download = `cwmp-faults-${watchdogOnly() ? 'watchdog-' : ''}${filter()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -177,21 +183,36 @@ const Faults: Component = () => {
         <div class="card"><ResourceError title="Fault data is unavailable" description="ACS could not read the protocol fault register. Retry the request without changing the selected filter." onRetry={() => { refetch(); refetchStats(); }} /></div>
       </Show>
 
-      <div class="ops-register fault-register" role="group" aria-label="Filter CWMP faults" aria-busy={stats.loading}>
-        <button type="button" class="ops-register-cell fault-filter-card is-offline" onClick={() => selectFaultFilter('active')} aria-pressed={filter() === 'active'}>
+      <div class="ops-register fault-register fault-center-register" role="group" aria-label="Filter CWMP faults" aria-busy={stats.loading}>
+        <button type="button" class="ops-register-cell fault-filter-card is-offline" onClick={() => selectFaultFilter('active')} aria-pressed={activeView() === 'active'}>
           <span class="fault-filter-label">Active faults</span>
           <strong class="fault-filter-count">{stats()?.active ?? 0}</strong>
           <span class="fault-filter-description">Awaiting operator action</span>
         </button>
-        <button type="button" class="ops-register-cell fault-filter-card is-online" onClick={() => selectFaultFilter('resolved')} aria-pressed={filter() === 'resolved'}>
+        <button type="button" class="ops-register-cell fault-filter-card is-online" onClick={() => selectFaultFilter('resolved')} aria-pressed={activeView() === 'resolved'}>
           <span class="fault-filter-label">Resolved</span>
           <strong class="fault-filter-count">{stats()?.resolved ?? 0}</strong>
           <span class="fault-filter-description">Closed fault records</span>
         </button>
-        <button type="button" class="ops-register-cell fault-filter-card" onClick={() => selectFaultFilter('all')} aria-pressed={filter() === 'all'}>
-          <span class="fault-filter-label">Total recorded</span>
+        <button type="button" class="ops-register-cell fault-filter-card" onClick={() => selectFaultFilter('all')} aria-pressed={activeView() === 'all'}>
+          <span class="fault-filter-label">Total faults</span>
           <strong class="fault-filter-count">{stats()?.total ?? 0}</strong>
           <span class="fault-filter-description">All CWMP fault events</span>
+        </button>
+        <button type="button" class="ops-register-cell fault-filter-card is-offline" onClick={() => selectFaultFilter('active-watchdog')} aria-pressed={activeView() === 'active-watchdog'}>
+          <span class="fault-filter-label">Active watchdog</span>
+          <strong class="fault-filter-count">{stats()?.active_watchdog ?? 0}</strong>
+          <span class="fault-filter-description">Active watchdog events</span>
+        </button>
+        <button type="button" class="ops-register-cell fault-filter-card is-online" onClick={() => selectFaultFilter('resolved-watchdog')} aria-pressed={activeView() === 'resolved-watchdog'}>
+          <span class="fault-filter-label">Resolved watchdog</span>
+          <strong class="fault-filter-count">{stats()?.resolved_watchdog ?? 0}</strong>
+          <span class="fault-filter-description">Resolved watchdog events</span>
+        </button>
+        <button type="button" class="ops-register-cell fault-filter-card" onClick={() => selectFaultFilter('all-watchdog')} aria-pressed={activeView() === 'all-watchdog'}>
+          <span class="fault-filter-label">Total watchdog</span>
+          <strong class="fault-filter-count">{stats()?.total_watchdog ?? 0}</strong>
+          <span class="fault-filter-description">All watchdog events</span>
         </button>
       </div>
 
@@ -244,9 +265,9 @@ const Faults: Component = () => {
           <Show when={filteredFaults().length > 0} fallback={
             <EmptyState
               icon={<AlertTriangle size={22} />}
-              title={(faults()?.faults?.length ?? 0) > 0 ? 'No CWMP faults match the current filters' : filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
-              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear the search or a column filter to inspect more fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
-              action={filter() !== 'all' ? <button type="button" class="btn btn-secondary" onClick={() => setFilter('all')}>Show all fault records</button> : undefined}
+              title={(faults()?.faults?.length ?? 0) > 0 ? 'No CWMP faults match the current filters' : watchdogOnly() ? 'No watchdog events match this view' : filter() === 'active' ? 'No active CWMP faults require review' : `No ${filter()} fault records`}
+              description={(faults()?.faults?.length ?? 0) > 0 ? 'Adjust or clear the search or a column filter to inspect more fault records.' : watchdogOnly() ? 'Change the panel filter to inspect other CWMP fault records.' : filter() === 'active' ? 'The current fleet has not reported an unresolved protocol failure.' : 'Change the fault filter to inspect another part of the protocol history.'}
+              action={activeView() !== 'all' ? <button type="button" class="btn btn-secondary" onClick={() => selectFaultFilter('all')}>Show all fault records</button> : undefined}
             />
           }>
             <div class="overflow-x-auto table-scroll">

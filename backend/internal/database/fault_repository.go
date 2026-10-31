@@ -14,10 +14,15 @@ type FaultRepository struct {
 	db *gorm.DB
 }
 
-func (r *FaultRepository) ListPage(ctx context.Context, limit, offset int, resolved *bool, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Fault, int, error) {
+var watchdogFaultCodes = []string{"WATCHDOG_SUMMON_FAILED", "WATCHDOG_MARKED_OFFLINE"}
+
+func (r *FaultRepository) ListPage(ctx context.Context, limit, offset int, resolved *bool, watchdogOnly bool, search, sort, direction string, filters map[string]TableColumnFilter) ([]*models.Fault, int, error) {
 	query := r.db.WithContext(ctx).Table("faults f").Joins("JOIN devices d ON f.device_id = d.id")
 	if resolved != nil {
 		query = query.Where("f.resolved = ?", *resolved)
+	}
+	if watchdogOnly {
+		query = query.Where("f.fault_code IN ?", watchdogFaultCodes)
 	}
 	expressions := map[string]string{
 		"serial_number": "d.serial_number", "model_name": "COALESCE(NULLIF(d.model_name, ''), d.product_class, '')",
@@ -195,16 +200,35 @@ func (r *FaultRepository) DeleteMany(ctx context.Context, ids []int64) (int64, e
 }
 
 func (r *FaultRepository) GetStats(ctx context.Context) (map[string]int, error) {
-	var active, resolved, total int64
-
-	r.db.WithContext(ctx).Model(&models.Fault{}).Where("resolved = ?", false).Count(&active)
-	r.db.WithContext(ctx).Model(&models.Fault{}).Where("resolved = ?", true).Count(&resolved)
-	r.db.WithContext(ctx).Model(&models.Fault{}).Count(&total)
+	var active, resolved, total, activeWatchdog, resolvedWatchdog, totalWatchdog int64
+	query := r.db.WithContext(ctx).Model(&models.Fault{})
+	if err := query.Where("resolved = ?", false).Count(&active).Error; err != nil {
+		return nil, err
+	}
+	if err := query.Where("resolved = ?", true).Count(&resolved).Error; err != nil {
+		return nil, err
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	watchdogQuery := query.Where("fault_code IN ?", watchdogFaultCodes)
+	if err := watchdogQuery.Where("resolved = ?", false).Count(&activeWatchdog).Error; err != nil {
+		return nil, err
+	}
+	if err := watchdogQuery.Where("resolved = ?", true).Count(&resolvedWatchdog).Error; err != nil {
+		return nil, err
+	}
+	if err := watchdogQuery.Count(&totalWatchdog).Error; err != nil {
+		return nil, err
+	}
 
 	stats := map[string]int{
-		"active":   int(active),
-		"resolved": int(resolved),
-		"total":    int(total),
+		"active":            int(active),
+		"resolved":          int(resolved),
+		"total":             int(total),
+		"active_watchdog":   int(activeWatchdog),
+		"resolved_watchdog": int(resolvedWatchdog),
+		"total_watchdog":    int(totalWatchdog),
 	}
 
 	type CodeCount struct {
