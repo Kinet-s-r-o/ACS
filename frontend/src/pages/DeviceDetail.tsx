@@ -983,6 +983,32 @@ const DeviceDetail: Component = () => {
     throw new Error(`${label} timed out while waiting for the CPE session.`);
   };
 
+  const waitForSystemTask = async (taskId: number, label: string, timeoutMs = 120_000): Promise<void> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const task = await api.getSystemTask(taskId);
+      if (task?.status === 'completed') return;
+      if (task?.status === 'failed') throw new Error(task.error_message || `${label} failed.`);
+      await new Promise(resolve => window.setTimeout(resolve, 1500));
+    }
+    throw new Error(`${label} timed out while waiting for the CPE session.`);
+  };
+
+  const handleRefreshHosts = async () => {
+    if (!isFullAccess() || actionLoading() !== null) return;
+    setActionLoading('hosts-refresh');
+    try {
+      const task = await api.createSystemSummon(serial(), true);
+      await waitForSystemTask(task.id, 'Connected hosts refresh');
+      await loadDeviceParameters();
+      showMessage('success', 'Connected hosts refreshed from the CPE.');
+    } catch (error) {
+      showMessage('error', 'Could not refresh connected hosts.', (error as Error).message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleRunIperf = async () => {
     const form = iperfForm();
     const port = Number(form.port);
@@ -2908,22 +2934,27 @@ const DeviceDetail: Component = () => {
             <Show when={activeTab() === 'hosts'}>
             {/* Row 4: Connected Hosts */}
             <div class="card p-5">
-              <div class="flex items-center justify-between mb-4">
+              <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
                   <Users size={14} />
                   Connected Hosts ({filteredHosts().length})
                 </h2>
-                <div class="relative">
-                  <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                  <input type="text" value={hostSearch()} onInput={(e) => setHostSearch(e.currentTarget.value)} placeholder="Search hosts…" class="input pl-9! w-48 text-sm" />
-                  <Show when={hostSearch()}>
-                    <button onClick={() => setHostSearch('')} class="input-clear" aria-label="Clear search"><X size={12} /></button>
-                  </Show>
+                <div class="flex items-center gap-2">
+                  <Show when={isFullAccess()}><button type="button" class="btn btn-secondary whitespace-nowrap text-xs" onClick={() => void handleRefreshHosts()} disabled={actionLoading() !== null} aria-label="Refresh connected hosts" title="Request updated connected host data from the CPE">
+                    <RefreshCw size={13} class={actionLoading() === 'hosts-refresh' ? 'animate-spin' : ''} />{actionLoading() === 'hosts-refresh' ? 'Refreshing…' : 'Refresh'}
+                  </button></Show>
+                  <div class="relative">
+                    <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                    <input type="text" value={hostSearch()} onInput={(e) => setHostSearch(e.currentTarget.value)} placeholder="Search hosts…" class="input pl-9! w-48 text-sm" />
+                    <Show when={hostSearch()}>
+                      <button onClick={() => setHostSearch('')} class="input-clear" aria-label="Clear search"><X size={12} /></button>
+                    </Show>
+                  </div>
                 </div>
               </div>
               <Show when={!parameters.loading || (parameters()?.length ?? 0) > 0} fallback={<div class="space-y-2" aria-label="Loading connected hosts"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-2/3" /></div>}>
                 <Show when={filteredHosts().length > 0} fallback={
-                  <EmptyState compact title="No connected hosts are reported" description="The stored parameter set contains no active LAN or Wi-Fi clients. Send a connection request with Summon to request current host data." />
+                  <EmptyState compact title="No connected hosts are reported" description="The stored parameter set contains no active LAN or Wi-Fi clients. Refresh connected hosts to request current data from the CPE." />
                 }>
                 <div class="overflow-x-auto">
                   <table class="data-table w-full text-sm min-w-[960px]">

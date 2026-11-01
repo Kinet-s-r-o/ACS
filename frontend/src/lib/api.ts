@@ -198,7 +198,8 @@ export const api = {
     if (search) params.set('search', search);
     return request<{ tasks: SystemTask[]; total: number; limit: number; offset: number }>(`/system-tasks?${params}`);
   },
-  createSystemSummon: (serial: string, refreshParameters = false) => request<{ status: string; count: number }>('/system-tasks/summon', { method: 'POST', body: JSON.stringify({ serial_number: serial, refresh_parameters: refreshParameters }) }),
+  getSystemTask: (id: number) => request<SystemTask>(`/system-tasks/${id}`),
+  createSystemSummon: (serial: string, refreshParameters = false) => request<{ status: string; count: number; id: number }>('/system-tasks/summon', { method: 'POST', body: JSON.stringify({ serial_number: serial, refresh_parameters: refreshParameters }) }),
   createBulkSummon: (deviceIDs: number[]) => request<{ status: string; count: number }>('/system-tasks/bulk-summon', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs }) }),
   createBulkRestart: (deviceIDs: number[], credentials: ReauthenticationCredentials) => request<{ status: string; count: number }>('/system-tasks/bulk-restart', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs, ...credentials }) }),
   retrySystemTask: (id: number) => request<{ status: string }>(`/system-tasks/${id}/retry`, { method: 'POST' }),

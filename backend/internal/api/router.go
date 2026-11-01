@@ -197,6 +197,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /tasks/bulk-delete", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleBulkDeletePendingTasks))
 	apiMux.HandleFunc("GET /system-tasks/summary", auth.RequirePermission(models.PermDevicesRead)(r.handleSystemTaskSummary))
 	apiMux.HandleFunc("GET /system-tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListSystemTasks))
+	apiMux.HandleFunc("GET /system-tasks/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetSystemTask))
 	apiMux.HandleFunc("POST /system-tasks/summon", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateSystemSummon))
 	apiMux.HandleFunc("POST /system-tasks/bulk-summon", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateBulkSummon))
 	apiMux.HandleFunc("POST /system-tasks/bulk-restart", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateBulkRestart))
@@ -739,6 +740,23 @@ func (r *Router) handleListSystemTasks(w http.ResponseWriter, req *http.Request)
 	respondJSON(w, http.StatusOK, map[string]interface{}{"tasks": items, "total": total, "limit": options.Limit, "offset": options.Offset})
 }
 
+func (r *Router) handleGetSystemTask(w http.ResponseWriter, req *http.Request) {
+	id, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid system task ID")
+		return
+	}
+	var task models.SystemTask
+	if err := r.db.WithContext(req.Context()).First(&task, id).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		respondError(w, http.StatusNotFound, "System task not found")
+		return
+	} else if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load system task")
+		return
+	}
+	respondJSON(w, http.StatusOK, task)
+}
+
 func (r *Router) handleCreateSystemSummon(w http.ResponseWriter, req *http.Request) {
 	var body struct {
 		SerialNumber      string `json:"serial_number"`
@@ -764,12 +782,12 @@ func (r *Router) handleCreateSystemSummon(w http.ResponseWriter, req *http.Reque
 	if claims != nil {
 		createdBy = claims.Username
 	}
-	task := models.SystemTask{Type: models.SystemTaskTypeSummonFromCPE, DeviceID: device.ID, RefreshParameters: body.RefreshParameters, Status: models.SystemTaskStatusPending, CreatedBy: createdBy}
-	if err := r.systemTaskRepo.CreateMany(req.Context(), []models.SystemTask{task}); err != nil {
+	tasks := []models.SystemTask{{Type: models.SystemTaskTypeSummonFromCPE, DeviceID: device.ID, RefreshParameters: body.RefreshParameters, Status: models.SystemTaskStatusPending, CreatedBy: createdBy}}
+	if err := r.systemTaskRepo.CreateMany(req.Context(), tasks); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to queue Summon task")
 		return
 	}
-	respondJSON(w, http.StatusAccepted, map[string]interface{}{"status": "queued", "count": 1})
+	respondJSON(w, http.StatusAccepted, map[string]interface{}{"status": "queued", "count": 1, "id": tasks[0].ID})
 }
 
 func (r *Router) handleCreateBulkSummon(w http.ResponseWriter, req *http.Request) {
