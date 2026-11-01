@@ -90,7 +90,7 @@ export interface CompressionStatus {
   tables: Array<{ table: string; label: string; present: boolean; compression_enabled: boolean; scheduled: boolean; after_days: number; minimum_days: number; compressed_chunks: number; total_chunks: number }>;
   operational: Array<{ table: string; compressible_columns: number }>;
 }
-export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray';
+export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray' | `#${string}`;
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
 export type DashboardPanelKind = 'parameter' | 'category' | 'recency';
 export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'configured_option' | 'last_inform';

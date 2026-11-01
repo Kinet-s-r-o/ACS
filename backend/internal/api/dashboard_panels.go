@@ -51,6 +51,7 @@ const dashboardAggregationOptionsSetting = "fleet_aggregation_options"
 var dashboardPanelIDRe = regexp.MustCompile(`^custom-[a-zA-Z0-9-]{1,64}$`)
 var dashboardAggregationOptionIDRe = regexp.MustCompile(`^aggregation-[a-zA-Z0-9-]{1,64}$`)
 var dashboardParameterPatternRe = regexp.MustCompile(`^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$`)
+var dashboardPanelHexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 var dashboardPanelColors = map[string]struct{}{
 	"blue": {}, "green": {}, "amber": {}, "orange": {}, "red": {}, "gray": {},
@@ -206,7 +207,8 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 				return errors.New("threshold labels must be unique")
 			}
 			labels[strings.ToLower(label)] = struct{}{}
-			if _, validColor := dashboardPanelColors[threshold.Color]; !validColor {
+			_, validColor := dashboardPanelColors[threshold.Color]
+			if !validColor && !dashboardPanelHexColorRe.MatchString(threshold.Color) {
 				return errors.New("threshold color is invalid")
 			}
 			if threshold.Max == nil {

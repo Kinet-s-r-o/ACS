@@ -8,6 +8,7 @@ import { useFeedback } from '../components/Feedback';
 import { formatDateTime } from '../lib/dateTime';
 import { useAuth } from '../lib/auth';
 import DeviceGrowthChart from '../components/DeviceGrowthChart';
+import ColorSwatch from '../components/ColorSwatch';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 
 interface DistributionListProps {
@@ -176,10 +177,11 @@ const FleetPanelFrame: Component<{
   </div>;
 };
 
-const thresholdColors: Array<{ id: DashboardThresholdColor; label: string }> = [
-  { id: 'blue', label: 'Blue' }, { id: 'green', label: 'Green' }, { id: 'amber', label: 'Amber' },
-  { id: 'orange', label: 'Orange' }, { id: 'red', label: 'Red' }, { id: 'gray', label: 'Gray' },
-];
+const legacyThresholdColorHex: Record<string, string> = {
+  blue: '#0ea5e9', green: '#22c55e', amber: '#f59e0b', orange: '#f97316', red: '#ef4444', gray: '#94a3b8',
+};
+const isDashboardThresholdColor = (color: string): color is DashboardThresholdColor =>
+  Object.hasOwn(legacyThresholdColorHex, color) || /^#[0-9a-fA-F]{6}$/.test(color);
 
 const growthIntervals: Array<{ id: DeviceGrowthInterval; label: string }> = [
   { id: 'hourly', label: 'Hourly' }, { id: 'daily', label: 'Daily' }, { id: 'weekly', label: 'Weekly' },
@@ -271,7 +273,9 @@ const DistributionList: Component<DistributionListProps> = (props) => {
           <li class="distribution-row">
             <span class="distribution-label" title={label}>{label}</span>
             <progress
-              class={`distribution-progress ${props.colors?.[label] ? `distribution-progress-${props.colors[label]}` : ''} ${props.semantic ? semanticTone(label) : ''}`}
+              class={`distribution-progress ${legacyThresholdColorHex[props.colors?.[label] ?? ''] ? `distribution-progress-${props.colors?.[label]}` : ''} ${props.semantic ? semanticTone(label) : ''}`}
+              data-dynamic-style={props.colors?.[label]?.startsWith('#') ? 'distribution-progress-color' : undefined}
+              style={props.colors?.[label]?.startsWith('#') ? { '--distribution-progress-color': props.colors[label] } as any : undefined}
               value={value}
               max={maximum()}
               aria-label={`${label}: ${value}`}
@@ -499,7 +503,7 @@ const Dashboard: Component = () => {
         notify({ tone: 'error', title: 'Duplicate threshold label', message: 'Use a different label for each threshold bucket.' });
         return null;
       }
-      if (!thresholdColors.some((color) => color.id === threshold.color)) {
+      if (!isDashboardThresholdColor(threshold.color)) {
         notify({ tone: 'error', title: 'Invalid threshold color', message: 'Choose a supported color for each threshold.' });
         return null;
       }
@@ -790,7 +794,7 @@ const Dashboard: Component = () => {
                   <div class="grid grid-cols-[minmax(0,1fr)_8rem_3.5rem_2rem] items-end gap-2">
                     <label class="block min-w-0 text-xs text-muted">Label<input class="input mt-1 w-full" maxlength={48} value={threshold().label} onInput={(event) => updateThreshold(index, 'label', event.currentTarget.value)} /></label>
                     <label class="block text-xs text-muted">Maximum<input type="number" step="any" class="input mt-1 w-full" placeholder={index === (panelDraft()?.thresholds.length ?? 1) - 1 ? 'No limit' : ''} value={threshold().max} onInput={(event) => updateThreshold(index, 'max', event.currentTarget.value)} /></label>
-                    <label class="block text-xs text-muted">Color<select class="input mt-1 w-full" value={threshold().color} aria-label={`Color for ${threshold().label}`} onChange={(event) => updateThresholdColor(index, event.currentTarget.value as DashboardThresholdColor)}><For each={thresholdColors}>{(color) => <option value={color.id}>{color.label}</option>}</For></select></label>
+                    <div class="block text-xs text-muted">Color<div class="mt-1"><ColorSwatch compact clearable={false} ariaLabel={`Choose color for ${threshold().label}`} value={legacyThresholdColorHex[threshold().color] ?? threshold().color} onChange={(color) => updateThresholdColor(index, color as DashboardThresholdColor)} /></div></div>
                     <button type="button" class="icon-button text-rose-400" aria-label={`Remove threshold ${threshold().label}`} title="Remove threshold" disabled={(panelDraft()?.thresholds.length ?? 0) <= 1} onClick={() => removeThreshold(index)}><Trash2 size={14} /></button>
                   </div>
                 )}</Index>
