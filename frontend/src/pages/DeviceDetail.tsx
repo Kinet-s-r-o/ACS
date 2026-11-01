@@ -2960,7 +2960,7 @@ const DeviceDetail: Component = () => {
             <Show when={activeTab() === 'tasks'}>
             <dl class="ops-register task-register" aria-label="Device CWMP task status register" aria-busy={deviceTaskCounts.loading}>
               <div class="ops-register-cell is-warning"><dt>Pending</dt><dd>{deviceTaskCounts()?.pending ?? 0}</dd><small>Waiting to be sent</small></div>
-              <div class="ops-register-cell"><dt>Sent</dt><dd>{deviceTaskCounts()?.sent ?? 0}</dd><small>Dispatched to CPE</small></div>
+              <div class="ops-register-cell is-sent"><dt>Sent</dt><dd>{deviceTaskCounts()?.sent ?? 0}</dd><small>Dispatched to CPE</small></div>
               <div class="ops-register-cell is-online"><dt>Completed</dt><dd>{deviceTaskCounts()?.completed ?? 0}</dd><small>Successfully finished</small></div>
               <div class="ops-register-cell is-offline"><dt>Failed</dt><dd>{deviceTaskCounts()?.failed ?? 0}</dd><small>Require review</small></div>
               <div class="ops-register-cell"><dt>Deleted</dt><dd>{deviceTaskCounts()?.deleted ?? 0}</dd><small>Cancelled before dispatch</small></div>
