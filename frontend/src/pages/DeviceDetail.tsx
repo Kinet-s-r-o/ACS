@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight, ClipboardList, ScrollText } from 'lucide-solid';
-import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
+import { api, type DeviceParameter, type DeviceReachability, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -265,6 +265,13 @@ const DeviceDetail: Component = () => {
   const [autoRefreshTick, setAutoRefreshTick] = createSignal(0);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = createPersistedSignal('acs.device.autoRefresh', 'true');
   const [autoRefreshRunning, setAutoRefreshRunning] = createSignal(false);
+  const [deviceReachability, setDeviceReachability] = createSignal<{
+    status: DeviceReachability['status'] | 'checking';
+    ip_address?: string;
+    checked_at?: string;
+    response_time_ms?: number;
+    error?: string;
+  }>({ status: 'checking' });
   const [deletingTask, setDeletingTask] = createSignal<number | null>(null);
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<DeviceSnapshot | null>(null);
@@ -273,6 +280,35 @@ const DeviceDetail: Component = () => {
   const [snapshotSearch, setSnapshotSearch] = createSignal('');
   const [snapshotLoading, setSnapshotLoading] = createSignal<string | null>(null);
   const [collapsedSnapshotPaths, setCollapsedSnapshotPaths] = createSignal<Set<string>>(new Set());
+
+  createEffect(() => {
+    const deviceSerial = serial();
+    if (!deviceSerial) return;
+
+    let disposed = false;
+    let controller: AbortController | undefined;
+    const checkReachability = async () => {
+      controller?.abort();
+      const requestController = new AbortController();
+      controller = requestController;
+      try {
+        const result = await api.getDeviceReachability(deviceSerial, requestController.signal);
+        if (!disposed) setDeviceReachability(result);
+      } catch (error) {
+        if (!disposed && !requestController.signal.aborted) {
+          setDeviceReachability({ status: 'unknown', checked_at: new Date().toISOString(), error: (error as Error).message });
+        }
+      }
+    };
+
+    void checkReachability();
+    const timer = window.setInterval(() => void checkReachability(), 30_000);
+    onCleanup(() => {
+      disposed = true;
+      window.clearInterval(timer);
+      controller?.abort();
+    });
+  });
 
   const snapshotRows = createMemo<SnapshotTreeRow[]>(() => {
     const snapshot = selectedSnapshot();
@@ -1865,6 +1901,16 @@ const DeviceDetail: Component = () => {
             <Show when={device()}>
               <span class={`px-2.5 py-1 rounded-md text-xs font-medium ${device()?.online ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
                 {device()?.online ? 'Online' : 'Offline'}
+              </span>
+              <span
+                class="inline-flex items-center gap-2 text-[11px] text-muted"
+                role="status"
+                aria-live="polite"
+                title={[deviceReachability().error, deviceReachability().ip_address, deviceReachability().response_time_ms !== undefined ? `${deviceReachability().response_time_ms?.toFixed(1)} ms` : undefined].filter(Boolean).join(' · ')}
+              >
+                <span class={`h-1.5 w-1.5 shrink-0 ${deviceReachability().status === 'reachable' ? 'bg-emerald-500' : deviceReachability().status === 'unreachable' ? 'bg-rose-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                {deviceReachability().status === 'reachable' ? 'Ping reachable' : deviceReachability().status === 'unreachable' ? 'No ping response' : deviceReachability().status === 'checking' ? 'Checking ping' : deviceReachability().error ? 'Ping check unavailable' : deviceReachability().ip_address ? 'Ping status unavailable' : 'Main IP unavailable'}
+                <Show when={deviceReachability().checked_at}>· Updated {formatDateTime(deviceReachability().checked_at)}</Show>
               </span>
             </Show>
           </div>

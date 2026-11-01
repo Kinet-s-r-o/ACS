@@ -45,6 +45,7 @@ type Router struct {
 	apiTokenRepo         *database.APITokenRepository
 	apiTokenLimiter      *loginLimiter
 	apiIPLimiter         *loginLimiter
+	pingLimiter          *loginLimiter
 	roleRepo             *database.RoleRepository
 	provisioningRepo     *database.ProvisioningRepository
 	auditRepo            *database.AuditRepository
@@ -119,6 +120,7 @@ func NewRouter(db *gorm.DB) *Router {
 		apiTokenRepo:         database.NewAPITokenRepository(db),
 		apiTokenLimiter:      newLoginLimiter(120, time.Minute),
 		apiIPLimiter:         newLoginLimiter(600, time.Minute),
+		pingLimiter:          newLoginLimiter(1, 5*time.Second),
 		roleRepo:             database.NewRoleRepository(db),
 		provisioningRepo:     database.NewProvisioningRepository(db),
 		auditRepo:            database.NewAuditRepository(db),
@@ -236,6 +238,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /device/{serial}/tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/tasks/page", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTasksPageBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/task-counts", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDeviceTaskCountsBySerial))
+	apiMux.HandleFunc("GET /device/{serial}/reachability", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceReachability))
 	apiMux.HandleFunc("GET /device/{serial}/snapshots", auth.RequirePermission(models.PermDevicesRead)(r.handleListSnapshotsBySerial))
 	apiMux.HandleFunc("POST /device/{serial}/snapshots", auth.RequireAnyPermission(models.PermDevicesSnapshots, models.PermDevicesWrite)(r.handleCreateSnapshotBySerial))
 	apiMux.HandleFunc("GET /device/{serial}/snapshots/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetSnapshotBySerial))

@@ -34,6 +34,9 @@ services:
 
     restart: unless-stopped
 
+    sysctls:
+      net.ipv4.ping_group_range: "10001 10001"
+
     environment:
       TZ: ${TZ:-Europe/Bratislava}
 

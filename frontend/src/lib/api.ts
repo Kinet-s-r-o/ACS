@@ -74,6 +74,7 @@ export interface BulkSummonSettings { max_in_flight: number; interval_seconds: n
 export interface BulkRestartSettings extends BulkSummonSettings {}
 export interface ReauthenticationCredentials { current_password?: string; totp_code?: string }
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
+export interface DeviceReachability { status: 'reachable' | 'unreachable' | 'unknown'; ip_address?: string; checked_at: string; response_time_ms?: number }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
 export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
@@ -244,6 +245,7 @@ export const api = {
   getDeviceTasks: (serial: string) => request<Task[]>(`/device/${encodeURIComponent(serial)}/tasks`),
   getDeviceTasksPage: (serial: string, limit = 20, offset = 0, options?: TableQueryOptions) => request<TablePage<Task>>(`/device/${encodeURIComponent(serial)}/tasks/page?${tableQuery(limit, offset, options)}`),
   getDeviceTaskCounts: (serial: string) => request<DeviceTaskCounts>(`/device/${encodeURIComponent(serial)}/task-counts`),
+  getDeviceReachability: (serial: string, signal?: AbortSignal) => request<DeviceReachability>(`/device/${encodeURIComponent(serial)}/reachability`, { signal }),
   getDeviceSnapshots: (serial: string) => request<DeviceSnapshot[]>(`/device/${encodeURIComponent(serial)}/snapshots`),
   getDeviceSnapshot: (serial: string, id: number) => request<DeviceSnapshot>(`/device/${encodeURIComponent(serial)}/snapshots/${id}`),
   createDeviceSnapshot: (serial: string, name?: string) => request<DeviceSnapshot>(`/device/${encodeURIComponent(serial)}/snapshots`, { method: 'POST', body: JSON.stringify({ name }) }),
