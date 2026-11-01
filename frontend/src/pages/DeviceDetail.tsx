@@ -1906,11 +1906,11 @@ const DeviceDetail: Component = () => {
                 class="inline-flex items-center gap-2 text-[11px] text-muted"
                 role="status"
                 aria-live="polite"
-                title={[deviceReachability().error, deviceReachability().ip_address, deviceReachability().response_time_ms !== undefined ? `${deviceReachability().response_time_ms?.toFixed(1)} ms` : undefined].filter(Boolean).join(' · ')}
+                aria-label={deviceReachability().status === 'reachable' ? `CPE ping response ${deviceReachability().response_time_ms?.toFixed(1) ?? 'unknown'} milliseconds` : deviceReachability().status === 'unreachable' ? 'CPE did not respond to ping' : deviceReachability().status === 'checking' ? 'Checking CPE ping status' : deviceReachability().error ? 'CPE ping check unavailable' : 'CPE main IP unavailable'}
+                title={[deviceReachability().ip_address, deviceReachability().checked_at ? `Updated ${formatDateTime(deviceReachability().checked_at)}` : undefined, deviceReachability().error].filter(Boolean).join(' · ')}
               >
                 <span class={`h-1.5 w-1.5 shrink-0 ${deviceReachability().status === 'reachable' ? 'bg-emerald-500' : deviceReachability().status === 'unreachable' ? 'bg-rose-500' : 'bg-slate-400'}`} aria-hidden="true" />
-                {deviceReachability().status === 'reachable' ? 'Ping reachable' : deviceReachability().status === 'unreachable' ? 'No ping response' : deviceReachability().status === 'checking' ? 'Checking ping' : deviceReachability().error ? 'Ping check unavailable' : deviceReachability().ip_address ? 'Ping status unavailable' : 'Main IP unavailable'}
-                <Show when={deviceReachability().checked_at}>· Updated {formatDateTime(deviceReachability().checked_at)}</Show>
+                {deviceReachability().status === 'reachable' ? `${deviceReachability().response_time_ms?.toFixed(1) ?? '—'} ms` : deviceReachability().status === 'unreachable' ? 'No ping response' : deviceReachability().status === 'checking' ? 'Checking ping' : deviceReachability().error ? 'Ping check unavailable' : deviceReachability().ip_address ? 'Ping status unavailable' : 'Main IP unavailable'}
               </span>
             </Show>
           </div>
