@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight, ClipboardList, ScrollText } from 'lucide-solid';
-import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type SnapshotParameter, type Task } from '../lib/api';
+import { api, type DeviceParameter, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -109,7 +109,7 @@ const cpeWebUiUrl = (address: string): string | null => {
 const DeviceDetail: Component = () => {
   const params = useParams<{ serial: string }>();
   const navigate = useNavigate();
-  const { isFullAccess } = useAuth();
+  const { isFullAccess, user } = useAuth();
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -575,6 +575,8 @@ const DeviceDetail: Component = () => {
   const [showSensitive, setShowSensitive] = createSignal(false);
   const [showFactoryResetModal, setShowFactoryResetModal] = createSignal(false);
   const [factoryResetPassword, setFactoryResetPassword] = createSignal('');
+  const [factoryResetTOTPCode, setFactoryResetTOTPCode] = createSignal('');
+  const [factoryResetError, setFactoryResetError] = createSignal('');
   const [paramColumnFilters, setParamColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.parameters`, {});
   const [hostColumnFilters, setHostColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>(`acs.filters.device.${encodeURIComponent(serial())}.hosts`, {});
   const [hostColumns, setHostColumns] = createSignal<HostColumnConfig[]>([]);
@@ -812,6 +814,14 @@ const DeviceDetail: Component = () => {
   const closeFactoryResetModal = () => {
     setShowFactoryResetModal(false);
     setFactoryResetPassword('');
+    setFactoryResetTOTPCode('');
+    setFactoryResetError('');
+  };
+  const openFactoryResetModal = () => {
+    setFactoryResetPassword('');
+    setFactoryResetTOTPCode('');
+    setFactoryResetError('');
+    setShowFactoryResetModal(true);
   };
 
   createEffect(() => {
@@ -843,17 +853,30 @@ const DeviceDetail: Component = () => {
   };
 
   const handleFactoryReset = async () => {
-    if (!factoryResetPassword()) return;
+    const usesTOTP = user()?.two_factor_configured ?? false;
+    const credentials: ReauthenticationCredentials = usesTOTP
+      ? { totp_code: factoryResetTOTPCode() }
+      : { current_password: factoryResetPassword() };
+    if (usesTOTP ? !credentials.totp_code : !credentials.current_password) return;
     setActionLoading('factory-reset');
+    setFactoryResetError('');
     try {
-      await api.factoryResetDevice(serial(), factoryResetPassword());
+      await api.factoryResetDevice(serial(), credentials);
       closeFactoryResetModal();
       showMessage('success', 'Factory reset task created. Track its state in the task register.');
       refetchTasks();
     } catch (err) {
-      showMessage('error', 'Factory reset task was rejected. Verify the account password and retry.', (err as Error).message);
+      showMessage('error', 'Factory reset task was rejected. Verify your reauthentication credential and retry.', (err as Error).message);
+      setFactoryResetPassword('');
+      setFactoryResetTOTPCode('');
+      setFactoryResetError((err as Error).message || 'The reauthentication credential was rejected. Try again.');
     }
     setActionLoading(null);
+  };
+
+  const submitFactoryReset = (event: SubmitEvent) => {
+    event.preventDefault();
+    void handleFactoryReset();
   };
 
   const handleDelete = async () => {
@@ -1873,7 +1896,7 @@ const DeviceDetail: Component = () => {
                   <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); void handleReboot(); }}>
                     Reboot
                   </button>
-                  <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); setShowFactoryResetModal(true); }}>
+                  <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); openFactoryResetModal(); }}>
                     Factory reset
                   </button>
                   <div class="my-1 border-t border-subtle" role="separator"></div>
@@ -3416,18 +3439,13 @@ const DeviceDetail: Component = () => {
 
 		  {/* Factory reset step-up confirmation */}
 		  <Show when={showFactoryResetModal()}>
-			<Dialog title={`Factory reset ${serial()}?`} description="All CPE configuration will be erased and service may not recover automatically. This operation cannot be undone." size="small" closeOnBackdrop={false} onClose={closeFactoryResetModal} actions={<><button onClick={closeFactoryResetModal} class="btn btn-secondary">Cancel</button><button onClick={handleFactoryReset} disabled={!factoryResetPassword() || actionLoading() !== null} class="btn btn-danger">Confirm factory reset</button></>}>
-				<label for="factory-reset-password" class="block text-xs text-muted mb-1.5">Current ACS account password</label>
-				<input
-				  id="factory-reset-password"
-			  type="password"
-			  value={factoryResetPassword()}
-			  onInput={(e) => setFactoryResetPassword(e.currentTarget.value)}
-			  onKeyDown={(e) => { if (e.key === 'Enter') void handleFactoryReset(); }}
-			  class="input w-full"
-			  autocomplete="current-password"
-			  autofocus
-			/>
+			<Dialog title={`Factory reset ${serial()}?`} description={`All CPE configuration will be erased and service may not recover automatically. This operation cannot be undone. Enter ${user()?.two_factor_configured ? 'a code from your authenticator app' : 'your current ACS account password'} to confirm.`} size="small" closeOnBackdrop={false} onClose={closeFactoryResetModal} actions={<><button type="button" onClick={closeFactoryResetModal} class="btn btn-secondary" disabled={actionLoading() === 'factory-reset'}>Cancel</button><button type="submit" form="factory-reset-reauth-form" disabled={actionLoading() !== null || (user()?.two_factor_configured ? !factoryResetTOTPCode() : !factoryResetPassword())} class="btn btn-danger">{actionLoading() === 'factory-reset' ? 'Submitting…' : 'Confirm factory reset'}</button></>}>
+				<form id="factory-reset-reauth-form" class="space-y-3" autocomplete="on" onSubmit={submitFactoryReset}>
+					<Show when={user()?.two_factor_configured} fallback={<label for="factory-reset-password" class="block text-xs text-muted">Current ACS account password<input id="factory-reset-password" name="current_password" type="password" value={factoryResetPassword()} onInput={(e) => { setFactoryResetPassword(e.currentTarget.value); setFactoryResetError(''); }} class="input mt-1.5 w-full" autocomplete="current-password" autofocus /></label>}>
+						<label for="factory-reset-totp-code" class="block text-xs text-muted">Authenticator code<input id="factory-reset-totp-code" name="totp_code" type="text" inputmode="numeric" maxlength="7" value={factoryResetTOTPCode()} onInput={(e) => { setFactoryResetTOTPCode(e.currentTarget.value); setFactoryResetError(''); }} class="input mt-1.5 w-full font-mono" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" autofocus /></label>
+					</Show>
+					<Show when={factoryResetError()}><p class="text-sm text-error" role="alert">{factoryResetError()}</p></Show>
+				</form>
 			</Dialog>
 		  </Show>
 

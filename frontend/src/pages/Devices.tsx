@@ -2,9 +2,10 @@ import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
 import { Download, Router as RouterIcon, X, Search, Send, RotateCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
-import { api, type Device } from '../lib/api';
+import { api, type Device, type ReauthenticationCredentials } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
+import Dialog from '../components/Dialog';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
@@ -81,12 +82,16 @@ const Devices: Component = () => {
   const [inventoryColumnSelection, setInventoryColumnSelection] = createSignal<string>();
   const [bulkAction, setBulkAction] = createSignal<'summon' | 'restart' | null>(null);
   const [showBulkActions, setShowBulkActions] = createSignal(false);
+  const [restartConfirmOpen, setRestartConfirmOpen] = createSignal(false);
+  const [restartPassword, setRestartPassword] = createSignal('');
+  const [restartTOTPCode, setRestartTOTPCode] = createSignal('');
+  const [restartError, setRestartError] = createSignal('');
   let bulkActionsMenu: HTMLDivElement | undefined;
   const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
-  const { isFullAccess, hasAnyPermission } = useAuth();
-  const { notify, confirm } = useFeedback();
+  const { isFullAccess, hasAnyPermission, user } = useAuth();
+  const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
   onMount(() => {
@@ -372,22 +377,67 @@ const Devices: Component = () => {
   const queueBulkDeviceAction = async (action: 'summon' | 'restart') => {
     const list = sortedDevices();
     if (list.length === 0 || bulkAction()) return;
-    if (action === 'restart' && !await confirm({ title: `Restart ${list.length} visible CPEs?`, description: 'ACS will queue a reboot task for each visible CPE and process them gradually. Each device will restart when it next establishes a CWMP session.', confirmLabel: 'Queue restarts' })) return;
+    if (action === 'restart') {
+      setRestartPassword('');
+      setRestartTOTPCode('');
+      setRestartError('');
+      setRestartConfirmOpen(true);
+      return;
+    }
     setBulkAction(action);
     try {
-      const result = action === 'restart'
-        ? await api.createBulkRestart(list.map(device => device.id))
-        : await api.createBulkSummon(list.map(device => device.id));
+      const result = await api.createBulkSummon(list.map(device => device.id));
       notify({
         tone: 'info',
-        title: action === 'restart' ? 'Bulk Restart queued' : 'Bulk Summon queued',
+        title: 'Bulk Summon queued',
         message: `${result.count} visible CPEs were added to the system task processor. Track progress in System settings → System tasks.`,
       });
     } catch (error) {
-      notify({ tone: 'error', title: `Could not queue Bulk ${action === 'restart' ? 'Restart' : 'Summon'}`, message: 'No CPEs were added to the system task queue.', detail: (error as Error).message, persistent: true });
+      notify({ tone: 'error', title: 'Could not queue Bulk Summon', message: 'No CPEs were added to the system task queue.', detail: (error as Error).message, persistent: true });
     } finally {
       setBulkAction(null);
     }
+  };
+
+  const submitBulkRestart = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const list = sortedDevices();
+    if (list.length === 0 || bulkAction()) return;
+    const usesTOTP = user()?.two_factor_configured ?? false;
+    const code = restartTOTPCode();
+    const password = restartPassword();
+    if (usesTOTP ? !code : !password) {
+      setRestartError(usesTOTP ? 'Enter the code from your authenticator app.' : 'Enter your current password to confirm the restart.');
+      return;
+    }
+    const credentials: ReauthenticationCredentials = usesTOTP ? { totp_code: code } : { current_password: password };
+    setBulkAction('restart');
+    setRestartError('');
+    try {
+      const result = await api.createBulkRestart(list.map(device => device.id), credentials);
+      setRestartConfirmOpen(false);
+      setRestartPassword('');
+      setRestartTOTPCode('');
+      notify({
+        tone: 'info',
+        title: 'Bulk Restart queued',
+        message: `${result.count} visible CPEs were added to the system task processor. Track progress in System settings → System tasks.`,
+      });
+    } catch (error) {
+      setRestartPassword('');
+      setRestartTOTPCode('');
+      setRestartError((error as Error).message || 'The restart request could not be verified. Check your password and try again.');
+    } finally {
+      setBulkAction(null);
+    }
+  };
+
+  const closeRestartDialog = () => {
+    if (bulkAction() !== null) return;
+    setRestartConfirmOpen(false);
+    setRestartPassword('');
+    setRestartTOTPCode('');
+    setRestartError('');
   };
 
   return (
@@ -561,6 +611,29 @@ const Devices: Component = () => {
       </div></Show>
 
       <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
+      </Show>
+      <Show when={restartConfirmOpen()}>
+        <Dialog
+          title={`Restart ${sortedDevices().length} visible CPEs?`}
+          description={`ACS will queue a reboot task for each visible CPE and process them gradually. Each device will restart when it next establishes a CWMP session. Enter ${user()?.two_factor_configured ? 'a code from your authenticator app' : 'your current password'} to confirm.`}
+          size="small"
+          onClose={closeRestartDialog}
+          actions={<>
+            <button type="button" class="btn btn-secondary" onClick={closeRestartDialog} disabled={bulkAction() === 'restart'}>Cancel</button>
+            <button type="submit" form="bulk-restart-confirm-form" class="btn btn-primary" disabled={bulkAction() === 'restart'}>{bulkAction() === 'restart' ? 'Queueing…' : 'Queue restarts'}</button>
+          </>}
+        >
+          <form id="bulk-restart-confirm-form" class="space-y-3" autocomplete="on" onSubmit={submitBulkRestart}>
+            <Show when={user()?.two_factor_configured} fallback={<label for="bulk-restart-current-password" class="block text-xs text-secondary">Current password
+              <input id="bulk-restart-current-password" name="current_password" type="password" autocomplete="current-password" class="input mt-1.5 w-full" value={restartPassword()} onInput={event => setRestartPassword(event.currentTarget.value)} disabled={bulkAction() === 'restart'} autofocus />
+            </label>}>
+              <label for="bulk-restart-totp-code" class="block text-xs text-secondary">Authenticator code
+                <input id="bulk-restart-totp-code" name="totp_code" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" maxlength="7" class="input mt-1.5 w-full font-mono" value={restartTOTPCode()} onInput={event => setRestartTOTPCode(event.currentTarget.value)} disabled={bulkAction() === 'restart'} autofocus />
+              </label>
+            </Show>
+            <Show when={restartError()}><p class="text-sm text-error" role="alert">{restartError()}</p></Show>
+          </form>
+        </Dialog>
       </Show>
     </div>
   );

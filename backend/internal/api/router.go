@@ -779,7 +779,9 @@ func (r *Router) handleCreateBulkRestart(w http.ResponseWriter, req *http.Reques
 
 func (r *Router) handleCreateBulkDeviceTask(w http.ResponseWriter, req *http.Request, taskType models.SystemTaskType) {
 	var body struct {
-		DeviceIDs []int64 `json:"device_ids"`
+		DeviceIDs       []int64 `json:"device_ids"`
+		CurrentPassword string  `json:"current_password"`
+		TOTPCode        string  `json:"totp_code"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	decoder.DisallowUnknownFields()
@@ -808,6 +810,11 @@ func (r *Router) handleCreateBulkDeviceTask(w http.ResponseWriter, req *http.Req
 	if len(devices) != len(ids) {
 		respondError(w, http.StatusNotFound, "One or more selected CPEs no longer exist")
 		return
+	}
+	if taskType == models.SystemTaskTypeBulkRestart {
+		if !r.verifyCurrentReauthentication(w, req, body.CurrentPassword, body.TOTPCode) {
+			return
+		}
 	}
 	claims := auth.GetUserFromContext(req.Context())
 	createdBy := "system"
@@ -1422,12 +1429,12 @@ func (r *Router) handleReboot(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) handleFactoryReset(w http.ResponseWriter, req *http.Request) {
-	if !r.requireCurrentPassword(w, req) {
-		return
-	}
 	id, err := r.parseDeviceID(req)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid device ID")
+		return
+	}
+	if !r.requireCurrentReauthentication(w, req) {
 		return
 	}
 
@@ -1461,6 +1468,79 @@ func (r *Router) requireCurrentPassword(w http.ResponseWriter, req *http.Request
 		return false
 	}
 	return r.verifyCurrentPassword(w, req, body.CurrentPassword)
+}
+
+func (r *Router) requireCurrentReauthentication(w http.ResponseWriter, req *http.Request) bool {
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		TOTPCode        string `json:"totp_code"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "Current password or authenticator code is required")
+		return false
+	}
+	return r.verifyCurrentReauthentication(w, req, body.CurrentPassword, body.TOTPCode)
+}
+
+func (r *Router) verifyCurrentReauthentication(w http.ResponseWriter, req *http.Request, currentPassword, totpCode string) bool {
+	claims := auth.GetUserFromContext(req.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return false
+	}
+	user, err := r.userRepo.GetByID(req.Context(), claims.UserID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to verify account credentials")
+		return false
+	}
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return false
+	}
+	if user.TwoFactorSecret == "" {
+		if currentPassword == "" {
+			respondError(w, http.StatusBadRequest, "Current password is required")
+			return false
+		}
+		return r.verifyCurrentPassword(w, req, currentPassword)
+	}
+	if totpCode == "" {
+		respondError(w, http.StatusBadRequest, "Authenticator code is required")
+		return false
+	}
+	return r.verifyCurrentTOTP(w, req, user, totpCode)
+}
+
+func (r *Router) verifyCurrentTOTP(w http.ResponseWriter, req *http.Request, user *models.User, code string) bool {
+	key := "reauth:" + clientIP(req)
+	if !r.loginLimiter.Allow(key) {
+		w.Header().Set("Retry-After", "900")
+		respondError(w, http.StatusTooManyRequests, "Too many reauthentication attempts; try again later")
+		return false
+	}
+	secret, err := database.DecryptValue(user.TwoFactorSecret)
+	if err != nil || secret == "" {
+		respondError(w, http.StatusInternalServerError, "Could not verify authenticator code")
+		return false
+	}
+	step, valid := auth.VerifyTOTP(secret, code, time.Now())
+	if !valid {
+		respondError(w, http.StatusForbidden, "Authenticator code is incorrect")
+		return false
+	}
+	consumed, err := r.userRepo.ConsumeTwoFactorStep(req.Context(), user.ID, step)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not verify authenticator code")
+		return false
+	}
+	if !consumed {
+		respondError(w, http.StatusForbidden, "This authenticator code has already been used")
+		return false
+	}
+	r.loginLimiter.Reset(key)
+	return true
 }
 
 func (r *Router) verifyCurrentPassword(w http.ResponseWriter, req *http.Request, currentPassword string) bool {
@@ -2913,12 +2993,12 @@ func (r *Router) handleRebootBySerial(w http.ResponseWriter, req *http.Request) 
 }
 
 func (r *Router) handleFactoryResetBySerial(w http.ResponseWriter, req *http.Request) {
-	if !r.requireCurrentPassword(w, req) {
-		return
-	}
 	device, err := r.parseDeviceBySerial(req)
 	if err != nil || device == nil {
 		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	if !r.requireCurrentReauthentication(w, req) {
 		return
 	}
 	task, err := models.NewTaskWithPayload(device.ID, models.TaskTypeFactoryReset, nil)

@@ -72,6 +72,7 @@ export type SystemTaskCounts = Record<SystemTaskStatus, number>;
 export interface SystemTaskSummary { summon_from_cpe: Partial<SystemTaskCounts>; bulk_summon: Partial<SystemTaskCounts>; bulk_restart: Partial<SystemTaskCounts> }
 export interface BulkSummonSettings { max_in_flight: number; interval_seconds: number; contact_timeout_seconds: number }
 export interface BulkRestartSettings extends BulkSummonSettings {}
+export interface ReauthenticationCredentials { current_password?: string; totp_code?: string }
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
 export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
@@ -198,7 +199,7 @@ export const api = {
   },
   createSystemSummon: (serial: string, refreshParameters = false) => request<{ status: string; count: number }>('/system-tasks/summon', { method: 'POST', body: JSON.stringify({ serial_number: serial, refresh_parameters: refreshParameters }) }),
   createBulkSummon: (deviceIDs: number[]) => request<{ status: string; count: number }>('/system-tasks/bulk-summon', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs }) }),
-  createBulkRestart: (deviceIDs: number[]) => request<{ status: string; count: number }>('/system-tasks/bulk-restart', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs }) }),
+  createBulkRestart: (deviceIDs: number[], credentials: ReauthenticationCredentials) => request<{ status: string; count: number }>('/system-tasks/bulk-restart', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs, ...credentials }) }),
   retrySystemTask: (id: number) => request<{ status: string }>(`/system-tasks/${id}/retry`, { method: 'POST' }),
   clearFinishedSystemTasks: (type: SystemTaskType) => request<{ deleted: number }>(`/system-tasks/${type}/finished`, { method: 'DELETE' }),
   getBulkSummonSettings: () => request<BulkSummonSettings>('/system-tasks/bulk-summon-settings'),
@@ -254,7 +255,7 @@ export const api = {
   getParameterValues: (serial: string, parameters: string[]) => request<Task>(`/device/${encodeURIComponent(serial)}/get-parameters`, { method: 'POST', body: JSON.stringify({ parameters }) }),
   setParameterValues: (serial: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/set-parameters`, { method: 'POST', body: JSON.stringify({ parameters }) }),
   rebootDevice: (serial: string) => request<Task>(`/device/${encodeURIComponent(serial)}/reboot`, { method: 'POST' }),
-  factoryResetDevice: (serial: string, currentPassword: string) => request<Task>(`/device/${encodeURIComponent(serial)}/factory-reset`, { method: 'POST', body: JSON.stringify({ current_password: currentPassword }) }),
+  factoryResetDevice: (serial: string, credentials: ReauthenticationCredentials) => request<Task>(`/device/${encodeURIComponent(serial)}/factory-reset`, { method: 'POST', body: JSON.stringify(credentials) }),
   deleteDevice: (serial: string) => request<{ status: string }>(`/device/${encodeURIComponent(serial)}`, { method: 'DELETE' }),
   connectionRequest: (serial: string) => request<{ status: string; url: string; message: string }>(`/device/${encodeURIComponent(serial)}/connection-request`, { method: 'POST' }),
   downloadFirmware: (serial: string, firmwareId: number, fileType?: string) => request<Task>(`/device/${encodeURIComponent(serial)}/download-firmware`, { method: 'POST', body: JSON.stringify({ firmware_id: firmwareId, file_type: fileType }) }),
