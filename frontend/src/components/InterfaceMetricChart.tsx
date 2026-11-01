@@ -44,6 +44,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
   const [selectedSeriesKey, setSelectedSeriesKey] = createSignal<string | null>(null);
   const [bucket, setBucket] = createSignal(readStoredBucket(props.serial, props.interfacePath));
   let chart: echarts.ECharts | undefined;
+  let chartBoundEl: HTMLDivElement | undefined;
   let observer: ResizeObserver | undefined;
   const requests = createMemo(() => props.definitions.flatMap(def =>
     props.parameterNames.filter(name => name.startsWith(props.interfacePath) && matches(def.parameter_pattern, name))
@@ -121,8 +122,11 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     const el = element();
     const { series: data, summaries } = visibleChartData();
     if (!el || data.length === 0) return;
-    if (!chart) {
+    if (!chart || chartBoundEl !== el) {
+      chart?.dispose();
+      observer?.disconnect();
       chart = echarts.init(el);
+      chartBoundEl = el;
       observer = new ResizeObserver(() => chart?.resize());
       observer.observe(el);
     }
@@ -159,7 +163,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
     }, { notMerge: true });
   });
 
-  onCleanup(() => { observer?.disconnect(); chart?.dispose(); chart = undefined; });
+  onCleanup(() => { observer?.disconnect(); chart?.dispose(); chart = undefined; chartBoundEl = undefined; });
 
   return <div class="space-y-2">
     <div class="flex justify-end gap-1" role="group" aria-label="Interface metric history range">
