@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
-import { Download, Router as RouterIcon, X, Search, Send, RotateCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
+import { Download, Router as RouterIcon, X, Search, Send, RotateCw, RefreshCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device, type ReauthenticationCredentials } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -81,12 +81,12 @@ const Devices: Component = () => {
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [inventoryColumnSelection, setInventoryColumnSelection] = createSignal<string>();
   const [bulkAction, setBulkAction] = createSignal<'summon' | 'restart' | null>(null);
-  const [showBulkActions, setShowBulkActions] = createSignal(false);
+  const [showInventoryActions, setShowInventoryActions] = createSignal(false);
   const [restartConfirmOpen, setRestartConfirmOpen] = createSignal(false);
   const [restartPassword, setRestartPassword] = createSignal('');
   const [restartTOTPCode, setRestartTOTPCode] = createSignal('');
   const [restartError, setRestartError] = createSignal('');
-  let bulkActionsMenu: HTMLDivElement | undefined;
+  let inventoryActionsMenu: HTMLDivElement | undefined;
   const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
@@ -119,10 +119,10 @@ const Devices: Component = () => {
 
   onMount(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (bulkActionsMenu && !bulkActionsMenu.contains(event.target as Node)) setShowBulkActions(false);
+      if (inventoryActionsMenu && !inventoryActionsMenu.contains(event.target as Node)) setShowInventoryActions(false);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowBulkActions(false);
+      if (event.key === 'Escape') setShowInventoryActions(false);
     };
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
@@ -458,7 +458,7 @@ const Devices: Component = () => {
         <div class="card"><ResourceError title="CPE inventory is unavailable" description="The inventory request failed. Check the API service status and retry without losing the current search or column settings." onRetry={() => refetch()} /></div>
       </Show>
 
-      <Show when={!deviceList.error}><div class="card overflow-hidden">
+      <Show when={!deviceList.error}><div class="card">
         <div class="table-panel-toolbar">
           <span><strong>{pagedDevices().length}</strong> shown · <strong>{deviceList()?.total ?? 0}</strong> matching CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
           <div class="flex items-center gap-2">
@@ -482,33 +482,29 @@ const Devices: Component = () => {
                 </button>
               </Show>
             </div>
-            <button
-              type="button"
-              class="icon-button"
-              onClick={() => void exportDevicesCSV()}
-              disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0}
-              title="Export filtered CPE inventory as CSV"
-              aria-label="Export filtered CPE inventory as CSV"
-            >
-              <Download size={15} aria-hidden="true" />
+            <button type="button" class="icon-button" onClick={() => void refetch()} disabled={deviceList.loading} title="Refresh CPE inventory" aria-label="Refresh CPE inventory">
+              <RefreshCw size={15} class={deviceList.loading ? 'animate-spin' : ''} aria-hidden="true" />
             </button>
-            <Show when={isFullAccess()}>
-              <div class="relative" ref={bulkActionsMenu}>
-                <button type="button" class="icon-button" onClick={() => setShowBulkActions(value => !value)} disabled={bulkAction() !== null} aria-label="CPE inventory actions" aria-haspopup="menu" aria-expanded={showBulkActions()} title="CPE inventory actions">
-                  <MoreVertical size={16} aria-hidden="true" />
-                </button>
-                <Show when={showBulkActions()}>
-                  <div class="absolute right-0 top-full z-50 mt-2 min-w-52 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
-                    <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowBulkActions(false); void queueBulkDeviceAction('summon'); }}>
+            <div class="relative" ref={inventoryActionsMenu}>
+              <button type="button" class="icon-button" onClick={() => setShowInventoryActions(value => !value)} aria-label="CPE inventory actions" aria-haspopup="menu" aria-expanded={showInventoryActions()} title="CPE inventory actions">
+                <MoreVertical size={16} aria-hidden="true" />
+              </button>
+              <Show when={showInventoryActions()}>
+                <div class="absolute right-0 top-full z-50 mt-2 min-w-52 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
+                  <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} onClick={() => { setShowInventoryActions(false); void exportDevicesCSV(); }}>
+                    <Download size={14} aria-hidden="true" />{exportingDevices() ? 'Exporting…' : 'Export filtered CPEs as CSV'}
+                  </button>
+                  <Show when={isFullAccess()}>
+                    <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowInventoryActions(false); void queueBulkDeviceAction('summon'); }}>
                       <Send size={14} aria-hidden="true" />{bulkAction() === 'summon' ? 'Summoning…' : 'Summon visible CPEs'}
                     </button>
-                    <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowBulkActions(false); void queueBulkDeviceAction('restart'); }}>
+                    <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowInventoryActions(false); void queueBulkDeviceAction('restart'); }}>
                       <RotateCw size={14} aria-hidden="true" />{bulkAction() === 'restart' ? 'Restarting…' : 'Restart visible CPEs'}
                     </button>
-                  </div>
-                </Show>
-              </div>
-            </Show>
+                  </Show>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
         <div class="overflow-x-auto table-scroll">

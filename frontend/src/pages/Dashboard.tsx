@@ -601,7 +601,6 @@ const Dashboard: Component = () => {
         <div class="flex flex-wrap items-center justify-end gap-2">
           <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
           <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
-          <button type="button" class="icon-button" onClick={addPanel} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading} aria-label="Add dashboard panel" title="Add panel"><Plus size={16} /></button>
           <div class="relative" ref={panelActionsMenu}>
             <button type="button" class="icon-button" aria-label="Fleet panel actions" aria-haspopup="menu" aria-expanded={showPanelActionsMenu()} onClick={() => setShowPanelActionsMenu((visible) => !visible)}>
               <MoreVertical size={18} />
