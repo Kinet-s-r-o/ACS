@@ -197,10 +197,13 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /system-tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListSystemTasks))
 	apiMux.HandleFunc("POST /system-tasks/summon", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateSystemSummon))
 	apiMux.HandleFunc("POST /system-tasks/bulk-summon", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateBulkSummon))
+	apiMux.HandleFunc("POST /system-tasks/bulk-restart", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateBulkRestart))
 	apiMux.HandleFunc("POST /system-tasks/{id}/retry", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleRetrySystemTask))
 	apiMux.HandleFunc("DELETE /system-tasks/{type}/finished", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleClearFinishedSystemTasks))
 	apiMux.HandleFunc("GET /system-tasks/bulk-summon-settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetBulkSummonSettings))
 	apiMux.HandleFunc("PUT /system-tasks/bulk-summon-settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleSaveBulkSummonSettings))
+	apiMux.HandleFunc("GET /system-tasks/bulk-restart-settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetBulkRestartSettings))
+	apiMux.HandleFunc("PUT /system-tasks/bulk-restart-settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleSaveBulkRestartSettings))
 	apiMux.HandleFunc("GET /devices/stats", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceStats))
 	apiMux.HandleFunc("GET /devices/growth", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceGrowth))
 	apiMux.HandleFunc("GET /devices/analytics", auth.RequirePermission(models.PermDevicesRead)(r.handleDeviceAnalytics))
@@ -715,7 +718,7 @@ func (r *Router) handleSystemTaskSummary(w http.ResponseWriter, req *http.Reques
 
 func (r *Router) handleListSystemTasks(w http.ResponseWriter, req *http.Request) {
 	taskType := models.SystemTaskType(req.URL.Query().Get("type"))
-	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon {
+	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon && taskType != models.SystemTaskTypeBulkRestart {
 		respondError(w, http.StatusBadRequest, "Invalid system task type")
 		return
 	}
@@ -767,6 +770,14 @@ func (r *Router) handleCreateSystemSummon(w http.ResponseWriter, req *http.Reque
 }
 
 func (r *Router) handleCreateBulkSummon(w http.ResponseWriter, req *http.Request) {
+	r.handleCreateBulkDeviceTask(w, req, models.SystemTaskTypeBulkSummon)
+}
+
+func (r *Router) handleCreateBulkRestart(w http.ResponseWriter, req *http.Request) {
+	r.handleCreateBulkDeviceTask(w, req, models.SystemTaskTypeBulkRestart)
+}
+
+func (r *Router) handleCreateBulkDeviceTask(w http.ResponseWriter, req *http.Request, taskType models.SystemTaskType) {
 	var body struct {
 		DeviceIDs []int64 `json:"device_ids"`
 	}
@@ -805,10 +816,10 @@ func (r *Router) handleCreateBulkSummon(w http.ResponseWriter, req *http.Request
 	}
 	tasks := make([]models.SystemTask, 0, len(ids))
 	for _, id := range ids {
-		tasks = append(tasks, models.SystemTask{Type: models.SystemTaskTypeBulkSummon, DeviceID: id, RefreshParameters: true, Status: models.SystemTaskStatusPending, CreatedBy: createdBy})
+		tasks = append(tasks, models.SystemTask{Type: taskType, DeviceID: id, RefreshParameters: taskType == models.SystemTaskTypeBulkSummon, Status: models.SystemTaskStatusPending, CreatedBy: createdBy})
 	}
 	if err := r.systemTaskRepo.CreateMany(req.Context(), tasks); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to queue Bulk Summon tasks")
+		respondError(w, http.StatusInternalServerError, "Failed to queue bulk device tasks")
 		return
 	}
 	respondJSON(w, http.StatusAccepted, map[string]interface{}{"status": "queued", "count": len(tasks)})
@@ -838,7 +849,7 @@ func (r *Router) handleRetrySystemTask(w http.ResponseWriter, req *http.Request)
 
 func (r *Router) handleClearFinishedSystemTasks(w http.ResponseWriter, req *http.Request) {
 	taskType := models.SystemTaskType(req.PathValue("type"))
-	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon {
+	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon && taskType != models.SystemTaskTypeBulkRestart {
 		respondError(w, http.StatusBadRequest, "Invalid system task type")
 		return
 	}
@@ -868,6 +879,30 @@ func (r *Router) handleSaveBulkSummonSettings(w http.ResponseWriter, req *http.R
 		return
 	}
 	if err := r.settingsRepo.SaveBulkSummonSettings(req.Context(), settings); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, settings)
+}
+
+func (r *Router) handleGetBulkRestartSettings(w http.ResponseWriter, req *http.Request) {
+	settings, err := r.settingsRepo.GetBulkRestartSettings(req.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to read Bulk Restart settings")
+		return
+	}
+	respondJSON(w, http.StatusOK, settings)
+}
+
+func (r *Router) handleSaveBulkRestartSettings(w http.ResponseWriter, req *http.Request) {
+	var settings database.BulkRestartSettings
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&settings); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid Bulk Restart settings")
+		return
+	}
+	if err := r.settingsRepo.SaveBulkRestartSettings(req.Context(), settings); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}

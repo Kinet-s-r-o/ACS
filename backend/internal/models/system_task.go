@@ -8,6 +8,7 @@ type SystemTaskStatus string
 const (
 	SystemTaskTypeSummonFromCPE SystemTaskType = "summon_from_cpe"
 	SystemTaskTypeBulkSummon    SystemTaskType = "bulk_summon"
+	SystemTaskTypeBulkRestart   SystemTaskType = "bulk_restart"
 )
 
 const (

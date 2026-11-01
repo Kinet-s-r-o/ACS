@@ -77,6 +77,7 @@ func (r *SystemTaskRepository) Counts(ctx context.Context) (SystemTaskCounts, er
 	counts := SystemTaskCounts{
 		models.SystemTaskTypeSummonFromCPE: {},
 		models.SystemTaskTypeBulkSummon:    {},
+		models.SystemTaskTypeBulkRestart:   {},
 	}
 	for _, item := range rows {
 		if counts[item.Type] == nil {

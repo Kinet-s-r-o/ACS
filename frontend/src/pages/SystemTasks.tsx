@@ -15,6 +15,7 @@ import { formatDateTime } from '../lib/dateTime';
 const taskGroups: { type: SystemTaskType; label: string; description: string }[] = [
   { type: 'summon_from_cpe', label: 'Summon from CPE', description: 'Individual Summon requests started from a CPE record.' },
   { type: 'bulk_summon', label: 'Bulk Summon', description: 'Summon requests processed with the configured concurrency and interval.' },
+  { type: 'bulk_restart', label: 'Bulk Restart', description: 'Restart requests processed with the configured concurrency and interval.' },
 ];
 
 const statusLabels: SystemTaskStatus[] = ['pending', 'processing', 'waiting', 'completed', 'failed'];
@@ -45,7 +46,9 @@ const SystemTasks: Component = () => {
     query => api.getSystemTasks(query.type, query.size, query.page * query.size, query.search),
   );
   const [settingsOpen, setSettingsOpen] = createSignal(false);
-  const [settings, { refetch: refetchSettings }] = createResource(() => settingsOpen() && canConfigure() ? true : false, api.getBulkSummonSettings);
+  const [settingsType, setSettingsType] = createSignal<'bulk_summon' | 'bulk_restart'>('bulk_summon');
+  const settingsLabel = () => settingsType() === 'bulk_restart' ? 'Bulk Restart' : 'Bulk Summon';
+  const [settings, { refetch: refetchSettings }] = createResource(() => settingsOpen() && canConfigure() ? settingsType() : false, type => type === 'bulk_restart' ? api.getBulkRestartSettings() : api.getBulkSummonSettings());
   const [settingsForm, setSettingsForm] = createSignal<BulkSummonSettings>({ max_in_flight: 2, interval_seconds: 5, contact_timeout_seconds: 120 });
   const [savingSettings, setSavingSettings] = createSignal(false);
   const [busyAction, setBusyAction] = createSignal<string | null>(null);
@@ -82,10 +85,11 @@ const SystemTasks: Component = () => {
     if (current) setSettingsForm(current);
   });
 
-  const openSettings = async () => {
+  const openSettings = async (type: 'bulk_summon' | 'bulk_restart') => {
+    setSettingsType(type);
     setSettingsOpen(true);
     try {
-      const current = await refetchSettings();
+      const current = type === 'bulk_restart' ? await api.getBulkRestartSettings() : await api.getBulkSummonSettings();
       if (current) setSettingsForm(current);
     } catch {
       // The resource error state exposes a retry action in the modal.
@@ -108,12 +112,12 @@ const SystemTasks: Component = () => {
     }
     setSavingSettings(true);
     try {
-      const saved = await api.saveBulkSummonSettings(value);
+      const saved = settingsType() === 'bulk_restart' ? await api.saveBulkRestartSettings(value) : await api.saveBulkSummonSettings(value);
       setSettingsForm(saved);
       setSettingsOpen(false);
-      notify({ tone: 'success', title: 'Bulk Summon settings saved', message: 'The worker will use the new limits for subsequent dispatches.' });
+      notify({ tone: 'success', title: `${settingsLabel()} settings saved`, message: 'The worker will use the new limits for subsequent dispatches.' });
     } catch (error) {
-      notify({ tone: 'error', title: 'Could not save Bulk Summon settings', detail: (error as Error).message, persistent: true });
+      notify({ tone: 'error', title: `Could not save ${settingsLabel()} settings`, detail: (error as Error).message, persistent: true });
     } finally {
       setSavingSettings(false);
     }
@@ -123,7 +127,7 @@ const SystemTasks: Component = () => {
     setBusyAction(`retry-${task.id}`);
     try {
       await api.retrySystemTask(task.id);
-      notify({ tone: 'info', title: 'Summon task queued for retry', message: `${task.serial_number} will be processed again.` });
+      notify({ tone: 'info', title: `${task.type === 'bulk_restart' ? 'Restart' : 'Summon'} task queued for retry`, message: `${task.serial_number} will be processed again.` });
       await refreshGroup();
     } catch (error) {
       notify({ tone: 'error', title: 'Could not retry system task', detail: (error as Error).message, persistent: true });
@@ -154,7 +158,7 @@ const SystemTasks: Component = () => {
 
   return (
     <div class="space-y-5">
-      <PageHeader title="System tasks" description="Monitor individual and bulk Summon requests processed by the ACS worker." />
+      <PageHeader title="System tasks" description="Monitor individual Summon requests and bulk Summon or Restart operations processed by the ACS worker." />
 
       <Show when={summary.error}>
         <div class="card"><ResourceError title="System task queue is unavailable" description="ACS could not load system task counts. Retry without changing the queue." onRetry={() => void refetchSummary()} /></div>
@@ -182,8 +186,8 @@ const SystemTasks: Component = () => {
                   <button type="button" class="icon-button" onClick={() => void refreshGroup()} title={`Refresh ${group.label} queue`} aria-label={`Refresh ${group.label} queue`}>
                     <RefreshCw size={14} aria-hidden="true" />
                   </button>
-                  <Show when={group.type === 'bulk_summon' && canConfigure()}>
-                    <button type="button" class="icon-button" onClick={() => void openSettings()} title="Bulk Summon settings" aria-label="Bulk Summon settings">
+                  <Show when={(group.type === 'bulk_summon' || group.type === 'bulk_restart') && canConfigure()}>
+                    <button type="button" class="icon-button" onClick={() => void openSettings(group.type as 'bulk_summon' | 'bulk_restart')} title={`${group.label} settings`} aria-label={`${group.label} settings`}>
                       <Settings size={14} aria-hidden="true" />
                     </button>
                   </Show>
@@ -216,7 +220,7 @@ const SystemTasks: Component = () => {
                   <div class="p-4"><ResourceError title="System task records are unavailable" description="Retry the list request. The queue continues processing in the background." onRetry={() => void refetchTasks()} /></div>
                 </Show>
                 <Show when={!tasks.loading && !tasks.error}>
-                  <Show when={rows().length > 0} fallback={<div class="p-4"><EmptyState title={taskSearch() ? 'No system tasks match this search' : `No ${group.label} tasks`} description={taskSearch() ? 'Try another serial number, username, or error phrase.' : 'Tasks created from Summon actions will appear here.'} /></div>}>
+                  <Show when={rows().length > 0} fallback={<div class="p-4"><EmptyState title={taskSearch() ? 'No system tasks match this search' : `No ${group.label} tasks`} description={taskSearch() ? 'Try another serial number, username, or error phrase.' : 'Tasks created from CPE actions will appear here.'} /></div>}>
                     <div class="overflow-x-auto table-scroll">
                       <table class="data-table w-full text-sm min-w-[950px]">
                         <thead><tr class="border-b border-subtle bg-surface/50">
@@ -243,7 +247,7 @@ const SystemTasks: Component = () => {
                               <td class="px-3 py-2.5 text-xs text-error max-w-[280px] truncate" title={task.error_message}>{task.error_message || '—'}</td>
                               <td class="px-3 py-2.5 text-right">
                                 <Show when={task.status === 'failed' && canManageTasks()}>
-                                  <button type="button" class="icon-button" onClick={() => void retryTask(task)} disabled={busyAction() === `retry-${task.id}`} title="Retry failed Summon" aria-label={`Retry Summon for ${task.serial_number}`}><RotateCw size={14} aria-hidden="true" /></button>
+                                  <button type="button" class="icon-button" onClick={() => void retryTask(task)} disabled={busyAction() === `retry-${task.id}`} title={`Retry failed ${group.type === 'bulk_restart' ? 'Restart' : 'Summon'}`} aria-label={`Retry ${group.type === 'bulk_restart' ? 'Restart' : 'Summon'} for ${task.serial_number}`}><RotateCw size={14} aria-hidden="true" /></button>
                                 </Show>
                               </td>
                             </tr>
@@ -262,11 +266,11 @@ const SystemTasks: Component = () => {
       </div>
 
       <Show when={settingsOpen()}>
-        <Dialog title="Bulk Summon settings" description="Control dispatch pacing, concurrent CPEs, and how long each task waits for its CPE to connect." onClose={() => setSettingsOpen(false)} size="small" actions={<>
+        <Dialog title={`${settingsLabel()} settings`} description="Control dispatch pacing, concurrent CPEs, and how long each task waits for its CPE to connect." onClose={() => setSettingsOpen(false)} size="small" actions={<>
           <button type="button" class="btn btn-secondary" onClick={() => setSettingsOpen(false)} disabled={savingSettings()}>Cancel</button>
           <button type="button" class="btn btn-primary" onClick={() => void saveSettings()} disabled={savingSettings() || settings.loading}>{savingSettings() ? 'Saving…' : 'Save settings'}</button>
         </>}>
-          <Show when={settings.error}><ResourceError title="Bulk Summon settings are unavailable" description="Retry loading the current processor limits." onRetry={() => void refetchSettings()} /></Show>
+          <Show when={settings.error}><ResourceError title={`${settingsLabel()} settings are unavailable`} description="Retry loading the current processor limits." onRetry={() => void refetchSettings()} /></Show>
           <Show when={!settings.error}>
             <div class="space-y-4">
               <label class="block text-xs text-secondary" for="bulk-summon-max-in-flight">Maximum CPEs in flight
@@ -275,7 +279,7 @@ const SystemTasks: Component = () => {
               </label>
               <label class="block text-xs text-secondary" for="bulk-summon-interval">Interval between CPEs (seconds)
                 <input id="bulk-summon-interval" type="number" min="1" max="300" step="1" class="input mt-1.5" value={settingsForm().interval_seconds} onInput={event => setSettingsForm(value => ({ ...value, interval_seconds: Number(event.currentTarget.value) }))} disabled={savingSettings()} />
-                <span class="block mt-1 text-muted">1–300 seconds between Bulk Summon dispatches. Defaults: 2 in flight, 5 seconds apart.</span>
+                <span class="block mt-1 text-muted">1–300 seconds between {settingsLabel()} dispatches. Defaults: 2 in flight, 5 seconds apart.</span>
               </label>
               <label class="block text-xs text-secondary" for="bulk-summon-contact-timeout">Wait for CPE contact (seconds)
                 <input id="bulk-summon-contact-timeout" type="number" min="10" max="3600" step="1" class="input mt-1.5" value={settingsForm().contact_timeout_seconds} onInput={event => setSettingsForm(value => ({ ...value, contact_timeout_seconds: Number(event.currentTarget.value) }))} disabled={savingSettings()} />

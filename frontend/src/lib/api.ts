@@ -65,12 +65,13 @@ export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: 
 export interface WANInterface { serial_number: string; name: string; type: string; status: string; ip_address: string; mac_address: string }
 export interface Task { id: number; device_id: number; type: string; trigger_events?: string[]; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
 export interface GlobalTask extends Task { serial_number: string }
-export type SystemTaskType = 'summon_from_cpe' | 'bulk_summon';
+export type SystemTaskType = 'summon_from_cpe' | 'bulk_summon' | 'bulk_restart';
 export type SystemTaskStatus = 'pending' | 'processing' | 'waiting' | 'completed' | 'failed';
 export interface SystemTask { id: number; type: SystemTaskType; device_id: number; serial_number: string; cwmp_task_id?: number; status: SystemTaskStatus; attempts: number; error_message?: string; created_by: string; created_at: string; completed_at?: string }
 export type SystemTaskCounts = Record<SystemTaskStatus, number>;
-export interface SystemTaskSummary { summon_from_cpe: Partial<SystemTaskCounts>; bulk_summon: Partial<SystemTaskCounts> }
+export interface SystemTaskSummary { summon_from_cpe: Partial<SystemTaskCounts>; bulk_summon: Partial<SystemTaskCounts>; bulk_restart: Partial<SystemTaskCounts> }
 export interface BulkSummonSettings { max_in_flight: number; interval_seconds: number; contact_timeout_seconds: number }
+export interface BulkRestartSettings extends BulkSummonSettings {}
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
 export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
@@ -197,10 +198,13 @@ export const api = {
   },
   createSystemSummon: (serial: string, refreshParameters = false) => request<{ status: string; count: number }>('/system-tasks/summon', { method: 'POST', body: JSON.stringify({ serial_number: serial, refresh_parameters: refreshParameters }) }),
   createBulkSummon: (deviceIDs: number[]) => request<{ status: string; count: number }>('/system-tasks/bulk-summon', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs }) }),
+  createBulkRestart: (deviceIDs: number[]) => request<{ status: string; count: number }>('/system-tasks/bulk-restart', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs }) }),
   retrySystemTask: (id: number) => request<{ status: string }>(`/system-tasks/${id}/retry`, { method: 'POST' }),
   clearFinishedSystemTasks: (type: SystemTaskType) => request<{ deleted: number }>(`/system-tasks/${type}/finished`, { method: 'DELETE' }),
   getBulkSummonSettings: () => request<BulkSummonSettings>('/system-tasks/bulk-summon-settings'),
   saveBulkSummonSettings: (settings: BulkSummonSettings) => request<BulkSummonSettings>('/system-tasks/bulk-summon-settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  getBulkRestartSettings: () => request<BulkRestartSettings>('/system-tasks/bulk-restart-settings'),
+  saveBulkRestartSettings: (settings: BulkRestartSettings) => request<BulkRestartSettings>('/system-tasks/bulk-restart-settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getTask: (id: number) => request<GlobalTask>(`/tasks/${id}`),
   deletePendingTask: (id: number) => request<{ status: string }>(`/tasks/${id}`, { method: 'DELETE' }),
   deletePendingTasks: (ids: number[]) => request<{ deleted: number }>('/tasks/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),

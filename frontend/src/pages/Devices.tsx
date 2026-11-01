@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
-import { Download, Router as RouterIcon, X, Search, Send, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
+import { Download, Router as RouterIcon, X, Search, Send, RotateCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
 import { api, type Device } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -79,12 +79,14 @@ const Devices: Component = () => {
   const [debouncedSearch, setDebouncedSearch] = createSignal(searchQuery());
   const [columns, setColumns] = createSignal<ColumnConfig[]>([]);
   const [inventoryColumnSelection, setInventoryColumnSelection] = createSignal<string>();
-  const [summoningAll, setSummoningAll] = createSignal(false);
+  const [bulkAction, setBulkAction] = createSignal<'summon' | 'restart' | null>(null);
+  const [showBulkActions, setShowBulkActions] = createSignal(false);
+  let bulkActionsMenu: HTMLDivElement | undefined;
   const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
   const { isFullAccess, hasAnyPermission } = useAuth();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
   onMount(() => {
@@ -108,6 +110,21 @@ const Devices: Component = () => {
       setColumns([...defaultColumns]);
       setInventoryColumnSelection(JSON.stringify(defaultColumns.filter(column => column.visible && inventoryParameterColumns.has(column.id)).map(column => column.id).sort()));
     }
+  });
+
+  onMount(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (bulkActionsMenu && !bulkActionsMenu.contains(event.target as Node)) setShowBulkActions(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowBulkActions(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    });
   });
 
   createEffect(() => {
@@ -352,21 +369,24 @@ const Devices: Component = () => {
     }
   };
 
-  const summonVisibleCPEs = async () => {
+  const queueBulkDeviceAction = async (action: 'summon' | 'restart') => {
     const list = sortedDevices();
-    if (list.length === 0 || summoningAll()) return;
-    setSummoningAll(true);
+    if (list.length === 0 || bulkAction()) return;
+    if (action === 'restart' && !await confirm({ title: `Restart ${list.length} visible CPEs?`, description: 'ACS will queue a reboot task for each visible CPE and process them gradually. Each device will restart when it next establishes a CWMP session.', confirmLabel: 'Queue restarts' })) return;
+    setBulkAction(action);
     try {
-      const result = await api.createBulkSummon(list.map(device => device.id));
+      const result = action === 'restart'
+        ? await api.createBulkRestart(list.map(device => device.id))
+        : await api.createBulkSummon(list.map(device => device.id));
       notify({
         tone: 'info',
-        title: 'Bulk Summon queued',
+        title: action === 'restart' ? 'Bulk Restart queued' : 'Bulk Summon queued',
         message: `${result.count} visible CPEs were added to the system task processor. Track progress in System settings → System tasks.`,
       });
     } catch (error) {
-      notify({ tone: 'error', title: 'Could not queue Bulk Summon', message: 'No CPEs were added to the system task queue.', detail: (error as Error).message, persistent: true });
+      notify({ tone: 'error', title: `Could not queue Bulk ${action === 'restart' ? 'Restart' : 'Summon'}`, message: 'No CPEs were added to the system task queue.', detail: (error as Error).message, persistent: true });
     } finally {
-      setSummoningAll(false);
+      setBulkAction(null);
     }
   };
 
@@ -412,12 +432,6 @@ const Devices: Component = () => {
                 </button>
               </Show>
             </div>
-            <Show when={isFullAccess()}>
-              <button type="button" onClick={() => void summonVisibleCPEs()} disabled={summoningAll()} class="btn btn-secondary shrink-0" aria-label="Summon visible CPEs" title="Summon visible CPEs">
-                <Send size={14} class={summoningAll() ? 'animate-pulse' : ''} />
-                <span class="hidden sm:inline">{summoningAll() ? 'Summoning...' : 'Summon visible CPEs'}</span>
-              </button>
-            </Show>
             <button
               type="button"
               class="icon-button"
@@ -428,6 +442,23 @@ const Devices: Component = () => {
             >
               <Download size={15} aria-hidden="true" />
             </button>
+            <Show when={isFullAccess()}>
+              <div class="relative" ref={bulkActionsMenu}>
+                <button type="button" class="icon-button" onClick={() => setShowBulkActions(value => !value)} disabled={bulkAction() !== null} aria-label="CPE inventory actions" aria-haspopup="menu" aria-expanded={showBulkActions()} title="CPE inventory actions">
+                  <MoreVertical size={16} aria-hidden="true" />
+                </button>
+                <Show when={showBulkActions()}>
+                  <div class="absolute right-0 top-full z-50 mt-2 min-w-52 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
+                    <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowBulkActions(false); void queueBulkDeviceAction('summon'); }}>
+                      <Send size={14} aria-hidden="true" />{bulkAction() === 'summon' ? 'Summoning…' : 'Summon visible CPEs'}
+                    </button>
+                    <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowBulkActions(false); void queueBulkDeviceAction('restart'); }}>
+                      <RotateCw size={14} aria-hidden="true" />{bulkAction() === 'restart' ? 'Restarting…' : 'Restart visible CPEs'}
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
           </div>
         </div>
         <div class="overflow-x-auto table-scroll">
