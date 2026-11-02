@@ -16,6 +16,7 @@ ACS is a beta TR-069/CWMP control plane: Go backend, SolidJS/TypeScript console,
 - Do not expose API/CWMP/PostgreSQL ports directly in production.
 - Preserve existing working-tree changes. Do not commit, push, deploy, or change application behavior unless requested.
 - UI changes must follow [docs/ui-ux-standard.md](docs/ui-ux-standard.md) and pass the UI check.
+- In SolidJS editable repeaters, use `<Index>` for index-stable rows or stable item keys; do not replace `<For>` item identities on each keystroke, because that recreates inputs and loses focus. Verify that typing multiple characters keeps focus in the same input.
 - Tables using `enableTableColumnReordering` must give every reorderable data cell a stable `data-column-order-id` matching its header ID; never rely on the cell's current DOM index after reordering. When adding columns, keep the table order key stable or migrate saved order, and add the new column to the default order where applicable.
 
 ## Verification

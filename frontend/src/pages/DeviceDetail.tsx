@@ -1467,19 +1467,6 @@ const DeviceDetail: Component = () => {
     return formatDateTime(dateStr);
   };
 
-  const formatDateWithSeconds = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '—';
-    const date = new Date(dateStr);
-    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'medium' }).format(date);
-  };
-
-  const getPeriodicInformInterval = () => {
-    const params = parameters() || [];
-    const value = params.find(parameter => parameter.name === 'InternetGatewayDevice.ManagementServer.PeriodicInformInterval')?.value
-      || params.find(parameter => parameter.name === 'Device.ManagementServer.PeriodicInformInterval')?.value;
-    return value ? `${value} s` : '-';
-  };
-
   const getDeviceUptime = () => {
     const params = parameters() || [];
     const uptimeParam = params.find(p => p.name.endsWith('DeviceInfo.UpTime'));
@@ -2082,19 +2069,9 @@ const DeviceDetail: Component = () => {
                   <Server size={14} />
                   ONT Information
                 </h2>
-                <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div class="grid grid-cols-1 gap-x-6 gap-y-4 text-sm lg:grid-cols-2">
                   <div class="space-y-2">
-                    <div><span class="text-muted">Serial:</span> <span class="text-primary font-mono">{d().serial_number}</span></div>
-                    <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
-                    <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
-                    <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
-                    <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
-                    <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
-                    <div><span class="text-muted">Periodic Inform Interval:</span> <span class="text-primary">{getPeriodicInformInterval()}</span></div>
-                    <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDateWithSeconds(d().last_full_refresh)}</span></div>
-                    <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDateWithSeconds(d().last_overview_refresh)}</span></div>
-                    <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDateWithSeconds(d().last_inform)}</span></div>
-                    <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => <div><span class="text-muted">{field.name}:</span> <span class="text-primary">{parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-'}</span></div>}</For>
+                    <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-'}</span></div>}</For>
                   </div>
                   <div class="space-y-2 lg:-mt-8">
                     <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>

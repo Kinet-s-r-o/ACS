@@ -1475,14 +1475,14 @@ const Provisioning: Component = () => {
                   </div>
                 </div>
                 <div class="space-y-3">
-                  <For each={lanPortMappings()}>{mapping => <fieldset class="space-y-3 rounded border border-subtle p-3">
-                    <legend class="px-1 text-xs font-medium text-secondary">LAN{mapping.port}</legend>
+                  <Index each={lanPortMappings()}>{mapping => <fieldset class="space-y-3 rounded border border-subtle p-3">
+                    <legend class="px-1 text-xs font-medium text-secondary">LAN{mapping().port}</legend>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                       <For each={lanMappingFields}>{field => <label class="block text-xs text-muted">{field.label}
-                        <input class="input mt-1 w-full font-mono text-[11px]" value={mapping[field.key] || ''} placeholder={field.placeholder} onInput={event => updateLANPortMapping(mapping.port, field.key, event.currentTarget.value)} disabled={!isFullAccess()} />
+                        <input class="input mt-1 w-full font-mono text-[11px]" value={mapping()[field.key] || ''} placeholder={field.placeholder} onInput={event => updateLANPortMapping(mapping().port, field.key, event.currentTarget.value)} disabled={!isFullAccess()} />
                       </label>}</For>
                     </div>
-                  </fieldset>}</For>
+                  </fieldset>}</Index>
                 </div>
               </section>
               </Show>
@@ -1499,17 +1499,17 @@ const Provisioning: Component = () => {
                   </div>
                   <Show when={cpeInfoFields().length > 0} fallback={<EmptyState compact title="No CPE info parameters" description="Add a display name and exact CWMP parameter path for each value to show on the CPE overview." />}>
                     <div class="space-y-3">
-                      <For each={cpeInfoFields()}>{(field, index) => <div class="grid grid-cols-1 items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[minmax(12rem,1fr)_minmax(18rem,2fr)_auto]">
+                      <Index each={cpeInfoFields()}>{(field, index) => <div class="grid grid-cols-1 items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[minmax(12rem,1fr)_minmax(18rem,2fr)_auto]">
                         <label class="block text-xs text-muted">Name
-                          <input class="input mt-1 w-full" value={field.name} onInput={event => updateCPEInfoField(index(), 'name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="e.g. Optical receive power" />
+                          <input class="input mt-1 w-full" value={field().name} onInput={event => updateCPEInfoField(index, 'name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="e.g. Optical receive power" />
                         </label>
                         <label class="block text-xs text-muted">Parameter name
-                          <input class="input mt-1 w-full font-mono text-[11px]" value={field.parameter_name} onInput={event => updateCPEInfoField(index(), 'parameter_name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="InternetGatewayDevice..." />
+                          <input class="input mt-1 w-full font-mono text-[11px]" value={field().parameter_name} onInput={event => updateCPEInfoField(index, 'parameter_name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="InternetGatewayDevice..." />
                         </label>
                         <Show when={isFullAccess()}>
-                          <button type="button" class="icon-button text-rose-400" aria-label={`Remove CPE info parameter ${index() + 1}`} title="Remove parameter" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index()))}><Trash2 size={15} /></button>
+                          <button type="button" class="icon-button text-rose-400" aria-label={`Remove CPE info parameter ${index + 1}`} title="Remove parameter" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index))}><Trash2 size={15} /></button>
                         </Show>
-                      </div>}</For>
+                      </div>}</Index>
                     </div>
                   </Show>
                 </section>
