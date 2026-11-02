@@ -526,7 +526,7 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .app-sidebar { position: fixed; transform: none; transition: width 180ms ease, background-color 180ms ease, box-shadow 180ms ease; }
   .app-main { padding-left: 256px; }
   .sidebar-collapse-toggle { display: inline-grid; }
-  .app-sidebar.is-collapsed { width: 64px; background-color: rgb(var(--bg-sidebar) / .72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .app-sidebar.is-collapsed { width: 64px; background: rgb(var(--bg-sidebar) / .42); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .app-sidebar.is-collapsed .sidebar-brand { justify-content: center; padding: 10px; }
   .app-sidebar.is-collapsed .brand-lockup { justify-content: center; }
   .app-sidebar.is-collapsed .brand-lockup > div { display: none; }
@@ -559,7 +559,7 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .app-sidebar.is-collapsed:hover {
     z-index: 60;
     width: 256px;
-    background-color: rgb(var(--bg-sidebar) / .9);
+    background: rgb(var(--bg-sidebar) / .7);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     box-shadow: 12px 0 32px rgb(0 0 0 / .2);
