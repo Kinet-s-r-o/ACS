@@ -1625,11 +1625,6 @@ const DeviceDetail: Component = () => {
       const mapping: ProvisioningLANPortMapping = mappings.find(item => item.port === port) || { port };
       const read = (path?: string) => path ? params.find(parameter => parameter.name === path) : undefined;
       const text = (path?: string) => read(path)?.value?.trim() || '';
-      const counter = (path?: string) => {
-        const parameter = read(path);
-        const value = parameter ? Number(parameter.value) : Number.NaN;
-        return { value: Number.isFinite(value) && value >= 0 ? value : null, updatedAt: parameter?.updated_at || null };
-      };
       const statusParameter = read(mapping.status_parameter);
       const speed = text(mapping.speed_parameter);
       const duplex = text(mapping.duplex_parameter);
@@ -1639,8 +1634,6 @@ const DeviceDetail: Component = () => {
         statusUpdatedAt: statusParameter?.updated_at || null,
         speed: speed && speed !== '-' ? speed : null,
         duplex: duplex && duplex !== '-' ? duplex : null,
-        rx: counter(mapping.rx_bytes_parameter),
-        tx: counter(mapping.tx_bytes_parameter),
       };
     });
   };

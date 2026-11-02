@@ -70,8 +70,6 @@ const lanMappingFields: Array<{ key: Exclude<keyof ProvisioningLANPortMapping, '
   { key: 'status_parameter', label: 'Link status', placeholder: 'Device.Ethernet.Interface.1.Status' },
   { key: 'speed_parameter', label: 'Negotiated speed', placeholder: 'Device.Ethernet.Interface.1.MaxBitRate' },
   { key: 'duplex_parameter', label: 'Duplex', placeholder: 'Device.Ethernet.Interface.1.DuplexMode' },
-  { key: 'rx_bytes_parameter', label: 'Received bytes counter', placeholder: 'Device.Ethernet.Interface.1.Stats.BytesReceived' },
-  { key: 'tx_bytes_parameter', label: 'Sent bytes counter', placeholder: 'Device.Ethernet.Interface.1.Stats.BytesSent' },
 ];
 const formatInterval = (seconds: number) => seconds % 3600 === 0 ? `${seconds / 3600}h` : seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
 const metricColumnOrderId = (id: string, interfaceMetric = false) => {
@@ -531,7 +529,10 @@ const Provisioning: Component = () => {
     setCPEInfoFields(template.cpe_info_fields || []);
     const count = Math.max(1, Math.min(32, template.lan_port_count || 4));
     setLANPortCount(count);
-    setLANPortMappings(Array.from({ length: count }, (_, index) => template.lan_port_mappings?.find(mapping => mapping.port === index + 1) || { port: index + 1 }));
+    setLANPortMappings(Array.from({ length: count }, (_, index) => {
+      const mapping = template.lan_port_mappings?.find(item => item.port === index + 1);
+      return { port: index + 1, status_parameter: mapping?.status_parameter, speed_parameter: mapping?.speed_parameter, duplex_parameter: mapping?.duplex_parameter };
+    }));
     setProvRules(null);
     setProvError(null);
     loadProvRules();
@@ -1460,9 +1461,9 @@ const Provisioning: Component = () => {
                   </label>
                   <div class="space-y-2">
                     <div class="flex flex-wrap items-center gap-3">
-                      <div class="grid h-20 w-32 shrink-0 place-items-center overflow-hidden rounded border border-subtle bg-elevated p-1">
+                      <div class="grid h-48 w-64 shrink-0 place-items-center overflow-hidden rounded border border-subtle bg-elevated p-1">
                         <Show when={lanVisualizationUrl()} fallback={<span class="text-xs text-muted">No SVG uploaded</span>}>
-                          <img src={lanVisualizationUrl()!} alt={`LAN port layout for ${selectedTemplate()!.name}`} class="max-h-full max-w-full object-contain" />
+                          <img src={lanVisualizationUrl()!} alt={`LAN port layout for ${selectedTemplate()!.name}`} class="block h-full w-full min-h-0 min-w-0 object-contain object-center" />
                         </Show>
                       </div>
                       <Show when={isFullAccess()}>

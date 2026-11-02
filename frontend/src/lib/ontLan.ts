@@ -1,10 +1,5 @@
 export type LanLinkState = 'up' | 'down' | 'unknown';
 
-export interface LanCounterSample {
-  value: number | null;
-  updatedAt: string | null;
-}
-
 export interface OntLanPort {
   port: number;
   link: LanLinkState;
@@ -12,16 +7,13 @@ export interface OntLanPort {
   statusUpdatedAt: string | null;
   speed: string | null;
   duplex: string | null;
-  rx: LanCounterSample;
-  tx: LanCounterSample;
 }
 
-export function resolveLanVisualState(link: LanLinkState, online: boolean, cableConnected: boolean | null | undefined, activity: boolean) {
+export function resolveLanVisualState(link: LanLinkState, online: boolean, cableConnected: boolean | null | undefined) {
   const linkUp = online && link === 'up';
   return {
     connected: linkUp || cableConnected === true,
     linkUp,
-    activity: linkUp && activity,
   };
 }
 
@@ -30,24 +22,6 @@ export function parseLanLinkState(value: string | null | undefined): LanLinkStat
   if (normalized === 'up' || normalized === 'linkup' || normalized === 'connected') return 'up';
   if (normalized === 'down' || normalized === 'linkdown' || normalized === 'nolink' || normalized === 'disconnected' || normalized === 'lowerlayerdown' || normalized === 'dormant' || normalized === 'notpresent' || normalized === 'error') return 'down';
   return 'unknown';
-}
-
-export function measureCounterRate(
-  previous: LanCounterSample | undefined,
-  current: LanCounterSample,
-): number | null {
-  if (previous?.value === null || previous?.value === undefined || current.value === null || !previous.updatedAt || !current.updatedAt) return null;
-  const elapsedSeconds = (Date.parse(current.updatedAt) - Date.parse(previous.updatedAt)) / 1000;
-  const deltaBytes = current.value - previous.value;
-  if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0 || !Number.isFinite(deltaBytes) || deltaBytes <= 0) return null;
-  return deltaBytes * 8 / elapsedSeconds;
-}
-
-export function formatLanRate(bitsPerSecond: number | null | undefined, sampledAt?: string | null, now = Date.now()): string {
-  if (bitsPerSecond === null || bitsPerSecond === undefined || !Number.isFinite(bitsPerSecond) || bitsPerSecond < 0) return 'N/A';
-  const age = sampledAt ? now - Date.parse(sampledAt) : Number.POSITIVE_INFINITY;
-  if (!Number.isFinite(age) || age < 0 || age > 120_000) return 'N/A';
-  return `${(bitsPerSecond / 1_000_000).toFixed(1)} Mbps`;
 }
 
 export function formatLanSpeed(value: string | null | undefined): string {
