@@ -88,14 +88,7 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 	if search := strings.TrimSpace(options.Search); search != "" {
 		searchExpressions := []string{
 			`STRPOS(LOWER(COALESCE(devices.serial_number, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(COALESCE(devices.manufacturer, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(COALESCE(devices.model_name, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(COALESCE(devices.product_class, '')), LOWER(?)) > 0`,
 			`STRPOS(LOWER(COALESCE(devices.ip_address, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(COALESCE(` + inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.SoftwareVersion") + `, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(COALESCE(` + inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.HardwareVersion") + `, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(COALESCE(` + inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.ManufacturerOUI") + `, '')), LOWER(?)) > 0`,
-			`STRPOS(LOWER(CAST(` + inventoryActiveFaultsExpression + ` AS TEXT)), LOWER(?)) > 0`,
 		}
 		args := make([]interface{}, len(searchExpressions))
 		for i := range args {

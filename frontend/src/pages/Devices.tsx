@@ -472,8 +472,8 @@ const Devices: Component = () => {
                 type="text"
                 value={searchQuery()}
                 onInput={(e) => { setSearchQuery(e.currentTarget.value); setPage(0); }}
-                placeholder="Search CPEs..."
-                aria-label="Search CPEs by serial, model, vendor, or IP"
+                placeholder="Search serial number or IP..."
+                aria-label="Search CPEs by serial number or IP address"
                 class="input w-full pl-9!"
               />
               <Show when={searchQuery()}>
