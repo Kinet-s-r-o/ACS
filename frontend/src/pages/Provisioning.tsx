@@ -1502,25 +1502,32 @@ const Provisioning: Component = () => {
 
           <Show when={templateTab() === 'variables'}>
             <div class="space-y-4">
-              <div class="rounded border border-subtle bg-base p-3 text-xs text-muted">
-                Define reusable values for this template. Sources may be device identity, a literal, or a parameter reported in Inform. Leave the source empty to start with an empty value, then use a transformation such as Random string. HMAC-SHA256 can use the application connection-request master secret or a custom secret. Use <code class="text-primary">{'{{variable_name}}'}</code> in provisioning rule values. Transformations run in order.
+              <div class="rounded border border-subtle bg-base p-3 text-sm text-muted">
+                Define reusable values and reference them in provisioning rules as <code class="text-primary">{'{{variable_name}}'}</code>. Each variable starts from its source, then applies transformations in order.
               </div>
               <Show when={templateVariables().length > 0} fallback={<p class="py-8 text-center text-sm text-muted">No template variables defined yet.</p>}>
-                <Index each={templateVariables()}>{(variable, variableIndex) => <section class="card p-4 space-y-3">
-                  <div class="flex items-center justify-between gap-3">
-                    <h3 class="text-sm font-medium text-primary">Variable {variableIndex + 1}</h3>
-                    <button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => setTemplateVariables(previous => previous.filter((_, index) => index !== variableIndex))} aria-label={`Remove variable ${variable().name}`}><Trash2 size={13} />Remove</button>
+                <Index each={templateVariables()}>{(variable, variableIndex) => <section class="card p-3 space-y-3">
+                  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-subtle pb-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-sm font-semibold text-primary">Variable {variableIndex + 1}</h3>
+                      <code class="rounded bg-base px-2 py-1 text-xs text-secondary">{'{{'}{variable().name || 'variable_name'}{'}}'}</code>
+                    </div>
+                    <button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => setTemplateVariables(previous => previous.filter((_, index) => index !== variableIndex))} aria-label={`Remove variable ${variable().name || variableIndex + 1}`}><Trash2 size={13} />Remove</button>
                   </div>
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <label class="block text-xs text-muted">Variable name<input class="input mt-1 w-full font-mono" value={variable().name} onInput={event => updateTemplateVariable(variableIndex, { name: event.currentTarget.value })} placeholder="serial_suffix" /></label>
                     <label class="block text-xs text-muted">Source<select class="input mt-1 w-full" value={variable().source} onChange={event => updateTemplateVariable(variableIndex, { source: event.currentTarget.value })}>
                       <option value="">No source</option><option value="literal">Literal value</option><option value="serial_number">Device serial number</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><option value="oui">OUI</option><option value="parameter">CWMP parameter from Inform</option>
                     </select></label>
-                    <Show when={variable().source === 'literal' || variable().source === 'parameter'}>
-                      <label class="block text-xs text-muted">{variable().source === 'literal' ? 'Literal value' : 'Parameter path'}<input class="input mt-1 w-full font-mono text-xs" value={variable().value || ''} onInput={event => updateTemplateVariable(variableIndex, { value: event.currentTarget.value })} placeholder={variable().source === 'parameter' ? 'InternetGatewayDevice.DeviceInfo.SerialNumber' : 'Enter a starting value'} /></label>
+                    <Show when={!variable().source || variable().source === 'literal' || variable().source === 'parameter'}>
+                      <label class="block text-xs text-muted md:col-span-2">{variable().source === 'parameter' ? 'CWMP parameter path' : 'Starting value'}<input class="input mt-1 w-full font-mono text-xs" value={variable().value || ''} onInput={event => updateTemplateVariable(variableIndex, { value: event.currentTarget.value })} placeholder={variable().source === 'parameter' ? 'InternetGatewayDevice.DeviceInfo.SerialNumber' : variable().source === 'literal' ? 'Enter a literal value' : 'Optional initial value'} /></label>
                     </Show>
                   </div>
-                  <div class="space-y-2">
+                  <div class="space-y-2 rounded border border-subtle bg-base p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div><h4 class="text-xs font-semibold text-primary">Transformations</h4><p class="mt-0.5 text-xs text-muted">Applied from top to bottom.</p></div>
+                      <button type="button" class="btn btn-secondary text-xs" onClick={() => addVariableTransform(variableIndex)}><Plus size={12} />Add transformation</button>
+                    </div>
                     <Index each={variable().steps}>{(step, stepIndex) => {
                       const argumentFields: Record<string, Array<[string, string]>> = {
                         prefix: [['text', 'Prefix']], suffix: [['text', 'Suffix']],
@@ -1532,23 +1539,25 @@ const Provisioning: Component = () => {
                         default: [['value', 'Fallback value']],
                         random_string: [['length', 'Length'], ['charset', 'Character set (alphanumeric, digits, lowercase, uppercase, hex)']],
                       };
-                      return <div class="grid grid-cols-1 md:grid-cols-12 items-end gap-2 rounded bg-base p-3">
-                        <label class="block text-xs text-muted md:col-span-3">Transformation<select class="input mt-1 w-full" value={step().function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex, stepIndex, { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : fn === 'hmac_sha256' ? { key_source: 'application', encoding: 'connection_request' } : {}, key_configured: false }); }}>
+                      return <div class="relative rounded border border-subtle p-3 pr-12">
+                        <div class="mb-2 flex items-center gap-2"><span class="badge badge-muted">Step {stepIndex + 1}</span><span class="text-xs text-muted">Transformation</span></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-end gap-3">
+                        <label class="block text-xs text-muted">Operation<select class="input mt-1 w-full" value={step().function} onChange={event => { const fn = event.currentTarget.value; updateVariableTransform(variableIndex, stepIndex, { function: fn, args: fn === 'random_string' ? { length: '12', charset: 'alphanumeric' } : fn === 'hmac_sha256' ? { key_source: 'application', encoding: 'connection_request' } : {}, key_configured: false }); }}>
                           <option value="trim">Trim whitespace</option><option value="upper">Uppercase</option><option value="lower">Lowercase</option><option value="prefix">Add prefix</option><option value="suffix">Add suffix</option><option value="slice">Slice by indexes</option><option value="replace">Replace text</option><option value="regex_replace">Replace by regex</option><option value="pad_start">Pad at start</option><option value="pad_end">Pad at end</option><option value="default">Fallback if empty</option><option value="random_string">Generate random string</option><option value="sha256">SHA-256 hash</option><option value="hmac_sha256">HMAC-SHA256</option><option value="base64_encode">Base64 encode</option><option value="base64_decode">Base64 decode</option><option value="hex_encode">Hex encode</option><option value="hex_decode">Hex decode</option>
                         </select></label>
-                        <For each={argumentFields[step().function] || []}>{([key, label]) => <label class="block text-xs text-muted md:col-span-2">{label}<input class="input mt-1 w-full" value={step().args?.[key] || (step().function === 'random_string' && key === 'charset' ? 'alphanumeric' : '')} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, [key]: event.currentTarget.value } })} /></label>}</For>
+                        <For each={argumentFields[step().function] || []}>{([key, label]) => <label class="block text-xs text-muted">{label}<input class="input mt-1 w-full" value={step().args?.[key] || (step().function === 'random_string' && key === 'charset' ? 'alphanumeric' : '')} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, [key]: event.currentTarget.value } })} /></label>}</For>
                         <Show when={step().function === 'hmac_sha256'}>
-                          <label class="block text-xs text-muted md:col-span-3">HMAC key source<select class="input mt-1 w-full" value={step().args?.key_source || 'application'} onChange={event => setVariableHmacKeySource(variableIndex, stepIndex, event.currentTarget.value)}><option value="application">Connection-request master secret</option><option value="custom">Custom secret</option></select></label>
+                          <label class="block text-xs text-muted">HMAC key source<select class="input mt-1 w-full" value={step().args?.key_source || 'application'} onChange={event => setVariableHmacKeySource(variableIndex, stepIndex, event.currentTarget.value)}><option value="application">Connection-request master secret</option><option value="custom">Custom secret</option></select></label>
                           <Show when={step().args?.key_source === 'custom'}>
-                            <label class="block text-xs text-muted md:col-span-4">Custom HMAC secret<input type="password" class="input mt-1 w-full" value={step().args?.key_secret || ''} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, key_secret: event.currentTarget.value } })} placeholder={step().key_configured ? 'Saved secret — leave blank to keep it' : 'At least 16 characters'} />{step().key_configured && <span class="block mt-1 text-muted">A secret is saved; leave this blank to keep it unchanged.</span>}</label>
+                            <label class="block text-xs text-muted">Custom HMAC secret<input type="password" class="input mt-1 w-full" value={step().args?.key_secret || ''} onInput={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, key_secret: event.currentTarget.value } })} placeholder={step().key_configured ? 'Saved secret — leave blank to keep it' : 'At least 16 characters'} />{step().key_configured && <span class="block mt-1 text-muted">A secret is saved; leave this blank to keep it unchanged.</span>}</label>
                           </Show>
-                          <label class="block text-xs text-muted md:col-span-3">Output format<select class="input mt-1 w-full" value={step().args?.encoding || 'connection_request'} onChange={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, encoding: event.currentTarget.value } })}><option value="connection_request">Connection request (18-byte Base64URL)</option><option value="base64url">Full digest (Base64URL)</option><option value="hex">Full digest (hex)</option></select></label>
-                          <p class="text-xs text-muted md:col-span-12">The input variable is the HMAC message. Custom secrets are encrypted in the database and never returned by the API.</p>
+                          <label class="block text-xs text-muted">Output format<select class="input mt-1 w-full" value={step().args?.encoding || 'connection_request'} onChange={event => updateVariableTransform(variableIndex, stepIndex, { args: { ...step().args, encoding: event.currentTarget.value } })}><option value="connection_request">Connection request (18-byte Base64URL)</option><option value="base64url">Full digest (Base64URL)</option><option value="hex">Full digest (hex)</option></select></label>
+                          <p class="text-xs text-muted md:col-span-2 xl:col-span-4">The input variable is the HMAC message. Custom secrets are encrypted in the database and never returned by the API.</p>
                         </Show>
-                        <button type="button" class="btn btn-ghost text-rose-400 md:col-span-1" onClick={() => updateTemplateVariable(variableIndex, { steps: variable().steps.filter((_, index) => index !== stepIndex) })} aria-label="Remove transformation"><Trash2 size={13} /></button>
+                        </div>
+                        <button type="button" class="icon-button absolute right-2 top-2 text-rose-400" onClick={() => updateTemplateVariable(variableIndex, { steps: variable().steps.filter((_, index) => index !== stepIndex) })} aria-label={`Remove step ${stepIndex + 1} transformation`} title="Remove transformation"><Trash2 size={14} /></button>
                       </div>;
                     }}</Index>
-                    <button type="button" class="btn btn-secondary text-xs" onClick={() => addVariableTransform(variableIndex)}><Plus size={12} />Add transformation</button>
                   </div>
                 </section>}</Index>
               </Show>
