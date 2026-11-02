@@ -612,6 +612,7 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .overflow-x-auto { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: thin; }
   .data-table thead th { padding: 8px 10px; }
   .data-table tbody td { padding: 9px 10px; }
+  .data-table th:first-child, .data-table td:first-child { position: static; left: auto; z-index: auto; background: transparent; box-shadow: none; }
   .data-table .icon-button { width: 40px; height: 40px; }
   .data-table .btn-xs { min-height: 40px; }
 
@@ -626,4 +627,8 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .column-dropdown-close { width: 44px; height: 44px; }
   .column-toggle-row { min-height: 44px; }
   .device-detail-header { top: calc(58px + env(safe-area-inset-top)); }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .table-scroll { max-height: none; }
 }
