@@ -29,9 +29,10 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
   { label: 'Devices', permissions: [
     { key: 'devices.read', label: 'Read', description: 'View devices and their operational data.' },
     { key: 'devices.write', label: 'Write (legacy bundle)', description: 'All device changes, including every focused permission below.' },
+    { key: 'devices.create', label: 'Add CPEs', description: 'Pre-register CPEs by serial number and assign initial tags.' },
     { key: 'devices.configure', label: 'Configure', description: 'Change parameters, tags, and device advanced settings.' },
     { key: 'devices.command', label: 'Run commands', description: 'Read parameters remotely, reboot, and request a CWMP session.' },
-    { key: 'devices.reset', label: 'Factory reset', description: 'Queue a factory reset.' },
+    { key: 'devices.reset', label: 'Factory reset', description: 'Queue a factory reset or arm one for a pre-registered CPE’s first CWMP Inform.' },
     { key: 'devices.delete', label: 'Delete devices and tasks', description: 'Delete devices or pending tasks.' },
     { key: 'devices.credentials', label: 'Manage credentials', description: 'Change connection-request credentials.' },
     { key: 'devices.snapshots.write', label: 'Manage snapshots', description: 'Create, restore, and delete device snapshots.' },

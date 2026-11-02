@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import DeviceStatusBadge from '../components/DeviceStatusBadge';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight, ClipboardList, ScrollText } from 'lucide-solid';
@@ -1925,9 +1926,7 @@ const DeviceDetail: Component = () => {
               <ArrowLeft size={18} />
             </A>
             <Show when={device()}>
-              <span class={`px-2.5 py-1 rounded-md text-xs font-medium ${device()?.online ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
-                {device()?.online ? 'Online' : 'Offline'}
-              </span>
+              <DeviceStatusBadge device={device()!} />
               <span
                 class="inline-flex items-center gap-2 text-[11px] text-muted"
                 role="status"
@@ -3104,7 +3103,7 @@ const DeviceDetail: Component = () => {
                       <For each={pagedTasks()}>
                         {(task) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <Show when={isDeviceTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}<Show when={task.automatic_factory_reset}> <span class="badge badge-warning">First Inform</span></Show></td></Show>
                             <Show when={isDeviceTaskColumnVisible('trigger_event')}><td class="px-4 py-2 text-secondary text-xs">{formatTaskTriggerEvents(task.trigger_events)}</td></Show>
                             <Show when={isDeviceTaskColumnVisible('status')}><td class="px-4 py-2"><span class={`badge ${getStatusBadge(task.status)}`}>{task.status}</span></td></Show>
                             <Show when={isDeviceTaskColumnVisible('created_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>

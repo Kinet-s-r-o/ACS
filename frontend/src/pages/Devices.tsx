@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
 import { A, useSearchParams } from '@solidjs/router';
-import { Download, Router as RouterIcon, X, Search, Send, RotateCw, RefreshCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-solid';
+import { Download, Router as RouterIcon, X, Search, Send, RotateCw, RefreshCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown, Plus } from 'lucide-solid';
 import { api, type Device, type ReauthenticationCredentials } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -13,6 +13,9 @@ import Pagination from '../components/Pagination';
 import type { ColumnFilterState } from '../lib/filters';
 import { usePageSize } from '../lib/usePageSize';
 import DeviceTagPicker from '../components/DeviceTagPicker';
+import CreateDeviceDialog from '../components/CreateDeviceDialog';
+import DeviceStatusBadge from '../components/DeviceStatusBadge';
+import { deviceStatus } from '../lib/deviceStatus';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime, formatRelativeTime } from '../lib/dateTime';
 import { formatUptime } from '../lib/health';
@@ -83,6 +86,7 @@ const Devices: Component = () => {
   const [bulkAction, setBulkAction] = createSignal<'summon' | 'restart' | null>(null);
   const [showInventoryActions, setShowInventoryActions] = createSignal(false);
   const [restartConfirmOpen, setRestartConfirmOpen] = createSignal(false);
+  const [createDeviceOpen, setCreateDeviceOpen] = createSignal(false);
   const [restartPassword, setRestartPassword] = createSignal('');
   const [restartTOTPCode, setRestartTOTPCode] = createSignal('');
   const [restartError, setRestartError] = createSignal('');
@@ -264,16 +268,7 @@ const Devices: Component = () => {
       case 'ppp_username':
         return <span class="text-secondary text-sm font-mono">{getPppUsername(device)}</span>;
       case 'status':
-        return (
-          <span class={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${
-            device.online 
-              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
-              : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-          }`}>
-            <span class={`w-1.5 h-1.5 rounded-full ${device.online ? 'bg-emerald-400' : 'bg-rose-400'}`} aria-hidden="true" />
-            {device.online ? 'Online' : 'Offline'}
-          </span>
-        );
+        return <DeviceStatusBadge device={device} />;
       case 'last_inform':
         return <span class="text-muted text-xs" title={formatDateTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
       case 'created_at':
@@ -328,7 +323,7 @@ const Devices: Component = () => {
           case 'ppp_username': return getPppUsername(device) === '-' ? '' : getPppUsername(device);
           case 'rx_power': return getRxPower(device).value;
           case 'uptime': return getUptime(device);
-          case 'status': return device.online ? 'Online' : 'Offline';
+          case 'status': return deviceStatus(device);
           case 'last_inform': return device.last_inform || '';
           case 'created_at': return device.created_at || '';
           case 'tags': return getDeviceTagLabels(device);
@@ -447,6 +442,9 @@ const Devices: Component = () => {
           <button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button>
           <button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button>
         </nav>
+        <Show when={activeTab() === 'cpes' && hasAnyPermission('devices.create', 'devices.write')}>
+          <button type="button" class="btn btn-primary" onClick={() => setCreateDeviceOpen(true)}><Plus size={14} />Add CPE</button>
+        </Show>
       </div>
 
       <Show when={activeTab() === 'wans'}>
@@ -607,6 +605,17 @@ const Devices: Component = () => {
       </div></Show>
 
       <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
+      </Show>
+      <Show when={createDeviceOpen()}>
+        <CreateDeviceDialog canAutoFactoryReset={hasAnyPermission('devices.reset', 'devices.write')} requiresTOTP={user()?.two_factor_configured ?? false} onClose={() => setCreateDeviceOpen(false)} onCreated={device => {
+          setCreateDeviceOpen(false);
+          setColumnFilters({});
+          setPage(0);
+          setSearchQuery(device.serial_number);
+          setDebouncedSearch(device.serial_number);
+          void refetch();
+          notify({ tone: 'success', title: 'CPE added', message: device.factory_reset_on_first_inform ? `${device.serial_number} is waiting. Factory reset is armed for its first CWMP Inform.` : `${device.serial_number} is waiting for its first CWMP Inform.` });
+        }} />
       </Show>
       <Show when={restartConfirmOpen()}>
         <Dialog

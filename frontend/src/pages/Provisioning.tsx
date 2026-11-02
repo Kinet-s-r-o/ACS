@@ -1555,7 +1555,7 @@ const Provisioning: Component = () => {
                           <p class="text-xs text-muted md:col-span-2 xl:col-span-4">The input variable is the HMAC message. Custom secrets are encrypted in the database and never returned by the API.</p>
                         </Show>
                         </div>
-                        <button type="button" class="icon-button absolute right-2 top-2 text-rose-400" onClick={() => updateTemplateVariable(variableIndex, { steps: variable().steps.filter((_, index) => index !== stepIndex) })} aria-label={`Remove step ${stepIndex + 1} transformation`} title="Remove transformation"><Trash2 size={14} /></button>
+                        <button type="button" class="btn btn-ghost text-xs text-rose-400 absolute right-2 top-2" onClick={() => updateTemplateVariable(variableIndex, { steps: variable().steps.filter((_, index) => index !== stepIndex) })} aria-label={`Remove step ${stepIndex + 1} transformation`}><Trash2 size={13} />Remove</button>
                       </div>;
                     }}</Index>
                   </div>

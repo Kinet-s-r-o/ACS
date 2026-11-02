@@ -10,6 +10,7 @@ const (
 	PermRolesWrite            = "roles.write"
 	PermDevicesRead           = "devices.read"
 	PermDevicesWrite          = "devices.write"
+	PermDevicesCreate         = "devices.create"
 	PermFirmwaresRead         = "firmwares.read"
 	PermFirmwaresWrite        = "firmwares.write"
 	PermFaultsRead            = "faults.read"
@@ -40,7 +41,7 @@ const (
 var AllPermissions = []string{
 	PermUsersRead, PermUsersWrite,
 	PermRolesRead, PermRolesWrite,
-	PermDevicesRead, PermDevicesWrite,
+	PermDevicesRead, PermDevicesWrite, PermDevicesCreate,
 	PermFirmwaresRead, PermFirmwaresWrite,
 	PermFaultsRead, PermFaultsWrite,
 	PermProvisioningRead, PermProvisioningWrite,

@@ -18,6 +18,30 @@ type DeviceRepository struct {
 	db *gorm.DB
 }
 
+var ErrDeviceExists = errors.New("device serial number already exists")
+
+// CreateWaiting reserves a serial number without overwriting an existing CPE.
+// A missing LastInform identifies a device awaiting its first CWMP session.
+func (r *DeviceRepository) CreateWaiting(ctx context.Context, serial string, tags []string, factoryResetOnFirstInform bool) (*models.Device, error) {
+	device := &models.Device{SerialNumber: serial, Tags: tags, FactoryResetOnFirstInform: factoryResetOnFirstInform}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "serial_number"}}, DoNothing: true,
+		}).Create(device)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrDeviceExists
+		}
+		return tx.Create(&models.DeviceLifecycleEvent{
+			DeviceID: device.ID, SerialNumber: device.SerialNumber,
+			EventType: models.DeviceLifecycleRegistered, OccurredAt: device.CreatedAt,
+		}).Error
+	})
+	return device, err
+}
+
 func EnsureWANParameterIndex(ctx context.Context, db *gorm.DB) error {
 	if db.Dialector.Name() != "postgres" {
 		return nil
@@ -133,22 +157,52 @@ func (r *DeviceRepository) UpsertFromInformWithTransition(ctx context.Context, d
 	recovered := false
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing models.Device
-		err := tx.Where("serial_number = ?", device.SerialNumber).First(&existing).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("serial_number = ?", device.SerialNumber).First(&existing).Error
 		isNew := errors.Is(err, gorm.ErrRecordNotFound)
 		if err != nil && !isNew {
 			return err
 		}
+		queueAutomaticReset := !isNew && existing.LastInform == nil && existing.FactoryResetOnFirstInform
+		if queueAutomaticReset {
+			device.FactoryResetOnFirstInform = false
+			updates = append(updates, "factory_reset_on_first_inform")
+		} else if !isNew && existing.LastInform != nil {
+			if err := tx.Model(&models.Task{}).
+				Where("device_id = ? AND automatic_factory_reset = ? AND status = ?", existing.ID, true, models.TaskStatusPending).
+				Updates(map[string]interface{}{
+					"status": models.TaskStatusFailed, "error_message": "The first CWMP session ended before the automatic factory reset was sent.", "completed_at": now,
+				}).Error; err != nil {
+				return err
+			}
+		}
+		assignments := clause.AssignmentColumns(updates)
+		if device.OUI != "" {
+			assignments = append(assignments, clause.Assignment{
+				Column: clause.Column{Name: "oui"},
+				Value:  gorm.Expr("CASE WHEN devices.oui = '' THEN EXCLUDED.oui ELSE devices.oui END"),
+			})
+		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "serial_number"}},
-			DoUpdates: clause.AssignmentColumns(updates),
+			DoUpdates: assignments,
 		}).Create(device).Error; err != nil {
 			return err
 		}
 		if !isNew {
+			if queueAutomaticReset {
+				task, err := models.NewTaskWithPayload(device.ID, models.TaskTypeFactoryReset, nil)
+				if err != nil {
+					return err
+				}
+				task.AutomaticFactoryReset = true
+				if err := tx.Create(task).Error; err != nil {
+					return err
+				}
+			}
 			if existing.Online {
 				return nil
 			}
-			recovered = true
+			recovered = existing.LastInform != nil
 			return tx.Create(&models.DeviceLifecycleEvent{
 				DeviceID: device.ID, SerialNumber: device.SerialNumber,
 				EventType: models.DeviceLifecycleOnline, OccurredAt: now,
@@ -471,22 +525,12 @@ func (r *DeviceRepository) ListWANInterfacesPage(ctx context.Context, limit, off
 
 func (r *DeviceRepository) GetStats(ctx context.Context) (*models.DeviceStats, error) {
 	stats := &models.DeviceStats{}
-	var total, online, offline int64
-
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.Device{}).Select(`COUNT(*) AS total,
+		COUNT(*) FILTER (WHERE online) AS online,
+		COUNT(*) FILTER (WHERE NOT online AND last_inform IS NOT NULL) AS offline,
+		COUNT(*) FILTER (WHERE NOT online AND last_inform IS NULL) AS waiting`).Scan(stats).Error; err != nil {
 		return nil, err
 	}
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Where("online = ?", true).Count(&online).Error; err != nil {
-		return nil, err
-	}
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Where("online = ?", false).Count(&offline).Error; err != nil {
-		return nil, err
-	}
-
-	stats.Total = int(total)
-	stats.Online = int(online)
-	stats.Offline = int(offline)
-
 	return stats, nil
 }
 
@@ -796,7 +840,8 @@ func (r *DeviceRepository) GetRecencyAnalytics(ctx context.Context, maxDevices i
 	if maxDevices < 1 {
 		maxDevices = 10000
 	}
-	query := `SELECT CASE WHEN last_inform IS NULL OR NOW() - last_inform >= INTERVAL '30 days' THEN 'Offline >30d'
+	query := `SELECT CASE WHEN last_inform IS NULL THEN 'Waiting'
+		WHEN NOW() - last_inform >= INTERVAL '30 days' THEN 'Offline >30d'
 		WHEN NOW() - last_inform >= INTERVAL '7 days' THEN 'Offline >7d'
 		WHEN NOW() - last_inform >= INTERVAL '1 day' THEN 'Offline >1d'
 		WHEN NOW() - last_inform >= INTERVAL '1 hour' THEN 'Offline >1h'

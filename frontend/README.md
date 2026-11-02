@@ -12,3 +12,5 @@
 | `index.html`, `vite.config.ts`, `tsconfig*.json` | Build and TypeScript/Vite configuration | `npm run build` |
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
+
+CPE pre-registration uses `components/CreateDeviceDialog.tsx` and `POST /devices`. `lib/deviceStatus.ts` and `components/DeviceStatusBadge.tsx` display Waiting for CPEs with no first Inform and no online state. Keep inventory filters, exports, detail badges, and fleet counts consistent with this lifecycle.

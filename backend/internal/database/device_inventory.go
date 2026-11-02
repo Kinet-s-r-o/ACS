@@ -165,6 +165,7 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 }
 
 const inventoryActiveFaultsExpression = `(SELECT COUNT(*) FROM faults WHERE faults.device_id = devices.id AND faults.resolved = FALSE)`
+const inventoryStatusExpression = `CASE WHEN devices.online THEN 'Online' WHEN devices.last_inform IS NULL THEN 'Waiting' ELSE 'Offline' END`
 
 func inventoryParameterExpression(name string) string {
 	return `(SELECT dp.value FROM device_parameters dp WHERE dp.device_id = devices.id AND dp.name = '` + strings.ReplaceAll(name, "'", "''") + `' ORDER BY dp.name LIMIT 1)`
@@ -231,7 +232,7 @@ func inventorySortExpression(column string, includeSensitive bool) (string, bool
 		raw := inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.UpTime")
 		return `CASE WHEN ` + raw + ` ~ '^[0-9]+([.][0-9]+)?$' THEN (` + raw + `)::double precision END`, true
 	case "status":
-		return "devices.online", true
+		return inventoryStatusExpression, true
 	case "last_inform":
 		return "devices.last_inform", true
 	case "created_at":
@@ -259,7 +260,7 @@ func inventoryFilterExpression(column string, includeSensitive bool, rxPowerValu
 		return inventoryPPPExpression(includeSensitive, true), nil
 	}
 	if column == "status" {
-		return `CASE WHEN devices.online THEN 'Online' ELSE 'Offline' END`, nil
+		return inventoryStatusExpression, nil
 	}
 	if column == "rx_power" {
 		text, _ := inventoryRXExpressionsFor(rxPowerValue)

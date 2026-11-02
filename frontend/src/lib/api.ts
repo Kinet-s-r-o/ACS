@@ -22,6 +22,7 @@ export interface Device {
   conn_cred_username: string | null;
   conn_cred_password: string | null;
   tags: string[] | null;
+  factory_reset_on_first_inform?: boolean;
   last_inform: string | null;
   last_overview_refresh: string | null;
   last_full_refresh: string | null;
@@ -32,7 +33,7 @@ export interface Device {
   parameters?: DeviceParameter[];
 }
 
-export interface DeviceStats { total: number; online: number; offline: number }
+export interface DeviceStats { total: number; online: number; offline: number; waiting: number }
 export type DeviceGrowthInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 export interface DeviceGrowthPoint { timestamp: string; count: number; online: number }
 export interface DeviceGrowth { interval: DeviceGrowthInterval; points: DeviceGrowthPoint[] }
@@ -63,7 +64,7 @@ export interface DeviceParameter { id: number; device_id: number; name: string; 
 export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
 export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number }
 export interface WANInterface { serial_number: string; name: string; type: string; status: string; ip_address: string; mac_address: string }
-export interface Task { id: number; device_id: number; type: string; trigger_events?: string[]; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
+export interface Task { id: number; device_id: number; type: string; automatic_factory_reset?: boolean; trigger_events?: string[]; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
 export interface GlobalTask extends Task { serial_number: string }
 export type SystemTaskType = 'summon_from_cpe' | 'bulk_summon' | 'bulk_restart';
 export type SystemTaskStatus = 'pending' | 'processing' | 'waiting' | 'completed' | 'failed';
@@ -179,6 +180,7 @@ export async function requestBlob(endpoint: string, options: RequestInit = {}): 
 
 export const api = {
   health: () => request<{ status: string }>('/health'),
+  createDevice: (body: { serial_number: string; tags: string[]; factory_reset_on_first_inform: boolean; current_password?: string; totp_code?: string }) => request<Device>('/devices', { method: 'POST', body: JSON.stringify(body) }),
   getDevices: (limit = 50, offset = 0, columns?: string[], options?: DeviceListOptions) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (columns) params.set('columns', columns.join(','));

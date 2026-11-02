@@ -96,6 +96,8 @@ Analytics tracking is intentionally not embedded in the console. Security audit 
 
 ## Content and interaction rules
 
+CPE status badges use the shared `DeviceStatusBadge`: Online (success), Offline (error), and Waiting (warning/yellow, awaiting the first CWMP Inform). Manual creation uses a labelled serial-number field and optional catalog tags, retains inputs on failure, and reports duplicate serial numbers without overwriting the existing CPE. Optional factory reset is a clearly described destructive action; it requires factory reset permission and fresh password or TOTP verification, and the task history labels the first-Inform reset.
+
 - Use `CPE`, `CWMP`, `Inform`, `parameter`, `fault`, `task`, `provisioning rule`, and `connection request` consistently.
 - State whether an operation is queued, processing, complete, partially complete, or rejected.
 - Preserve entered values after validation or network failure.

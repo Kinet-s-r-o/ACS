@@ -193,7 +193,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context, deviceID int64, t
 		var task models.Task
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
 			Where("device_id = ? AND status = ?", deviceID, models.TaskStatusPending).
-			Order("created_at ASC, id ASC").
+			Order("automatic_factory_reset DESC, created_at ASC, id ASC").
 			First(&task).Error
 		if err == gorm.ErrRecordNotFound {
 			return nil

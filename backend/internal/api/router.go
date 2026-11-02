@@ -190,6 +190,7 @@ func (r *Router) Handler() http.Handler {
 
 	// Device endpoints (by ID - legacy)
 	apiMux.HandleFunc("GET /devices", auth.RequirePermission(models.PermDevicesRead)(r.handleListDevices))
+	apiMux.HandleFunc("POST /devices", auth.RequireAnyPermission(models.PermDevicesCreate, models.PermDevicesWrite)(r.handleCreateDevice))
 	apiMux.HandleFunc("GET /wan-interfaces", auth.RequirePermission(models.PermDevicesRead)(r.handleListWANInterfaces))
 	apiMux.HandleFunc("GET /tasks", auth.RequirePermission(models.PermDevicesRead)(r.handleListTasks))
 	apiMux.HandleFunc("GET /tasks/{id}", auth.RequirePermission(models.PermDevicesRead)(r.handleGetTask))
@@ -1040,6 +1041,7 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 	}
 
 	lastInformRanges := map[string]int{
+		"Waiting":      0,
 		"Online":       0,
 		"Offline >30m": 0,
 		"Offline >1h":  0,
@@ -1090,7 +1092,7 @@ func (r *Router) handleDeviceAnalytics(w http.ResponseWriter, req *http.Request)
 				lastInformRanges["Offline >30d"]++
 			}
 		} else {
-			lastInformRanges["Offline >30d"]++
+			lastInformRanges["Waiting"]++
 		}
 
 		var deviceRxPower float64 = -999
@@ -2838,21 +2840,33 @@ func (r *Router) handleSetDeviceTagsBySerial(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	tags := normalizeTags(body.Tags)
+	tags, valid := r.validateDeviceTags(w, req, body.Tags)
+	if !valid {
+		return
+	}
+	if err := r.deviceRepo.SetTags(req.Context(), device.ID, tags); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to update tags")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"status": "updated", "tags": tags})
+}
+
+func (r *Router) validateDeviceTags(w http.ResponseWriter, req *http.Request, requested []string) ([]string, bool) {
+	tags := normalizeTags(requested)
 	if len(tags) > 32 {
 		respondError(w, http.StatusBadRequest, "A device can have at most 32 tags")
-		return
+		return nil, false
 	}
 	for _, tag := range tags {
 		if len(tag) > 64 {
 			respondError(w, http.StatusBadRequest, "A tag must be 64 characters or fewer")
-			return
+			return nil, false
 		}
 	}
 	catalog, err := r.tagRepo.List(req.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to read tag catalog")
-		return
+		return nil, false
 	}
 	knownTags := make(map[string]struct{}, len(catalog))
 	for _, definition := range catalog {
@@ -2861,15 +2875,11 @@ func (r *Router) handleSetDeviceTagsBySerial(w http.ResponseWriter, req *http.Re
 	for _, tag := range tags {
 		if _, exists := knownTags[tag]; !exists {
 			respondError(w, http.StatusBadRequest, "Unknown tag: "+tag)
-			return
+			return nil, false
 		}
 	}
 
-	if err := r.deviceRepo.SetTags(req.Context(), device.ID, tags); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to update tags")
-		return
-	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"status": "updated", "tags": tags})
+	return tags, true
 }
 
 // normalizeProductClasses trims, lowercases, de-duplicates and drops empty

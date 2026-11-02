@@ -542,6 +542,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	overviewInterval, fullInterval := h.refreshIntervals(ctx)
 	session.mu.Lock()
 	isNewSession := session.State == StateWaitingInform
+	session.AutoFactoryResetSessionFinished = false
 	session.State = StateInformReceived
 	session.DeviceID = deviceID
 	session.DeviceType = inform.DeviceId.Manufacturer + "/" + inform.DeviceId.ProductClass
@@ -668,6 +669,9 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.AutoFactoryResetSessionFinished {
+		return nil, defaultNamespace(session.CWMPNamespace), nil
+	}
 
 	namespace := defaultNamespace(session.CWMPNamespace)
 	request, err := h.getNextTask(ctx, session)
@@ -1340,6 +1344,16 @@ func (h *Handler) handleFactoryResetResponse(ctx context.Context, remoteAddr str
 			}
 		}
 		session.CurrentTaskID = 0
+		if session.AutomaticFactoryResetActive {
+			session.AutomaticFactoryResetActive = false
+			session.AutoFactoryResetSessionFinished = true
+			session.Provisioning = nil
+			session.ProvisioningRules = nil
+			session.AddObjectQueue = nil
+			session.ConditionalFetchActive = false
+			session.State = StateIdle
+			return nil, nil
+		}
 		return h.getNextTask(ctx, session)
 	}
 
@@ -1472,6 +1486,20 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 		}
 
 		if session.CurrentTaskID > 0 && h.taskRepo != nil {
+			if session.AutomaticFactoryResetActive {
+				if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusFailed, nil, faultMessage); err != nil {
+					return nil, fmt.Errorf("fail automatic first-Inform factory reset: %w", err)
+				}
+				session.CurrentTaskID = 0
+				session.AutomaticFactoryResetActive = false
+				session.AutoFactoryResetSessionFinished = true
+				session.Provisioning = nil
+				session.ProvisioningRules = nil
+				session.AddObjectQueue = nil
+				session.ConditionalFetchActive = false
+				session.State = StateIdle
+				return nil, nil
+			}
 			if faultCode == "9005" && session.CurrentDeleteObjectPath != "" {
 				if h.parameterRepo != nil {
 					if err := h.parameterRepo.DeleteObjectParameters(ctx, session.DeviceID, session.CurrentDeleteObjectPath); err != nil {
@@ -1528,6 +1556,7 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 		}
 
 		session.CurrentTaskID = task.ID
+		session.AutomaticFactoryResetActive = task.AutomaticFactoryReset
 		session.CurrentDeleteObjectPath = ""
 		session.CurrentFullTreeFetch = false
 		session.State = StateProcessingTasks

@@ -142,6 +142,29 @@ func TestOverviewFetchUsesKnownParameterNames(t *testing.T) {
 	}
 }
 
+func TestAutomaticFactoryResetStopsTheFirstCWMPSession(t *testing.T) {
+	handler := NewHandler(nil)
+	session := handler.sessions.GetOrCreate("automatic-reset", "SERIAL")
+	session.State = StateProcessingTasks
+	session.CurrentTaskID = 1
+	session.AutomaticFactoryResetActive = true
+	session.Provisioning = &SetParameterValues{}
+	session.ProvisioningRules = []models.ProvisioningApplication{{RuleID: 1}}
+	session.AddObjectQueue = []*AddObject{{ObjectName: "Device.WiFi.SSID."}}
+
+	request, err := handler.handleFactoryResetResponse(context.Background(), session.ID)
+	if err != nil || request != nil {
+		t.Fatalf("factory reset response continued the session: request=%#v err=%v", request, err)
+	}
+	if !session.AutoFactoryResetSessionFinished || session.AutomaticFactoryResetActive || session.State != StateIdle || session.Provisioning != nil || len(session.ProvisioningRules) != 0 || len(session.AddObjectQueue) != 0 {
+		t.Fatal("automatic factory reset did not stop provisioning for the first session")
+	}
+	request, _, err = handler.handleEmptyPost(context.Background(), session.ID)
+	if err != nil || request != nil {
+		t.Fatalf("finished reset session resumed work: request=%#v err=%v", request, err)
+	}
+}
+
 func TestInformIsAcknowledgedBeforeACSRequest(t *testing.T) {
 	handler := NewHandler(nil)
 	inform := `<?xml version="1.0"?>

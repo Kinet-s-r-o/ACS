@@ -650,7 +650,7 @@ const Dashboard: Component = () => {
           <div class="ops-register-cell">
             <dt>Managed devices</dt>
             <dd>{(stats()?.total ?? 0).toLocaleString()}</dd>
-            <small>Registered CPE inventory</small>
+            <small>{stats()?.waiting ? `${stats()!.waiting} waiting for first Inform` : 'Registered CPE inventory'}</small>
           </div>
           <div class="ops-register-cell is-online">
             <dt>Online</dt>

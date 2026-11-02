@@ -25,6 +25,10 @@ Finalize exact permission keys and route mapping before implementation. Avoid cr
 
 ## Implemented focused grants
 
+`POST /devices` accepts `devices.create` or the legacy `devices.write` bundle. The Add CPE dialog uses the same grants. Creation reserves a unique, case-sensitive serial number and assigns existing catalog tags; changing tags later still requires `devices.configure` or `devices.write`.
+
+Arming a factory reset for a pre-registered CPE also requires `devices.reset` (or `devices.write`) and fresh password/TOTP verification. The reset task is created atomically on the first Inform only while the device was Waiting; if the first CWMP session ends before dispatch, the task is failed and never retried on a later Inform.
+
 The implementation adds these independently assignable grants: `devices.configure`, `devices.command`, `devices.reset`, `devices.delete`, `devices.credentials`, `devices.snapshots.write`, `devices.firmware`, `firmwares.manage`, `users.tokens`, `provisioning.rules.write`, `provisioning.templates.write`, and `database.stats.read`. Existing domain `*.write` keys remain valid compatibility bundles and continue to authorize their former operations. The database statistics grant is excluded from the read-only system role because it exposes normalized SQL text; the built-in admin receives it with the other `AllPermissions`. The role editor lists the grants with descriptions.
 
 ## Implementation sequence
