@@ -2056,12 +2056,12 @@ const DeviceDetail: Component = () => {
             {/* Row 1: ONT Info + Device Health + Actions */}
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* ONT Information Card */}
-              <div class="card p-5 lg:col-span-5">
+              <div class="card p-5 lg:col-span-5 lg:flex lg:flex-col">
                 <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
                   <Server size={14} />
                   ONT Information
                 </h2>
-                <div class="grid grid-cols-1 gap-x-6 gap-y-4 text-sm lg:grid-cols-2">
+                <div class="grid grid-cols-1 gap-x-6 gap-y-4 text-sm lg:flex-1 lg:grid-cols-2">
                   <div class="space-y-2">
                     <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => {
                       const value = (field.source || 'parameter') === 'acs'
@@ -2070,7 +2070,7 @@ const DeviceDetail: Component = () => {
                       return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value}</span></div>;
                     }}</For>
                   </div>
-                  <div class="space-y-2 lg:-mt-8">
+                  <div class="space-y-2 lg:flex lg:items-center lg:justify-center">
                     <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
                       <Show when={templateImageUrl()}>
                         <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full object-contain object-center" />
