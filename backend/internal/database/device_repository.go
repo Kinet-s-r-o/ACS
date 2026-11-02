@@ -138,9 +138,17 @@ func (r *DeviceRepository) UpsertFromInform(ctx context.Context, device *models.
 // existing device changed from offline to online.
 func (r *DeviceRepository) UpsertFromInformWithTransition(ctx context.Context, device *models.Device) (bool, error) {
 	now := time.Now()
-	device.LastInform = &now
+	if device.LastInform == nil {
+		device.LastInform = &now
+	}
 	device.Online = true
 	updates := []string{"last_inform", "online", "updated_at"}
+	if device.LastBootstrap != nil {
+		updates = append(updates, "last_bootstrap")
+	}
+	if device.LastBoot != nil {
+		updates = append(updates, "last_boot")
+	}
 	for _, field := range []struct {
 		column string
 		value  *string

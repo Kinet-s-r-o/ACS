@@ -35,7 +35,9 @@ type ProvisioningLANPortMapping struct {
 
 type ProvisioningCPEInfoField struct {
 	Name          string `json:"name"`
-	ParameterName string `json:"parameter_name"`
+	ParameterName string `json:"parameter_name,omitempty"`
+	Source        string `json:"source,omitempty"`
+	ACSField      string `json:"acs_field,omitempty"`
 }
 
 // TemplateInventory controls how device-level values are presented in the

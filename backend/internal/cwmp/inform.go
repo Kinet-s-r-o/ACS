@@ -55,6 +55,19 @@ func informEventCodes(inform *Inform) []string {
 	return events
 }
 
+func informHasEventCode(inform *Inform, code string) bool {
+	if inform == nil {
+		return false
+	}
+	for _, event := range inform.Event.Events {
+		parts := strings.Fields(strings.TrimSpace(event.EventCode))
+		if len(parts) > 0 && parts[0] == code {
+			return true
+		}
+	}
+	return false
+}
+
 func validateInform(inform *Inform) error {
 	if inform == nil {
 		return errors.New("missing Inform payload")

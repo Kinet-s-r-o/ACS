@@ -2063,7 +2063,12 @@ const DeviceDetail: Component = () => {
                 </h2>
                 <div class="grid grid-cols-1 gap-x-6 gap-y-4 text-sm lg:grid-cols-2">
                   <div class="space-y-2">
-                    <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-'}</span></div>}</For>
+                    <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => {
+                      const value = (field.source || 'parameter') === 'acs'
+                        ? formatDateTime(field.acs_field === 'last_bootstrap' ? d().last_bootstrap : field.acs_field === 'last_boot' ? d().last_boot : d().last_inform)
+                        : parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-';
+                      return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value}</span></div>;
+                    }}</For>
                   </div>
                   <div class="space-y-2 lg:-mt-8">
                     <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>

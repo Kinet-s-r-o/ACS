@@ -458,6 +458,14 @@ const Provisioning: Component = () => {
     setCPEInfoFields(current => current.map((field, fieldIndex) => fieldIndex === index ? { ...field, [key]: value } : field));
   };
 
+  const updateCPEInfoSource = (index: number, source: 'parameter' | 'acs') => {
+    setCPEInfoFields(current => current.map((field, fieldIndex) => fieldIndex === index
+      ? source === 'acs'
+        ? { ...field, source, parameter_name: '', acs_field: field.acs_field || 'last_inform' }
+        : { ...field, source, acs_field: undefined, parameter_name: field.parameter_name || '' }
+      : field));
+  };
+
   const moveCPEInfoField = (sourceIndex: number, targetIndex: number) => {
     if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0 || targetIndex >= cpeInfoFields().length) return;
     setCPEInfoFields(current => {
@@ -478,7 +486,7 @@ const Provisioning: Component = () => {
   const saveCPEInfoFields = async () => {
     const template = selectedTemplate();
     if (!template || cpeInfoSaving()) return;
-    const fields = cpeInfoFields().filter(field => field.name.trim() || field.parameter_name.trim());
+    const fields = cpeInfoFields().filter(field => field.name.trim() || (field.source === 'acs' ? field.acs_field : field.parameter_name)?.trim());
     setCPEInfoSaving(true);
     try {
       const updated = await api.updateProvisioningTemplateCPEInfo(template.id, fields);
@@ -1510,29 +1518,43 @@ const Provisioning: Component = () => {
               <Show when={templateDetailTab() === 'cpe_info'}>
                 <section class="space-y-4">
                   <div class="flex flex-wrap items-end justify-between gap-3">
-                    <p class="max-w-3xl text-xs text-muted">Choose the CWMP parameters shown in the ONT Information card. Drag rows to set their order, then save to apply the same order on CPE overview.</p>
+                    <p class="max-w-3xl text-xs text-muted">Choose CWMP parameters or ACS timestamps shown in the ONT Information card. Drag rows to set their order, then save to apply the same order on CPE overview.</p>
                     <Show when={isFullAccess()}>
                       <div class="flex gap-2">
-                        <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => setCPEInfoFields(current => [...current, { name: '', parameter_name: '' }])}><Plus size={12} />Add parameter</button>
+                        <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => setCPEInfoFields(current => [...current, { name: '', parameter_name: '', source: 'parameter' }])}><Plus size={12} />Add field</button>
                         <button type="button" class="btn btn-primary text-xs py-1.5" onClick={() => void saveCPEInfoFields()} disabled={cpeInfoSaving()}><Save size={12} />{cpeInfoSaving() ? 'Saving…' : 'Save CPE info'}</button>
                       </div>
                     </Show>
                   </div>
-                  <Show when={cpeInfoFields().length > 0} fallback={<EmptyState compact title="No CPE info parameters" description="Add a display name and exact CWMP parameter path for each value to show on the CPE overview." />}>
+                  <Show when={cpeInfoFields().length > 0} fallback={<EmptyState compact title="No ONT information fields" description="Add a display name and choose a CWMP parameter or ACS timestamp to show on the CPE overview." />}>
                     <div class="space-y-3">
-                      <Index each={cpeInfoFields()}>{(field, index) => <div onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderCPEInfoField(index); }} class={`grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[auto_minmax(12rem,1fr)_minmax(18rem,2fr)_auto] ${cpeInfoDraggedIndex() === index ? 'opacity-50' : ''}`}>
-                        <button type="button" draggable={isFullAccess() && !cpeInfoSaving()} class={`icon-button text-muted ${isFullAccess() ? 'cursor-grab active:cursor-grabbing' : ''}`} aria-label={`Drag to reorder CPE info parameter ${index + 1}`} title="Drag to reorder" onDragStart={event => { setCPEInfoDraggedIndex(index); event.dataTransfer?.setData('text/plain', String(index)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setCPEInfoDraggedIndex(null)}><GripVertical size={15} /></button>
+                      <Index each={cpeInfoFields()}>{(field, index) => <div onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderCPEInfoField(index); }} class={`grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[auto_repeat(3,minmax(0,1fr))_auto] ${cpeInfoDraggedIndex() === index ? 'opacity-50' : ''}`}>
+                        <button type="button" draggable={isFullAccess() && !cpeInfoSaving()} class={`icon-button text-muted ${isFullAccess() ? 'cursor-grab active:cursor-grabbing' : ''}`} aria-label={`Drag to reorder ONT information field ${index + 1}`} title="Drag to reorder" onDragStart={event => { setCPEInfoDraggedIndex(index); event.dataTransfer?.setData('text/plain', String(index)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setCPEInfoDraggedIndex(null)}><GripVertical size={15} /></button>
                         <label class="block text-xs text-muted">Name
                           <input class="input mt-1 w-full" value={field().name} onInput={event => updateCPEInfoField(index, 'name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="e.g. Optical receive power" />
                         </label>
-                        <label class="block text-xs text-muted">Parameter name
-                          <input class="input mt-1 w-full font-mono text-[11px]" value={field().parameter_name} onInput={event => updateCPEInfoField(index, 'parameter_name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="InternetGatewayDevice..." />
+                        <label class="block text-xs text-muted">Source
+                          <select class="input mt-1 w-full" value={field().source || 'parameter'} onChange={event => updateCPEInfoSource(index, event.currentTarget.value as 'parameter' | 'acs')} disabled={!isFullAccess()}>
+                            <option value="parameter">CPE parameter</option>
+                            <option value="acs">ACS timestamp</option>
+                          </select>
                         </label>
+                        <Show when={(field().source || 'parameter') === 'acs'} fallback={<label class="block text-xs text-muted">Parameter name
+                          <input class="input mt-1 w-full font-mono text-[11px]" value={field().parameter_name || ''} onInput={event => updateCPEInfoField(index, 'parameter_name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="InternetGatewayDevice..." />
+                        </label>}>
+                          <label class="block text-xs text-muted">ACS timestamp
+                            <select class="input mt-1 w-full" value={field().acs_field || 'last_inform'} onChange={event => updateCPEInfoField(index, 'acs_field', event.currentTarget.value)} disabled={!isFullAccess()}>
+                              <option value="last_inform">Last inform</option>
+                              <option value="last_bootstrap">Last bootstrap</option>
+                              <option value="last_boot">Last boot</option>
+                            </select>
+                          </label>
+                        </Show>
                         <Show when={isFullAccess()}>
                           <div class="flex items-center gap-1">
-                            <button type="button" class="icon-button" aria-label={`Move CPE info parameter ${index + 1} up`} title="Move up" disabled={index === 0 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index - 1)}><ArrowUp size={14} /></button>
-                            <button type="button" class="icon-button" aria-label={`Move CPE info parameter ${index + 1} down`} title="Move down" disabled={index === cpeInfoFields().length - 1 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index + 1)}><ArrowDown size={14} /></button>
-                            <button type="button" class="icon-button text-rose-400" aria-label={`Remove CPE info parameter ${index + 1}`} title="Remove parameter" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index))}><Trash2 size={15} /></button>
+                            <button type="button" class="icon-button" aria-label={`Move ONT information field ${index + 1} up`} title="Move up" disabled={index === 0 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index - 1)}><ArrowUp size={14} /></button>
+                            <button type="button" class="icon-button" aria-label={`Move ONT information field ${index + 1} down`} title="Move down" disabled={index === cpeInfoFields().length - 1 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index + 1)}><ArrowDown size={14} /></button>
+                            <button type="button" class="icon-button text-rose-400" aria-label={`Remove ONT information field ${index + 1}`} title="Remove field" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index))}><Trash2 size={15} /></button>
                           </div>
                         </Show>
                       </div>}</Index>

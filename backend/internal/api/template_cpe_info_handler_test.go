@@ -20,4 +20,14 @@ func TestValidateTemplateCPEInfoFields(t *testing.T) {
 	if _, err := validateTemplateCPEInfoFields([]models.ProvisioningCPEInfoField{{Name: "Invalid path", ParameterName: "Device.X;DROP"}}); err == nil {
 		t.Fatal("expected an invalid CWMP parameter name to be rejected")
 	}
+	fields, err = validateTemplateCPEInfoFields([]models.ProvisioningCPEInfoField{{Name: "Last inform", Source: "acs", ACSField: "last_inform", ParameterName: "ignored"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 1 || fields[0].Source != "acs" || fields[0].ACSField != "last_inform" || fields[0].ParameterName != "" {
+		t.Fatalf("unexpected normalized ACS CPE info field: %#v", fields)
+	}
+	if _, err := validateTemplateCPEInfoFields([]models.ProvisioningCPEInfoField{{Name: "Bad timestamp", Source: "acs", ACSField: "last_bootstrap;DROP"}}); err == nil {
+		t.Fatal("expected an invalid ACS field to be rejected")
+	}
 }

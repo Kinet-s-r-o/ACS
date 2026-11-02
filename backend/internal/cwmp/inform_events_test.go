@@ -27,3 +27,16 @@ func TestInformEventCodesReturnsNilWithoutEvents(t *testing.T) {
 		t.Fatalf("got %v, want nil", got)
 	}
 }
+
+func TestInformHasEventCodeMatchesCodeToken(t *testing.T) {
+	inform := &Inform{Event: EventList{Events: []EventStruct{
+		{EventCode: "10 VALUE CHANGE"},
+		{EventCode: "1 BOOT"},
+	}}}
+	if !informHasEventCode(inform, "1") {
+		t.Fatal("expected BOOT event to be detected")
+	}
+	if informHasEventCode(inform, "0") {
+		t.Fatal("did not expect code 0 to match event code 10")
+	}
+}

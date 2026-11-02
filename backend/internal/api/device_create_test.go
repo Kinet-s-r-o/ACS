@@ -103,7 +103,8 @@ func TestCreateWaitingDevicePostgres(t *testing.T) {
 		t.Fatalf("get reserved device: %v", err)
 	}
 	manufacturer, productClass, ip := "Example", "Model", "192.0.2.10"
-	inform := &models.Device{SerialNumber: reserved.SerialNumber, OUI: "001122", Manufacturer: &manufacturer, ProductClass: &productClass, IPAddress: &ip}
+	bootstrapAt, bootAt := time.Now().UTC().Add(-2*time.Hour), time.Now().UTC().Add(-time.Hour)
+	inform := &models.Device{SerialNumber: reserved.SerialNumber, OUI: "001122", Manufacturer: &manufacturer, ProductClass: &productClass, IPAddress: &ip, LastBootstrap: &bootstrapAt, LastBoot: &bootAt}
 	recovered, err := r.deviceRepo.UpsertFromInformWithTransition(t.Context(), inform)
 	if err != nil || recovered || inform.ID != reserved.ID {
 		t.Fatalf("first Inform did not bind to reserved ID: recovered=%v, err=%v", recovered, err)
@@ -112,7 +113,7 @@ func TestCreateWaitingDevicePostgres(t *testing.T) {
 	if err != nil || stored == nil {
 		t.Fatalf("get device: %v", err)
 	}
-	if !stored.Online || stored.LastInform == nil || stored.OUI != "001122" || !reflect.DeepEqual(stored.Tags, reserved.Tags) || !stored.CreatedAt.Equal(beforeInform.CreatedAt) || stored.Manufacturer == nil || *stored.Manufacturer != manufacturer {
+	if !stored.Online || stored.LastInform == nil || stored.LastBootstrap == nil || !stored.LastBootstrap.Equal(bootstrapAt) || stored.LastBoot == nil || !stored.LastBoot.Equal(bootAt) || stored.OUI != "001122" || !reflect.DeepEqual(stored.Tags, reserved.Tags) || !stored.CreatedAt.Equal(beforeInform.CreatedAt) || stored.Manufacturer == nil || *stored.Manufacturer != manufacturer {
 		t.Fatal("first Inform did not preserve tags/creation time or populate device identity")
 	}
 	assertStatus("Waiting", 0)
@@ -128,6 +129,10 @@ func TestCreateWaitingDevicePostgres(t *testing.T) {
 	recovered, err = r.deviceRepo.UpsertFromInformWithTransition(t.Context(), &models.Device{SerialNumber: reserved.SerialNumber, OUI: "001122"})
 	if err != nil || !recovered {
 		t.Fatalf("subsequent Inform should recover offline CPE: %v", err)
+	}
+	stored, err = r.deviceRepo.GetBySerial(t.Context(), reserved.SerialNumber)
+	if err != nil || stored == nil || stored.LastBootstrap == nil || !stored.LastBootstrap.Equal(bootstrapAt) || stored.LastBoot == nil || !stored.LastBoot.Equal(bootAt) {
+		t.Fatal("subsequent Inform without boot events cleared the stored ACS timestamps")
 	}
 	var registered int64
 	if err := db.Model(&models.DeviceLifecycleEvent{}).Where("device_id = ? AND event_type = ?", reserved.ID, models.DeviceLifecycleRegistered).Count(&registered).Error; err != nil || registered != 1 {

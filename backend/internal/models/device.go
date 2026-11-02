@@ -21,6 +21,8 @@ type Device struct {
 	Tags                      []string          `json:"tags" gorm:"type:jsonb;serializer:json"`
 	FactoryResetOnFirstInform bool              `json:"factory_reset_on_first_inform,omitempty" gorm:"default:false"`
 	LastInform                *time.Time        `json:"last_inform" gorm:"index:idx_devices_online_last_inform,priority:2"`
+	LastBootstrap             *time.Time        `json:"last_bootstrap"`
+	LastBoot                  *time.Time        `json:"last_boot"`
 	LastOverviewRefresh       *time.Time        `json:"last_overview_refresh"`
 	LastFullRefresh           *time.Time        `json:"last_full_refresh"`
 	InformStaggered           bool              `json:"-" gorm:"default:false;index"`

@@ -55,8 +55,29 @@ func validateTemplateCPEInfoFields(fields []models.ProvisioningCPEInfoField) ([]
 	for index, field := range fields {
 		field.Name = strings.TrimSpace(field.Name)
 		field.ParameterName = strings.TrimSpace(field.ParameterName)
-		if field.Name == "" || len(field.Name) > 128 || field.ParameterName == "" || !validLANParameterPath(field.ParameterName) {
-			return nil, fmt.Errorf("CPE info field %d requires a valid name and CWMP parameter name", index+1)
+		field.Source = strings.TrimSpace(field.Source)
+		field.ACSField = strings.TrimSpace(field.ACSField)
+		if field.Name == "" || len(field.Name) > 128 {
+			return nil, fmt.Errorf("CPE info field %d requires a valid name", index+1)
+		}
+		if field.Source == "" {
+			field.Source = "parameter"
+		}
+		switch field.Source {
+		case "parameter":
+			if field.ParameterName == "" || !validLANParameterPath(field.ParameterName) {
+				return nil, fmt.Errorf("CPE info field %d requires a valid CWMP parameter name", index+1)
+			}
+			field.ACSField = ""
+		case "acs":
+			switch field.ACSField {
+			case "last_inform", "last_bootstrap", "last_boot":
+			default:
+				return nil, fmt.Errorf("CPE info field %d requires a valid ACS timestamp", index+1)
+			}
+			field.ParameterName = ""
+		default:
+			return nil, fmt.Errorf("CPE info field %d has an invalid source", index+1)
 		}
 		validated = append(validated, field)
 	}

@@ -276,6 +276,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	if err != nil {
 		return nil, err
 	}
+	receivedAt := time.Now().UTC()
 
 	var deviceID int64
 	var resolvedTemplate *models.ProvisioningTemplate
@@ -306,6 +307,13 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			SoftwareVersion:      strPtr(params["SoftwareVersion"]),
 			IPAddress:            ipAddrStr,
 			ConnectionRequestURL: strPtr(params["ConnectionRequestURL"]),
+			LastInform:           &receivedAt,
+		}
+		if informHasEventCode(inform, "0") {
+			device.LastBootstrap = &receivedAt
+		}
+		if informHasEventCode(inform, "1") {
+			device.LastBoot = &receivedAt
 		}
 
 		recovered, err := h.deviceRepo.UpsertFromInformWithTransition(ctx, device)
