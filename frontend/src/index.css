@@ -523,10 +523,10 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 @media (min-width: 1024px) {
   .lg\:hidden { display: none !important; }
   .task-register { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .app-sidebar { position: fixed; transform: none; transition: width 180ms ease; }
+  .app-sidebar { position: fixed; transform: none; transition: width 180ms ease, background-color 180ms ease, box-shadow 180ms ease; }
   .app-main { padding-left: 256px; }
   .sidebar-collapse-toggle { display: inline-grid; }
-  .app-sidebar.is-collapsed { width: 64px; }
+  .app-sidebar.is-collapsed { width: 64px; background-color: rgb(var(--bg-sidebar) / .72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .app-sidebar.is-collapsed .sidebar-brand { justify-content: center; padding: 10px; }
   .app-sidebar.is-collapsed .brand-lockup { justify-content: center; }
   .app-sidebar.is-collapsed .brand-lockup > div { display: none; }
@@ -553,6 +553,36 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
   .inventory-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dashboard-health-grid .data-panel-section + .data-panel-section,
   .inventory-grid .data-panel-section + .data-panel-section { border-top: 0; border-left: 1px solid rgb(var(--border-subtle)); }
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .app-sidebar.is-collapsed:hover {
+    z-index: 60;
+    width: 256px;
+    background-color: rgb(var(--bg-sidebar) / .9);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 12px 0 32px rgb(0 0 0 / .2);
+  }
+  .app-sidebar.is-collapsed:hover .sidebar-brand { justify-content: space-between; padding: 14px 16px; }
+  .app-sidebar.is-collapsed:hover .brand-lockup { justify-content: flex-start; }
+  .app-sidebar.is-collapsed:hover .brand-lockup > div { display: block; }
+  .app-sidebar.is-collapsed:hover .brand-logo { width: auto; height: auto; max-width: 120px; max-height: 40px; }
+  .app-sidebar.is-collapsed:hover .sidebar-collapse-toggle { position: static; top: auto; right: auto; width: 32px; height: 32px; }
+  .app-sidebar.is-collapsed:hover .sidebar-nav { padding: 14px 10px; }
+  .app-sidebar.is-collapsed:hover .nav-section { display: block; }
+  .app-sidebar.is-collapsed:hover .nav-link > span { display: inline; }
+  .app-sidebar.is-collapsed:hover .nav-chevron,
+  .app-sidebar.is-collapsed:hover .nav-chevron-down { display: block; }
+  .app-sidebar.is-collapsed:hover .nav-submenu,
+  .app-sidebar.is-collapsed:hover .operator-copy,
+  .app-sidebar.is-collapsed:hover .sidebar-meta { display: flex; }
+  .app-sidebar.is-collapsed:hover .nav-group + .nav-group { margin-top: 18px; }
+  .app-sidebar.is-collapsed:hover .nav-link { justify-content: flex-start; width: auto; height: auto; min-height: 36px; margin: 0; padding: 0 10px; }
+  .app-sidebar.is-collapsed:hover .sidebar-footer { padding: 10px; }
+  .app-sidebar.is-collapsed:hover .operator-card { flex-wrap: nowrap; justify-content: flex-start; gap: 9px; padding: 8px; border-top: 1px solid rgb(var(--border-subtle)); }
+  .app-sidebar.is-collapsed:hover .operator-avatar { width: 30px; height: 30px; }
+  .app-sidebar.is-collapsed:hover .operator-card .icon-button { width: 32px; height: 32px; }
 }
 
 @media (max-width: 1023px) {
