@@ -35,6 +35,7 @@ type provisioningTransferTemplate struct {
 	Features                 []models.ProvisioningFeature        `json:"features,omitempty"`
 	LANPortCount             int                                 `json:"lan_port_count,omitempty"`
 	LANPortMappings          []models.ProvisioningLANPortMapping `json:"lan_port_mappings,omitempty"`
+	CPEInfoFields            []models.ProvisioningCPEInfoField   `json:"cpe_info_fields,omitempty"`
 	Rules                    []models.ProvisioningRule           `json:"rules,omitempty"`
 	Metrics                  []models.MetricDefinition           `json:"metrics,omitempty"`
 	ParameterPolls           []models.ParameterPollDefinition    `json:"parameter_polls,omitempty"`
@@ -68,6 +69,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
 			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
 			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
+			CPEInfoFields: template.CPEInfoFields,
 		}
 		rules, err := r.provisioningRepo.ListForTemplate(req.Context(), template.ID)
 		if err != nil {
@@ -179,6 +181,7 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
 				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, Variables: item.Variables, Features: item.Features,
 				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,
+				CPEInfoFields: item.CPEInfoFields,
 			}
 			if err := tx.Create(&template).Error; err != nil {
 				return err
@@ -259,6 +262,11 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 		item.LANPortMappings = mappings
 	} else if len(item.LANPortMappings) > 0 {
 		return errors.New("LAN port mappings require a LAN port count")
+	}
+	var err error
+	item.CPEInfoFields, err = validateTemplateCPEInfoFields(item.CPEInfoFields)
+	if err != nil {
+		return err
 	}
 	for index := range item.Rules {
 		rule := &item.Rules[index]

@@ -2088,10 +2088,13 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted">Manufacturer:</span> <span class="text-primary">{d().manufacturer || '-'}</span></div>
                     <div><span class="text-muted">Product:</span> <span class="text-primary">{d().product_class || '-'}</span></div>
                     <div><span class="text-muted">OUI:</span> <span class="text-primary">{d().oui}</span></div>
+                    <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
+                    <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
                     <div><span class="text-muted">Periodic Inform Interval:</span> <span class="text-primary">{getPeriodicInformInterval()}</span></div>
                     <div><span class="text-muted">Full tree refreshed:</span> <span class="text-primary">{formatDateWithSeconds(d().last_full_refresh)}</span></div>
                     <div><span class="text-muted">Overview refreshed:</span> <span class="text-primary">{formatDateWithSeconds(d().last_overview_refresh)}</span></div>
                     <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDateWithSeconds(d().last_inform)}</span></div>
+                    <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => <div><span class="text-muted">{field.name}:</span> <span class="text-primary">{parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-'}</span></div>}</For>
                   </div>
                   <div class="space-y-2 lg:-mt-8">
                     <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
@@ -2101,10 +2104,6 @@ const DeviceDetail: Component = () => {
                     </div>}>
                       <OntLanVisualization svgMarkup={templateLANVisualization() || ''} ports={getOntLanPorts()} deviceOnline={device()?.online === true} />
                     </Show>
-                    <div class="space-y-2 text-sm mt-4">
-                      <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
-                      <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
-                    </div>
                   </div>
                 </div>
 

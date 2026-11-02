@@ -298,6 +298,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/image", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUploadProvisioningTemplateImage))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/image", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplateImage))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}/lan-ports", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUpdateTemplateLANConfiguration))
+	apiMux.HandleFunc("PUT /provisioning/templates/{id}/cpe-info", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUpdateTemplateCPEInfo))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/lan-visualization", auth.RequirePermission(models.PermProvisioningRead)(r.handleGetTemplateLANVisualization))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/lan-visualization", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUploadTemplateLANVisualization))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/lan-visualization", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleDeleteTemplateLANVisualization))

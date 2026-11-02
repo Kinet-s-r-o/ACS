@@ -14,6 +14,7 @@ type ProvisioningTemplate struct {
 	Features                 []ProvisioningFeature        `json:"features" gorm:"type:jsonb;serializer:json"`
 	LANPortCount             int                          `json:"lan_port_count" gorm:"default:0"`
 	LANPortMappings          []ProvisioningLANPortMapping `json:"lan_port_mappings" gorm:"type:jsonb;serializer:json"`
+	CPEInfoFields            []ProvisioningCPEInfoField   `json:"cpe_info_fields" gorm:"type:jsonb;serializer:json"`
 	ImagePath                string                       `json:"-" gorm:"size:512;default:''"`
 	ImageType                string                       `json:"-" gorm:"size:64;default:''"`
 	ImageURL                 string                       `json:"image_url,omitempty" gorm:"-"`
@@ -30,6 +31,11 @@ type ProvisioningLANPortMapping struct {
 	DuplexParameter  string `json:"duplex_parameter,omitempty"`
 	RXBytesParameter string `json:"rx_bytes_parameter,omitempty"`
 	TXBytesParameter string `json:"tx_bytes_parameter,omitempty"`
+}
+
+type ProvisioningCPEInfoField struct {
+	Name          string `json:"name"`
+	ParameterName string `json:"parameter_name"`
 }
 
 // TemplateInventory controls how device-level values are presented in the

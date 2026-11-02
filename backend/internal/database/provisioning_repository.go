@@ -81,6 +81,12 @@ func (r *ProvisioningRepository) UpdateTemplateLANConfiguration(ctx context.Cont
 		Select("lan_port_count", "lan_port_mappings").Updates(&template).Error
 }
 
+func (r *ProvisioningRepository) UpdateTemplateCPEInfo(ctx context.Context, id int64, fields []models.ProvisioningCPEInfoField) error {
+	template := models.ProvisioningTemplate{ID: id, CPEInfoFields: fields}
+	return r.db.WithContext(ctx).Model(&template).Where("id = ?", id).
+		Select("cpe_info_fields").Updates(&template).Error
+}
+
 func (r *ProvisioningRepository) UpdateTemplateLANVisualization(ctx context.Context, id int64, path string) error {
 	return r.db.WithContext(ctx).Model(&models.ProvisioningTemplate{}).Where("id = ?", id).
 		Update("lan_visualization_path", path).Error

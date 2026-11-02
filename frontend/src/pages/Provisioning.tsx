@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
 import { Activity, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -153,11 +153,14 @@ const Provisioning: Component = () => {
   const [lanConfigurationSaving, setLANConfigurationSaving] = createSignal(false);
   const [lanPortCount, setLANPortCount] = createSignal(4);
   const [lanPortMappings, setLANPortMappings] = createSignal<ProvisioningLANPortMapping[]>([]);
+  const [cpeInfoFields, setCPEInfoFields] = createSignal<ProvisioningCPEInfoField[]>([]);
+  const [cpeInfoSaving, setCPEInfoSaving] = createSignal(false);
   let templateImageInput: HTMLInputElement | undefined;
   let lanVisualizationInput: HTMLInputElement | undefined;
   let templateImageObjectUrl: string | null = null;
   let lanVisualizationObjectUrl: string | null = null;
-  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features' | 'lan'>('rules');
+  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features' | 'cpe_detail'>('rules');
+  const [templateDetailTab, setTemplateDetailTab] = createSignal<'lan' | 'cpe_info'>('lan');
   const [metricSubTab, setMetricSubTab] = createSignal<'general' | 'interface' | 'polling'>('general');
   const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
   const [variablesSaving, setVariablesSaving] = createSignal(false);
@@ -452,6 +455,28 @@ const Provisioning: Component = () => {
     }
   };
 
+  const updateCPEInfoField = (index: number, key: keyof ProvisioningCPEInfoField, value: string) => {
+    setCPEInfoFields(current => current.map((field, fieldIndex) => fieldIndex === index ? { ...field, [key]: value } : field));
+  };
+
+  const saveCPEInfoFields = async () => {
+    const template = selectedTemplate();
+    if (!template || cpeInfoSaving()) return;
+    const fields = cpeInfoFields().filter(field => field.name.trim() || field.parameter_name.trim());
+    setCPEInfoSaving(true);
+    try {
+      const updated = await api.updateProvisioningTemplateCPEInfo(template.id, fields);
+      setCPEInfoFields(updated.cpe_info_fields || []);
+      setSelectedTemplate(current => current?.id === updated.id ? { ...current, cpe_info_fields: updated.cpe_info_fields } : current);
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'CPE info fields saved' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not save CPE info fields', detail: (error as Error).message, persistent: true });
+    } finally {
+      setCPEInfoSaving(false);
+    }
+  };
+
   const handleLANVisualizationSelected = async (event: Event) => {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     const template = selectedTemplate();
@@ -501,7 +526,9 @@ const Provisioning: Component = () => {
   const selectTemplate = (template: ProvisioningTemplate) => {
     setSelectedTemplate(template);
     setTemplateTab('rules');
+    setTemplateDetailTab('lan');
     setTemplateVariables(template.variables || []);
+    setCPEInfoFields(template.cpe_info_fields || []);
     const count = Math.max(1, Math.min(32, template.lan_port_count || 4));
     setLANPortCount(count);
     setLANPortMappings(Array.from({ length: count }, (_, index) => template.lan_port_mappings?.find(mapping => mapping.port === index + 1) || { port: index + 1 }));
@@ -517,6 +544,7 @@ const Provisioning: Component = () => {
     clearLANVisualizationPreview();
     setSelectedTemplate(null);
     setTemplateVariables([]);
+    setCPEInfoFields([]);
     setProvRules(null);
     setProvError(null);
   };
@@ -1412,10 +1440,15 @@ const Provisioning: Component = () => {
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
               <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Advanced settings</span></button>
-              <button type="button" onClick={() => setTemplateTab('lan')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'lan' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Network size={12} />LAN ports</span></button>
+              <button type="button" onClick={() => setTemplateTab('cpe_detail')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'cpe_detail' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SettingsIcon size={12} />CPE detail</span></button>
             </div>
 
-            <Show when={templateTab() === 'lan'}>
+            <Show when={templateTab() === 'cpe_detail'}>
+              <div class="mb-4 flex gap-1 border-b border-subtle" role="tablist" aria-label="CPE detail settings">
+                <button type="button" role="tab" aria-selected={templateDetailTab() === 'lan'} onClick={() => setTemplateDetailTab('lan')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'lan' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Network size={12} />LAN ports</span></button>
+                <button type="button" role="tab" aria-selected={templateDetailTab() === 'cpe_info'} onClick={() => setTemplateDetailTab('cpe_info')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'cpe_info' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />CPE info</span></button>
+              </div>
+              <Show when={templateDetailTab() === 'lan'}>
               <section class="space-y-4">
                 <div class="flex flex-wrap items-end justify-between gap-3">
                   <p class="max-w-3xl text-xs text-muted">Configure a model-specific vector panel and map each physical LAN port to its CWMP parameters. Unmapped or missing values appear as Unknown or N/A.</p>
@@ -1452,6 +1485,35 @@ const Provisioning: Component = () => {
                   </fieldset>}</For>
                 </div>
               </section>
+              </Show>
+              <Show when={templateDetailTab() === 'cpe_info'}>
+                <section class="space-y-4">
+                  <div class="flex flex-wrap items-end justify-between gap-3">
+                    <p class="max-w-3xl text-xs text-muted">Choose the CWMP parameters shown in the ONT Information card on each matching CPE overview.</p>
+                    <Show when={isFullAccess()}>
+                      <div class="flex gap-2">
+                        <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => setCPEInfoFields(current => [...current, { name: '', parameter_name: '' }])}><Plus size={12} />Add parameter</button>
+                        <button type="button" class="btn btn-primary text-xs py-1.5" onClick={() => void saveCPEInfoFields()} disabled={cpeInfoSaving()}><Save size={12} />{cpeInfoSaving() ? 'Saving…' : 'Save CPE info'}</button>
+                      </div>
+                    </Show>
+                  </div>
+                  <Show when={cpeInfoFields().length > 0} fallback={<EmptyState compact title="No CPE info parameters" description="Add a display name and exact CWMP parameter path for each value to show on the CPE overview." />}>
+                    <div class="space-y-3">
+                      <For each={cpeInfoFields()}>{(field, index) => <div class="grid grid-cols-1 items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[minmax(12rem,1fr)_minmax(18rem,2fr)_auto]">
+                        <label class="block text-xs text-muted">Name
+                          <input class="input mt-1 w-full" value={field.name} onInput={event => updateCPEInfoField(index(), 'name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="e.g. Optical receive power" />
+                        </label>
+                        <label class="block text-xs text-muted">Parameter name
+                          <input class="input mt-1 w-full font-mono text-[11px]" value={field.parameter_name} onInput={event => updateCPEInfoField(index(), 'parameter_name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="InternetGatewayDevice..." />
+                        </label>
+                        <Show when={isFullAccess()}>
+                          <button type="button" class="icon-button text-rose-400" aria-label={`Remove CPE info parameter ${index() + 1}`} title="Remove parameter" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index()))}><Trash2 size={15} /></button>
+                        </Show>
+                      </div>}</For>
+                    </div>
+                  </Show>
+                </section>
+              </Show>
             </Show>
 
             <Show when={templateTab() === 'rules'}>
