@@ -2094,11 +2094,13 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted">Last inform:</span> <span class="text-primary">{formatDateWithSeconds(d().last_inform)}</span></div>
                   </div>
                   <div class="space-y-2 lg:-mt-8">
-                    <div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
+                    <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
                       <Show when={templateImageUrl()}>
                         <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full object-contain object-center" />
                       </Show>
-                    </div>
+                    </div>}>
+                      <OntLanVisualization svgMarkup={templateLANVisualization() || ''} ports={getOntLanPorts()} deviceOnline={device()?.online === true} />
+                    </Show>
                     <div class="space-y-2 text-sm mt-4">
                       <div><span class="text-muted">HW Version:</span> <span class="text-primary">{d().hardware_version || '-'}</span></div>
                       <div><span class="text-muted">SW Version:</span> <span class="text-primary">{d().software_version || '-'}</span></div>
@@ -2779,11 +2781,6 @@ const DeviceDetail: Component = () => {
                   </div>
                 </Show>
               </div>
-              <Show when={matchingProvisioningTemplate()?.lan_port_count}>
-                <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<p class="mb-4 text-xs text-muted">No LAN visualization is configured for the matching provisioning template.</p>}>
-                  <OntLanVisualization svgMarkup={templateLANVisualization() || ''} ports={getOntLanPorts()} deviceOnline={device()?.online === true} />
-                </Show>
-              </Show>
               <Show when={getLanInterfaces().length > 0} fallback={
                 <p class="text-muted text-sm">No LAN interface data. Click Summon to fetch.</p>
               }>
