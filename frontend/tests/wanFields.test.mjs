@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GENERAL_FIELDS, BINDING_FIELDS, IPV4_FIELDS, IPV6_FIELDS, ADVANCED_FIELDS, ALL_FIELDS, resolveSuffix, getChangedParams, validateFields } from '../src/lib/wanFields.ts';
+import { GENERAL_FIELDS, BINDING_FIELDS, IPV4_FIELDS, IPV6_FIELDS, ADVANCED_FIELDS, ALL_FIELDS, resolveSuffix, getChangedParams, validateChangedFields, validateFields } from '../src/lib/wanFields.ts';
 
 const prefix = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.';
 
@@ -142,6 +142,12 @@ test('validateFields uses edited value over original', () => {
   const params = makeParams({ MaxMTUSize: '1492' });
   const errors = validateFields(params, prefix, { [prefix + 'MaxMTUSize']: '100' });
   assert.ok(errors[prefix + 'MaxMTUSize']);
+});
+
+test('validateChangedFields ignores invalid untouched parameters but validates edited values', () => {
+  const params = makeParams({ Name: 'WAN1', X_HW_VLAN: '5000', MaxMTUSize: '4294967295' });
+  assert.deepEqual(validateChangedFields(params, prefix, { [prefix + 'Name']: 'WAN2' }), {});
+  assert.ok(validateChangedFields(params, prefix, { [prefix + 'X_HW_VLAN']: '5001' })[prefix + 'X_HW_VLAN']);
 });
 
 test('visibleWhen: isRouted hides field when bridged', () => {

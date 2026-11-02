@@ -3,7 +3,7 @@ import { api, type DeviceParameter } from '../lib/api';
 import { useFeedback } from './Feedback';
 import Dialog from './Dialog';
 import { Save, Send, Check } from 'lucide-solid';
-import { GENERAL_FIELDS, BINDING_FIELDS, IPV4_FIELDS, IPV6_FIELDS, ADVANCED_FIELDS, resolveSuffix, getChangedParams, validateFields, type WanFieldDef } from '../lib/wanFields';
+import { ALL_FIELDS, GENERAL_FIELDS, BINDING_FIELDS, IPV4_FIELDS, IPV6_FIELDS, ADVANCED_FIELDS, resolveSuffix, getChangedParams, validateChangedFields, type WanFieldDef } from '../lib/wanFields';
 import { getWanProfiles, buildExclusiveTieParams } from '../lib/wanProfiles';
 
 interface WanSettingsModalProps {
@@ -31,8 +31,13 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
   const [saved, setSaved] = createSignal(false);
   const [summoning, setSummoning] = createSignal(false);
   const [errors, setErrors] = createSignal<Record<string, string>>({});
-
   const prefix = props.wanPath;
+  const validationMessage = createMemo(() => {
+    const [parameterName, message] = Object.entries(errors())[0] || [];
+    if (!parameterName || !message) return null;
+    const field = ALL_FIELDS.find(item => item.suffixes.some(suffix => prefix + suffix === parameterName));
+    return { label: field?.label || parameterName.slice(prefix.length), message };
+  });
 
   const resolveFieldSuffix = (suffixes: string[]): string | null => resolveSuffix(props.parameters, prefix, suffixes);
 
@@ -104,8 +109,15 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
   const isRoutedMode = createMemo(() => getValForVisibility(['ConnectionType']) === 'IP_Routed');
 
   const validate = (): boolean => {
-    const newErrors = validateFields(props.parameters, prefix, edits());
+    const newErrors = validateChangedFields(props.parameters, prefix, edits());
     setErrors(newErrors);
+    const firstInvalid = Object.keys(newErrors)[0];
+    if (firstInvalid) {
+      if (IPV4_FIELDS.some(field => field.suffixes.some(suffix => prefix + suffix === firstInvalid))) setActiveTab('ipv4');
+      else if (IPV6_FIELDS.some(field => field.suffixes.some(suffix => prefix + suffix === firstInvalid))) setActiveTab('ipv6');
+      else if (ADVANCED_FIELDS.some(field => field.suffixes.some(suffix => prefix + suffix === firstInvalid))) setActiveTab('advanced');
+      else setActiveTab('general');
+    }
     return Object.keys(newErrors).length === 0;
   };
 
@@ -224,7 +236,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
         <Show when={saved()} fallback={
           <div class="flex items-center gap-2">
             <button onClick={props.onClose} class="btn btn-secondary">Cancel</button>
-            <button onClick={handleSave} disabled={!hasChanges() && !hasGenericChanges() || saving()} class="btn btn-primary">
+            <button type="button" onClick={handleSave} disabled={!hasChanges() && !hasGenericChanges() || saving()} class="btn btn-primary">
               <Save size={14} />
               {saving() ? 'Saving…' : 'Save changes'}
             </button>
@@ -252,6 +264,8 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
           </button>
         )}</For>
       </div>
+
+      <Show when={validationMessage()}>{message => <div class="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">{message().label}: {message().message}</div>}</Show>
 
       <div class="space-y-4 max-h-80 overflow-y-auto pr-1">
         <Show when={activeTab() === 'general'}>
