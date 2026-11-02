@@ -2128,10 +2128,10 @@ const Provisioning: Component = () => {
               <legend class="px-1 text-xs font-medium text-secondary">Dynamic parameter branches</legend>
               <p class="text-xs text-muted">These object branches are discovered live before overview polling, so removed CPE objects are not requested from the ACS cache.</p>
               <div class="space-y-2">
-                <For each={templateForm().dynamic_parameter_branches}>{(branch, index) => <div class="flex items-center gap-2">
-                  <input aria-label={`Dynamic parameter branch ${index() + 1}`} class="input min-w-0 flex-1 font-mono text-xs" value={branch} onInput={(event) => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.map((item, itemIndex) => itemIndex === index() ? event.currentTarget.value : item) }))} placeholder="InternetGatewayDevice.LANDevice.*.Hosts.Host." />
-                  <button type="button" class="icon-button text-rose-400" aria-label={`Remove dynamic parameter branch ${index() + 1}`} title="Remove branch" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.filter((_, itemIndex) => itemIndex !== index()) }))}><Trash2 size={14} /></button>
-                </div>}</For>
+                <Index each={templateForm().dynamic_parameter_branches}>{(branch, index) => <div class="flex items-center gap-2">
+                  <input aria-label={`Dynamic parameter branch ${index + 1}`} class="input min-w-0 flex-1 font-mono text-xs" value={branch()} onInput={(event) => { const value = event.currentTarget.value; setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.map((item, itemIndex) => itemIndex === index ? value : item) })); }} placeholder="InternetGatewayDevice.LANDevice.*.Hosts.Host." />
+                  <button type="button" class="icon-button text-rose-400" aria-label={`Remove dynamic parameter branch ${index + 1}`} title="Remove branch" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.filter((_, itemIndex) => itemIndex !== index) }))}><Trash2 size={14} /></button>
+                </div>}</Index>
                 <button type="button" class="btn btn-secondary text-xs" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: [...form.dynamic_parameter_branches, ''] }))}><Plus size={13} />Add branch</button>
               </div>
               <p class="text-[10px] text-muted">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.AssociatedDevice.</code></p>
