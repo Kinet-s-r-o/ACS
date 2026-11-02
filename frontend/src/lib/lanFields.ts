@@ -72,6 +72,15 @@ export function validateFields(
   return errors;
 }
 
+export function validateChangedFields(
+  parameters: { name: string; value: string }[],
+  prefix: string,
+  edits: Record<string, string>,
+): Record<string, string> {
+  const changedKeys = new Set(Object.keys(getChangedParams(parameters, prefix, edits)));
+  return Object.fromEntries(Object.entries(validateFields(parameters, prefix, edits)).filter(([key]) => changedKeys.has(key)));
+}
+
 export function statusBadgeClass(status: string): string {
   const s = status.trim().toLowerCase();
   if (s === 'up' || s === 'linkup' || s === 'connected' || s === 'enabled') return 'badge-success';

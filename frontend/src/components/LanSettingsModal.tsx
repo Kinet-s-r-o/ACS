@@ -3,7 +3,7 @@ import { api, type DeviceParameter } from '../lib/api';
 import { useFeedback } from './Feedback';
 import Dialog from './Dialog';
 import { Save, Send, Check } from 'lucide-solid';
-import { GENERAL_FIELDS, ADVANCED_FIELDS, LAN_PREFIX, resolveSuffix, getChangedParams, validateFields, type LanFieldDef } from '../lib/lanFields';
+import { ALL_FIELDS, GENERAL_FIELDS, ADVANCED_FIELDS, LAN_PREFIX, resolveSuffix, getChangedParams, validateChangedFields, type LanFieldDef } from '../lib/lanFields';
 
 interface LanSettingsModalProps {
   lanIndex: number;
@@ -30,6 +30,12 @@ const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
   const [errors, setErrors] = createSignal<Record<string, string>>({});
 
   const prefix = LAN_PREFIX(props.lanIndex);
+  const validationMessage = createMemo(() => {
+    const [parameterName, message] = Object.entries(errors())[0] || [];
+    if (!parameterName || !message) return null;
+    const field = ALL_FIELDS.find(item => item.suffixes.some(suffix => prefix + suffix === parameterName));
+    return { label: field?.label || parameterName.slice(prefix.length), message };
+  });
 
   const resolveFieldSuffix = (suffixes: string[]): string | null => resolveSuffix(props.parameters, prefix, suffixes);
 
@@ -89,8 +95,10 @@ const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
   const hasGenericChanges = createMemo(() => Object.keys(getGenericChanged()).length > 0);
 
   const validate = (): boolean => {
-    const newErrors = validateFields(props.parameters, prefix, edits());
+    const newErrors = validateChangedFields(props.parameters, prefix, edits());
     setErrors(newErrors);
+    const firstInvalid = Object.keys(newErrors)[0];
+    if (firstInvalid) setActiveTab(ADVANCED_FIELDS.some(field => field.suffixes.some(suffix => prefix + suffix === firstInvalid)) ? 'advanced' : 'general');
     return Object.keys(newErrors).length === 0;
   };
 
@@ -186,7 +194,7 @@ const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
         <Show when={saved()} fallback={
           <div class="flex items-center gap-2">
             <button onClick={props.onClose} class="btn btn-secondary">Cancel</button>
-            <button onClick={handleSave} disabled={!hasChanges() && !hasGenericChanges() || saving()} class="btn btn-primary">
+            <button type="button" onClick={handleSave} disabled={!hasChanges() && !hasGenericChanges() || saving()} class="btn btn-primary">
               <Save size={14} />
               {saving() ? 'Saving…' : 'Save changes'}
             </button>
@@ -214,6 +222,8 @@ const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
           </button>
         )}</For>
       </div>
+
+      <Show when={validationMessage()}>{message => <div class="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">{message().label}: {message().message}</div>}</Show>
 
       <div class="space-y-4 max-h-80 overflow-y-auto pr-1">
         <Show when={activeTab() === 'general'}>

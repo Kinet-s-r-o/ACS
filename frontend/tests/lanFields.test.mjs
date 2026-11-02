@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GENERAL_FIELDS, ADVANCED_FIELDS, ALL_FIELDS, LAN_PREFIX, resolveSuffix, getChangedParams, validateFields } from '../src/lib/lanFields.ts';
+import { GENERAL_FIELDS, ADVANCED_FIELDS, ALL_FIELDS, LAN_PREFIX, resolveSuffix, getChangedParams, validateChangedFields, validateFields } from '../src/lib/lanFields.ts';
 
 const prefix = LAN_PREFIX(1);
 
@@ -82,6 +82,12 @@ test('validateFields uses edited value over original', () => {
   const params = makeParams({ X_HW_VLAN: '100' });
   const errors = validateFields(params, prefix, { [prefix + 'X_HW_VLAN']: '9999' });
   assert.ok(errors[prefix + 'X_HW_VLAN']);
+});
+
+test('validateChangedFields ignores invalid untouched values but validates edited values', () => {
+  const params = makeParams({ Name: 'LAN1', X_HW_VLAN: '0', X_HW_PVID: 'abc' });
+  assert.deepEqual(validateChangedFields(params, prefix, { [prefix + 'Name']: 'LAN2' }), {});
+  assert.ok(validateChangedFields(params, prefix, { [prefix + 'X_HW_VLAN']: '4095' })[prefix + 'X_HW_VLAN']);
 });
 
 test('ALL_FIELDS contains all general and advanced fields', () => {
