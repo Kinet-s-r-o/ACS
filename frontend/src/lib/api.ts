@@ -110,7 +110,8 @@ export interface TemplateInventory { primary_ip_mode?: 'automatic' | 'parameter'
 export interface ProvisioningObjectField { name: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt'; input: 'input' | 'select' | 'boolean'; help?: string; options?: string[]; option_labels?: Record<string, string>; enabled_value?: string; disabled_value?: string }
 export interface ProvisioningFeatureControl { key: string; label: string; type: 'boolean' | 'string' | 'int' | 'unsignedInt' | 'object'; parameter: string; options?: string[]; enabled_value?: string; disabled_value?: string; group?: string; description?: string; object_fields?: ProvisioningObjectField[] }
 export interface ProvisioningFeature { id: string; name: string; description?: string; controls: ProvisioningFeatureControl[] }
-export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; image_url?: string; created_at: string; updated_at: string }
+export interface ProvisioningLANPortMapping { port: number; status_parameter?: string; speed_parameter?: string; duplex_parameter?: string; rx_bytes_parameter?: string; tx_bytes_parameter?: string }
+export interface ProvisioningTemplate { id: number; name: string; manufacturer: string; product_class: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; variables?: ProvisioningVariable[]; features?: ProvisioningFeature[]; lan_port_count?: number; lan_port_mappings?: ProvisioningLANPortMapping[]; lan_visualization_url?: string; image_url?: string; created_at: string; updated_at: string }
 export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricDefinition, 'template_id' | 'interface_type' | 'parameter_pattern'>>;
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; excluded_tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
@@ -334,6 +335,15 @@ export const api = {
     return request<ProvisioningTemplate>(`/provisioning/templates/${id}/image`, { method: 'POST', body });
   },
   deleteProvisioningTemplateImage: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}/image`, { method: 'DELETE' }),
+  getProvisioningTemplateLANVisualization: (id: number) => requestBlob(`/provisioning/templates/${id}/lan-visualization`),
+  uploadProvisioningTemplateLANVisualization: (id: number, file: File, portCount: number) => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('port_count', String(portCount));
+    return request<ProvisioningTemplate>(`/provisioning/templates/${id}/lan-visualization`, { method: 'POST', body });
+  },
+  deleteProvisioningTemplateLANVisualization: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}/lan-visualization`, { method: 'DELETE' }),
+  updateProvisioningTemplateLANPorts: (id: number, lanPortCount: number, lanPortMappings: ProvisioningLANPortMapping[]) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/lan-ports`, { method: 'PUT', body: JSON.stringify({ lan_port_count: lanPortCount, lan_port_mappings: lanPortMappings }) }),
   importTemplateFeature: (templateId: number, name: string, csv: string) => request<ProvisioningFeature>(`/provisioning/templates/${templateId}/features/import`, { method: 'POST', body: JSON.stringify({ name, csv }) }),
   saveTemplateFeatures: (templateId: number, features: ProvisioningFeature[]) => request<{ features: ProvisioningFeature[] }>(`/provisioning/templates/${templateId}/features`, { method: 'PUT', body: JSON.stringify({ features }) }),
   deleteTemplateFeature: (templateId: number, featureId: string) => request<{ status: string }>(`/provisioning/templates/${templateId}/features/${encodeURIComponent(featureId)}`, { method: 'DELETE' }),

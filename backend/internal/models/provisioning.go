@@ -3,20 +3,33 @@ package models
 import "time"
 
 type ProvisioningTemplate struct {
-	ID                       int64                  `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name                     string                 `json:"name" gorm:"not null;size:256"`
-	Manufacturer             string                 `json:"manufacturer" gorm:"size:128;default:''"`
-	ProductClass             string                 `json:"product_class" gorm:"size:128;default:''"`
-	Description              string                 `json:"description,omitempty"`
-	Inventory                TemplateInventory      `json:"inventory" gorm:"type:jsonb;serializer:json"`
-	DynamicParameterBranches []string               `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
-	Variables                []ProvisioningVariable `json:"variables" gorm:"type:jsonb;serializer:json"`
-	Features                 []ProvisioningFeature  `json:"features" gorm:"type:jsonb;serializer:json"`
-	ImagePath                string                 `json:"-" gorm:"size:512;default:''"`
-	ImageType                string                 `json:"-" gorm:"size:64;default:''"`
-	ImageURL                 string                 `json:"image_url,omitempty" gorm:"-"`
-	CreatedAt                time.Time              `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt                time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+	ID                       int64                        `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name                     string                       `json:"name" gorm:"not null;size:256"`
+	Manufacturer             string                       `json:"manufacturer" gorm:"size:128;default:''"`
+	ProductClass             string                       `json:"product_class" gorm:"size:128;default:''"`
+	Description              string                       `json:"description,omitempty"`
+	Inventory                TemplateInventory            `json:"inventory" gorm:"type:jsonb;serializer:json"`
+	DynamicParameterBranches []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
+	Variables                []ProvisioningVariable       `json:"variables" gorm:"type:jsonb;serializer:json"`
+	Features                 []ProvisioningFeature        `json:"features" gorm:"type:jsonb;serializer:json"`
+	LANPortCount             int                          `json:"lan_port_count" gorm:"default:0"`
+	LANPortMappings          []ProvisioningLANPortMapping `json:"lan_port_mappings" gorm:"type:jsonb;serializer:json"`
+	ImagePath                string                       `json:"-" gorm:"size:512;default:''"`
+	ImageType                string                       `json:"-" gorm:"size:64;default:''"`
+	ImageURL                 string                       `json:"image_url,omitempty" gorm:"-"`
+	LANVisualizationPath     string                       `json:"-" gorm:"size:512;default:''"`
+	LANVisualizationURL      string                       `json:"lan_visualization_url,omitempty" gorm:"-"`
+	CreatedAt                time.Time                    `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt                time.Time                    `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type ProvisioningLANPortMapping struct {
+	Port             int    `json:"port"`
+	StatusParameter  string `json:"status_parameter,omitempty"`
+	SpeedParameter   string `json:"speed_parameter,omitempty"`
+	DuplexParameter  string `json:"duplex_parameter,omitempty"`
+	RXBytesParameter string `json:"rx_bytes_parameter,omitempty"`
+	TXBytesParameter string `json:"tx_bytes_parameter,omitempty"`
 }
 
 // TemplateInventory controls how device-level values are presented in the

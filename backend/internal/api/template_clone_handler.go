@@ -75,9 +75,10 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 	clone := models.ProvisioningTemplate{
 		Name: body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
 		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), Variables: source.Variables, Features: source.Features,
+		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
 	}
 	targetMetricScope := templateMetricScope(clone.Manufacturer, clone.ProductClass)
-	imageCopyPath := ""
+	imageCopyPath, lanVisualizationCopyPath := "", ""
 	err = r.db.WithContext(req.Context()).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&clone).Error; err != nil {
 			return err
@@ -174,16 +175,38 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 				return err
 			}
 		}
+		if source.LANVisualizationPath != "" {
+			sourcePath, err := secureTemplateImagePath(r.templateImageDir, source.LANVisualizationPath)
+			if err != nil {
+				return err
+			}
+			visualizationData, err := os.ReadFile(sourcePath)
+			if err != nil {
+				return err
+			}
+			lanVisualizationCopyPath = filepath.Join(r.templateImageDir, strconv.FormatInt(clone.ID, 10)+"-lan-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".svg")
+			if err := os.WriteFile(lanVisualizationCopyPath, visualizationData, 0600); err != nil {
+				return err
+			}
+			clone.LANVisualizationPath = lanVisualizationCopyPath
+			if err := tx.Model(&clone).Update("lan_visualization_path", clone.LANVisualizationPath).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
 		if imageCopyPath != "" {
 			_ = os.Remove(imageCopyPath)
 		}
+		if lanVisualizationCopyPath != "" {
+			_ = os.Remove(lanVisualizationCopyPath)
+		}
 		respondError(w, http.StatusInternalServerError, "Failed to clone provisioning template")
 		return
 	}
 	r.templateImageURL(&clone)
+	r.templateLANVisualizationURL(&clone)
 	redactProvisioningVariableSecrets(clone.Variables)
 	respondJSON(w, http.StatusCreated, clone)
 }

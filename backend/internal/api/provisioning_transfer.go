@@ -25,17 +25,19 @@ type provisioningTransfer struct {
 }
 
 type provisioningTransferTemplate struct {
-	Name                     string                           `json:"name"`
-	Manufacturer             string                           `json:"manufacturer"`
-	ProductClass             string                           `json:"product_class"`
-	Description              string                           `json:"description,omitempty"`
-	Inventory                models.TemplateInventory         `json:"inventory,omitempty"`
-	DynamicParameterBranches []string                         `json:"dynamic_parameter_branches,omitempty"`
-	Variables                []models.ProvisioningVariable    `json:"variables,omitempty"`
-	Features                 []models.ProvisioningFeature     `json:"features,omitempty"`
-	Rules                    []models.ProvisioningRule        `json:"rules,omitempty"`
-	Metrics                  []models.MetricDefinition        `json:"metrics,omitempty"`
-	ParameterPolls           []models.ParameterPollDefinition `json:"parameter_polls,omitempty"`
+	Name                     string                              `json:"name"`
+	Manufacturer             string                              `json:"manufacturer"`
+	ProductClass             string                              `json:"product_class"`
+	Description              string                              `json:"description,omitempty"`
+	Inventory                models.TemplateInventory            `json:"inventory,omitempty"`
+	DynamicParameterBranches []string                            `json:"dynamic_parameter_branches,omitempty"`
+	Variables                []models.ProvisioningVariable       `json:"variables,omitempty"`
+	Features                 []models.ProvisioningFeature        `json:"features,omitempty"`
+	LANPortCount             int                                 `json:"lan_port_count,omitempty"`
+	LANPortMappings          []models.ProvisioningLANPortMapping `json:"lan_port_mappings,omitempty"`
+	Rules                    []models.ProvisioningRule           `json:"rules,omitempty"`
+	Metrics                  []models.MetricDefinition           `json:"metrics,omitempty"`
+	ParameterPolls           []models.ParameterPollDefinition    `json:"parameter_polls,omitempty"`
 }
 
 func requireFullProvisioningAccess(w http.ResponseWriter, req *http.Request) bool {
@@ -65,6 +67,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
 			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
+			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
 		}
 		rules, err := r.provisioningRepo.ListForTemplate(req.Context(), template.ID)
 		if err != nil {
@@ -175,6 +178,7 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 			template := models.ProvisioningTemplate{
 				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
 				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, Variables: item.Variables, Features: item.Features,
+				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,
 			}
 			if err := tx.Create(&template).Error; err != nil {
 				return err
@@ -246,6 +250,15 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 	item.DynamicParameterBranches = normalizeDynamicParameterBranches(item.DynamicParameterBranches)
 	if err := validateProvisioningFeatures(item.Features); err != nil {
 		return err
+	}
+	if item.LANPortCount > 0 {
+		mappings, err := validateTemplateLANConfiguration(item.LANPortCount, item.LANPortMappings)
+		if err != nil {
+			return err
+		}
+		item.LANPortMappings = mappings
+	} else if len(item.LANPortMappings) > 0 {
+		return errors.New("LAN port mappings require a LAN port count")
 	}
 	for index := range item.Rules {
 		rule := &item.Rules[index]

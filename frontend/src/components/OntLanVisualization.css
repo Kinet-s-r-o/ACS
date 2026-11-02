@@ -1,0 +1,20 @@
+.ont-lan-visualization { width: 100%; }
+.ont-svg-host { width: min(100%, 36rem); margin-inline: auto; overflow: visible; }
+.ont-svg-host svg { display: block; width: 100%; height: auto; overflow: visible; }
+.ont-svg-host .lan .port-led { fill: #d1d3d1; transition: fill .22s ease; }
+.ont-svg-host .lan .port-glow { fill: transparent; pointer-events: none; filter: url(#lightGlow); }
+.ont-svg-host .lan.is-connected .port-led { fill: #dfaa37; stroke: #bf8e29; }
+.ont-svg-host .lan.is-connected.is-up .port-led { fill: #33d76b; stroke: #199d4c; }
+.ont-svg-host .lan.is-connected.is-up .port-glow { fill: #37dd70; opacity: .38; }
+.ont-svg-host .lan.is-connected.is-up.is-traffic .port-led { animation: ontLanPulse .8s ease-in-out infinite alternate; }
+.ont-svg-host .lan.is-connected.is-up.is-traffic .port-glow { animation: ontLanGlow .8s ease-in-out infinite alternate; }
+.ont-svg-host .cable-system { opacity: 0; visibility: hidden; transform: translateY(-6px); transition: opacity .2s ease, transform .2s ease, visibility .2s; }
+.ont-svg-host .lan.is-connected .cable-system { visibility: visible; opacity: 1; transform: translateY(0); }
+.ont-svg-host [id^="lan"]:focus-visible { outline: none; filter: drop-shadow(0 0 3px #38bdf8); }
+.ont-lan-visualization .ont-status-dot { display: inline-block; width: .55rem; height: .55rem; margin-right: .35rem; border: 1px solid currentColor; border-radius: 50%; vertical-align: .02em; }
+.ont-status-dot--up { background: #33d76b; color: #199d4c; }
+.ont-status-dot--down { background: #dfaa37; color: #bf8e29; }
+.ont-status-dot--unknown { background: #d1d3d1; color: #858d8d; }
+@keyframes ontLanPulse { from { fill: #158d42; } to { fill: #73ff9b; } }
+@keyframes ontLanGlow { from { opacity: .15; } to { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .ont-svg-host .lan *, .ont-svg-host .lan.is-connected.is-up.is-traffic * { animation: none !important; transition: none !important; } }

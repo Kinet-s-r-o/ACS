@@ -297,6 +297,10 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/image", auth.RequirePermission(models.PermProvisioningRead)(r.handleGetProvisioningTemplateImage))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/image", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUploadProvisioningTemplateImage))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/image", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleDeleteProvisioningTemplateImage))
+	apiMux.HandleFunc("PUT /provisioning/templates/{id}/lan-ports", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUpdateTemplateLANConfiguration))
+	apiMux.HandleFunc("GET /provisioning/templates/{id}/lan-visualization", auth.RequirePermission(models.PermProvisioningRead)(r.handleGetTemplateLANVisualization))
+	apiMux.HandleFunc("POST /provisioning/templates/{id}/lan-visualization", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleUploadTemplateLANVisualization))
+	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/lan-visualization", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleDeleteTemplateLANVisualization))
 	apiMux.HandleFunc("PUT /provisioning/templates/{id}/features", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleSaveTemplateFeatures))
 	apiMux.HandleFunc("POST /provisioning/templates/{id}/features/import", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleImportTemplateFeature))
 	apiMux.HandleFunc("DELETE /provisioning/templates/{id}/features/{featureID}", auth.RequireAnyPermission(models.PermProvisioningTemplates, models.PermProvisioningWrite)(r.handleDeleteTemplateFeature))
@@ -4485,6 +4489,7 @@ func (r *Router) handleListProvisioningTemplates(w http.ResponseWriter, req *htt
 	}
 	for _, template := range templates {
 		r.templateImageURL(template)
+		r.templateLANVisualizationURL(template)
 		redactProvisioningVariableSecrets(template.Variables)
 	}
 	respondJSON(w, http.StatusOK, templates)
@@ -4555,6 +4560,7 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		return
 	}
 	r.templateImageURL(template)
+	r.templateLANVisualizationURL(template)
 	redactProvisioningVariableSecrets(template.Variables)
 	respondJSON(w, http.StatusCreated, template)
 }
@@ -4650,6 +4656,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		return
 	}
 	r.templateImageURL(updated)
+	r.templateLANVisualizationURL(updated)
 	redactProvisioningVariableSecrets(updated.Variables)
 	respondJSON(w, http.StatusOK, updated)
 }
@@ -4676,6 +4683,11 @@ func (r *Router) handleDeleteProvisioningTemplate(w http.ResponseWriter, req *ht
 	if template != nil && template.ImagePath != "" {
 		if imagePath, pathErr := secureTemplateImagePath(r.templateImageDir, template.ImagePath); pathErr == nil {
 			_ = os.Remove(imagePath)
+		}
+	}
+	if template != nil && template.LANVisualizationPath != "" {
+		if path, pathErr := secureTemplateImagePath(r.templateImageDir, template.LANVisualizationPath); pathErr == nil {
+			_ = os.Remove(path)
 		}
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})

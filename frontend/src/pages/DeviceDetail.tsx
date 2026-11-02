@@ -1,9 +1,10 @@
 import type { Component } from 'solid-js';
 import DeviceStatusBadge from '../components/DeviceStatusBadge';
+import OntLanVisualization from '../components/OntLanVisualization';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit, Save, X, HeartPulse, Eye, EyeOff, Plus, Minus, Activity, AlertTriangle, Check, Download, Search, MoreVertical, ExternalLink, ChevronDown, ChevronRight, ClipboardList, ScrollText } from 'lucide-solid';
-import { api, type DeviceParameter, type DeviceReachability, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
+import { api, type DeviceParameter, type DeviceReachability, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningLANPortMapping, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
 import { useAuth } from '../lib/auth';
@@ -20,6 +21,7 @@ import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { getWanProfiles, buildExclusiveTieParams, type WanProfile } from '../lib/wanProfiles';
 import { statusBadgeClass } from '../lib/lanFields';
+import { parseLanLinkState, type OntLanPort } from '../lib/ontLan';
 import { usePageSize } from '../lib/usePageSize';
 import { appName } from '../lib/appName';
 import WifiSettingsModal from '../components/WifiSettingsModal';
@@ -224,6 +226,13 @@ const DeviceDetail: Component = () => {
     onCleanup(() => { window.clearInterval(interval); window.clearTimeout(timeout); });
   });
   const [templateImageBlob] = createResource(() => matchingProvisioningTemplate()?.image_url ? matchingProvisioningTemplate()!.id : undefined, (id) => api.getProvisioningTemplateImage(id));
+  const [templateLANVisualization] = createResource(
+    () => matchingProvisioningTemplate()?.lan_visualization_url ? matchingProvisioningTemplate()!.id : undefined,
+    async id => {
+      try { return await (await api.getProvisioningTemplateLANVisualization(id!)).text(); }
+      catch { return ''; }
+    },
+  );
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   let templateImageObjectUrl: string | null = null;
   createEffect(() => {
@@ -1619,6 +1628,36 @@ const DeviceDetail: Component = () => {
     return lans;
   };
 
+  const getOntLanPorts = (): OntLanPort[] => {
+    const params = parameters() || [];
+    const template = matchingProvisioningTemplate();
+    const mappings = template?.lan_port_mappings || [];
+    const portCount = Math.min(Math.max(template?.lan_port_count || 0, 0), 32);
+    return Array.from({ length: portCount }, (_, index) => {
+      const port = index + 1;
+      const mapping: ProvisioningLANPortMapping = mappings.find(item => item.port === port) || { port };
+      const read = (path?: string) => path ? params.find(parameter => parameter.name === path) : undefined;
+      const text = (path?: string) => read(path)?.value?.trim() || '';
+      const counter = (path?: string) => {
+        const parameter = read(path);
+        const value = parameter ? Number(parameter.value) : Number.NaN;
+        return { value: Number.isFinite(value) && value >= 0 ? value : null, updatedAt: parameter?.updated_at || null };
+      };
+      const statusParameter = read(mapping.status_parameter);
+      const speed = text(mapping.speed_parameter);
+      const duplex = text(mapping.duplex_parameter);
+      return {
+        port,
+        link: parseLanLinkState(statusParameter?.value),
+        statusUpdatedAt: statusParameter?.updated_at || null,
+        speed: speed && speed !== '-' ? speed : null,
+        duplex: duplex && duplex !== '-' ? duplex : null,
+        rx: counter(mapping.rx_bytes_parameter),
+        tx: counter(mapping.tx_bytes_parameter),
+      };
+    });
+  };
+
   const getWlanConfigs = () => {
     const params = parameters() || [];
     const wlans: Array<{
@@ -2740,6 +2779,11 @@ const DeviceDetail: Component = () => {
                   </div>
                 </Show>
               </div>
+              <Show when={matchingProvisioningTemplate()?.lan_port_count}>
+                <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<p class="mb-4 text-xs text-muted">No LAN visualization is configured for the matching provisioning template.</p>}>
+                  <OntLanVisualization svgMarkup={templateLANVisualization() || ''} ports={getOntLanPorts()} deviceOnline={device()?.online === true} />
+                </Show>
+              </Show>
               <Show when={getLanInterfaces().length > 0} fallback={
                 <p class="text-muted text-sm">No LAN interface data. Click Summon to fetch.</p>
               }>

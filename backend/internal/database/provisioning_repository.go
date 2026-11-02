@@ -75,6 +75,17 @@ func (r *ProvisioningRepository) ClearTemplateImage(ctx context.Context, id int6
 		Updates(map[string]interface{}{"image_path": "", "image_type": ""}).Error
 }
 
+func (r *ProvisioningRepository) UpdateTemplateLANConfiguration(ctx context.Context, id int64, portCount int, mappings []models.ProvisioningLANPortMapping) error {
+	template := models.ProvisioningTemplate{ID: id, LANPortCount: portCount, LANPortMappings: mappings}
+	return r.db.WithContext(ctx).Model(&template).Where("id = ?", id).
+		Select("lan_port_count", "lan_port_mappings").Updates(&template).Error
+}
+
+func (r *ProvisioningRepository) UpdateTemplateLANVisualization(ctx context.Context, id int64, path string) error {
+	return r.db.WithContext(ctx).Model(&models.ProvisioningTemplate{}).Where("id = ?", id).
+		Update("lan_visualization_path", path).Error
+}
+
 func (r *ProvisioningRepository) DeleteTemplate(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("template_id = ?", id).Delete(&models.MetricDefinition{}).Error; err != nil {

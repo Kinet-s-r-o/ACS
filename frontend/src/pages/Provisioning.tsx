@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
-import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
+import { Activity, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
+import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
@@ -66,6 +66,13 @@ const featureTableColumns = [
   { id: 'group', label: 'Collapsible box', visible: true },
 ];
 const defaultTemplateInventory = (): TemplateInventory => ({ primary_ip_mode: 'automatic', primary_ip_parameter: '', primary_ip_interface_name: '' });
+const lanMappingFields: Array<{ key: Exclude<keyof ProvisioningLANPortMapping, 'port'>; label: string; placeholder: string }> = [
+  { key: 'status_parameter', label: 'Link status', placeholder: 'Device.Ethernet.Interface.1.Status' },
+  { key: 'speed_parameter', label: 'Negotiated speed', placeholder: 'Device.Ethernet.Interface.1.MaxBitRate' },
+  { key: 'duplex_parameter', label: 'Duplex', placeholder: 'Device.Ethernet.Interface.1.DuplexMode' },
+  { key: 'rx_bytes_parameter', label: 'Received bytes counter', placeholder: 'Device.Ethernet.Interface.1.Stats.BytesReceived' },
+  { key: 'tx_bytes_parameter', label: 'Sent bytes counter', placeholder: 'Device.Ethernet.Interface.1.Stats.BytesSent' },
+];
 const formatInterval = (seconds: number) => seconds % 3600 === 0 ? `${seconds / 3600}h` : seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
 const metricColumnOrderId = (id: string, interfaceMetric = false) => {
   const labels: Record<string, string> = { min_interval: 'min interval', gpv_interval: 'gpv interval', device_match: 'device match', unit_scale: 'unit scale' };
@@ -141,9 +148,16 @@ const Provisioning: Component = () => {
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
+  const [lanVisualizationUrl, setLANVisualizationUrl] = createSignal<string | null>(null);
+  const [lanVisualizationUploading, setLANVisualizationUploading] = createSignal(false);
+  const [lanConfigurationSaving, setLANConfigurationSaving] = createSignal(false);
+  const [lanPortCount, setLANPortCount] = createSignal(4);
+  const [lanPortMappings, setLANPortMappings] = createSignal<ProvisioningLANPortMapping[]>([]);
   let templateImageInput: HTMLInputElement | undefined;
+  let lanVisualizationInput: HTMLInputElement | undefined;
   let templateImageObjectUrl: string | null = null;
-  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features'>('rules');
+  let lanVisualizationObjectUrl: string | null = null;
+  const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features' | 'lan'>('rules');
   const [metricSubTab, setMetricSubTab] = createSignal<'general' | 'interface' | 'polling'>('general');
   const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
   const [variablesSaving, setVariablesSaving] = createSignal(false);
@@ -352,6 +366,7 @@ const Provisioning: Component = () => {
       document.removeEventListener('click', closeMenu);
       document.removeEventListener('keydown', closeOnEscape);
       clearTemplateImagePreview();
+      clearLANVisualizationPreview();
     });
   });
 
@@ -392,21 +407,114 @@ const Provisioning: Component = () => {
     }
   };
 
+  const clearLANVisualizationPreview = () => {
+    if (lanVisualizationObjectUrl) URL.revokeObjectURL(lanVisualizationObjectUrl);
+    lanVisualizationObjectUrl = null;
+    setLANVisualizationUrl(null);
+  };
+
+  const loadLANVisualization = async (template: ProvisioningTemplate) => {
+    clearLANVisualizationPreview();
+    if (!template.lan_visualization_url) return;
+    try {
+      const blob = await api.getProvisioningTemplateLANVisualization(template.id);
+      if (selectedTemplate()?.id !== template.id) return;
+      lanVisualizationObjectUrl = URL.createObjectURL(blob);
+      setLANVisualizationUrl(lanVisualizationObjectUrl);
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not load LAN visualization', detail: (error as Error).message });
+    }
+  };
+
+  const updateLANPortCount = (value: number) => {
+    const count = Math.max(1, Math.min(32, Number.isFinite(value) ? Math.trunc(value) : 1));
+    setLANPortCount(count);
+    setLANPortMappings(current => Array.from({ length: count }, (_, index) => current.find(mapping => mapping.port === index + 1) || { port: index + 1 }));
+  };
+
+  const updateLANPortMapping = (port: number, field: Exclude<keyof ProvisioningLANPortMapping, 'port'>, value: string) => {
+    setLANPortMappings(current => current.map(mapping => mapping.port === port ? { ...mapping, [field]: value } : mapping));
+  };
+
+  const saveLANPortConfiguration = async () => {
+    const template = selectedTemplate();
+    if (!template || lanConfigurationSaving()) return;
+    setLANConfigurationSaving(true);
+    try {
+      const updated = await api.updateProvisioningTemplateLANPorts(template.id, lanPortCount(), lanPortMappings());
+      setSelectedTemplate(current => current?.id === updated.id ? { ...current, lan_port_count: updated.lan_port_count, lan_port_mappings: updated.lan_port_mappings } : current);
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'LAN port configuration saved' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not save LAN port configuration', detail: (error as Error).message, persistent: true });
+    } finally {
+      setLANConfigurationSaving(false);
+    }
+  };
+
+  const handleLANVisualizationSelected = async (event: Event) => {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    const template = selectedTemplate();
+    if (!file || !template) return;
+    if (!(file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) || file.size > 5 * 1024 * 1024) {
+      notify({ tone: 'error', title: 'Invalid LAN visualization', message: 'Choose an SVG file up to 5 MB.' });
+      if (lanVisualizationInput) lanVisualizationInput.value = '';
+      return;
+    }
+    setLANVisualizationUploading(true);
+    try {
+      await api.updateProvisioningTemplateLANPorts(template.id, lanPortCount(), lanPortMappings());
+      const updated = await api.uploadProvisioningTemplateLANVisualization(template.id, file, lanPortCount());
+      setSelectedTemplate(current => current?.id === updated.id ? updated : current);
+      await loadLANVisualization(updated);
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'LAN visualization uploaded' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'LAN visualization upload failed', detail: (error as Error).message, persistent: true });
+    } finally {
+      setLANVisualizationUploading(false);
+      if (lanVisualizationInput) lanVisualizationInput.value = '';
+    }
+  };
+
+  const handleDeleteLANVisualization = async () => {
+    const template = selectedTemplate();
+    if (!template?.lan_visualization_url || !await confirm({ title: 'Remove LAN visualization?', description: 'The SVG will be removed from this provisioning template.', confirmLabel: 'Remove SVG', tone: 'danger' })) return;
+    setLANVisualizationUploading(true);
+    try {
+      await api.deleteProvisioningTemplateLANVisualization(template.id);
+      setSelectedTemplate(current => current?.id === template.id ? { ...current, lan_visualization_url: undefined } : current);
+      clearLANVisualizationPreview();
+      await loadProvTemplates();
+      notify({ tone: 'success', title: 'LAN visualization removed' });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not remove LAN visualization', detail: (error as Error).message, persistent: true });
+    } finally {
+      setLANVisualizationUploading(false);
+    }
+  };
+
   const refetchProvRules = async () => {
     await loadProvRules();
   };
 
   const selectTemplate = (template: ProvisioningTemplate) => {
     setSelectedTemplate(template);
+    setTemplateTab('rules');
     setTemplateVariables(template.variables || []);
+    const count = Math.max(1, Math.min(32, template.lan_port_count || 4));
+    setLANPortCount(count);
+    setLANPortMappings(Array.from({ length: count }, (_, index) => template.lan_port_mappings?.find(mapping => mapping.port === index + 1) || { port: index + 1 }));
     setProvRules(null);
     setProvError(null);
     loadProvRules();
     void loadTemplateImage(template);
+    void loadLANVisualization(template);
   };
 
   const backToTemplates = () => {
     clearTemplateImagePreview();
+    clearLANVisualizationPreview();
     setSelectedTemplate(null);
     setTemplateVariables([]);
     setProvRules(null);
@@ -764,7 +872,7 @@ const Provisioning: Component = () => {
     setPendingAction('clone-template');
     try {
       const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean) });
-      notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, and device photo.` });
+      notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, device photo, and LAN layout.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
       await loadProvTemplates();
@@ -1304,7 +1412,47 @@ const Provisioning: Component = () => {
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
               <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Advanced settings</span></button>
+              <button type="button" onClick={() => setTemplateTab('lan')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'lan' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Network size={12} />LAN ports</span></button>
             </div>
+
+            <Show when={templateTab() === 'lan'}>
+              <section class="space-y-4">
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                  <p class="max-w-3xl text-xs text-muted">Configure a model-specific vector panel and map each physical LAN port to its CWMP parameters. Unmapped or missing values appear as Unknown or N/A.</p>
+                  <Show when={isFullAccess()}><button type="button" class="btn btn-primary text-xs py-1.5" onClick={() => void saveLANPortConfiguration()} disabled={lanConfigurationSaving()}><Save size={12} />{lanConfigurationSaving() ? 'Saving…' : 'Save LAN settings'}</button></Show>
+                </div>
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(12rem,20rem)_1fr]">
+                  <label class="block text-xs text-muted">LAN port count
+                    <input type="number" min="1" max="32" class="input mt-1 w-full" value={lanPortCount()} onInput={event => updateLANPortCount(Number(event.currentTarget.value))} disabled={!isFullAccess()} />
+                  </label>
+                  <div class="space-y-2">
+                    <div class="flex flex-wrap items-center gap-3">
+                      <div class="grid h-20 w-32 shrink-0 place-items-center overflow-hidden rounded border border-subtle bg-elevated p-1">
+                        <Show when={lanVisualizationUrl()} fallback={<span class="text-xs text-muted">No SVG uploaded</span>}>
+                          <img src={lanVisualizationUrl()!} alt={`LAN port layout for ${selectedTemplate()!.name}`} class="max-h-full max-w-full object-contain" />
+                        </Show>
+                      </div>
+                      <Show when={isFullAccess()}>
+                        <input ref={element => { lanVisualizationInput = element; }} id="template-lan-visualization" type="file" accept=".svg,image/svg+xml" class="sr-only" onChange={event => void handleLANVisualizationSelected(event)} disabled={lanVisualizationUploading()} />
+                        <label for="template-lan-visualization" class="btn btn-secondary text-xs cursor-pointer" aria-disabled={lanVisualizationUploading()}><Upload size={12} />{lanVisualizationUploading() ? 'Uploading…' : selectedTemplate()?.lan_visualization_url ? 'Change SVG' : 'Upload SVG'}</label>
+                        <Show when={selectedTemplate()?.lan_visualization_url}><button type="button" class="btn btn-ghost text-xs text-rose-400" onClick={() => void handleDeleteLANVisualization()} disabled={lanVisualizationUploading()}>Remove SVG</button></Show>
+                      </Show>
+                    </div>
+                    <p class="text-xs text-muted">SVG up to 5 MB. Use a <code>viewBox</code> and groups <code>lan1</code> … <code>lanN</code>, each containing a <code>port-led</code> element and a <code>cable-system</code> group. Scripts, embedded styles, event handlers, and external links are stripped or rejected; keep artwork fills and strokes as SVG attributes.</p>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                  <For each={lanPortMappings()}>{mapping => <fieldset class="space-y-3 rounded border border-subtle p-3">
+                    <legend class="px-1 text-xs font-medium text-secondary">LAN{mapping.port}</legend>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <For each={lanMappingFields}>{field => <label class="block text-xs text-muted">{field.label}
+                        <input class="input mt-1 w-full font-mono text-[11px]" value={mapping[field.key] || ''} placeholder={field.placeholder} onInput={event => updateLANPortMapping(mapping.port, field.key, event.currentTarget.value)} disabled={!isFullAccess()} />
+                      </label>}</For>
+                    </div>
+                  </fieldset>}</For>
+                </div>
+              </section>
+            </Show>
 
             <Show when={templateTab() === 'rules'}>
               <div class="mb-4 flex flex-wrap items-center justify-end gap-2">
@@ -1882,7 +2030,7 @@ const Provisioning: Component = () => {
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
               <input id="template-description" type="text" value={templateForm().description} onInput={(e) => setTemplateForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="e.g. Rules for SkyDash AC1000 devices" />
             </div>
-            <Show when={cloningTemplate()}><p class="text-xs text-muted">All rules, matching metrics, interface metrics, variables, advanced settings, and the device photo will be copied. Set the identity for the new device type.</p></Show>
+            <Show when={cloningTemplate()}><p class="text-xs text-muted">Rules, matching metrics, interface metrics, variables, advanced settings, the device photo, and LAN layout will be copied. Set the identity for the new device type.</p></Show>
             <Show when={editingTemplate()}>
               <div class="space-y-2">
                 <span class="block text-xs text-muted">Device photo (optional)</span>
