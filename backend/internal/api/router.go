@@ -120,7 +120,7 @@ func NewRouter(db *gorm.DB) *Router {
 		apiTokenRepo:         database.NewAPITokenRepository(db),
 		apiTokenLimiter:      newLoginLimiter(120, time.Minute),
 		apiIPLimiter:         newLoginLimiter(600, time.Minute),
-		pingLimiter:          newLoginLimiter(1, 5*time.Second),
+		pingLimiter:          newLoginLimiter(1, 2*time.Second),
 		roleRepo:             database.NewRoleRepository(db),
 		provisioningRepo:     database.NewProvisioningRepository(db),
 		auditRepo:            database.NewAuditRepository(db),
