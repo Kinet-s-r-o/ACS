@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { formatLanRate, formatLanSpeed, measureCounterRate, resolveLanVisualState, type LanCounterSample, type OntLanPort } from '../lib/ontLan';
 import './OntLanVisualization.css';
 
@@ -14,7 +14,6 @@ const linkLabel = (link: OntLanPort['link'], online: boolean) => !online || link
 
 const OntLanVisualization: Component<Props> = (props) => {
   let svgHost: HTMLDivElement | undefined;
-  const [svgAvailable, setSvgAvailable] = createSignal(false);
   const [activePorts, setActivePorts] = createSignal<Set<number>>(new Set());
   const [rates, setRates] = createSignal<Record<number, { rx: number | null; tx: number | null; sampledAt: string | null }>>({});
   const previousCounters = new Map<string, LanCounterSample>();
@@ -25,18 +24,12 @@ const OntLanVisualization: Component<Props> = (props) => {
     .replace(/<style\b[\s\S]*?<\/style\s*>/gi, '')
     .replace(/\sstyle="[^"]*"/gi, '');
 
-  onMount(() => setSvgAvailable(Boolean(svgHost?.querySelector('svg'))));
-
   createEffect(() => {
     const markup = props.svgMarkup;
     const ports = props.ports;
     const online = props.deviceOnline;
     const svg = svgHost?.querySelector('svg');
-    if (!svg) {
-      setSvgAvailable(false);
-      return;
-    }
-    setSvgAvailable(true);
+    if (!svg) return;
 
     for (const port of ports) {
       const group = svg.getElementById(`lan${port.port}`) as SVGGElement | null;
@@ -114,7 +107,7 @@ const OntLanVisualization: Component<Props> = (props) => {
   };
 
   return <section class="ont-lan-visualization" aria-label="CPE LAN port status">
-    <Show when={svgAvailable()} fallback={<p class="text-sm text-muted" role="status">The template LAN visualization could not be loaded. LAN interface data remains available in the table below.</p>}>
+    <Show when={props.svgMarkup.trim()} fallback={<p class="text-sm text-muted" role="status">The template LAN visualization could not be loaded. LAN interface data remains available in the table below.</p>}>
       <div ref={svgHost} class="ont-svg-host" innerHTML={safeSvg()} />
       <div class="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-secondary" aria-label="LAN port states">
         <For each={props.ports}>{port => <span class="font-mono">LAN{port.port}: {linkLabel(port.link, props.deviceOnline)}</span>}</For>

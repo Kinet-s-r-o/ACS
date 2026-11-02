@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 const maxTemplateLANPorts = 32
 
 var svgURLReference = regexp.MustCompile(`(?i)url\(\s*['"]?([^)'"\s]+)['"]?\s*\)`)
+var templateLANFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
 
 var safeTemplateSVGElements = map[string]bool{
 	"svg": true, "g": true, "title": true, "desc": true, "defs": true,
@@ -148,7 +150,8 @@ func (r *Router) handleGetTemplateLANVisualization(w http.ResponseWriter, req *h
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Disposition", "inline; filename=lan-visualization.svg")
+	filename := filepath.Base(path)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": filename}))
 	_, _ = w.Write(data)
 }
 
@@ -184,7 +187,7 @@ func (r *Router) handleUploadTemplateLANVisualization(w http.ResponseWriter, req
 		respondError(w, http.StatusBadRequest, "Set a LAN port count between 1 and 32 before uploading an SVG")
 		return
 	}
-	file, _, err := req.FormFile("file")
+	file, fileHeader, err := req.FormFile("file")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "No SVG uploaded")
 		return
@@ -204,13 +207,19 @@ func (r *Router) handleUploadTemplateLANVisualization(w http.ResponseWriter, req
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	tempFile, err := os.CreateTemp(r.templateImageDir, ".template-lan-*.svg")
+	visualizationName := templateLANVisualizationFilename(id, fileHeader.Filename, time.Now().UnixNano())
+	tempFile, err := os.CreateTemp(r.templateImageDir, strings.TrimSuffix(visualizationName, ".svg")+"-*.svg")
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to save SVG")
 		return
 	}
 	tempPath := tempFile.Name()
-	defer os.Remove(tempPath)
+	keepFile := false
+	defer func() {
+		if !keepFile {
+			_ = os.Remove(tempPath)
+		}
+	}()
 	if _, err := tempFile.Write(sanitized); err != nil {
 		_ = tempFile.Close()
 		respondError(w, http.StatusInternalServerError, "Failed to save SVG")
@@ -224,16 +233,12 @@ func (r *Router) handleUploadTemplateLANVisualization(w http.ResponseWriter, req
 		respondError(w, http.StatusInternalServerError, "Failed to secure SVG")
 		return
 	}
-	visualizationPath := filepath.Join(r.templateImageDir, strconv.FormatInt(id, 10)+"-lan-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".svg")
-	if err := os.Rename(tempPath, visualizationPath); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to finalize SVG")
-		return
-	}
+	visualizationPath := tempPath
 	if err := r.provisioningRepo.UpdateTemplateLANVisualization(req.Context(), id, visualizationPath); err != nil {
-		_ = os.Remove(visualizationPath)
 		respondError(w, http.StatusInternalServerError, "Failed to save SVG")
 		return
 	}
+	keepFile = true
 	if template.LANVisualizationPath != "" {
 		if oldPath, pathErr := secureTemplateImagePath(r.templateImageDir, template.LANVisualizationPath); pathErr == nil {
 			_ = os.Remove(oldPath)
@@ -243,6 +248,20 @@ func (r *Router) handleUploadTemplateLANVisualization(w http.ResponseWriter, req
 	r.templateLANVisualizationURL(template)
 	redactProvisioningVariableSecrets(template.Variables)
 	respondJSON(w, http.StatusOK, template)
+}
+
+func templateLANVisualizationFilename(templateID int64, uploadedName string, uploadedAt int64) string {
+	name := strings.ReplaceAll(uploadedName, "\\", "/")
+	name = filepath.Base(name)
+	name = strings.TrimSuffix(name, filepath.Ext(name))
+	name = strings.Trim(templateLANFilenameChars.ReplaceAllString(name, "-"), "-_")
+	if name == "" {
+		name = "visualization"
+	}
+	if len(name) > 80 {
+		name = strings.TrimRight(name[:80], "-_")
+	}
+	return strconv.FormatInt(templateID, 10) + "-lan-" + name + "-" + strconv.FormatInt(uploadedAt, 10) + ".svg"
 }
 
 func (r *Router) handleDeleteTemplateLANVisualization(w http.ResponseWriter, req *http.Request) {

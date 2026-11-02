@@ -26,6 +26,18 @@ func TestValidateTemplateLANConfiguration(t *testing.T) {
 	}
 }
 
+func TestTemplateLANVisualizationFilenameIsUniqueAndSafe(t *testing.T) {
+	first := templateLANVisualizationFilename(42, `C:\uploads\EG8145 port layout.svg`, 1700000000000000001)
+	second := templateLANVisualizationFilename(43, `C:\uploads\EG8145 port layout.svg`, 1700000000000000001)
+	third := templateLANVisualizationFilename(42, `C:\uploads\EG8145 port layout.svg`, 1700000000000000002)
+	if first == second || first == third {
+		t.Fatal("expected uploaded SVG filenames to be unique across templates and uploads")
+	}
+	if strings.Contains(first, `\`) || strings.Contains(first, "/") || !strings.HasSuffix(first, ".svg") {
+		t.Fatalf("expected a safe SVG filename, got %q", first)
+	}
+}
+
 func TestSanitizeTemplateLANVisualization(t *testing.T) {
 	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><style>.lan{fill:red}</style><script><![CDATA[window.evil=true]]></script><g id="lan1" class="lan"><circle class="port-led" cx="50" cy="10" r="2"/><g class="cable-system"><path d="M50 12V90"/></g></g></svg>`)
 	sanitized, err := sanitizeTemplateLANVisualization(svg, 1)
