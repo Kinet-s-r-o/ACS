@@ -2056,29 +2056,27 @@ const DeviceDetail: Component = () => {
             {/* Row 1: ONT Info + Device Health + Actions */}
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* ONT Information Card */}
-              <div class="card p-5 lg:col-span-5">
-                <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
+              <div class="card p-5 lg:col-span-5 lg:grid lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-x-6">
+                <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2 lg:col-start-1 lg:row-start-1">
                   <Server size={14} />
                   ONT Information
                 </h2>
-                <div class="grid grid-cols-1 gap-x-6 gap-y-4 text-sm lg:grid-cols-2 lg:items-center">
-                  <div class="space-y-2">
-                    <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => {
-                      const value = (field.source || 'parameter') === 'acs'
-                        ? formatDateTime(field.acs_field === 'last_bootstrap' ? d().last_bootstrap : field.acs_field === 'last_boot' ? d().last_boot : d().last_inform)
-                        : parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-';
-                      return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value}</span></div>;
-                    }}</For>
-                  </div>
-                  <div class="space-y-2 min-w-0">
-                    <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
-                      <Show when={templateImageUrl()}>
-                        <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full object-contain object-center" />
-                      </Show>
-                    </div>}>
-                      <OntLanVisualization svgMarkup={templateLANVisualization() || ''} ports={getOntLanPorts()} deviceOnline={device()?.online === true} />
+                <div class="space-y-2 text-sm lg:col-start-1 lg:row-start-2">
+                  <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => {
+                    const value = (field.source || 'parameter') === 'acs'
+                      ? formatDateTime(field.acs_field === 'last_bootstrap' ? d().last_bootstrap : field.acs_field === 'last_boot' ? d().last_boot : d().last_inform)
+                      : parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-';
+                    return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value}</span></div>;
+                  }}</For>
+                </div>
+                <div class="mt-4 min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0 lg:self-center">
+                  <Show when={matchingProvisioningTemplate()?.lan_visualization_url} fallback={<div class="h-32 w-full overflow-hidden" aria-hidden={!templateImageUrl()}>
+                    <Show when={templateImageUrl()}>
+                      <img src={templateImageUrl()!} alt={`Device image for ${d().product_class || d().serial_number}`} class="h-full w-full object-contain object-center" />
                     </Show>
-                  </div>
+                  </div>}>
+                    <OntLanVisualization svgMarkup={templateLANVisualization() || ''} ports={getOntLanPorts()} deviceOnline={device()?.online === true} />
+                  </Show>
                 </div>
 
               </div>

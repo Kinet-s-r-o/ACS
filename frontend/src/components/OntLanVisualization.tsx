@@ -11,6 +11,36 @@ interface Props {
 
 const linkLabel = (link: OntLanPort['link'], online: boolean) => !online || link === 'unknown' ? 'Unknown' : link === 'up' ? 'Link Up' : 'Link Down';
 
+const originalViewBoxes = new WeakMap<SVGSVGElement, { x: number; y: number; width: number; height: number }>();
+
+// Uploaded SVG canvases may contain blank space that offsets the visible ONT from its legend.
+const trimSvgVerticalWhitespace = (svg: SVGSVGElement) => {
+  let viewBox = originalViewBoxes.get(svg);
+  if (!viewBox) {
+    const original = svg.viewBox.baseVal;
+    viewBox = { x: original.x, y: original.y, width: original.width, height: original.height };
+    originalViewBoxes.set(svg, viewBox);
+  }
+  if (viewBox.width <= 0 || viewBox.height <= 0) return;
+
+  let bounds: DOMRect;
+  try {
+    bounds = svg.getBBox();
+  } catch {
+    return;
+  }
+  if (!Number.isFinite(bounds.y) || !Number.isFinite(bounds.height) || bounds.height <= 0) return;
+
+  const padding = Math.max(viewBox.height * 0.01, bounds.height * 0.05);
+  const top = Math.max(viewBox.y, bounds.y - padding);
+  const bottom = Math.min(viewBox.y + viewBox.height, bounds.y + bounds.height + padding);
+  const height = bottom - top;
+  const shouldTrim = height > 0 && height < viewBox.height * 0.9;
+  const visibleHeight = shouldTrim ? height : viewBox.height;
+  svg.setAttribute('viewBox', `${viewBox.x} ${shouldTrim ? top : viewBox.y} ${viewBox.width} ${visibleHeight}`);
+  svg.style.aspectRatio = `${viewBox.width} / ${visibleHeight}`;
+};
+
 const OntLanVisualization: Component<Props> = (props) => {
   let svgHost: HTMLDivElement | undefined;
 
@@ -50,6 +80,7 @@ const OntLanVisualization: Component<Props> = (props) => {
         `Duplex: ${online ? port.duplex || 'N/A' : 'N/A'}`,
       ].join('\n');
     }
+    trimSvgVerticalWhitespace(svg);
     void markup;
   });
 
