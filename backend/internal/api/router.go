@@ -596,7 +596,7 @@ func filterInventoryParameters(parameters []models.DeviceParameter, columns []st
 }
 
 func (r *Router) handleListWANInterfaces(w http.ResponseWriter, req *http.Request) {
-	options, err := parseTableQuery(req, "serial_number", "name", "type", "status", "ip_address", "mac_address")
+	options, err := parseTableQuery(req, "serial_number", "name", "type", "status", "ip_address", "mac_address", "tags")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid WAN interface query")
 		return

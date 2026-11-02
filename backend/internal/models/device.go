@@ -47,12 +47,13 @@ type DeviceStats struct {
 }
 
 type WANInterface struct {
-	SerialNumber string `json:"serial_number"`
-	Name         string `json:"name"`
-	Type         string `json:"type"`
-	Status       string `json:"status"`
-	IPAddress    string `json:"ip_address"`
-	MACAddress   string `json:"mac_address"`
+	SerialNumber string   `json:"serial_number"`
+	Name         string   `json:"name"`
+	Type         string   `json:"type"`
+	Status       string   `json:"status"`
+	IPAddress    string   `json:"ip_address"`
+	MACAddress   string   `json:"mac_address"`
+	Tags         []string `json:"tags" gorm:"serializer:json"`
 }
 
 type WANInterfaceRecord struct {

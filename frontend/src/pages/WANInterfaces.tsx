@@ -41,6 +41,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
     { id: 'status', label: 'Status', visible: true },
     { id: 'ip_address', label: 'IP address', visible: true },
     { id: 'mac_address', label: 'MAC address', visible: true },
+    { id: 'tags', label: 'Device tags', visible: true },
   ]);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.wan-interfaces', {});
   const [interfaces, { refetch }] = createResource(
@@ -75,7 +76,10 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
     }
     const exportColumns = columns().filter(column => column.visible);
     const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const csvRows = rowsToExport.map(row => exportColumns.map(column => row[column.id as keyof typeof row] || ''));
+    const csvRows = rowsToExport.map(row => exportColumns.map(column => {
+      const value = row[column.id as keyof typeof row];
+      return Array.isArray(value) ? value.join(', ') : value || '';
+    }));
     const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...csvRows]
       .map(row => row.map(escapeCsvValue).join(','))
       .join('\r\n') + '\r\n';
@@ -190,6 +194,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                               </div>
                             </td></Show>
                             <Show when={isVisible('mac_address')}><td class="px-4 py-3 text-secondary font-mono">{row.mac_address}</td></Show>
+                            <Show when={isVisible('tags')}><td class="px-4 py-3"><div class="flex flex-wrap gap-1">{row.tags?.length ? <For each={row.tags}>{tag => <span class="badge badge-muted">{tag}</span>}</For> : <span class="text-muted">-</span>}</div></td></Show>
                             <td></td>
                           </tr>
                         );
