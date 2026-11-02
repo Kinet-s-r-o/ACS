@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
+import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -153,6 +153,7 @@ const Provisioning: Component = () => {
   const [lanPortMappings, setLANPortMappings] = createSignal<ProvisioningLANPortMapping[]>([]);
   const [cpeInfoFields, setCPEInfoFields] = createSignal<ProvisioningCPEInfoField[]>([]);
   const [cpeInfoSaving, setCPEInfoSaving] = createSignal(false);
+  const [cpeInfoDraggedIndex, setCPEInfoDraggedIndex] = createSignal<number | null>(null);
   let templateImageInput: HTMLInputElement | undefined;
   let lanVisualizationInput: HTMLInputElement | undefined;
   let templateImageObjectUrl: string | null = null;
@@ -457,6 +458,23 @@ const Provisioning: Component = () => {
     setCPEInfoFields(current => current.map((field, fieldIndex) => fieldIndex === index ? { ...field, [key]: value } : field));
   };
 
+  const moveCPEInfoField = (sourceIndex: number, targetIndex: number) => {
+    if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0 || targetIndex >= cpeInfoFields().length) return;
+    setCPEInfoFields(current => {
+      const fields = [...current];
+      const [moved] = fields.splice(sourceIndex, 1);
+      fields.splice(targetIndex, 0, moved);
+      return fields;
+    });
+  };
+
+  const reorderCPEInfoField = (targetIndex: number) => {
+    const sourceIndex = cpeInfoDraggedIndex();
+    setCPEInfoDraggedIndex(null);
+    if (sourceIndex === null || cpeInfoSaving()) return;
+    moveCPEInfoField(sourceIndex, targetIndex);
+  };
+
   const saveCPEInfoFields = async () => {
     const template = selectedTemplate();
     if (!template || cpeInfoSaving()) return;
@@ -525,6 +543,7 @@ const Provisioning: Component = () => {
     setSelectedTemplate(template);
     setTemplateTab('rules');
     setTemplateDetailTab('lan');
+    setCPEInfoDraggedIndex(null);
     setTemplateVariables(template.variables || []);
     setCPEInfoFields(template.cpe_info_fields || []);
     const count = Math.max(1, Math.min(32, template.lan_port_count || 4));
@@ -546,6 +565,7 @@ const Provisioning: Component = () => {
     setSelectedTemplate(null);
     setTemplateVariables([]);
     setCPEInfoFields([]);
+    setCPEInfoDraggedIndex(null);
     setProvRules(null);
     setProvError(null);
   };
@@ -1490,7 +1510,7 @@ const Provisioning: Component = () => {
               <Show when={templateDetailTab() === 'cpe_info'}>
                 <section class="space-y-4">
                   <div class="flex flex-wrap items-end justify-between gap-3">
-                    <p class="max-w-3xl text-xs text-muted">Choose the CWMP parameters shown in the ONT Information card on each matching CPE overview.</p>
+                    <p class="max-w-3xl text-xs text-muted">Choose the CWMP parameters shown in the ONT Information card. Drag rows to set their order, then save to apply the same order on CPE overview.</p>
                     <Show when={isFullAccess()}>
                       <div class="flex gap-2">
                         <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => setCPEInfoFields(current => [...current, { name: '', parameter_name: '' }])}><Plus size={12} />Add parameter</button>
@@ -1500,7 +1520,8 @@ const Provisioning: Component = () => {
                   </div>
                   <Show when={cpeInfoFields().length > 0} fallback={<EmptyState compact title="No CPE info parameters" description="Add a display name and exact CWMP parameter path for each value to show on the CPE overview." />}>
                     <div class="space-y-3">
-                      <Index each={cpeInfoFields()}>{(field, index) => <div class="grid grid-cols-1 items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[minmax(12rem,1fr)_minmax(18rem,2fr)_auto]">
+                      <Index each={cpeInfoFields()}>{(field, index) => <div onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderCPEInfoField(index); }} class={`grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[auto_minmax(12rem,1fr)_minmax(18rem,2fr)_auto] ${cpeInfoDraggedIndex() === index ? 'opacity-50' : ''}`}>
+                        <button type="button" draggable={isFullAccess() && !cpeInfoSaving()} class={`icon-button text-muted ${isFullAccess() ? 'cursor-grab active:cursor-grabbing' : ''}`} aria-label={`Drag to reorder CPE info parameter ${index + 1}`} title="Drag to reorder" onDragStart={event => { setCPEInfoDraggedIndex(index); event.dataTransfer?.setData('text/plain', String(index)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setCPEInfoDraggedIndex(null)}><GripVertical size={15} /></button>
                         <label class="block text-xs text-muted">Name
                           <input class="input mt-1 w-full" value={field().name} onInput={event => updateCPEInfoField(index, 'name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="e.g. Optical receive power" />
                         </label>
@@ -1508,7 +1529,11 @@ const Provisioning: Component = () => {
                           <input class="input mt-1 w-full font-mono text-[11px]" value={field().parameter_name} onInput={event => updateCPEInfoField(index, 'parameter_name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="InternetGatewayDevice..." />
                         </label>
                         <Show when={isFullAccess()}>
-                          <button type="button" class="icon-button text-rose-400" aria-label={`Remove CPE info parameter ${index + 1}`} title="Remove parameter" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index))}><Trash2 size={15} /></button>
+                          <div class="flex items-center gap-1">
+                            <button type="button" class="icon-button" aria-label={`Move CPE info parameter ${index + 1} up`} title="Move up" disabled={index === 0 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index - 1)}><ArrowUp size={14} /></button>
+                            <button type="button" class="icon-button" aria-label={`Move CPE info parameter ${index + 1} down`} title="Move down" disabled={index === cpeInfoFields().length - 1 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index + 1)}><ArrowDown size={14} /></button>
+                            <button type="button" class="icon-button text-rose-400" aria-label={`Remove CPE info parameter ${index + 1}`} title="Remove parameter" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index))}><Trash2 size={15} /></button>
+                          </div>
                         </Show>
                       </div>}</Index>
                     </div>
