@@ -48,6 +48,8 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
     () => ({ page: page(), size: pageSize(), search: searchQuery(), sort: sortBy(), filters: columnFilters() }),
     (query) => api.getWANInterfaces(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
   );
+  const [tagCatalog] = createResource(api.getTags);
+  const tagColor = (name: string) => tagCatalog()?.find(tag => tag.name === name)?.color || '#64748b';
   const poll = window.setInterval(() => { if (interfaces()?.preparing) void refetch(); }, 5000);
   onCleanup(() => window.clearInterval(poll));
   const filteredInterfaces = createMemo(() => interfaces()?.items || []);
@@ -194,7 +196,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                               </div>
                             </td></Show>
                             <Show when={isVisible('mac_address')}><td class="px-4 py-3 text-secondary font-mono">{row.mac_address}</td></Show>
-                            <Show when={isVisible('tags')}><td class="px-4 py-3"><div class="flex flex-wrap gap-1">{row.tags?.length ? <For each={row.tags}>{tag => <span class="badge badge-muted">{tag}</span>}</For> : <span class="text-muted">-</span>}</div></td></Show>
+                            <Show when={isVisible('tags')}><td class="px-4 py-3"><div class="flex flex-wrap gap-1.5">{row.tags?.length ? <For each={row.tags}>{tag => <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-elevated text-primary whitespace-nowrap"><span class="tag-color-swatch" data-dynamic-style="tag-color" style={{ '--tag-color': tagColor(tag) } as any} />{tag}</span>}</For> : <span class="text-muted">-</span>}</div></td></Show>
                             <td></td>
                           </tr>
                         );
