@@ -472,13 +472,6 @@ const MetricsSettings: Component = () => {
                 </select>
               </div>
             </div>
-            <div>
-              <label for="metric-active" class="block text-xs text-muted mb-1.5">Active</label>
-              <select id="metric-active" value={metricForm().active ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.value === 'true' }))} class="input w-full">
-                <option value="true">Yes — collect this metric</option>
-                <option value="false">No — paused</option>
-              </select>
-            </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label for="metric-group" class="block text-xs text-muted mb-1.5">Chart / Health Group</label>
@@ -533,6 +526,10 @@ const MetricsSettings: Component = () => {
                 </select>
               </div>
             </div>
+            <label for="metric-active" class="flex items-center gap-2 text-xs text-secondary cursor-pointer">
+              <input id="metric-active" type="checkbox" checked={metricForm().active} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} class="checkbox shrink-0" />
+              <span>Active — collect this metric</span>
+            </label>
             </Show>
             <Show when={metricTab() === 'health'}>
             <div>
@@ -632,28 +629,31 @@ const MetricsSettings: Component = () => {
                   <div class="space-y-1.5">
                     <For each={metricForm().thresholds}>
                       {(t, i) => (
-                        <div class="flex items-center gap-2">
-                          <input
-                            type="number"
-                            step="any"
-                            value={t.value}
-                            onInput={(e) => setMetricForm(f => {
+                        <div class="flex items-start gap-2">
+                          <label class="w-28 shrink-0 text-xs text-muted">Threshold value
+                            <input
+                              type="number"
+                              step="any"
+                              value={t.value}
+                              onInput={(e) => setMetricForm(f => {
+                                const thresholds = [...f.thresholds];
+                                thresholds[i()].value = parseFloat(e.currentTarget.value) || 0;
+                                return { ...f, thresholds };
+                              })}
+                              class="input mt-1 w-full font-mono text-xs"
+                            />
+                          </label>
+                          <div class="min-w-0 flex-1">
+                            <ColorSwatch value={t.color} onChange={(c) => setMetricForm(f => {
                               const thresholds = [...f.thresholds];
-                              thresholds[i()].value = parseFloat(e.currentTarget.value) || 0;
+                              thresholds[i()].color = c;
                               return { ...f, thresholds };
-                            })}
-                            placeholder="Value"
-                            class="input flex-1"
-                          />
-                          <ColorSwatch value={t.color} onChange={(c) => setMetricForm(f => {
-                            const thresholds = [...f.thresholds];
-                            thresholds[i()].color = c;
-                            return { ...f, thresholds };
-                          })} />
+                            })} />
+                          </div>
                           <button
                             type="button"
                             onClick={() => setMetricForm(f => ({ ...f, thresholds: f.thresholds.filter((_, j) => j !== i()) }))}
-                            class="btn btn-ghost text-xs text-red-400"
+                            class="btn btn-ghost self-start text-xs text-red-400"
                             title="Remove"
                           >
                             <X size={12} />

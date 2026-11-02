@@ -421,13 +421,6 @@ const Settings: Component = () => {
                   <option value="universal">Universal (both)</option>
                 </select>
               </div>
-              <div>
-                <label for="metric-active" class="block text-xs text-muted mb-1.5">Active</label>
-                <select id="metric-active" value={metricForm().active ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.value === 'true' }))} class="input w-full">
-                  <option value="true">Yes — collect this metric</option>
-                  <option value="false">No — paused</option>
-                </select>
-              </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
@@ -469,6 +462,10 @@ const Settings: Component = () => {
                 </select>
               </div>
             </div>
+            <label for="metric-active" class="flex items-center gap-2 text-xs text-secondary cursor-pointer">
+              <input id="metric-active" type="checkbox" checked={metricForm().active} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} class="checkbox shrink-0" />
+              <span>Active — collect this metric</span>
+            </label>
             </Show>
             <Show when={metricTab() === 'health'}>
             <div>

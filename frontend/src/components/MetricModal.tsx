@@ -198,13 +198,6 @@ const MetricModal: Component<MetricModalProps> = (props) => {
             </div>
           </div>
           <div>
-            <label for="metric-active" class="block text-xs text-muted mb-1.5">Active</label>
-            <select id="metric-active" value={metricForm().active ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.value === 'true' }))} class="input w-full">
-              <option value="true">Yes — collect this metric</option>
-              <option value="false">No — paused</option>
-            </select>
-          </div>
-          <div>
             <label for="metric-min-sample-interval" class="block text-xs text-muted mb-1.5">Minimum sample interval (seconds)</label>
             <input id="metric-min-sample-interval" type="number" min="0" max="31536000" step="1" value={metricForm().min_sample_interval_seconds} onInput={(e) => setMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} class="input w-full" />
             <p class="text-xs text-muted mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per CPE.</p>
@@ -366,28 +359,31 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 <div class="space-y-1.5">
                   <For each={metricForm().thresholds}>
                     {(t, i) => (
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="number"
-                          step="any"
-                          value={t.value}
-                          onInput={(e) => setMetricForm(f => {
+                      <div class="flex items-start gap-2">
+                        <label class="w-28 shrink-0 text-xs text-muted">Threshold value
+                          <input
+                            type="number"
+                            step="any"
+                            value={t.value}
+                            onInput={(e) => setMetricForm(f => {
+                              const thresholds = [...f.thresholds];
+                              thresholds[i()].value = parseFloat(e.currentTarget.value) || 0;
+                              return { ...f, thresholds };
+                            })}
+                            class="input mt-1 w-full font-mono text-xs"
+                          />
+                        </label>
+                        <div class="min-w-0 flex-1">
+                          <ColorSwatch value={t.color} onChange={(c) => setMetricForm(f => {
                             const thresholds = [...f.thresholds];
-                            thresholds[i()].value = parseFloat(e.currentTarget.value) || 0;
+                            thresholds[i()].color = c;
                             return { ...f, thresholds };
-                          })}
-                          placeholder="Value"
-                          class="input flex-1"
-                        />
-                        <ColorSwatch value={t.color} onChange={(c) => setMetricForm(f => {
-                          const thresholds = [...f.thresholds];
-                          thresholds[i()].color = c;
-                          return { ...f, thresholds };
-                        })} />
+                          })} />
+                        </div>
                         <button
                           type="button"
                           onClick={() => setMetricForm(f => ({ ...f, thresholds: f.thresholds.filter((_, j) => j !== i()) }))}
-                          class="btn btn-ghost text-xs text-red-400"
+                          class="btn btn-ghost self-start text-xs text-red-400"
                           title="Remove"
                         >
                           <X size={12} />
@@ -406,6 +402,10 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </div>
                 <p class="text-[10px] text-muted mt-1">Each threshold marks the start of a color band. Sorted by value.</p>
               </div>
+              <label for="metric-active" class="col-span-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
+                <input id="metric-active" type="checkbox" checked={metricForm().active} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} class="checkbox shrink-0" />
+                <span>Active — collect this metric</span>
+              </label>
             </div>
           </div>
           </Show>
