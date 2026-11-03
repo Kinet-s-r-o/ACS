@@ -101,6 +101,13 @@ type DeviceLogEntry struct {
 	Device      Device    `json:"-" gorm:"foreignKey:DeviceID;constraint:OnDelete:CASCADE"`
 }
 
+type DataMigrationRecord struct {
+	Name        string    `gorm:"primaryKey;size:128"`
+	CompletedAt time.Time `gorm:"not null"`
+}
+
+func (DataMigrationRecord) TableName() string { return "data_migration_records" }
+
 func (DeviceLogEntry) TableName() string {
 	return "device_logs"
 }

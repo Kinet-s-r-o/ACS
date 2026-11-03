@@ -62,25 +62,33 @@ func main() {
 	if err != nil {
 		log.Fatalf("WAN interface cache initialization failed: %v", err)
 	}
-	if count, err := database.NewParameterRepository(db).EncryptLegacySensitiveValues(ctx); err != nil {
+	if _, ran, err := database.RunDataMigrationOnce(ctx, db, "encrypt_legacy_sensitive_parameters_v1", func() (int64, error) {
+		return database.NewParameterRepository(db).EncryptLegacySensitiveValues(ctx)
+	}); err != nil {
 		log.Fatalf("Sensitive parameter migration failed: %v", err)
-	} else if count > 0 {
-		log.Printf("Encrypted %d legacy sensitive parameter values", count)
+	} else if ran {
+		log.Println("Legacy sensitive parameter migration completed")
 	}
-	if count, err := database.NewProvisioningRepository(db).EncryptLegacySensitiveValues(ctx); err != nil {
+	if _, ran, err := database.RunDataMigrationOnce(ctx, db, "encrypt_legacy_sensitive_provisioning_v1", func() (int64, error) {
+		return database.NewProvisioningRepository(db).EncryptLegacySensitiveValues(ctx)
+	}); err != nil {
 		log.Fatalf("Sensitive provisioning migration failed: %v", err)
-	} else if count > 0 {
-		log.Printf("Encrypted %d legacy sensitive provisioning values", count)
+	} else if ran {
+		log.Println("Legacy sensitive provisioning migration completed")
 	}
-	if count, err := database.NewSettingsRepository(db).EncryptLegacySensitiveValues(ctx); err != nil {
+	if _, ran, err := database.RunDataMigrationOnce(ctx, db, "encrypt_legacy_sensitive_settings_v1", func() (int64, error) {
+		return database.NewSettingsRepository(db).EncryptLegacySensitiveValues(ctx)
+	}); err != nil {
 		log.Fatalf("Sensitive settings migration failed: %v", err)
-	} else if count > 0 {
-		log.Printf("Encrypted %d legacy sensitive settings", count)
+	} else if ran {
+		log.Println("Legacy sensitive settings migration completed")
 	}
-	if count, err := database.NewTaskRepository(db).ProtectLegacyTaskSecrets(ctx); err != nil {
+	if _, ran, err := database.RunDataMigrationOnce(ctx, db, "protect_legacy_task_secrets_v1", func() (int64, error) {
+		return database.NewTaskRepository(db).ProtectLegacyTaskSecrets(ctx)
+	}); err != nil {
 		log.Fatalf("Sensitive task migration failed: %v", err)
-	} else if count > 0 {
-		log.Printf("Protected %d legacy task records containing sensitive values", count)
+	} else if ran {
+		log.Println("Legacy task secret migration completed")
 	}
 	go runTaskRecovery(ctx, database.NewTaskRepository(db))
 	go database.RunRetentionMaintenance(ctx, db)
@@ -141,6 +149,23 @@ func main() {
 		log.Printf("ACS API server listening on %s", apiServer.Addr)
 		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("API server failed: %v", err)
+		}
+	}()
+	go func() {
+		log.Println("Preparing device log backfill index in the background...")
+		if err := database.EnsureDeviceLogBackfillIndex(ctx, db); err != nil {
+			log.Printf("Device log backfill index creation failed: %v", err)
+			return
+		}
+		_, ran, err := database.RunDataMigrationOnce(ctx, db, "backfill_device_logs_v1", func() (int64, error) {
+			return 0, database.BackfillDeviceLogs(ctx, db)
+		})
+		if err != nil {
+			log.Printf("Device log backfill failed: %v", err)
+			return
+		}
+		if ran {
+			log.Println("Device log backfill completed")
 		}
 	}()
 	go func() {
@@ -353,6 +378,7 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.Device{},
 		&models.DeviceLifecycleEvent{},
 		&models.DeviceParameter{},
+		&models.DataMigrationRecord{},
 		&models.WANInterfaceRecord{},
 		&models.WANInterfaceBackfillState{},
 		&models.DeviceLogEntry{},
@@ -394,9 +420,6 @@ func runAutoMigrate(db *gorm.DB) error {
 		if err := db.Migrator().DropIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type"); err != nil {
 			return fmt.Errorf("drop obsolete device lifecycle uniqueness index: %w", err)
 		}
-	}
-	if err := database.BackfillDeviceLogs(context.Background(), db); err != nil {
-		return fmt.Errorf("backfill device logs: %w", err)
 	}
 	if err := database.NewTagRepository(db).SeedLegacyDefinitions(context.Background()); err != nil {
 		return fmt.Errorf("seed legacy tag definitions: %w", err)

@@ -37,12 +37,34 @@ func ConfigureParameterEncryption(secret string) error {
 
 func IsSensitiveParameterName(name string) bool {
 	name = strings.ToLower(name)
-	for _, marker := range []string{"password", "passphrase", "presharedkey", "pre_shared_key", "privatekey", "secret", "connectionrequestusername"} {
+	for _, marker := range sensitiveParameterNameMarkers {
 		if strings.Contains(name, marker) {
 			return true
 		}
 	}
-	return strings.HasSuffix(name, ".username")
+	for _, suffix := range sensitiveParameterNameSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+var sensitiveParameterNameMarkers = []string{"password", "passphrase", "presharedkey", "pre_shared_key", "privatekey", "secret", "connectionrequestusername"}
+var sensitiveParameterNameSuffixes = []string{".username"}
+
+func legacySensitiveValueFilter(nameColumn, valueColumn string) (string, []interface{}) {
+	conditions := make([]string, 0, len(sensitiveParameterNameMarkers)+len(sensitiveParameterNameSuffixes))
+	args := make([]interface{}, 0, cap(conditions))
+	for _, marker := range sensitiveParameterNameMarkers {
+		conditions = append(conditions, nameColumn+" ILIKE ? ESCAPE '!'")
+		args = append(args, "%"+escapeLike(marker)+"%")
+	}
+	for _, suffix := range sensitiveParameterNameSuffixes {
+		conditions = append(conditions, nameColumn+" ILIKE ? ESCAPE '!'")
+		args = append(args, "%"+escapeLike(suffix))
+	}
+	return "(" + strings.Join(conditions, " OR ") + ") AND " + valueColumn + " <> '' AND " + valueColumn + " NOT LIKE ?", append(args, encryptedParameterPrefix+"%")
 }
 
 // EncryptProvisioningValue exposes the same encryption primitive used by
@@ -475,17 +497,19 @@ func decryptParameters(params []models.DeviceParameter) error {
 	return nil
 }
 
-// EncryptLegacySensitiveValues upgrades plaintext values written by older
-// releases. Keyset pagination keeps startup memory bounded on large ACS data
-// sets, while each batch is committed atomically.
+// EncryptLegacySensitiveValues upgrades only legacy plaintext secrets. The
+// trigram name index narrows this to sensitive paths instead of paging through
+// every cached CPE parameter on each application start.
 func (r *ParameterRepository) EncryptLegacySensitiveValues(ctx context.Context) (int64, error) {
 	var encrypted int64
 	var lastID int64
+	filter, filterArgs := legacySensitiveValueFilter("name", "value")
 	for {
 		var params []models.DeviceParameter
 		if err := r.db.WithContext(ctx).
 			Select("id", "name", "value").
 			Where("id > ?", lastID).
+			Where(filter, filterArgs...).
 			Order("id ASC").
 			Limit(500).
 			Find(&params).Error; err != nil {
@@ -498,9 +522,6 @@ func (r *ParameterRepository) EncryptLegacySensitiveValues(ctx context.Context) 
 		if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			for _, param := range params {
 				lastID = param.ID
-				if !IsSensitiveParameterName(param.Name) || param.Value == "" || strings.HasPrefix(param.Value, encryptedParameterPrefix) {
-					continue
-				}
 				value, err := encryptParameterValue(param.Value)
 				if err != nil {
 					return fmt.Errorf("encrypt %s: %w", param.Name, err)

@@ -93,6 +93,30 @@ func BackfillDeviceLogs(ctx context.Context, db *gorm.DB) error {
 	}
 }
 
+// EnsureDeviceLogBackfillIndex keeps the one-time cache backfill from scanning
+// the full parameter table. The index is built concurrently so live CWMP
+// traffic can continue while an existing installation creates it.
+func EnsureDeviceLogBackfillIndex(ctx context.Context, db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+	db = db.WithContext(ctx)
+	var index struct{ Valid bool }
+	result := db.Raw(`SELECT indisvalid AS valid FROM pg_index
+		WHERE indexrelid = to_regclass('idx_device_parameters_device_log_backfill')`).Scan(&index)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 && !index.Valid {
+		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS idx_device_parameters_device_log_backfill`).Error; err != nil {
+			return err
+		}
+	}
+	return db.Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_device_log_backfill
+		ON device_parameters (id)
+		WHERE name = 'InternetGatewayDevice.DeviceInfo.DeviceLog'`).Error
+}
+
 func ListDeviceLogs(ctx context.Context, db *gorm.DB, deviceID int64, offset, limit int, filter DeviceLogFilter) (DeviceLogPage, error) {
 	if offset < 0 || limit < 1 || limit > 500 {
 		return DeviceLogPage{}, fmt.Errorf("invalid device log page")
