@@ -42,7 +42,7 @@ func TestAPITokenAuthenticationAndLivePermissions(t *testing.T) {
 		t.Fatal("invalid generated token metadata")
 	}
 	roleID := int64(8)
-	user := &models.User{ID: 4, Username: "billing", Role: models.RoleFull, RoleID: &roleID}
+	user := &models.User{ID: 4, Username: "billing", Role: models.RoleFull, RoleID: &roleID, Active: true}
 	tokens := &apiTokenStub{token: &models.APIToken{ID: 5, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour)}, digest: digest}
 	roles := &apiRoleStub{role: &models.Role{ID: roleID, Permissions: []string{models.PermDevicesWrite}}}
 	next := RequirePermission(models.PermDevicesWrite)(func(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +65,11 @@ func TestAPITokenAuthenticationAndLivePermissions(t *testing.T) {
 	if code := call("Bearer "+secret, lookup); code != 204 {
 		t.Fatalf("valid token: %d", code)
 	}
+	user.Active = false
+	if code := call("Bearer "+secret, lookup); code != 401 {
+		t.Fatalf("inactive user API token: %d", code)
+	}
+	user.Active = true
 	roles.role.Permissions = nil
 	if code := call("Bearer "+secret, lookup); code != 403 {
 		t.Fatalf("empty role must not fall back to legacy full access: %d", code)

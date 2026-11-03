@@ -140,7 +140,7 @@ func AuthMiddleware(users UserLookup, perms PermissionLookup, next http.Handler)
 			return
 		}
 		user, err := users.GetByID(r.Context(), claims.UserID)
-		if err != nil || user == nil || user.Username != claims.Username || user.Role != claims.Role || user.TokenVersion != claims.TokenVersion {
+		if err != nil || user == nil || !user.Active || user.Username != claims.Username || user.Role != claims.Role || user.TokenVersion != claims.TokenVersion {
 			writeAuthError(w, `{"error":"session has been revoked"}`, http.StatusUnauthorized)
 			return
 		}

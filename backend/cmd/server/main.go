@@ -480,6 +480,7 @@ func runAutoMigrate(db *gorm.DB) error {
 			Username:     "admin",
 			PasswordHash: string(hashedPassword),
 			Role:         models.RoleFull,
+			Active:       true,
 		}
 		if err := db.Create(admin).Error; err != nil {
 			return fmt.Errorf("create bootstrap administrator: %w", err)

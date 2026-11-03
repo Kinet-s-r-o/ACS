@@ -21,7 +21,7 @@ func TestTokenRoundTrip(t *testing.T) {
 	if err := ConfigureJWT("0123456789abcdef0123456789abcdef"); err != nil {
 		t.Fatal(err)
 	}
-	token, err := GenerateToken(&models.User{ID: 42, Username: "operator", Role: models.RoleRead})
+	token, err := GenerateToken(&models.User{ID: 42, Username: "operator", Role: models.RoleRead, Active: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestAuthMiddlewareRejectsRevokedToken(t *testing.T) {
 	if err := ConfigureJWT("0123456789abcdef0123456789abcdef"); err != nil {
 		t.Fatal(err)
 	}
-	issued := &models.User{ID: 7, Username: "admin", Role: models.RoleFull, TokenVersion: 1}
+	issued := &models.User{ID: 7, Username: "admin", Role: models.RoleFull, TokenVersion: 1, Active: true}
 	token, err := GenerateToken(issued)
 	if err != nil {
 		t.Fatal(err)
@@ -71,9 +71,27 @@ func TestAuthMiddlewareRejectsRevokedToken(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
-	AuthMiddleware(userLookupStub{user: &models.User{ID: 7, Username: "admin", Role: models.RoleFull, TokenVersion: 2}}, nil, next).ServeHTTP(recorder, req)
+	AuthMiddleware(userLookupStub{user: &models.User{ID: 7, Username: "admin", Role: models.RoleFull, TokenVersion: 2, Active: true}}, nil, next).ServeHTTP(recorder, req)
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("revoked token returned status %d", recorder.Code)
+	}
+}
+
+func TestAuthMiddlewareRejectsInactiveUser(t *testing.T) {
+	if err := ConfigureJWT("0123456789abcdef0123456789abcdef"); err != nil {
+		t.Fatal(err)
+	}
+	token, err := GenerateToken(&models.User{ID: 8, Username: "operator", Role: models.RoleRead, TokenVersion: 1, Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+	AuthMiddleware(userLookupStub{user: &models.User{ID: 8, Username: "operator", Role: models.RoleRead, TokenVersion: 1, Active: false}}, nil, next).ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("inactive user session returned status %d", recorder.Code)
 	}
 }
 

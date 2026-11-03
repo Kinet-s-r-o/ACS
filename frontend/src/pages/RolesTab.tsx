@@ -19,7 +19,7 @@ import { usePageSize } from '../lib/usePageSize';
 const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; description: string }[] }[] = [
   { label: 'Users', permissions: [
     { key: 'users.read', label: 'Read', description: 'View user accounts.' },
-    { key: 'users.write', label: 'Write', description: 'Create, edit, and delete users.' },
+    { key: 'users.write', label: 'Write', description: 'Create, edit, activate, and deactivate users.' },
     { key: 'users.tokens', label: 'Manage API tokens', description: 'Create and revoke user API tokens.' },
     { key: 'users.dashboards', label: 'Manage Fleet dashboards', description: 'View and remove saved Fleet panels for any user.' },
   ] },

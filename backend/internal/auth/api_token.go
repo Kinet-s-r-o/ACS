@@ -71,7 +71,7 @@ func APITokenMiddleware(tokens APITokenLookup, users UserLookup, roles APIRoleLo
 			writeAuthError(w, `{"error":"Authentication service unavailable"}`, http.StatusServiceUnavailable)
 			return
 		}
-		if user == nil {
+		if user == nil || !user.Active {
 			unauthorized()
 			return
 		}

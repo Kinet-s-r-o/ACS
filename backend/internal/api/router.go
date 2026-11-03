@@ -174,7 +174,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /users", auth.RequirePermission(models.PermUsersRead)(r.handleListUsers))
 	apiMux.HandleFunc("POST /users", auth.RequirePermission(models.PermUsersWrite)(r.handleCreateUser))
 	apiMux.HandleFunc("PUT /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateUser))
-	apiMux.HandleFunc("DELETE /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleDeleteUser))
+	apiMux.HandleFunc("PATCH /users/{id}/active", auth.RequirePermission(models.PermUsersWrite)(r.handleSetUserActive))
 	apiMux.HandleFunc("GET /users/{id}/dashboard-panels", auth.RequirePermission(models.PermUsersDashboards)(r.handleGetUserDashboardPanels))
 	apiMux.HandleFunc("PUT /users/{id}/dashboard-panels", auth.RequirePermission(models.PermUsersDashboards)(r.handleSaveUserDashboardPanels))
 	apiMux.HandleFunc("DELETE /users/{id}/dashboard-panels/{panelID}", auth.RequirePermission(models.PermUsersDashboards)(r.handleDeleteUserDashboardPanel))
@@ -3384,6 +3384,11 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
+	if !user.Active {
+		r.recordLoginAudit(req, loginReq.Username, http.StatusUnauthorized)
+		respondError(w, http.StatusUnauthorized, "Invalid username or password")
+		return
+	}
 	r.loginLimiter.Reset(ip)
 	if user.Required2FA {
 		if err := r.beginTwoFactorChallenge(w, req, user); err != nil {
@@ -3477,7 +3482,7 @@ func (r *Router) twoFactorChallengeMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		user, err := r.userRepo.GetByID(req.Context(), claims.UserID)
-		if err != nil || user == nil || !user.Required2FA || user.Username != claims.Username || user.Role != claims.Role || user.TokenVersion != claims.TokenVersion {
+		if err != nil || user == nil || !user.Active || !user.Required2FA || user.Username != claims.Username || user.Role != claims.Role || user.TokenVersion != claims.TokenVersion {
 			respondError(w, http.StatusUnauthorized, "Two-factor challenge expired; sign in again")
 			return
 		}
@@ -3568,6 +3573,10 @@ func (r *Router) completeTwoFactorChallenge(w http.ResponseWriter, req *http.Req
 }
 
 func (r *Router) finishLogin(w http.ResponseWriter, req *http.Request, user *models.User) {
+	if user == nil || !user.Active {
+		respondError(w, http.StatusUnauthorized, "Invalid username or password")
+		return
+	}
 	token, err := auth.GenerateToken(user)
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
@@ -3760,6 +3769,7 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 		PasswordHash: hash,
 		Role:         legacyRole,
 		RoleID:       roleID,
+		Active:       true,
 	}
 
 	if err := r.userRepo.Create(req.Context(), user); err != nil {
@@ -3904,7 +3914,7 @@ func (r *Router) resolveAssignedRole(ctx context.Context, roleID *int64, fallbac
 	return &role.ID, legacyRole, nil
 }
 
-func (r *Router) handleDeleteUser(w http.ResponseWriter, req *http.Request) {
+func (r *Router) handleSetUserActive(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
 	if claims == nil || claims.Role != models.RoleFull {
 		respondError(w, http.StatusForbidden, "Full access required")
@@ -3918,26 +3928,34 @@ func (r *Router) handleDeleteUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if id == claims.UserID {
-		respondError(w, http.StatusBadRequest, "Cannot delete yourself")
+	var body struct {
+		Active *bool `json:"active"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || body.Active == nil {
+		respondError(w, http.StatusBadRequest, "Active status is required")
+		return
+	}
+	if id == claims.UserID && !*body.Active {
+		respondError(w, http.StatusBadRequest, "Cannot deactivate yourself")
 		return
 	}
 
-	user, err := r.userRepo.GetByID(req.Context(), id)
-	if err != nil || user == nil {
-		respondError(w, http.StatusNotFound, "User not found")
-		return
-	}
-	if err := r.userRepo.DeleteSafely(req.Context(), id); err != nil {
-		if errors.Is(err, database.ErrLastFullAdmin) || errors.Is(err, database.ErrLastUser) {
+	if err := r.userRepo.SetActive(req.Context(), id, *body.Active); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			respondError(w, http.StatusNotFound, "User not found")
+			return
+		}
+		if errors.Is(err, database.ErrLastFullAdmin) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "Failed to delete user")
+		respondError(w, http.StatusInternalServerError, "Failed to update user active status")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	respondJSON(w, http.StatusOK, map[string]interface{}{"status": "updated", "active": *body.Active})
 }
 
 func (r *Router) handleListRoles(w http.ResponseWriter, req *http.Request) {

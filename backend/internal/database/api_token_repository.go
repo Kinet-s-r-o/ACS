@@ -10,7 +10,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var ErrAPITokenLimit = errors.New("a user can have at most 100 active API tokens")
+var (
+	ErrAPITokenLimit = errors.New("a user can have at most 100 active API tokens")
+	ErrUserInactive  = errors.New("cannot create API tokens for an inactive user")
+)
 
 type APITokenRepository struct{ db *gorm.DB }
 
@@ -21,6 +24,9 @@ func (r *APITokenRepository) Create(ctx context.Context, token *models.APIToken)
 		var user models.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, token.UserID).Error; err != nil {
 			return err
+		}
+		if !user.Active {
+			return ErrUserInactive
 		}
 		var count int64
 		if err := tx.Model(&models.APIToken{}).Where("user_id = ? AND revoked_at IS NULL AND expires_at > ?", token.UserID, time.Now()).Count(&count).Error; err != nil {

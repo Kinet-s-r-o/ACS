@@ -75,6 +75,10 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 			respondError(w, http.StatusConflict, err.Error())
 			return
 		}
+		if errors.Is(err, database.ErrUserInactive) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		respondError(w, http.StatusInternalServerError, "Failed to create API token")
 		return
 	}

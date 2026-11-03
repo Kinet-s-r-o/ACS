@@ -103,7 +103,7 @@ export interface DashboardAggregationOption { id: string; title: string; source:
 export interface DashboardPanelLayout { order: number; width: number; height: number; interval?: DeviceGrowthInterval }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
-export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
+export interface User { id: number; username: string; first_name: string; last_name: string; email: string; active: boolean; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
 export interface TagDefinition { id: string; name: string; color: string; description?: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string>; key_configured?: boolean }
@@ -316,7 +316,7 @@ export const api = {
   getIntegrationSpec: () => request<Record<string, unknown>>('/openapi.json'),
   createUser: (body: { username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
   updateUser: (id: number, body: Partial<{ username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteUser: (id: number) => request<{ status: string }>(`/users/${id}`, { method: 'DELETE' }),
+  setUserActive: (id: number, active: boolean) => request<{ status: string; active: boolean }>(`/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active }) }),
   getRoles: () => request<Role[]>('/roles'),
   createRole: (body: { name: string; description: string; permissions: string[] }) => request<Role>('/roles', { method: 'POST', body: JSON.stringify(body) }),
   updateRole: (id: number, body: Partial<{ name: string; description: string; permissions: string[] }>) => request<Role>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),

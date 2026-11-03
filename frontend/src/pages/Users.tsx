@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { Users, ShieldCheck, Trash2, Edit2, Plus, Search, X, KeyRound, LayoutDashboard } from 'lucide-solid';
+import { Users, ShieldCheck, Ban, Check, Edit2, Plus, Search, X, KeyRound, LayoutDashboard } from 'lucide-solid';
 import UserAPITokens from '../components/UserAPITokens';
 import { api, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
@@ -23,7 +23,7 @@ import { sortRows, type SortDirection } from '../lib/sorting';
 
 const UsersPage: Component = () => {
   const navigate = useNavigate();
-  const { hasPermission, isFullAccess } = useAuth();
+  const { hasPermission, isFullAccess, user: currentUser } = useAuth();
   const { confirm, notify } = useFeedback();
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<'users' | 'roles'>('users');
@@ -45,6 +45,7 @@ const UsersPage: Component = () => {
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.users');
   const { columns, isVisible, toggle } = useColumnVisibility('users', [
     { id: 'username', label: 'Username', visible: true },
+    { id: 'active', label: 'Active', visible: true },
     { id: 'first_name', label: 'First name', visible: true },
     { id: 'last_name', label: 'Last name', visible: true },
     { id: 'email', label: 'Email', visible: true },
@@ -71,6 +72,7 @@ const UsersPage: Component = () => {
   const getFilterValue = (user: User, colId: string): string => {
     switch (colId) {
       case 'username': return user.username || '';
+      case 'active': return user.active ? 'Yes' : 'No';
       case 'first_name': return user.first_name || '';
       case 'last_name': return user.last_name || '';
       case 'email': return user.email || '';
@@ -88,6 +90,7 @@ const UsersPage: Component = () => {
     if (query) {
       all = all.filter(u =>
         u.username?.toLowerCase().includes(query) ||
+        (u.active ? 'active yes' : 'inactive no').includes(query) ||
         u.first_name?.toLowerCase().includes(query) ||
         u.last_name?.toLowerCase().includes(query) ||
         u.email?.toLowerCase().includes(query) ||
@@ -140,12 +143,13 @@ const UsersPage: Component = () => {
     finally { setPendingAction(null); }
   };
 
-  const handleDeleteUser = async (id: number) => {
-    if (!await confirm({ title: 'Delete operator account?', description: 'The operator will immediately lose access. Existing audit records remain attributed to the account.', confirmLabel: 'Delete operator', tone: 'danger' })) return;
+  const handleSetUserActive = async (target: User) => {
+    const active = !target.active;
     if (pendingAction()) return;
-    setPendingAction(`delete-user-${id}`);
-    try { await api.deleteUser(id); notify({ tone: 'success', title: 'Operator account deleted' }); refetchUsers(); }
-    catch (error) { notify({ tone: 'error', title: 'Could not delete operator', message: 'The account remains active.', detail: (error as Error).message, persistent: true }); }
+    if (!active && !await confirm({ title: 'Deactivate operator?', description: `${target.username} will no longer be able to sign in. Existing web sessions and API tokens will be blocked while the account is inactive; account data and dashboard settings will be retained.`, confirmLabel: 'Deactivate operator', tone: 'danger' })) return;
+    setPendingAction(`set-user-active-${target.id}`);
+    try { await api.setUserActive(target.id, active); notify({ tone: 'success', title: `Operator ${active ? 'activated' : 'deactivated'}`, message: target.username }); refetchUsers(); }
+    catch (error) { notify({ tone: 'error', title: `Could not ${active ? 'activate' : 'deactivate'} operator`, message: 'The account status was not changed.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
   };
 
@@ -202,6 +206,7 @@ const UsersPage: Component = () => {
                     </SortableHeader>
                   </th>
                 </Show>
+                <Show when={isVisible('active')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="active" label="Active" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="active" label="Active" active={columnFilters()['active'] || null} onApply={(state) => applyUserFilter('active', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('first_name')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="first_name" label="First name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="first_name" label="First name" active={columnFilters()['first_name'] || null} onApply={(state) => applyUserFilter('first_name', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('last_name')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="last_name" label="Last name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_name" label="Last name" active={columnFilters()['last_name'] || null} onApply={(state) => applyUserFilter('last_name', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('email')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="email" label="Email" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="email" label="Email" active={columnFilters()['email'] || null} onApply={(state) => applyUserFilter('email', state)} /></SortableHeader></th></Show>
@@ -226,6 +231,7 @@ const UsersPage: Component = () => {
                 {(u) => (
                   <tr class="border-b border-subtle/50">
                     <Show when={isVisible('username')}><td class="py-2 text-primary">{u.username}</td></Show>
+                    <Show when={isVisible('active')}><td class="py-2"><span class={`badge ${u.active ? 'badge-success' : 'badge-muted'}`}>{u.active ? 'Yes' : 'No'}</span></td></Show>
                     <Show when={isVisible('first_name')}><td class="py-2 text-primary">{u.first_name || '—'}</td></Show>
                     <Show when={isVisible('last_name')}><td class="py-2 text-primary">{u.last_name || '—'}</td></Show>
                     <Show when={isVisible('email')}><td class="py-2 text-secondary">{u.email || '—'}</td></Show>
@@ -247,12 +253,12 @@ const UsersPage: Component = () => {
                       <div class="flex items-center justify-end gap-1">
                         <Show when={isFullAccess() && hasPermission('users.read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
                         <Show when={hasPermission('users.dashboards')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
-                        <button onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}>
-                          <Edit2 size={14} />
-                        </button>
-                        <button onClick={() => handleDeleteUser(u.id)} class="icon-button" aria-label={`Delete operator ${u.username}`} disabled={pendingAction() !== null}>
-                          <Trash2 size={14} />
-                        </button>
+                        <Show when={isFullAccess() && hasPermission('users.write')}>
+                          <button type="button" onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}><Edit2 size={14} /></button>
+                          <button type="button" onClick={() => void handleSetUserActive(u)} class={`icon-button ${u.active ? 'text-amber-400' : 'text-emerald-400'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
+                            {u.active ? <Ban size={14} /> : <Check size={14} />}
+                          </button>
+                        </Show>
                       </div>
                     </td>
                     <td class="px-2 py-2"></td>

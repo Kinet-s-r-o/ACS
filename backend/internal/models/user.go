@@ -15,6 +15,7 @@ type User struct {
 	FirstName              string     `json:"first_name" gorm:"size:100;not null;default:''"`
 	LastName               string     `json:"last_name" gorm:"size:100;not null;default:''"`
 	Email                  string     `json:"email" gorm:"size:254;not null;default:''"`
+	Active                 bool       `json:"active" gorm:"not null;default:true"`
 	Required2FA            bool       `json:"required_2fa" gorm:"column:required_2fa;not null;default:false"`
 	TwoFactorConfigured    bool       `json:"two_factor_configured" gorm:"-"`
 	TwoFactorSecret        string     `json:"-" gorm:"not null;default:''"`

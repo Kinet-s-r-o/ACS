@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	ErrLastFullAdmin = errors.New("cannot remove the last full-access administrator")
-	ErrLastUser      = errors.New("cannot remove the last user")
+	ErrLastFullAdmin = errors.New("cannot demote or deactivate the last active full-access administrator")
 )
 
 type UserRepository struct {
@@ -74,9 +73,9 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, 
 		if err := tx.First(&current, id).Error; err != nil {
 			return err
 		}
-		if current.Role == models.RoleFull && role != models.RoleFull {
+		if current.Role == models.RoleFull && current.Active && role != models.RoleFull {
 			var count int64
-			if err := tx.Model(&models.User{}).Where("role = ?", models.RoleFull).Count(&count).Error; err != nil {
+			if err := tx.Model(&models.User{}).Where("role = ? AND active = ?", models.RoleFull, true).Count(&count).Error; err != nil {
 				return err
 			}
 			if count <= 1 {
@@ -134,7 +133,7 @@ func (r *UserRepository) ConsumeTwoFactorStep(ctx context.Context, id, step int6
 	return result.RowsAffected == 1, result.Error
 }
 
-func (r *UserRepository) DeleteSafely(ctx context.Context, id int64) error {
+func (r *UserRepository) SetActive(ctx context.Context, id int64, active bool) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
 			return err
@@ -143,23 +142,22 @@ func (r *UserRepository) DeleteSafely(ctx context.Context, id int64) error {
 		if err := tx.First(&user, id).Error; err != nil {
 			return err
 		}
-		var userCount int64
-		if err := tx.Model(&models.User{}).Count(&userCount).Error; err != nil {
-			return err
+		if user.Active == active {
+			return nil
 		}
-		if userCount <= 1 {
-			return ErrLastUser
-		}
-		if user.Role == models.RoleFull {
+		if !active && user.Role == models.RoleFull {
 			var count int64
-			if err := tx.Model(&models.User{}).Where("role = ?", models.RoleFull).Count(&count).Error; err != nil {
+			if err := tx.Model(&models.User{}).Where("role = ? AND active = ?", models.RoleFull, true).Count(&count).Error; err != nil {
 				return err
 			}
 			if count <= 1 {
 				return ErrLastFullAdmin
 			}
 		}
-		return tx.Delete(&models.User{}, id).Error
+		return tx.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"active":        active,
+			"token_version": gorm.Expr("token_version + 1"),
+		}).Error
 	})
 }
 
