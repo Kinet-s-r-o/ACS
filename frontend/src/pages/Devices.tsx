@@ -483,15 +483,15 @@ const Devices: Component = () => {
             <button type="button" class="icon-button" onClick={() => void refetch()} disabled={deviceList.loading} title="Refresh CPE inventory" aria-label="Refresh CPE inventory">
               <RefreshCw size={15} class={deviceList.loading ? 'animate-spin' : ''} aria-hidden="true" />
             </button>
+            <button type="button" class="icon-button" onClick={() => void exportDevicesCSV()} disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} title="Export filtered CPEs as CSV" aria-label={`Export ${deviceList()?.total ?? 0} filtered CPEs as CSV`}>
+              <Download size={15} aria-hidden="true" />
+            </button>
             <div class="relative" ref={inventoryActionsMenu}>
               <button type="button" class="icon-button" onClick={() => setShowInventoryActions(value => !value)} aria-label="CPE inventory actions" aria-haspopup="menu" aria-expanded={showInventoryActions()} title="CPE inventory actions">
                 <MoreVertical size={16} aria-hidden="true" />
               </button>
               <Show when={showInventoryActions()}>
                 <div class="absolute right-0 top-full z-50 mt-2 min-w-52 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
-                  <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} onClick={() => { setShowInventoryActions(false); void exportDevicesCSV(); }}>
-                    <Download size={14} aria-hidden="true" />{exportingDevices() ? 'Exporting…' : 'Export filtered CPEs as CSV'}
-                  </button>
                   <Show when={isFullAccess()}>
                     <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={deviceList.loading || bulkAction() !== null || pagedDevices().length === 0} onClick={() => { setShowInventoryActions(false); void queueBulkDeviceAction('summon'); }}>
                       <Send size={14} aria-hidden="true" />{bulkAction() === 'summon' ? 'Summoning…' : 'Summon visible CPEs'}
