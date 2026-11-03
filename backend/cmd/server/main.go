@@ -152,6 +152,25 @@ func main() {
 		}
 	}()
 	go func() {
+		log.Println("Removing oversized Fleet analytics indexes in the background...")
+		if err := database.DropFleetAnalyticsParameterIndexes(ctx, db); err != nil {
+			log.Printf("Fleet analytics index cleanup failed: %v", err)
+			return
+		}
+		log.Println("Fleet analytics index cleanup completed")
+
+		if wanBackfillNeeded {
+			log.Println("Preparing WAN interface inventory in the background...")
+			if err := database.EnsureWANParameterIndex(ctx, db); err != nil {
+				log.Printf("WAN parameter index creation failed: %v", err)
+			}
+			if err := database.BackfillWANInterfaces(ctx, db); err != nil {
+				log.Printf("WAN interface inventory preparation failed: %v", err)
+			} else {
+				log.Println("WAN interface inventory preparation completed")
+			}
+		}
+
 		log.Println("Preparing device log backfill index in the background...")
 		if err := database.EnsureDeviceLogBackfillIndex(ctx, db); err != nil {
 			log.Printf("Device log backfill index creation failed: %v", err)
@@ -167,25 +186,12 @@ func main() {
 		if ran {
 			log.Println("Device log backfill completed")
 		}
-	}()
-	go func() {
-		if wanBackfillNeeded {
-			log.Println("Preparing WAN interface inventory in the background...")
-			if err := database.EnsureWANParameterIndex(ctx, db); err != nil {
-				log.Printf("WAN parameter index creation failed: %v", err)
-			}
-			if err := database.BackfillWANInterfaces(ctx, db); err != nil {
-				log.Printf("WAN interface inventory preparation failed: %v", err)
-			} else {
-				log.Println("WAN interface inventory preparation completed")
-			}
-		}
-		log.Println("Preparing fleet parameter search index (pg_trgm) in the background...")
-		if err := database.EnsureAnalyticsParameterIndex(ctx, db); err != nil {
-			log.Printf("Fleet parameter search index creation failed: %v", err)
+
+		if err := database.EnsureDeviceInventoryParameterIndex(ctx, db); err != nil {
+			log.Printf("Device inventory parameter index creation failed: %v", err)
 			return
 		}
-		log.Println("Fleet parameter search index is ready (idx_device_parameters_name_trgm)")
+		log.Println("Device inventory parameter index is ready")
 	}()
 
 	quit := make(chan os.Signal, 1)

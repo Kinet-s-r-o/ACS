@@ -51,40 +51,34 @@ func EnsureWANParameterIndex(ctx context.Context, db *gorm.DB) error {
 		WHERE name LIKE 'InternetGatewayDevice.WANDevice.%'`).Error
 }
 
-func EnsureAnalyticsParameterIndex(ctx context.Context, db *gorm.DB) error {
+// DropFleetAnalyticsParameterIndexes removes the global indexes that were
+// created for Fleet parameter analytics. The device-scoped unique index
+// (device_id, name) remains in place for CPE parameter reads and writes.
+func DropFleetAnalyticsParameterIndexes(ctx context.Context, db *gorm.DB) error {
 	if db.Dialector.Name() != "postgres" {
 		return nil
 	}
 	db = db.WithContext(ctx)
-	var index struct{ Valid bool }
-	result := db.Raw(`SELECT indisvalid AS valid FROM pg_index
-		WHERE indexrelid = to_regclass('idx_device_parameters_name_trgm')`).Scan(&index)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected > 0 && !index.Valid {
-		// An interrupted concurrent build leaves an unusable index with the same name.
-		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS idx_device_parameters_name_trgm`).Error; err != nil {
-			return err
+	// These indexes accelerate Fleet-wide wildcard/latest-value analytics.
+	// They are much larger than the parameter heap and are no longer needed
+	// when those dashboard panels are not used. Concurrent drops preserve the
+	// table data and keep normal CPE reads and writes available.
+	for _, name := range []string{"idx_device_parameters_name_trgm", "idx_device_parameters_device_updated"} {
+		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS public.` + name).Error; err != nil {
+			return fmt.Errorf("drop obsolete Fleet parameter index %s: %w", name, err)
 		}
 	}
-	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS pg_trgm`).Error; err != nil {
-		return fmt.Errorf("enable pg_trgm for parameter search: %w", err)
+	return nil
+}
+
+// EnsureDeviceInventoryParameterIndex keeps the small selective index used
+// by CPE inventory RX-power lookups. It avoids rebuilding global analytics
+// indexes over every cached parameter value.
+func EnsureDeviceInventoryParameterIndex(ctx context.Context, db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
 	}
-	var extensionSchema string
-	if err := db.Raw(`SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
-		WHERE e.extname = 'pg_trgm'`).Scan(&extensionSchema).Error; err != nil {
-		return err
-	}
-	operatorClass := `"` + strings.ReplaceAll(extensionSchema, `"`, `""`) + `".gin_trgm_ops`
-	if err := db.Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_name_trgm
-		ON device_parameters USING gin (name ` + operatorClass + `)`).Error; err != nil {
-		return err
-	}
-	if err := db.Exec(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_device_parameters_device_updated
-		ON device_parameters (device_id, updated_at DESC, name) INCLUDE (value)`).Error; err != nil {
-		return err
-	}
+	db = db.WithContext(ctx)
 	var rxIndex struct{ Valid bool }
 	rxIndexResult := db.Raw(`SELECT indisvalid AS valid FROM pg_index
 		WHERE indexrelid = to_regclass('idx_device_parameters_device_rx_power')`).Scan(&rxIndex)
