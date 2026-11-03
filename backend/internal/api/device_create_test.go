@@ -33,7 +33,7 @@ func TestCreateDeviceRejectsInvalidInput(t *testing.T) {
 
 func TestCreateWaitingDevicePostgres(t *testing.T) {
 	db := integrationTestDatabase(t)
-	if err := db.AutoMigrate(&models.TagDefinition{}, &models.DeviceLifecycleEvent{}, &models.Fault{}); err != nil {
+	if err := db.AutoMigrate(&models.TagDefinition{}, &models.DeviceLifecycleEvent{}, &models.Fault{}, &models.WANInterfaceRecord{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&models.TagDefinition{ID: "branch", Name: "Branch", Color: "#123456"}).Error; err != nil {

@@ -166,7 +166,10 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 }
 
 const inventoryActiveFaultsExpression = `(SELECT COUNT(*) FROM faults WHERE faults.device_id = devices.id AND faults.resolved = FALSE)`
-const inventoryWANInterfacesCountExpression = `(SELECT COUNT(DISTINCT regexp_replace(dp.name, '(\.(WANPPPConnection|WANIPConnection)\.[0-9]+)\..*$', '\1.')) FROM device_parameters dp WHERE dp.device_id = devices.id AND dp.name ~ '^InternetGatewayDevice\.WANDevice\.[0-9]+\.WANConnectionDevice\.[0-9]+\.(WANPPPConnection|WANIPConnection)\.[0-9]+\.')`
+
+// Count the maintained WAN summary using its (device_id, path) primary key.
+// Inventory reads must not scan and parse the full parameter tree per CPE.
+const inventoryWANInterfacesCountExpression = `(SELECT COUNT(*) FROM wan_interfaces WHERE wan_interfaces.device_id = devices.id)`
 const inventoryStatusExpression = `CASE WHEN devices.online THEN 'Online' WHEN devices.last_inform IS NULL THEN 'Waiting' ELSE 'Offline' END`
 
 func inventoryParameterExpression(name string) string {
