@@ -284,6 +284,28 @@ const DeviceDetail: Component = () => {
     { id: 'actions', label: 'Actions', visible: true },
   ]);
   const wanVisibleColumnCount = () => wanColumns().filter((column) => column.visible).length;
+  const { columns: lanColumns, isVisible: isLanColumnVisible, toggle: toggleLanColumn } = useColumnVisibility('lan_interfaces', [
+    { id: 'name', label: 'Name', visible: true },
+    { id: 'admin_status', label: 'Adm. status', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'mac_address', label: 'MAC Address', visible: true },
+    { id: 'duplex', label: 'Duplex', visible: true },
+    { id: 'speed', label: 'Speed', visible: true },
+    { id: 'l3', label: 'L3', visible: true },
+    { id: 'actions', label: 'Actions', visible: true },
+  ]);
+  const { columns: wifiColumns, isVisible: isWifiColumnVisible, toggle: toggleWifiColumn } = useColumnVisibility('wifi_configuration', [
+    { id: 'index', label: 'Index', visible: true },
+    { id: 'admin_status', label: 'Adm. status', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'ssid_name', label: 'SSID Name', visible: true },
+    { id: 'security', label: 'Security', visible: true },
+    { id: 'band', label: 'Band', visible: true },
+    { id: 'channel', label: 'Ch', visible: true },
+    { id: 'max_rate', label: 'Max Rate', visible: true },
+    { id: 'password', label: 'Password', visible: true },
+    { id: 'actions', label: 'Actions', visible: true },
+  ]);
   const toggleSort = (setSort: typeof setTaskSort, setPage: (page: number) => void) => (column: string) => { setPage(0); setSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const updateTaskFilter = (column: string, state: ColumnFilterState | null) => { setTaskColumnFilters(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; }); setTaskPage(0); };
   const updateDeviceFaultFilter = (column: string, state: ColumnFilterState | null) => { setDeviceFaultColumnFilters(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; }); setFaultPage(0); };
@@ -2767,20 +2789,23 @@ const DeviceDetail: Component = () => {
                   <Network size={14} />
                   LAN Interfaces ({getLanInterfaces().length})
                 </h2>
-                <Show when={isFullAccess()}>
-                  <div class="relative" ref={lanContextMenu}>
-                    <button type="button" class="icon-button" aria-label="LAN Interfaces menu" aria-haspopup="menu" aria-expanded={showLanContextMenu()} onClick={() => setShowLanContextMenu(value => !value)}>
-                      <MoreVertical size={18} />
-                    </button>
-                    <Show when={showLanContextMenu()}>
-                      <div class="absolute right-0 top-full z-50 mt-2 min-w-48 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
-                        <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowLanContextMenu(false); setShowLanNetworkModal(true); }}>
-                          LAN IP and DHCP
-                        </button>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
+                <div class="flex items-center gap-2">
+                  <ColumnVisibility columns={lanColumns} onToggle={toggleLanColumn} title="LAN columns" />
+                  <Show when={isFullAccess()}>
+                    <div class="relative" ref={lanContextMenu}>
+                      <button type="button" class="icon-button" aria-label="LAN Interfaces menu" aria-haspopup="menu" aria-expanded={showLanContextMenu()} onClick={() => setShowLanContextMenu(value => !value)}>
+                        <MoreVertical size={18} />
+                      </button>
+                      <Show when={showLanContextMenu()}>
+                        <div class="absolute right-0 top-full z-50 mt-2 min-w-48 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
+                          <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowLanContextMenu(false); setShowLanNetworkModal(true); }}>
+                            LAN IP and DHCP
+                          </button>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
               </div>
               <Show when={getLanInterfaces().length > 0} fallback={
                 <p class="text-muted text-sm">No LAN interface data. Click Summon to fetch.</p>
@@ -2789,22 +2814,22 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-sm min-w-[720px]">
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b-2 border-subtle bg-base">
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">Adm. status</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">MAC Address</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Duplex</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Speed</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">L3</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Actions</th>
+                        <th data-column-order-id="name#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('name') }}>Name</th>
+                        <th data-column-order-id="adm. status#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('admin_status') }}>Adm. status</th>
+                        <th data-column-order-id="status#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('status') }}>Status</th>
+                        <th data-column-order-id="mac address#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('mac_address') }}>MAC Address</th>
+                        <th data-column-order-id="duplex#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('duplex') }}>Duplex</th>
+                        <th data-column-order-id="speed#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('speed') }}>Speed</th>
+                        <th data-column-order-id="l3#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('l3') }}>L3</th>
+                        <th data-column-order-id="actions#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('actions') }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       <For each={getLanInterfaces()}>
                         {(lan) => (
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                            <td class="px-3 py-2.5 text-primary font-medium">{lan.name}</td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="name#0" class="px-3 py-2.5 text-primary font-medium" classList={{ hidden: !isLanColumnVisible('name') }}>{lan.name}</td>
+                            <td data-column-order-id="adm. status#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isLanColumnVisible('admin_status') }}>
                               <Show when={isFullAccess()} fallback={<span class={lan.enabled ? 'text-emerald-400' : 'text-muted'}>{lan.enabled ? 'Y' : '-'}</span>}>
                                 <button
                                   onClick={() => handleLanEnable(lan.index, !lan.enabled)}
@@ -2816,13 +2841,13 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                            <td class="px-3 py-2.5">
+                            <td data-column-order-id="status#0" class="px-3 py-2.5" classList={{ hidden: !isLanColumnVisible('status') }}>
                               <span class={`badge ${statusBadgeClass(lan.status)}`}>{lan.status}</span>
                             </td>
-                            <td class="px-3 py-2.5 text-primary font-mono">{lan.mac}</td>
-                            <td class="px-3 py-2.5 text-secondary">{lan.duplex}</td>
-                            <td class="px-3 py-2.5 text-secondary">{lan.speed}</td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="mac address#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isLanColumnVisible('mac_address') }}>{lan.mac}</td>
+                            <td data-column-order-id="duplex#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isLanColumnVisible('duplex') }}>{lan.duplex}</td>
+                            <td data-column-order-id="speed#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isLanColumnVisible('speed') }}>{lan.speed}</td>
+                            <td data-column-order-id="l3#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isLanColumnVisible('l3') }}>
                               <Show when={isFullAccess()} fallback={<span class={lan.l3Enable === '1' || lan.l3Enable === 'true' ? 'text-emerald-400' : 'text-muted'}>{lan.l3Enable === '1' || lan.l3Enable === 'true' ? 'Y' : '-'}</span>}>
                                 <button
                                   onClick={() => handleLanL3(lan.index, lan.l3Enable !== '1' && lan.l3Enable !== 'true')}
@@ -2834,7 +2859,7 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                            <td class="px-2 py-2">
+                            <td data-column-order-id="actions#0" class="px-2 py-2" classList={{ hidden: !isLanColumnVisible('actions') }}>
                               <button
                                 onClick={() => setStatsInterface({ type: 'lan', name: lan.name, path: `InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.${lan.index}.` })}
                                 class="icon-button"
@@ -2864,35 +2889,38 @@ const DeviceDetail: Component = () => {
 
             {/* Row 3: Wi-Fi information */}
             <div class="card p-5">
-              <h2 class="text-xs font-medium text-muted mb-4 flex items-center justify-start gap-4 flex-wrap">
-                <span class="flex items-center gap-2">
-                  <Radio size={14} />
-                  Wi-Fi configuration
-                </span>
-                <Show when={getWifiRadios().length > 0}>
-                  <div class="flex flex-wrap items-center justify-start gap-2" aria-label="Wi-Fi radio states">
-                    <For each={getWifiRadios()}>
-                      {(radio) => (
-                        <div class="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5">
-                          <Show when={isFullAccess()} fallback={<span class={`badge ${radio.enabled ? 'badge-success' : 'badge-error'}`}>{radio.enabled ? 'Enabled' : 'Disabled'}</span>}>
-                            <button
-                              type="button"
-                              onClick={() => handleSetWifiRadioEnabled(radio, !radio.enabled)}
-                              disabled={actionLoading() !== null}
-                              class={`badge cursor-pointer ${radio.enabled ? 'badge-success' : 'badge-error'}`}
-                              aria-label={`${radio.enabled ? 'Disable' : 'Enable'} radio ${radio.index}`}
-                              aria-pressed={radio.enabled}
-                            >
-                              {radio.enabled ? 'Enabled' : 'Disabled'}
-                            </button>
-                          </Show>
-                          <span class="text-xs text-secondary">Radio {radio.index} · {radio.frequency}</span>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </Show>
-              </h2>
+              <div class="mb-4 flex items-start justify-between gap-3">
+                <h2 class="text-xs font-medium text-muted flex items-center justify-start gap-4 flex-wrap">
+                  <span class="flex items-center gap-2">
+                    <Radio size={14} />
+                    Wi-Fi configuration
+                  </span>
+                  <Show when={getWifiRadios().length > 0}>
+                    <div class="flex flex-wrap items-center justify-start gap-2" aria-label="Wi-Fi radio states">
+                      <For each={getWifiRadios()}>
+                        {(radio) => (
+                          <div class="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5">
+                            <Show when={isFullAccess()} fallback={<span class={`badge ${radio.enabled ? 'badge-success' : 'badge-error'}`}>{radio.enabled ? 'Enabled' : 'Disabled'}</span>}>
+                              <button
+                                type="button"
+                                onClick={() => handleSetWifiRadioEnabled(radio, !radio.enabled)}
+                                disabled={actionLoading() !== null}
+                                class={`badge cursor-pointer ${radio.enabled ? 'badge-success' : 'badge-error'}`}
+                                aria-label={`${radio.enabled ? 'Disable' : 'Enable'} radio ${radio.index}`}
+                                aria-pressed={radio.enabled}
+                              >
+                                {radio.enabled ? 'Enabled' : 'Disabled'}
+                              </button>
+                            </Show>
+                            <span class="text-xs text-secondary">Radio {radio.index} · {radio.frequency}</span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </h2>
+                <ColumnVisibility columns={wifiColumns} onToggle={toggleWifiColumn} title="Wi-Fi columns" />
+              </div>
               <Show when={!parameters.loading || (parameters()?.length ?? 0) > 0} fallback={<div class="space-y-2" aria-label="Loading Wi-Fi configuration"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-3/4" /></div>}>
                 <Show when={getWlanConfigs().length > 0} fallback={
                   <EmptyState compact title="No Wi-Fi configuration is stored" description="This CPE has not reported WLAN parameters. Send a connection request with Summon, then refresh the record." />
@@ -2901,24 +2929,24 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-xs min-w-[860px]">
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b border-subtle bg-base">
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Index</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Adm. status</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Status</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">SSID Name</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Security</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Band</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Ch</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Max Rate</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Password</th>
-                        <th class="text-left px-2 py-2 font-medium text-secondary">Actions</th>
+                        <th data-column-order-id="index#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('index') }}>Index</th>
+                        <th data-column-order-id="adm. status#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('admin_status') }}>Adm. status</th>
+                        <th data-column-order-id="status#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('status') }}>Status</th>
+                        <th data-column-order-id="ssid name#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('ssid_name') }}>SSID Name</th>
+                        <th data-column-order-id="security#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('security') }}>Security</th>
+                        <th data-column-order-id="band#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('band') }}>Band</th>
+                        <th data-column-order-id="ch#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('channel') }}>Ch</th>
+                        <th data-column-order-id="max rate#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('max_rate') }}>Max Rate</th>
+                        <th data-column-order-id="password#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('password') }}>Password</th>
+                        <th data-column-order-id="actions#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('actions') }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       <For each={getWlanConfigs()}>
                         {(wlan, i) => (
                           <tr class={`border-t border-subtle/30 hover:bg-elevated/50 transition-colors ${i() % 2 === 1 ? 'bg-elevated/20' : ''}`}>
-                            <td class="px-3 py-2 text-secondary">SSID{wlan.index}</td>
-                            <td class="px-3 py-2">
+                            <td data-column-order-id="index#0" class="px-3 py-2 text-secondary" classList={{ hidden: !isWifiColumnVisible('index') }}>SSID{wlan.index}</td>
+                            <td data-column-order-id="adm. status#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('admin_status') }}>
                               <Show when={isFullAccess()} fallback={<span class={`badge ${wlan.enabled ? 'badge-success' : 'badge-error'}`}>{wlan.enabled ? 'Yes' : 'No'}</span>}><button
                                 onClick={() => handleSetWifiEnabled(wlan.index, !wlan.enabled)}
                                 disabled={actionLoading() !== null}
@@ -2928,20 +2956,20 @@ const DeviceDetail: Component = () => {
                                 {wlan.enabled ? 'Yes' : 'No'}
                               </button></Show>
                             </td>
-                            <td class="px-3 py-2">
+                            <td data-column-order-id="status#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('status') }}>
                               <span class={`badge ${statusBadgeClass(wlan.status)}`}>{wlan.status}</span>
                             </td>
-                            <td class="px-3 py-2">
+                            <td data-column-order-id="ssid name#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('ssid_name') }}>
                               <span class="text-primary font-medium">{wlan.ssid}</span>
                             </td>
-                            <td class="px-3 py-2 text-secondary">{wlan.security}</td>
-                            <td class="px-3 py-2 text-secondary">{wlan.frequency}</td>
-                            <td class="px-3 py-2 text-secondary">{wlan.channel}</td>
-                            <td class="px-3 py-2 text-secondary">{wlan.maxBitrate}</td>
-                            <td class="px-3 py-2">
+                            <td data-column-order-id="security#0" class="px-3 py-2 text-secondary" classList={{ hidden: !isWifiColumnVisible('security') }}>{wlan.security}</td>
+                            <td data-column-order-id="band#0" class="px-3 py-2 text-secondary" classList={{ hidden: !isWifiColumnVisible('band') }}>{wlan.frequency}</td>
+                            <td data-column-order-id="ch#0" class="px-3 py-2 text-secondary" classList={{ hidden: !isWifiColumnVisible('channel') }}>{wlan.channel}</td>
+                            <td data-column-order-id="max rate#0" class="px-3 py-2 text-secondary" classList={{ hidden: !isWifiColumnVisible('max_rate') }}>{wlan.maxBitrate}</td>
+                            <td data-column-order-id="password#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('password') }}>
                               <span class="text-muted font-mono text-xs">{showSensitive() ? wlan.password : '••••••••'}</span>
                             </td>
-                            <td class="px-3 py-2">
+                            <td data-column-order-id="actions#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('actions') }}>
                               <Show when={isFullAccess()}>
                                 <button
                                   onClick={() => setWifiModalIndex(wlan.index)}
