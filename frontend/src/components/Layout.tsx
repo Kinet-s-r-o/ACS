@@ -26,7 +26,7 @@ const navigation = [
     { href: '/settings', label: 'System settings', icon: Settings, children: [
       { href: '/settings/general', label: 'General' },
       { href: '/settings/system-tasks', label: 'System tasks', permission: 'devices.read' },
-      { href: '/settings/retention', label: 'DB retention' },
+      { href: '/settings/retention', label: 'DB tools' },
       { href: '/settings/dictionaries', label: 'Dictionaries' },
       { href: '/settings/users', label: 'Users and Roles' },
       { href: '/settings/api-docs', label: 'API documentation' },
