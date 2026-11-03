@@ -3,7 +3,6 @@ package cwmp
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 )
 
