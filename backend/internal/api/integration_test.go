@@ -46,12 +46,17 @@ func TestIntegrationOpenAPIAndRouteCoverage(t *testing.T) {
 		"/v1/me": {"get"}, "/v1/devices": {"get"}, "/v1/devices/{serial}": {"get"},
 		"/v1/devices/{serial}/parameters": {"get"}, "/v1/devices/{serial}/read": {"post"}, "/v1/devices/{serial}/write": {"post"},
 		"/v1/devices/{serial}/tasks": {"get"}, "/v1/devices/{serial}/tasks/{taskID}": {"get"},
-		"/users/{id}/api-tokens": {"get", "post"}, "/users/{id}/api-tokens/{tokenID}": {"delete"}, "/openapi.json": {"get"},
+		"/openapi.json": {"get"},
 	} {
 		for _, verb := range verbs {
 			if len(spec.Paths[path][verb]) == 0 {
 				t.Errorf("missing API documentation: %s %s", verb, path)
 			}
+		}
+	}
+	for _, path := range []string{"/users/{id}/api-tokens", "/users/{id}/api-tokens/{tokenID}"} {
+		if _, exists := spec.Paths[path]; exists {
+			t.Errorf("console-only token endpoint exposed in integration API: %s", path)
 		}
 	}
 	// Exercise route registration and network guard without opening a database.

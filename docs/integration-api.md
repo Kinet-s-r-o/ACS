@@ -2,7 +2,7 @@
 
 The ACS exposes a versioned integration API for identifying CPEs by serial number, reading stored parameters, requesting fresh values, writing parameters and tracking CWMP tasks. Each external system uses its own named, expiring API token attached to an existing operator account.
 
-The complete machine-readable contract is [OpenAPI 3.0.3](../backend/internal/api/openapi.json). Interactive Swagger UI is available in **System settings → API documentation** (`/settings/api-docs`). The console can download the same document from `/api/openapi.json` using its session. It covers all integration and token-administration endpoints; internal console endpoints are not part of the external API contract.
+The machine-readable contract is [OpenAPI 3.0.3](../backend/internal/api/openapi.json). Interactive Swagger UI is available in **System settings → API documentation** (`/settings/api-docs`). The console can download the same document from `/api/openapi.json` using its session. It covers only the external `/v1` integration API. Token management is available in Users and Roles through the authenticated console and is not part of the integration API.
 
 ## Enable an integration
 
@@ -18,11 +18,11 @@ Tokens contain 256 random bits and use the `acs_` prefix. PostgreSQL stores only
 
 The owning user and current role are checked for every request. Role changes affect the next request; a missing user, revoked token or expired token cannot authenticate. Role/database lookup failures deny access. An empty role grants no permissions. There are no separate token grants that could exceed the user's permissions. Existing in-flight operations can finish when permissions change or a token is revoked.
 
-These are service credentials: interactive 2FA applies when the administrator signs into the console, not on each billing request. The owner need not complete an interactive login to use an administrator-issued service token. Password changes, logout and 2FA resets do **not** revoke service tokens. Revoke tokens explicitly when an integration is retired or compromised, and delete the owning account to block all its tokens.
+These are service credentials: interactive 2FA applies when the administrator signs into the console, not on each billing request. The owner need not complete an interactive login to use an administrator-issued service token. Password changes, logout and 2FA resets do **not** revoke service tokens. Revoke tokens explicitly when an integration is retired or compromised; deactivating the owning account blocks all its tokens.
 
 Up to 100 unexpired, unrevoked tokens may exist per user. Rotate by generating a replacement, changing the billing secret, verifying `/v1/me`, then revoking the old token. Revocation does not cancel tasks already queued. Metadata lists include creation, expiry, last-used and revoked timestamps. Last-used is updated at most once per minute, not for every request.
 
-Token administration requires a console session: full access plus `users.read` to list, or `users.write` to generate/revoke. Mutations retain normal CSRF cookie/header protection. The Swagger contract describes these endpoints, but the console token dialog is the intended administration interface.
+Token creation, listing and revocation are console-only operations. They require a full-access console session and normal CSRF protection for mutations; no integration API token can administer API tokens.
 
 ## Transport and operational limits
 
@@ -46,9 +46,6 @@ All paths below are relative to the public API base (`/api` in a standard revers
 | POST | `/v1/devices/{serial}/write` | `devices.write` | Queue SetParameterValues |
 | GET | `/v1/devices/{serial}/tasks` | `devices.read` | Paginated device task summaries, newest ID first |
 | GET | `/v1/devices/{serial}/tasks/{taskID}` | `devices.read` | Task state, result and errors |
-| GET | `/users/{id}/api-tokens` | Console administrator + `users.read` | Token metadata only |
-| POST | `/users/{id}/api-tokens` | Console administrator + `users.write` + CSRF | One-time token secret |
-| DELETE | `/users/{id}/api-tokens/{tokenID}` | Console administrator + `users.write` + CSRF | Revoke token belonging to that user |
 
 Serial numbers are exact and case-sensitive. URL-encode them as individual path segments. Internal numeric device IDs are not required for CPE operations. Task IDs are checked against the supplied serial; a mismatch returns 404. Device identity responses omit connection-request credentials and full parameter trees.
 
