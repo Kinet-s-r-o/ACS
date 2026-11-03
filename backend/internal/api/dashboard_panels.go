@@ -112,9 +112,10 @@ func validateDashboardAggregationOptionsJSON(raw string) (string, error) {
 }
 
 type dashboardLayoutItem struct {
-	Order  int     `json:"order"`
-	Width  float64 `json:"width"`
-	Height float64 `json:"height"`
+	Order    int     `json:"order"`
+	Width    float64 `json:"width"`
+	Height   float64 `json:"height"`
+	Interval string  `json:"interval,omitempty"`
 }
 
 type dashboardLayoutConfig map[string]dashboardLayoutItem
@@ -131,6 +132,16 @@ func validateDashboardLayout(layout dashboardLayoutConfig) error {
 	for id, item := range layout {
 		if _, ok := builtInDashboardPanelIDs[id]; !ok && !dashboardPanelIDRe.MatchString(id) {
 			return fmt.Errorf("invalid dashboard layout panel ID %q", id)
+		}
+		if item.Interval != "" {
+			if id != "growth" {
+				return fmt.Errorf("invalid device growth interval for dashboard panel %q", id)
+			}
+			switch item.Interval {
+			case "hourly", "daily", "weekly", "monthly", "yearly":
+			default:
+				return errors.New("invalid device growth interval")
+			}
 		}
 		if item.Order < 0 || item.Order > 1000 || math.IsNaN(item.Width) || math.IsInf(item.Width, 0) || item.Width < 30 || item.Width > 120 || math.IsNaN(item.Height) || math.IsInf(item.Height, 0) || item.Height < 0 || item.Height > 10000 {
 			return fmt.Errorf("invalid dashboard layout for panel %q", id)

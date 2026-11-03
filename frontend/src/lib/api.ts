@@ -100,7 +100,7 @@ export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_cla
 export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; aggregation_option_id?: string; limit?: number; hidden?: boolean; sort_by_count?: boolean; sort_direction?: 'asc' | 'desc'; exclude_na?: boolean; parameter_pattern: string; thresholds: DashboardThreshold[] }
 export type DashboardAggregationSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter';
 export interface DashboardAggregationOption { id: string; title: string; source: DashboardAggregationSource; parameter_pattern: string }
-export interface DashboardPanelLayout { order: number; width: number; height: number }
+export interface DashboardPanelLayout { order: number; width: number; height: number; interval?: DeviceGrowthInterval }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
 export interface User { id: number; username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }

@@ -9,7 +9,6 @@ import { formatDateTime } from '../lib/dateTime';
 import { useAuth } from '../lib/auth';
 import DeviceGrowthChart from '../components/DeviceGrowthChart';
 import ColorSwatch from '../components/ColorSwatch';
-import { createPersistedSignal } from '../lib/storage';
 
 interface DistributionListProps {
   data: Record<string, number>;
@@ -29,7 +28,14 @@ interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
 type FleetPanelLayout = DashboardPanelLayout;
 type FleetLayout = Record<string, FleetPanelLayout>;
 const defaultFleetLayout: FleetLayout = {
-  growth: { order: 0, width: 60, height: 2 },
+  growth: { order: 0, width: 60, height: 2, interval: 'daily' },
+};
+
+const readLegacyGrowthInterval = (): DeviceGrowthInterval => {
+  try {
+    const saved = localStorage.getItem('acs.dashboard.growth-interval');
+    return growthIntervals.some(({ id }) => id === saved) ? saved as DeviceGrowthInterval : 'daily';
+  } catch { return 'daily'; }
 };
 
 const normalizeFleetLayout = (layout: FleetLayout): FleetLayout => Object.fromEntries(
@@ -323,8 +329,10 @@ const Dashboard: Component = () => {
   const [savingPanel, setSavingPanel] = createSignal(false);
   const [showPanelActionsMenu, setShowPanelActionsMenu] = createSignal(false);
   let panelActionsMenu: HTMLDivElement | undefined;
-  const [storedGrowthInterval, setStoredGrowthInterval] = createPersistedSignal('acs.dashboard.growth-interval', 'daily');
-  const growthInterval = () => growthIntervals.some(({ id }) => id === storedGrowthInterval()) ? storedGrowthInterval() as DeviceGrowthInterval : 'daily';
+  const growthInterval = () => {
+    const interval = fleetLayout().growth?.interval;
+    return growthIntervals.some(({ id }) => id === interval) ? interval as DeviceGrowthInterval : 'daily';
+  };
   const [refreshKey, setRefreshKey] = createSignal(0);
   const userID = user()?.id ?? 'unknown';
   const [fleetLayout, setFleetLayout] = createSignal<FleetLayout>(readUserFleetLayout(String(userID)));
@@ -338,6 +346,9 @@ const Dashboard: Component = () => {
     const remote = savedFleetLayout();
     if (savedFleetLayout.loading || savedFleetLayout.error || !remote) return;
     const initial = Object.keys(remote).length > 0 ? { ...defaultFleetLayout, ...remote } : managingOtherDashboard() ? { ...defaultFleetLayout } : { ...defaultFleetLayout, ...readUserFleetLayout(String(userID)) };
+    if (!growthIntervals.some(({ id }) => id === initial.growth?.interval)) {
+      initial.growth = { ...defaultFleetLayout.growth, ...initial.growth, interval: managingOtherDashboard() ? 'daily' : readLegacyGrowthInterval() };
+    }
     setFleetLayout(normalizeFleetLayout(initial));
     setFleetLayoutReady(true);
     try { localStorage.removeItem('acs.dashboard.fleet-layout'); } catch { /* Ignore unavailable local storage. */ }
@@ -349,7 +360,10 @@ const Dashboard: Component = () => {
       const targetID = dashboardTargetUserID();
       const save = targetID ? api.saveUserDashboardLayout(targetID, snapshot) : api.saveDashboardLayout(snapshot);
       void save.then(() => {
-        if (!targetID) try { localStorage.setItem(`acs.dashboard.fleet-layout:${userID}`, JSON.stringify(snapshot)); } catch { /* Storage can be unavailable in private browsing. */ }
+        if (!targetID) try {
+          localStorage.setItem(`acs.dashboard.fleet-layout:${userID}`, JSON.stringify(snapshot));
+          localStorage.removeItem('acs.dashboard.growth-interval');
+        } catch { /* Storage can be unavailable in private browsing. */ }
       }).catch((error) => notify({ tone: 'error', title: 'Dashboard layout was not synced', detail: (error as Error).message }));
     }, 500);
     onCleanup(() => window.clearTimeout(timer));
@@ -706,7 +720,7 @@ const Dashboard: Component = () => {
                   type="button"
                   class={`btn text-xs ${growthInterval() === option.id ? 'btn-primary' : 'btn-secondary'}`}
                   aria-pressed={growthInterval() === option.id}
-                  onClick={() => setStoredGrowthInterval(option.id)}
+                  onClick={() => setFleetLayout((current) => ({ ...current, growth: { ...defaultFleetLayout.growth, ...current.growth, interval: option.id } }))}
                 >{option.label}</button>
               )}</For>
             </div>
