@@ -275,11 +275,11 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			return nil, fmt.Errorf("check device admission: %w", err)
 		}
 		if blocked {
-			log.Printf("Blocked device rejected: %s", inform.DeviceId.SerialNumber)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Blocked device rejected")
 			h.sessions.Remove(remoteAddr)
 			if h.deviceRepo != nil {
 				if err := h.deviceRepo.SetOffline(ctx, inform.DeviceId.SerialNumber); err != nil {
-					log.Printf("Failed to mark blocked device offline: %v", err)
+					logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Failed to mark blocked device offline: %v", err)
 				}
 			}
 			return &InformResponse{MaxEnvelopes: 1}, nil
@@ -299,7 +299,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 		if err == nil {
 			resolvedTemplate = template
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("Error resolving template for Inform from %s: %v", inform.DeviceId.SerialNumber, err)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error resolving template for Inform: %v", err)
 		}
 	}
 
@@ -332,10 +332,10 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 
 		recovered, err := h.deviceRepo.UpsertFromInformWithTransition(ctx, device)
 		if err != nil {
-			log.Printf("Error saving device: %v", err)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error saving device: %v", err)
 		} else {
 			deviceID = device.ID
-			log.Printf("Device saved: %s (ID: %d)", device.SerialNumber, device.ID)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Device saved (ID: %d)", device.ID)
 			if recovered && h.watchdog != nil {
 				h.watchdog.VerifyRecoveredDevice(device.SerialNumber)
 			}
@@ -352,9 +352,9 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 					Value:    parameter.Value,
 				})
 			}
-			log.Printf("Inform from %s carries %d parameters", inform.DeviceId.SerialNumber, len(inform.ParameterList.Parameters))
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Inform carries %d parameters", len(inform.ParameterList.Parameters))
 			if err := h.parameterRepo.SaveInformParameters(ctx, deviceID, paramsToSave); err != nil {
-				log.Printf("Error saving Inform parameters: %v", err)
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error saving Inform parameters: %v", err)
 			} else {
 				parametersSaved = true
 			}
@@ -368,10 +368,10 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 				cached, err = h.parameterRepo.GetByDeviceIDMatching(ctx, deviceID, []string{"InternetGatewayDevice.WANDevice."}, nil)
 			}
 			if err != nil {
-				log.Printf("Error loading cached IP parameters for %s: %v", inform.DeviceId.SerialNumber, err)
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading cached IP parameters: %v", err)
 			} else if ip := database.SelectPrimaryIPAddress(cached, resolvedTemplate.Inventory, ""); ip != "" {
 				if err := h.deviceRepo.UpdateIPAddress(ctx, deviceID, ip); err != nil {
-					log.Printf("Error saving selected IP address for %s: %v", inform.DeviceId.SerialNumber, err)
+					logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error saving selected IP address: %v", err)
 				}
 			}
 		}
@@ -383,7 +383,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 				paramMap[p.Name] = p.Value
 			}
 			if err := h.metricRepo.ExtractAndStore(ctx, deviceID, deviceType, paramMap, inform.DeviceId.SerialNumber); err != nil {
-				log.Printf("Error extracting metrics from Inform: %v", err)
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error extracting metrics from Inform: %v", err)
 			}
 		}
 	}
@@ -404,14 +404,14 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	if deviceID > 0 && h.deviceRepo != nil && h.parameterRepo != nil {
 		stored, err := h.deviceRepo.GetBySerial(ctx, inform.DeviceId.SerialNumber)
 		if err != nil {
-			log.Printf("Error loading Inform stagger state for %s: %v", inform.DeviceId.SerialNumber, err)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading Inform stagger state: %v", err)
 		} else if stored != nil {
 			cached, err := h.parameterRepo.GetByDeviceIDMatching(ctx, deviceID, nil, []string{
 				"InternetGatewayDevice.ManagementServer.PeriodicInformInterval",
 				"Device.ManagementServer.PeriodicInformInterval",
 			})
 			if err != nil {
-				log.Printf("Error loading Inform interval for %s: %v", inform.DeviceId.SerialNumber, err)
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading Inform interval: %v", err)
 			} else if plan, ok := planInformStagger(inform, cached, time.Now()); ok &&
 				(!stored.InformStaggered || stored.InformStaggerInterval != plan.Interval) {
 				informStagger = &plan
@@ -435,7 +435,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 					applicationSecretLoaded = true
 					setting, settingErr := h.settingsRepo.Get(ctx, "connection_request_password")
 					if settingErr != nil {
-						log.Printf("Could not load application HMAC secret for device %s", inform.DeviceId.SerialNumber)
+						logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Could not load application HMAC secret")
 					} else if setting != nil {
 						applicationSecret = setting.Value
 					}
@@ -447,7 +447,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			}
 		}
 		if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues, applicationSecret); err != nil {
-			log.Printf("Could not resolve provisioning variables for device %s: %v", inform.DeviceId.SerialNumber, err)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Could not resolve provisioning variables: %v", err)
 		} else {
 			provisioningVariableValues = values
 		}
@@ -469,7 +469,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 		}
 
 		if len(allRules) > 0 {
-			log.Printf("Applying %d provisioning rules to device %s", len(allRules), inform.DeviceId.SerialNumber)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Applying %d provisioning rules", len(allRules))
 
 			spv := &SetParameterValues{ParameterKey: "auto-provisioning"}
 			var conditionalRules []*models.ProvisioningRule
@@ -484,7 +484,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 				} else {
 					value, err := expandProvisioningValue(rule.ParameterValue, provisioningVariableValues)
 					if err != nil {
-						log.Printf("Could not expand provisioning rule %d for device %s: %v", rule.ID, inform.DeviceId.SerialNumber, err)
+						logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Could not expand provisioning rule %d: %v", rule.ID, err)
 						continue
 					}
 					provisioningRules = append(provisioningRules, models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version})
@@ -497,7 +497,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			}
 
 			if len(addObjectQueue) > 0 {
-				log.Printf("Queued %d AddObject operations for device %s", len(addObjectQueue), inform.DeviceId.SerialNumber)
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Queued %d AddObject operations", len(addObjectQueue))
 			}
 
 			if len(spv.ParameterList.Parameters) > 0 {
@@ -506,7 +506,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 
 			// Parse conditions and collect params needed for GPV fetch
 			if len(conditionalRules) > 0 {
-				log.Printf("Deferring %d conditional rules for device %s", len(conditionalRules), inform.DeviceId.SerialNumber)
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Deferring %d conditional rules", len(conditionalRules))
 				seen := make(map[string]bool)
 				var condParams []string
 				var pendingConds []*Condition
@@ -515,7 +515,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 				for _, rule := range conditionalRules {
 					cond, err := ParseCondition(rule.Condition)
 					if err != nil {
-						log.Printf("Invalid condition on rule %d: %v (skipping)", rule.ID, err)
+						logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Invalid condition on rule %d: %v (skipping)", rule.ID, err)
 						continue
 					}
 					app := models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version}
@@ -557,7 +557,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			Value: informStagger.Value,
 			Type:  "dateTime",
 		})
-		log.Printf("Scheduling Inform phase for device %s at %s (interval %ds)", inform.DeviceId.SerialNumber, informStagger.Value, informStagger.Interval)
+		logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Scheduling Inform phase at %s (interval %ds)", informStagger.Value, informStagger.Interval)
 	}
 
 	session := h.sessions.GetOrCreate(remoteAddr, inform.DeviceId.SerialNumber)
@@ -608,12 +608,12 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	} else if deviceID > 0 {
 		stored, err := h.deviceRepo.GetBySerial(ctx, inform.DeviceId.SerialNumber)
 		if err != nil {
-			log.Printf("Error loading refresh times for %s: %v", inform.DeviceId.SerialNumber, err)
+			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading refresh times: %v", err)
 		} else if stored != nil {
 			session.AutoFetchReady = session.AutoFetchReady || refreshDue(stored.LastFullRefresh, fullInterval)
 			if !session.AutoFetchReady && refreshDue(stored.LastOverviewRefresh, overviewInterval) && h.parameterRepo != nil {
 				if names, err := h.parameterRepo.OverviewNames(ctx, deviceID); err != nil {
-					log.Printf("Error loading overview parameters for %s: %v", inform.DeviceId.SerialNumber, err)
+					logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading overview parameters: %v", err)
 				} else {
 					names = database.FilterDynamicParameterNames(names, session.DynamicParameterBranches)
 					if len(names) > 0 || len(session.DynamicParameterBranches) > 0 {
@@ -843,7 +843,7 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		if err := saveErr; err != nil {
 			log.Printf("Error saving parameters: %v", err)
 		} else {
-			log.Printf("Saved %d parameters for device %d (serial: %s)", len(params), session.DeviceID, session.SerialNumber)
+			logCWMPSession(session.SerialNumber, remoteAddr, "Saved %d parameters for device %d", len(params), session.DeviceID)
 			if h.deviceRepo != nil {
 				if err := h.deviceRepo.UpdateFromParameters(ctx, session.DeviceID, ExtractImportantParameters(resp.ParameterList.Parameters)); err != nil {
 					log.Printf("Error updating device details from parameters: %v", err)
