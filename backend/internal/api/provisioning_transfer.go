@@ -31,6 +31,8 @@ type provisioningTransferTemplate struct {
 	Description              string                              `json:"description,omitempty"`
 	Inventory                models.TemplateInventory            `json:"inventory,omitempty"`
 	DynamicParameterBranches []string                            `json:"dynamic_parameter_branches,omitempty"`
+	OverviewPollInterval     string                              `json:"overview_poll_interval,omitempty"`
+	FullTreePollInterval     string                              `json:"full_tree_poll_interval,omitempty"`
 	Variables                []models.ProvisioningVariable       `json:"variables,omitempty"`
 	Features                 []models.ProvisioningFeature        `json:"features,omitempty"`
 	LANPortCount             int                                 `json:"lan_port_count,omitempty"`
@@ -68,6 +70,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
 			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
+			OverviewPollInterval: template.OverviewPollInterval, FullTreePollInterval: template.FullTreePollInterval,
 			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
 			CPEInfoFields: template.CPEInfoFields,
 		}
@@ -174,12 +177,16 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 		}
 		for index := range body.Templates {
 			item := &body.Templates[index]
+			if err := validateTemplateRefreshIntervals(item.OverviewPollInterval, item.FullTreePollInterval); err != nil {
+				return err
+			}
 			if err := prepareProvisioningVariableSecrets(item.Variables, nil); err != nil {
 				return err
 			}
 			template := models.ProvisioningTemplate{
 				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
 				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, Variables: item.Variables, Features: item.Features,
+				OverviewPollInterval: item.OverviewPollInterval, FullTreePollInterval: item.FullTreePollInterval,
 				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,
 				CPEInfoFields: item.CPEInfoFields,
 			}

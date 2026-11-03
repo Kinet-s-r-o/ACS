@@ -33,6 +33,8 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		Description              string                    `json:"description"`
 		Inventory                *models.TemplateInventory `json:"inventory,omitempty"`
 		DynamicParameterBranches []string                  `json:"dynamic_parameter_branches,omitempty"`
+		OverviewPollInterval     *string                   `json:"overview_poll_interval,omitempty"`
+		FullTreePollInterval     *string                   `json:"full_tree_poll_interval,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -69,12 +71,19 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	overviewInterval := templateIntervalValue(body.OverviewPollInterval, source.OverviewPollInterval)
+	fullTreeInterval := templateIntervalValue(body.FullTreePollInterval, source.FullTreePollInterval)
+	if err := validateTemplateRefreshIntervals(overviewInterval, fullTreeInterval); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if body.DynamicParameterBranches == nil {
 		body.DynamicParameterBranches = append([]string(nil), source.DynamicParameterBranches...)
 	}
 	clone := models.ProvisioningTemplate{
 		Name: body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
 		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), Variables: source.Variables, Features: source.Features,
+		OverviewPollInterval: overviewInterval, FullTreePollInterval: fullTreeInterval,
 		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
 		CPEInfoFields: append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),
 	}

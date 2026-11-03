@@ -115,7 +115,7 @@ func TestRefreshIntervalsLoadSavedSettings(t *testing.T) {
 	}
 	handler := NewHandler(nil)
 	handler.settingsRepo = database.NewSettingsRepository(db)
-	overview, full := handler.refreshIntervals(context.Background())
+	overview, full := handler.refreshIntervals(context.Background(), nil)
 	if overview != 30*time.Minute || full != 12*time.Hour {
 		t.Fatalf("saved intervals were not applied: overview=%s full=%s", overview, full)
 	}

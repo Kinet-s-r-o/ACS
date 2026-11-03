@@ -4561,6 +4561,12 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	overviewInterval := templateIntervalValue(body.OverviewPollInterval, "")
+	fullTreeInterval := templateIntervalValue(body.FullTreePollInterval, "")
+	if err := validateTemplateRefreshIntervals(overviewInterval, fullTreeInterval); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
 		Name:                     strings.TrimSpace(body.Name),
@@ -4569,6 +4575,8 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Description:              strings.TrimSpace(body.Description),
 		Inventory:                inventory,
 		DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches),
+		OverviewPollInterval:     overviewInterval,
+		FullTreePollInterval:     fullTreeInterval,
 		Variables:                body.Variables,
 	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
@@ -4647,6 +4655,12 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	overviewInterval := templateIntervalValue(body.OverviewPollInterval, previous.OverviewPollInterval)
+	fullTreeInterval := templateIntervalValue(body.FullTreePollInterval, previous.FullTreePollInterval)
+	if err := validateTemplateRefreshIntervals(overviewInterval, fullTreeInterval); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	template := &models.ProvisioningTemplate{
 		ID:                       id,
@@ -4656,6 +4670,8 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Description:              strings.TrimSpace(body.Description),
 		Inventory:                inventory,
 		DynamicParameterBranches: dynamicBranches,
+		OverviewPollInterval:     overviewInterval,
+		FullTreePollInterval:     fullTreeInterval,
 		Variables:                body.Variables,
 	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, previous.Variables); err != nil {
@@ -4759,6 +4775,35 @@ func normalizeDynamicParameterBranches(branches []string) []string {
 		result = append(result, branch)
 	}
 	return result
+}
+
+func templateIntervalValue(value *string, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return strings.TrimSpace(*value)
+}
+
+func validateTemplateRefreshIntervals(overview, fullTree string) error {
+	for _, interval := range []struct {
+		name  string
+		value string
+		min   time.Duration
+		max   time.Duration
+	}{
+		{name: "overview_poll_interval", value: overview, min: time.Minute, max: 24 * time.Hour},
+		{name: "full_tree_poll_interval", value: fullTree, min: 15 * time.Minute, max: 7 * 24 * time.Hour},
+	} {
+		value := strings.TrimSpace(interval.value)
+		if value == "" || value == "0" {
+			continue
+		}
+		duration, err := time.ParseDuration(value)
+		if err != nil || duration < interval.min || duration > interval.max {
+			return fmt.Errorf("%s must be 0 or between %s and %s", interval.name, interval.min, interval.max)
+		}
+	}
+	return nil
 }
 
 func validateDynamicParameterBranches(branches []string) error {

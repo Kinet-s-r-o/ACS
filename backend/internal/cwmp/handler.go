@@ -561,7 +561,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 
 	session := h.sessions.GetOrCreate(remoteAddr, inform.DeviceId.SerialNumber)
-	overviewInterval, fullInterval := h.refreshIntervals(ctx)
+	overviewInterval, fullInterval := h.refreshIntervals(ctx, resolvedTemplate)
 	session.mu.Lock()
 	isNewSession := session.State == StateWaitingInform
 	session.AutoFactoryResetSessionFinished = false
@@ -595,7 +595,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 	// The database timestamps survive CWMP session expiry and ACS restarts.
 	// A new session alone must not force a full-tree read.
-	session.AutoFetchReady = hasBootstrap
+	session.AutoFetchReady = hasBootstrap && fullInterval > 0
 	session.OverviewFetchReady = false
 	session.OverviewFetchActive = false
 	session.OverviewFetchParams = nil
@@ -604,14 +604,14 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DynamicDiscoveryCurrent = nil
 	session.DynamicDiscoveryNames = nil
 	if h.deviceRepo == nil {
-		session.AutoFetchReady = session.AutoFetchReady || isNewSession
+		session.AutoFetchReady = session.AutoFetchReady || (isNewSession && fullInterval > 0)
 	} else if deviceID > 0 {
 		stored, err := h.deviceRepo.GetBySerial(ctx, inform.DeviceId.SerialNumber)
 		if err != nil {
 			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading refresh times: %v", err)
 		} else if stored != nil {
-			session.AutoFetchReady = session.AutoFetchReady || refreshDue(stored.LastFullRefresh, fullInterval)
-			if !session.AutoFetchReady && refreshDue(stored.LastOverviewRefresh, overviewInterval) && h.parameterRepo != nil {
+			session.AutoFetchReady = session.AutoFetchReady || (fullInterval > 0 && refreshDue(stored.LastFullRefresh, fullInterval))
+			if !session.AutoFetchReady && overviewInterval > 0 && refreshDue(stored.LastOverviewRefresh, overviewInterval) && h.parameterRepo != nil {
 				if names, err := h.parameterRepo.OverviewNames(ctx, deviceID); err != nil {
 					logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading overview parameters: %v", err)
 				} else {
@@ -658,21 +658,36 @@ func refreshDue(last *time.Time, interval time.Duration) bool {
 	return last == nil || time.Since(*last) >= interval
 }
 
-func (h *Handler) refreshIntervals(ctx context.Context) (time.Duration, time.Duration) {
+func (h *Handler) refreshIntervals(ctx context.Context, template *models.ProvisioningTemplate) (time.Duration, time.Duration) {
 	overview, full := h.overviewPollInterval, h.fullPollInterval
-	if h.settingsRepo == nil {
-		return overview, full
+	if h.settingsRepo != nil {
+		values, err := h.settingsRepo.GetValues(ctx, "overview_poll_interval", "full_tree_poll_interval")
+		if err != nil {
+			log.Printf("Error loading provisioning refresh intervals: %v", err)
+		} else {
+			if value, err := time.ParseDuration(values["overview_poll_interval"]); err == nil && value >= time.Minute && value <= 24*time.Hour {
+				overview = value
+			}
+			if value, err := time.ParseDuration(values["full_tree_poll_interval"]); err == nil && value >= 15*time.Minute && value <= 7*24*time.Hour {
+				full = value
+			}
+		}
 	}
-	values, err := h.settingsRepo.GetValues(ctx, "overview_poll_interval", "full_tree_poll_interval")
-	if err != nil {
-		log.Printf("Error loading provisioning refresh intervals: %v", err)
-		return overview, full
-	}
-	if value, err := time.ParseDuration(values["overview_poll_interval"]); err == nil && value >= time.Minute && value <= 24*time.Hour {
-		overview = value
-	}
-	if value, err := time.ParseDuration(values["full_tree_poll_interval"]); err == nil && value >= 15*time.Minute && value <= 7*24*time.Hour {
-		full = value
+	if template != nil {
+		if value := strings.TrimSpace(template.OverviewPollInterval); value != "" {
+			if value == "0" {
+				overview = 0
+			} else if duration, err := time.ParseDuration(value); err == nil {
+				overview = duration
+			}
+		}
+		if value := strings.TrimSpace(template.FullTreePollInterval); value != "" {
+			if value == "0" {
+				full = 0
+			} else if duration, err := time.ParseDuration(value); err == nil {
+				full = duration
+			}
+		}
 	}
 	return overview, full
 }

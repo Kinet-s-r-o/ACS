@@ -10,6 +10,8 @@ type ProvisioningTemplate struct {
 	Description              string                       `json:"description,omitempty"`
 	Inventory                TemplateInventory            `json:"inventory" gorm:"type:jsonb;serializer:json"`
 	DynamicParameterBranches []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
+	OverviewPollInterval     string                       `json:"overview_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
+	FullTreePollInterval     string                       `json:"full_tree_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
 	Variables                []ProvisioningVariable       `json:"variables" gorm:"type:jsonb;serializer:json"`
 	Features                 []ProvisioningFeature        `json:"features" gorm:"type:jsonb;serializer:json"`
 	LANPortCount             int                          `json:"lan_port_count" gorm:"default:0"`
@@ -155,6 +157,8 @@ type CreateProvisioningTemplateRequest struct {
 	Description              string                 `json:"description"`
 	Inventory                *TemplateInventory     `json:"inventory,omitempty"`
 	DynamicParameterBranches []string               `json:"dynamic_parameter_branches,omitempty"`
+	OverviewPollInterval     *string                `json:"overview_poll_interval,omitempty"`
+	FullTreePollInterval     *string                `json:"full_tree_poll_interval,omitempty"`
 	Variables                []ProvisioningVariable `json:"variables"`
 }
 
