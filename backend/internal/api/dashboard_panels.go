@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/matrix8412/acs/internal/auth"
@@ -169,8 +170,8 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 				if len(pattern) > 512 || strings.Count(pattern, "*") > 8 || !dashboardParameterPatternRe.MatchString(pattern) || validateParameterNames([]string{strings.ReplaceAll(pattern, "*", "X")}) != nil {
 					return errors.New("invalid dashboard category parameter pattern")
 				}
-				if !dashboardAggregationOptionIDRe.MatchString(config.AggregationOptionID) {
-					return errors.New("select a configured aggregation option")
+				if config.AggregationOptionID != "" && !dashboardAggregationOptionIDRe.MatchString(config.AggregationOptionID) {
+					return errors.New("invalid dashboard aggregation option")
 				}
 			default:
 				return errors.New("invalid dashboard category source")
@@ -261,6 +262,73 @@ func (r *Router) handleGetDashboardPanels(w http.ResponseWriter, req *http.Reque
 		configs = append(configs, config)
 	}
 	respondJSON(w, http.StatusOK, configs)
+}
+
+func (r *Router) handleGetUserDashboardPanels(w http.ResponseWriter, req *http.Request) {
+	userID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	user, err := r.userRepo.GetByID(req.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load user")
+		return
+	}
+	if user == nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+	rows, err := r.dashboardPanelRepo.List(req.Context(), userID)
+	if err != nil {
+		logDashboardPanelError("admin load", err)
+		respondError(w, http.StatusInternalServerError, "Failed to load user dashboard panels")
+		return
+	}
+	configs := make([]dashboardPanelConfig, 0, len(rows))
+	for _, row := range rows {
+		var config dashboardPanelConfig
+		if err := json.Unmarshal([]byte(row.Config), &config); err != nil {
+			logDashboardPanelError("admin decode", err)
+			respondError(w, http.StatusInternalServerError, "Stored dashboard panel configuration is invalid")
+			return
+		}
+		configs = append(configs, config)
+	}
+	respondJSON(w, http.StatusOK, configs)
+}
+
+func (r *Router) handleDeleteUserDashboardPanel(w http.ResponseWriter, req *http.Request) {
+	userID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	panelID := req.PathValue("panelID")
+	if !validDashboardPanelID(panelID) {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard panel ID")
+		return
+	}
+	user, err := r.userRepo.GetByID(req.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load user")
+		return
+	}
+	if user == nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+	deleted, err := r.dashboardPanelRepo.DeletePanel(req.Context(), userID, panelID)
+	if err != nil {
+		logDashboardPanelError("admin delete", err)
+		respondError(w, http.StatusInternalServerError, "Failed to remove dashboard panel")
+		return
+	}
+	if !deleted {
+		respondError(w, http.StatusNotFound, "Dashboard panel not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (r *Router) handleGetDashboardAggregationOptions(w http.ResponseWriter, req *http.Request) {
@@ -465,7 +533,9 @@ func (r *Router) handleDashboardPanelAnalytics(w http.ResponseWriter, req *http.
 			values, err = r.deviceRepo.GetRecencyAnalytics(req.Context(), 10000)
 		} else {
 			source, pattern := config.Source, config.ParameterPattern
-			if source == "configured_option" || source == "custom_parameter" {
+			if source == "custom_parameter" && config.AggregationOptionID == "" {
+				source = "parameter"
+			} else if source == "configured_option" || source == "custom_parameter" {
 				if !aggregationOptionsLoaded {
 					aggregationOptions, err = r.loadDashboardAggregationOptions(req.Context())
 					if err != nil {

@@ -175,6 +175,8 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /users", auth.RequirePermission(models.PermUsersWrite)(r.handleCreateUser))
 	apiMux.HandleFunc("PUT /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateUser))
 	apiMux.HandleFunc("DELETE /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleDeleteUser))
+	apiMux.HandleFunc("GET /users/{id}/dashboard-panels", auth.RequirePermission(models.PermUsersRead)(auth.RequirePermission(models.PermUsersDashboards)(r.handleGetUserDashboardPanels)))
+	apiMux.HandleFunc("DELETE /users/{id}/dashboard-panels/{panelID}", auth.RequirePermission(models.PermUsersDashboards)(r.handleDeleteUserDashboardPanel))
 	apiMux.HandleFunc("GET /dashboard/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDashboardPanels))
 	apiMux.HandleFunc("GET /dashboard/aggregation-options", auth.RequirePermission(models.PermDevicesRead)(r.handleGetDashboardAggregationOptions))
 	apiMux.HandleFunc("PUT /dashboard/panels", auth.RequirePermission(models.PermDevicesRead)(r.handleSaveDashboardPanels))

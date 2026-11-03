@@ -1,8 +1,8 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
-import { Users, ShieldCheck, Trash2, Edit2, Plus, Search, X, KeyRound } from 'lucide-solid';
+import { Users, ShieldCheck, Trash2, Edit2, Plus, Search, X, KeyRound, LayoutDashboard } from 'lucide-solid';
 import UserAPITokens from '../components/UserAPITokens';
-import { api, type User } from '../lib/api';
+import { api, type DashboardPanelConfig, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
@@ -37,6 +37,8 @@ const UsersPage: Component = () => {
 
   const [showUserModal, setShowUserModal] = createSignal(false);
   const [tokenUser, setTokenUser] = createSignal<User | null>(null);
+  const [dashboardUser, setDashboardUser] = createSignal<User | null>(null);
+  const [userDashboardPanels, { refetch: refetchUserDashboardPanels }] = createResource(dashboardUser, (user) => api.getUserDashboardPanels(user.id));
   const [editingUser, setEditingUser] = createSignal<User | null>(null);
   const [userForm, setUserForm] = createSignal({ username: '', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read' as 'full' | 'read', roleId: '' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.users', {});
@@ -147,6 +149,21 @@ const UsersPage: Component = () => {
     finally { setPendingAction(null); }
   };
 
+  const handleDeleteDashboardPanel = async (panel: DashboardPanelConfig) => {
+    const user = dashboardUser();
+    if (!user || pendingAction()) return;
+    const customPanel = panel.id.startsWith('custom-');
+    if (!await confirm({ title: customPanel ? 'Remove Fleet panel?' : 'Reset Fleet panel?', description: customPanel ? `Remove “${panel.title}” from ${user.username}'s Fleet dashboard?` : `Restore “${panel.title}” on ${user.username}'s Fleet dashboard to its default configuration?`, confirmLabel: customPanel ? 'Remove panel' : 'Reset panel', tone: 'danger' })) return;
+    setPendingAction(`delete-dashboard-${panel.id}`);
+    try {
+      await api.deleteUserDashboardPanel(user.id, panel.id);
+      notify({ tone: 'success', title: customPanel ? 'Fleet panel removed' : 'Fleet panel reset', message: `${panel.title} updated on ${user.username}'s dashboard.` });
+      void refetchUserDashboardPanels();
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not update Fleet panel', message: 'The saved panel remains unchanged.', detail: (error as Error).message, persistent: true });
+    } finally { setPendingAction(null); }
+  };
+
   const openEditUser = (u: User) => {
     setEditingUser(u);
     setUserForm({ username: u.username, firstName: u.first_name || '', lastName: u.last_name || '', email: u.email || '', required2FA: u.required_2fa, reset2FA: false, password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
@@ -244,6 +261,7 @@ const UsersPage: Component = () => {
                     <td class="py-2 text-right">
                       <div class="flex items-center justify-end gap-1">
                         <Show when={isFullAccess() && hasPermission('users.read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
+                        <Show when={hasPermission('users.dashboards')}><button type="button" class="icon-button" title="Fleet dashboards" aria-label={`Fleet dashboards for ${u.username}`} onClick={() => setDashboardUser(u)}><LayoutDashboard size={14} /></button></Show>
                         <button onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}>
                           <Edit2 size={14} />
                         </button>
@@ -272,6 +290,24 @@ const UsersPage: Component = () => {
 
       {/* User Modal */}
       <Show when={tokenUser()}>{(user) => <UserAPITokens user={user()} onClose={() => setTokenUser(null)} />}</Show>
+      <Show when={dashboardUser()}>{(user) => <Dialog title={`Fleet dashboards · ${user().username}`} description="Saved panel settings for this operator. Removing a custom panel deletes it; resetting a built-in panel restores its default settings." size="medium" onClose={() => setDashboardUser(null)}>
+        <Show when={userDashboardPanels.loading}><p class="py-5 text-sm text-muted" role="status">Loading saved panels…</p></Show>
+        <Show when={userDashboardPanels.error}><ResourceError title="Fleet panels are unavailable" description="Could not load this user's saved panels." onRetry={() => void refetchUserDashboardPanels()} /></Show>
+        <Show when={!userDashboardPanels.loading && !userDashboardPanels.error}>
+          <Show when={(userDashboardPanels()?.length ?? 0) > 0} fallback={<EmptyState title="No saved Fleet panel settings" description="This user has no panel configurations saved in the database." />}>
+            <ul class="divide-y divide-subtle max-h-[60vh] overflow-y-auto">
+              <For each={userDashboardPanels()}>{(panel) => <li class="flex items-start justify-between gap-3 py-3">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-primary">{panel.title}</p>
+                  <p class="text-xs text-muted">{panel.kind ?? 'parameter'}{panel.source ? ` · ${panel.source}` : ''}{panel.hidden ? ' · hidden' : ''}</p>
+                  <Show when={panel.parameter_pattern}><code class="mt-1 block break-all text-xs text-secondary">{panel.parameter_pattern}</code></Show>
+                </div>
+                <button type="button" class="icon-button text-danger" aria-label={`${panel.id.startsWith('custom-') ? 'Remove' : 'Reset'} ${panel.title}`} title={panel.id.startsWith('custom-') ? 'Remove panel' : 'Reset to default'} disabled={pendingAction() !== null} onClick={() => void handleDeleteDashboardPanel(panel)}><Trash2 size={14} /></button>
+              </li>}</For>
+            </ul>
+          </Show>
+        </Show>
+      </Dialog>}</Show>
       <Show when={showUserModal()}>
         <Dialog title={editingUser() ? 'Edit operator' : 'Add operator'} description="Operator roles determine access to configuration and destructive CPE actions." size="small" onClose={() => { if (!pendingAction()) setShowUserModal(false); }}>
           <form class="space-y-4" onSubmit={(event) => { event.preventDefault(); void (editingUser() ? handleUpdateUser() : handleCreateUser()); }}>

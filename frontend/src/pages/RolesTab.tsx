@@ -21,6 +21,7 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
     { key: 'users.read', label: 'Read', description: 'View user accounts.' },
     { key: 'users.write', label: 'Write', description: 'Create, edit, and delete users.' },
     { key: 'users.tokens', label: 'Manage API tokens', description: 'Create and revoke user API tokens.' },
+    { key: 'users.dashboards', label: 'Manage Fleet dashboards', description: 'View and remove saved Fleet panels for any user.' },
   ] },
   { label: 'Roles', permissions: [
     { key: 'roles.read', label: 'Read', description: 'View role definitions.' },

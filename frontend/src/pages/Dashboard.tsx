@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, Index, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
 import { A } from '@solidjs/router';
-import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, RotateCcw, MoreVertical } from 'lucide-solid';
+import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, MoreVertical } from 'lucide-solid';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
 import { api, type DashboardAggregationOption, type DashboardPanelConfig, type DashboardPanelLayout, type DashboardThreshold, type DashboardThresholdColor, type DeviceGrowthInterval, type User } from '../lib/api';
@@ -24,12 +24,8 @@ interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
 
 type FleetPanelLayout = DashboardPanelLayout;
 type FleetLayout = Record<string, FleetPanelLayout>;
-const removableDefaultAggregationPanels = ['accessType', 'manufacturer', 'productClass'];
-
 const defaultFleetLayout: FleetLayout = {
-  growth: { order: 0, width: 60, height: 2 }, contactRecency: { order: 1, width: 60, height: 2 },
-  uptime: { order: 2, width: 40, height: 2 }, temperature: { order: 3, width: 40, height: 2 }, rxPower: { order: 4, width: 40, height: 2 },
-  accessType: { order: 5, width: 40, height: 2 }, manufacturer: { order: 6, width: 40, height: 2 }, productClass: { order: 7, width: 40, height: 2 },
+  growth: { order: 0, width: 60, height: 2 },
 };
 
 const normalizeFleetLayout = (layout: FleetLayout): FleetLayout => Object.fromEntries(
@@ -56,7 +52,7 @@ const FleetPanelFrame: Component<{
   id: string;
   layout: FleetPanelLayout;
   onMove: (source: string, target: string, after: boolean) => void;
-  onResize: (id: string, width: number, height?: number) => void;
+  onResize?: (id: string, width: number, height?: number) => void;
   children: JSX.Element;
 }> = (props) => {
   const [dragging, setDragging] = createSignal(false);
@@ -70,6 +66,7 @@ const FleetPanelFrame: Component<{
   });
   let startWidth = props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width;
   const resizeStart = (event: PointerEvent, axis: 'x' | 'y') => {
+    if (!props.onResize) return;
     event.preventDefault();
     event.stopPropagation();
     const startPointer = axis === 'x' ? event.clientX : event.clientY;
@@ -81,16 +78,16 @@ const FleetPanelFrame: Component<{
     const move = (current: PointerEvent) => {
       const delta = (axis === 'x' ? current.clientX : current.clientY) - startPointer;
       currentWidth = axis === 'x' ? Math.max(30, Math.min(120, startWidth + delta / Math.max(1, columnStep))) : Math.max(80, startWidth + delta);
-      if (axis === 'x') props.onResize(props.id, currentWidth);
-      else props.onResize(props.id, props.layout.width, currentWidth);
+      if (axis === 'x') props.onResize?.(props.id, currentWidth);
+      else props.onResize?.(props.id, props.layout.width, currentWidth);
     };
     const end = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
       grid?.classList.remove('is-resizing');
-      if (axis === 'x') props.onResize(props.id, Math.max(30, Math.min(120, Math.round(currentWidth))));
-      else props.onResize(props.id, props.layout.width, Math.max(80, Math.round(currentWidth / 12) * 12));
+      if (axis === 'x') props.onResize?.(props.id, Math.max(30, Math.min(120, Math.round(currentWidth))));
+      else props.onResize?.(props.id, props.layout.width, Math.max(80, Math.round(currentWidth / 12) * 12));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end, { once: true });
@@ -171,8 +168,8 @@ const FleetPanelFrame: Component<{
     <div class="fleet-panel-shell" ref={shell}>
       {props.children}
       <button type="button" class="fleet-panel-drag-handle" aria-label="Move panel" title="Drag to move panel" onPointerDown={dragStart}><GripVertical size={14} aria-hidden="true" /></button>
-      <button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge to resize width" onPointerDown={(event) => resizeStart(event, 'x')} />
-      <button type="button" class="fleet-panel-resize-y" aria-label="Resize panel height" title="Drag bottom edge to resize height" onPointerDown={(event) => resizeStart(event, 'y')} />
+      <Show when={props.onResize}><button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge to resize width" onPointerDown={(event) => resizeStart(event, 'x')} />
+      <button type="button" class="fleet-panel-resize-y" aria-label="Resize panel height" title="Drag bottom edge to resize height" onPointerDown={(event) => resizeStart(event, 'y')} /></Show>
     </div>
   </div>;
 };
@@ -188,41 +185,7 @@ const growthIntervals: Array<{ id: DeviceGrowthInterval; label: string }> = [
   { id: 'monthly', label: 'Monthly' }, { id: 'yearly', label: 'Yearly' },
 ];
 
-const defaultDashboardPanels: DashboardPanelConfig[] = [
-  { id: 'contactRecency', title: 'Contact recency', kind: 'recency', source: 'last_inform', parameter_pattern: '', thresholds: [] },
-  { id: 'accessType', title: 'Access type', kind: 'category', source: 'access_type', limit: 6, parameter_pattern: '', thresholds: [] },
-  { id: 'manufacturer', title: 'Manufacturer', kind: 'category', source: 'manufacturer', limit: 6, parameter_pattern: '', thresholds: [] },
-  { id: 'productClass', title: 'Product class', kind: 'category', source: 'product_class', limit: 6, parameter_pattern: '', thresholds: [] },
-  { id: 'uptime', title: 'Uptime', parameter_pattern: 'InternetGatewayDevice.*UpTime', thresholds: [
-    { label: '< 1 hour', max: 3600, color: 'blue' }, { label: '1-24 hours', max: 86400, color: 'blue' },
-    { label: '1-7 days', max: 604800, color: 'blue' }, { label: '1-30 days', max: 2592000, color: 'blue' }, { label: '> 1 month', max: null, color: 'blue' },
-  ] },
-  { id: 'temperature', title: 'Temperature', parameter_pattern: 'InternetGatewayDevice.*Temp*', thresholds: [
-    { label: 'Normal (< 45)', max: 45, color: 'green' }, { label: 'Warm (45-55)', max: 55, color: 'amber' },
-    { label: 'Hot (55-65)', max: 65, color: 'orange' }, { label: 'Critical (> 65)', max: null, color: 'red' },
-  ] },
-  { id: 'rxPower', title: 'Optical RX power', parameter_pattern: 'InternetGatewayDevice.*RxPower*', thresholds: [
-    { label: 'Critical (< -29)', max: -29, color: 'red' }, { label: 'Poor (-29 to -25)', max: -25, color: 'orange' },
-    { label: 'Normal (-25 to -23)', max: -23, color: 'amber' }, { label: 'Excellent (-23 to -15)', max: -15, color: 'green' }, { label: 'Above range (> -15)', max: null, color: 'blue' },
-  ] },
-];
-
-const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => {
-  const savedPanels = Array.isArray(panels) ? panels : [];
-  const defaults = defaultDashboardPanels.flatMap((fallback) => {
-    const saved = savedPanels.find((panel) => panel?.id === fallback.id);
-    return saved
-      ? [{ ...fallback, ...saved, thresholds: Array.isArray(saved.thresholds) ? saved.thresholds : fallback.thresholds }]
-      : [];
-  });
-  const custom = savedPanels.filter((panel) => panel?.id?.startsWith('custom-') && !defaultDashboardPanels.some((fallback) => fallback.id === panel.id));
-  return [...defaults, ...custom];
-};
-
-const initializeDashboardPanels = (panels: DashboardPanelConfig[]) => normalizeDashboardPanels([
-  ...defaultDashboardPanels.filter((fallback) => !panels.some((panel) => panel.id === fallback.id)),
-  ...panels,
-]);
+const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => Array.isArray(panels) ? panels : [];
 
 const loadDashboardPanelConfigs = async (): Promise<DashboardPanelConfig[]> => {
   const remote = await api.getDashboardPanels();
@@ -237,17 +200,9 @@ const loadDashboardPanelConfigs = async (): Promise<DashboardPanelConfig[]> => {
       panels = [];
     }
   }
-  const hasDefaultPanelState = panels.some((panel) => defaultDashboardPanels.some((fallback) => fallback.id === panel.id));
-  if (hasDefaultPanelState) {
-    if (legacyRaw) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
-    return panels;
-  }
-
-  // Seed defaults once for new users and older accounts that only received a copied custom panel.
-  const initialized = initializeDashboardPanels(panels);
-  const saved = await api.saveDashboardPanels(initialized);
+  if (remote.length === 0 && panels.length > 0) panels = await api.saveDashboardPanels(normalizeDashboardPanels(panels));
   if (legacyRaw) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
-  return saved;
+  return normalizeDashboardPanels(panels);
 };
 
 const semanticTone = (label: string) => {
@@ -370,6 +325,13 @@ const Dashboard: Component = () => {
     const total = stats()?.total ?? 0;
     return total > 0 ? Math.round(((stats()?.online ?? 0) / total) * 1000) / 10 : 0;
   });
+  const categoryPanelEntries = () => {
+    const values = panelAnalytics()?.data?.panels;
+    if (!values) return [];
+    return panelConfigs().filter((config) => config.kind === 'category' && !config.hidden).map((config) => ({
+      id: config.id, label: config.title, values: values[config.id] ?? {}, limit: config.limit ?? 6,
+    }));
+  };
   const openPanelSettings = (config: DashboardPanelConfig) => {
     setShowCopyUsers(false);
     setSelectedRecipientIDs([]);
@@ -377,14 +339,14 @@ const Dashboard: Component = () => {
   };
   const addPanel = () => {
     if (panelConfigs().length >= 12) {
-      notify({ tone: 'error', title: 'Panel limit reached', message: 'A maximum of 12 parameter panels can be shown on the dashboard.' });
+      notify({ tone: 'error', title: 'Panel limit reached', message: 'A maximum of 12 user panels can be shown on the dashboard.' });
       return;
     }
     const id = `custom-${crypto.randomUUID()}`;
     setShowCopyUsers(false);
     setSelectedRecipientIDs([]);
     setPanelDraft({
-      id, title: 'New parameter', parameter_pattern: '',
+      id, title: 'New panel', parameter_pattern: '',
       thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
     });
   };
@@ -405,15 +367,17 @@ const Dashboard: Component = () => {
   });
   const layoutFor = (id: string, fallbackOrder = 100): FleetPanelLayout => {
     const saved = fleetLayout()[id] ?? { order: fallbackOrder, width: 40, height: 2 };
+    if (id === 'growth') return { order: saved.order, width: 60, height: 2 };
     return { ...saved, width: Math.max(30, Math.min(120, saved.width <= 12 ? saved.width * 10 : saved.width)), height: saved.height > 5 ? saved.height : 0 };
   };
+  const panelFallbackOrder = (id: string) => Math.max(1, panelConfigs().findIndex((panel) => panel.id === id) + 1);
   const resizePanel = (id: string, width: number, height?: number) => setFleetLayout((current) => {
     const saved = current[id] ?? layoutFor(id);
     return { ...current, [id]: { ...saved, width, ...(height === undefined ? {} : { height }) } };
   });
   const movePanel = (source: string, target: string, after: boolean) => setFleetLayout((current) => {
     const layouts: FleetLayout = { ...defaultFleetLayout, ...current };
-    panelConfigs().filter((panel) => (panel.kind ?? 'parameter') === 'parameter').forEach((panel, index) => {
+    panelConfigs().forEach((panel, index) => {
       if (!layouts[panel.id]) layouts[panel.id] = layoutFor(panel.id, 2 + index);
     });
     if (!layouts[source]) layouts[source] = layoutFor(source);
@@ -458,19 +422,26 @@ const Dashboard: Component = () => {
       return null;
     }
     if (kind !== 'parameter') {
-      if (kind === 'category' && draft.id.startsWith('custom-') && !['configured_option', 'custom_parameter'].includes(draft.source ?? '')) {
+      if (kind === 'category' && !['configured_option', 'custom_parameter', 'access_type', 'manufacturer', 'product_class'].includes(draft.source ?? '')) {
         notify({ tone: 'error', title: 'Invalid panel source', message: 'Choose a supported category source.' });
         return null;
       }
-      if (kind === 'category' && draft.id.startsWith('custom-') && (!draft.aggregation_option_id || !aggregationOptions().some((option) => option.id === draft.aggregation_option_id))) {
+      if (kind === 'category' && draft.source === 'configured_option' && (!draft.aggregation_option_id || !aggregationOptions().some((option) => option.id === draft.aggregation_option_id))) {
         notify({ tone: 'error', title: 'Invalid aggregation option', message: 'Choose an aggregation source currently configured by an administrator.' });
+        return null;
+      }
+      if (kind === 'category' && draft.source === 'custom_parameter' && (!/^(InternetGatewayDevice|Device)\.[A-Za-z0-9_.*-]+$/.test(draft.parameter_pattern.trim()) || draft.parameter_pattern.length > 512)) {
+        notify({ tone: 'error', title: 'Invalid parameter path', message: 'Enter a Device. or InternetGatewayDevice. parameter path. Use * for dynamic path sections.' });
         return null;
       }
       if (kind === 'recency' && draft.source !== 'last_inform') {
         notify({ tone: 'error', title: 'Invalid panel source', message: 'Contact recency must use Last Inform.' });
         return null;
       }
-      const aggregationOptionID = draft.source === 'configured_option' || draft.source === 'custom_parameter' ? draft.aggregation_option_id : undefined;
+      if (draft.source === 'custom_parameter') {
+        return { id: draft.id, title, kind, source: 'custom_parameter', parameter_pattern: draft.parameter_pattern.trim(), limit: draft.limit ?? 6, thresholds: [] };
+      }
+      const aggregationOptionID = draft.source === 'configured_option' ? draft.aggregation_option_id : undefined;
       const configuredOption = aggregationOptions().find((option) => option.id === aggregationOptionID);
       return {
         id: draft.id, title, kind,
@@ -540,25 +511,20 @@ const Dashboard: Component = () => {
   };
   const deletePanel = async () => {
     const panel = panelDraft();
-    const isCustom = panel?.id.startsWith('custom-') ?? false;
-    const isDefaultAggregation = panel ? removableDefaultAggregationPanels.includes(panel.id) : false;
-    if (!panel || (!isCustom && !isDefaultAggregation)) return;
+    const isCustom = panel !== null;
+    if (!panel) return;
     if (!await confirm({
       title: `Remove “${panel.title}” panel?`,
-      description: isCustom
-        ? 'This removes the custom panel and its saved layout from your Fleet dashboard. Copies already shared with other users stay on their dashboards.'
-        : 'This hides the built-in panel from your Fleet dashboard. You can restore the built-in aggregation panels later.',
+      description: 'This removes the panel and its saved layout from your Fleet dashboard. Copies already shared with other users stay on their dashboards.',
       confirmLabel: 'Remove panel',
       tone: 'danger',
     })) return;
     setSavingPanel(true);
     try {
-      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? [])
-        .filter((item) => !isCustom || item.id !== panel.id)
-        .map((item) => isDefaultAggregation && item.id === panel.id ? { ...item, hidden: true } : item);
+      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? []).filter((item) => item.id !== panel.id);
       const saved = await api.saveDashboardPanels(panels);
       setSavedPanelConfigs(saved);
-      if (isCustom) setFleetLayout((current) => {
+      setFleetLayout((current) => {
           const next = { ...current };
           delete next[panel.id];
           return next;
@@ -567,19 +533,6 @@ const Dashboard: Component = () => {
       notify({ tone: 'success', title: isCustom ? 'Custom panel removed' : 'Built-in panel hidden', message: `“${panel.title}” is no longer shown on your Fleet dashboard.` });
     } catch (error) {
       notify({ tone: 'error', title: 'Could not remove panel', message: 'The panel remains on your Fleet dashboard.', detail: (error as Error).message, persistent: true });
-    } finally {
-      setSavingPanel(false);
-    }
-  };
-  const restoreDefaultAggregationPanels = async () => {
-    setSavingPanel(true);
-    try {
-      const panels = normalizeDashboardPanels(savedPanelConfigs() ?? []).map((panel) => removableDefaultAggregationPanels.includes(panel.id) ? { ...panel, hidden: false } : panel);
-      const saved = await api.saveDashboardPanels(panels);
-      setSavedPanelConfigs(saved);
-      notify({ tone: 'success', title: 'Built-in panels restored' });
-    } catch (error) {
-      notify({ tone: 'error', title: 'Could not restore built-in panels', detail: (error as Error).message, persistent: true });
     } finally {
       setSavingPanel(false);
     }
@@ -614,11 +567,6 @@ const Dashboard: Component = () => {
                 <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" onClick={() => { setShowPanelActionsMenu(false); addPanel(); }} disabled={panelConfigs().length >= 12 || savedPanelConfigs.loading}>
                   <Plus size={14} />Add panel
                 </button>
-                <Show when={panelConfigs().some((panel) => removableDefaultAggregationPanels.includes(panel.id) && panel.hidden)}>
-                  <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" onClick={() => { setShowPanelActionsMenu(false); void restoreDefaultAggregationPanels(); }} disabled={savingPanel() || savedPanelConfigs.loading}>
-                    <RotateCcw size={14} />Restore built-in panels
-                  </button>
-                </Show>
               </div>
             </Show>
           </div>
@@ -675,7 +623,7 @@ const Dashboard: Component = () => {
         </Show>
 
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
-        <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel} onResize={resizePanel}>
+        <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel}>
         <section class="data-panel fleet-content-panel">
           <div class="data-panel-header">
             <div><h2>Device growth</h2><p>Active CPE count at the end of each period, including registrations and deletions.</p></div>
@@ -694,7 +642,7 @@ const Dashboard: Component = () => {
         </section>
         </FleetPanelFrame>
 
-        <Show when={panelAnalytics()?.data}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel fleet-content-panel">
+        <Show when={panelAnalytics()?.data && panelConfigs().some((config) => config.id === 'contactRecency' && config.kind === 'recency')}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel fleet-content-panel">
           <div class="data-panel-header">
             <div><h2>{panelConfigs().find((config) => config.id === 'contactRecency')?.title ?? 'Contact recency'}</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
             <button type="button" class="icon-button" aria-label="Configure contact recency panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'contactRecency'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button>
@@ -709,8 +657,8 @@ const Dashboard: Component = () => {
         <Show when={savedPanelConfigs.loading}><div class="fleet-layout-status" role="status">Loading dashboard panels…</div></Show>
         <Show when={savedPanelConfigs.error}><div class="fleet-layout-status"><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></div></Show>
         <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
-          <For each={panelConfigs().filter((config) => (config.kind ?? 'parameter') === 'parameter')}>{(config, index) => (
-            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, 2 + index())} onMove={movePanel} onResize={resizePanel}>
+          <For each={panelConfigs().filter((config) => (config.kind ?? 'parameter') === 'parameter' && !config.hidden)}>{(config) => (
+            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, panelFallbackOrder(config.id))} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel fleet-content-panel">
                 <div class="dashboard-configurable-heading"><h3>{config.title}</h3><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></div>
                 <div class="data-panel-body"><ParameterDistribution config={config} refreshKey={refreshKey()} /></div>
@@ -720,48 +668,57 @@ const Dashboard: Component = () => {
         </Show>
 
         <Show when={panelAnalytics()?.data}>
-          <For each={[
-            { id: 'accessType', label: 'Access type', values: panelAnalytics()!.data!.panels.accessType, limit: panelConfigs().find((config) => config.id === 'accessType')?.limit ?? 6 },
-            { id: 'manufacturer', label: 'Manufacturer', values: panelAnalytics()!.data!.panels.manufacturer, limit: panelConfigs().find((config) => config.id === 'manufacturer')?.limit ?? 6 },
-            { id: 'productClass', label: 'Product class', values: panelAnalytics()!.data!.panels.productClass, limit: panelConfigs().find((config) => config.id === 'productClass')?.limit ?? 6 },
-          ].filter((panel) => !panelConfigs().find((config) => config.id === panel.id)?.hidden)}>{(panel, index) => {
+          <For each={categoryPanelEntries()}>{(panel) => {
             const config = () => panelConfigs().find((item) => item.id === panel.id);
-            return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, 5 + index())} onMove={movePanel} onResize={resizePanel}>
+            return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, panelFallbackOrder(panel.id))} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel data-panel-section fleet-content-panel">
                 <div class="dashboard-configurable-heading"><h3>{config()?.title ?? panel.label}</h3><button type="button" class="icon-button" aria-label={`Configure ${panel.label} panel`} title="Configure panel" onClick={() => config() && openPanelSettings(config()!)}><Settings2 size={14} /></button></div>
-                <Show when={['configured_option', 'custom_parameter'].includes(config()?.source ?? '') && !aggregationOptions().some((option) => option.id === config()?.aggregation_option_id)} fallback={<DistributionList data={panel.values ?? {}} limit={panel.limit} />}>
+                <Show when={(config()?.source === 'configured_option' || config()?.source === 'custom_parameter' && !!config()?.aggregation_option_id) && !aggregationOptions().some((option) => option.id === config()?.aggregation_option_id)} fallback={<DistributionList data={panel.values ?? {}} limit={panel.limit} />}>
                   <p class="py-4 text-center text-xs text-muted">This aggregation option is no longer configured. Choose an available option in panel settings.</p>
                 </Show>
               </section>
             </FleetPanelFrame>;
           }}</For>
         </Show>
+        <Show when={panelAnalytics()?.data}>
+          <For each={panelConfigs().filter((config) => config.id !== 'contactRecency' && config.kind === 'recency' && !config.hidden)}>{(config) => (
+            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, panelFallbackOrder(config.id))} onMove={movePanel} onResize={resizePanel}>
+              <section class="data-panel fleet-content-panel">
+                <div class="dashboard-configurable-heading"><h3>{config.title}</h3><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></div>
+                <div class="data-panel-body"><DistributionList data={panelAnalytics()!.data!.panels[config.id] ?? {}} semantic /></div>
+              </section>
+            </FleetPanelFrame>
+          )}</For>
+        </Show>
         </div>
       </Show>
       <Show when={panelDraft()}>
-        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex w-full items-center justify-between gap-3"><Show when={panelDraft()?.id.startsWith('custom-') || removableDefaultAggregationPanels.includes(panelDraft()?.id ?? '')}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
+        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex items-center justify-between gap-3"><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
-              <Show when={panelDraft()?.id.startsWith('custom-')}><label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {
-                const kind = event.currentTarget.value as 'parameter' | 'category';
-                return { ...draft, kind, source: undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : draft.thresholds };
-              })}><option value="parameter">Parameter thresholds</option><option value="category">Aggregation</option></select></label></Show>
+              <label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {
+                const kind = event.currentTarget.value as 'parameter' | 'category' | 'recency';
+                return { ...draft, kind, source: kind === 'recency' ? 'last_inform' : undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : kind === 'parameter' ? draft.thresholds : [] };
+              })}><option value="parameter">Parameter thresholds</option><option value="category">Aggregation</option><option value="recency">Contact recency</option></select></label>
               <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
               <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
             </Show>
-            <Show when={(panelDraft()?.kind ?? 'parameter') !== 'parameter'}>
-              <Show when={panelDraft()?.id.startsWith('custom-')}><label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.aggregation_option_id && ['configured_option', 'custom_parameter'].includes(panelDraft()?.source ?? '') ? `aggregation:${panelDraft()?.aggregation_option_id}` : ''} onChange={(event) => updatePanelDraft((draft) => {
+            <Show when={panelDraft()?.kind === 'category'}>
+              <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={panelDraft()?.source === 'custom_parameter' && !panelDraft()?.aggregation_option_id ? 'custom_parameter' : panelDraft()?.aggregation_option_id && panelDraft()?.source === 'configured_option' ? `aggregation:${panelDraft()?.aggregation_option_id}` : panelDraft()?.source ?? ''} onChange={(event) => updatePanelDraft((draft) => {
                 const selected = event.currentTarget.value;
+                if (selected === 'custom_parameter') return { ...draft, source: 'custom_parameter', aggregation_option_id: undefined, parameter_pattern: '' };
                 if (selected.startsWith('aggregation:')) {
                   const option = aggregationOptions().find((item) => item.id === selected.slice('aggregation:'.length));
                   return { ...draft, source: 'configured_option', aggregation_option_id: option?.id, parameter_pattern: option?.source === 'parameter' ? option.parameter_pattern : '' };
                 }
                 return { ...draft, source: selected as DashboardPanelConfig['source'], aggregation_option_id: undefined, parameter_pattern: '' };
               })}>
-                <option value="">Select a configured aggregation source</option>
+                <option value="">Select an aggregation source</option>
+                <option value="access_type">Access type</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option>
                 <For each={aggregationOptions()}>{(option) => <option value={`aggregation:${option.id}`}>{option.title}</option>}</For>
-              </select><span class="mt-1 block">Only options configured by an administrator appear here.</span></label><Show when={aggregationOptions().length === 0}><p class="text-xs text-muted">No sources are configured yet. Ask an administrator to add one under General → Fleet aggregations.</p></Show></Show>
-              <Show when={!panelDraft()?.id.startsWith('custom-')}><p class="text-xs text-muted">Built-in aggregation: {panelDraft()?.source?.replaceAll('_', ' ') || 'Last Inform'}. The source is fixed.</p></Show>
+                <option value="custom_parameter">CWMP parameter path…</option>
+              </select><span class="mt-1 block">Use a shared option or define a CWMP path for this panel.</span></label><Show when={aggregationOptions().length === 0}><p class="text-xs text-muted">No shared sources are configured; you can still enter a CWMP parameter path.</p></Show>
+              <Show when={panelDraft()?.source === 'custom_parameter' && !panelDraft()?.aggregation_option_id}><label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="Device.DeviceInfo.X_VENDOR.Region" /><span class="mt-1 block">Use * for dynamic path sections. Sensitive parameters are excluded.</span></label></Show>
               <Show when={panelDraft()?.kind === 'category' && panelDraft()?.source === 'configured_option'}><p class="text-xs text-muted">Each CPE contributes its latest matching value; SQL groups and counts the results. Sensitive parameters are excluded.</p></Show>
               <Show when={panelDraft()?.kind === 'category'}>
                 <label class="block text-xs text-muted">Maximum categories<input type="number" min="1" max="100" class="input mt-1 w-full" value={panelDraft()?.limit ?? 6} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, limit: Number(event.currentTarget.value) }))} /></label>

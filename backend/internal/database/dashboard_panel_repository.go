@@ -46,6 +46,11 @@ func (r *DashboardPanelRepository) Replace(ctx context.Context, userID int64, pa
 	})
 }
 
+func (r *DashboardPanelRepository) DeletePanel(ctx context.Context, userID int64, panelID string) (bool, error) {
+	result := r.db.WithContext(ctx).Where("user_id = ? AND panel_id = ?", userID, panelID).Delete(&models.UserDashboardPanel{})
+	return result.RowsAffected > 0, result.Error
+}
+
 func (r *DashboardPanelRepository) CopyToUsers(ctx context.Context, sourceConfig string, userIDs []int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing int64

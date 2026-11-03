@@ -33,6 +33,7 @@ const (
 	PermDevicesFirmware       = "devices.firmware"
 	PermFirmwaresManage       = "firmwares.manage"
 	PermUsersTokens           = "users.tokens"
+	PermUsersDashboards       = "users.dashboards"
 	PermProvisioningRules     = "provisioning.rules.write"
 	PermProvisioningTemplates = "provisioning.templates.write"
 )
@@ -50,7 +51,7 @@ var AllPermissions = []string{
 	PermSecurityRead, PermSecurityWrite,
 	PermDevicesConfigure, PermDevicesCommand, PermDevicesReset, PermDevicesDelete,
 	PermDevicesCredentials, PermDevicesSnapshots, PermDevicesFirmware,
-	PermFirmwaresManage, PermUsersTokens, PermProvisioningRules, PermProvisioningTemplates,
+	PermFirmwaresManage, PermUsersTokens, PermUsersDashboards, PermProvisioningRules, PermProvisioningTemplates,
 }
 
 // ReadPermissions lists all read-only permission keys.
