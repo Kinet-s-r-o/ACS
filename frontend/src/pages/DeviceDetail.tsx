@@ -115,6 +115,15 @@ const DeviceDetail: Component = () => {
   const { isFullAccess, user } = useAuth();
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
+  const copyWanAddress = async (value: string, label: 'IP address' | 'MAC address') => {
+    if (!value || value === '-') return;
+    try {
+      await navigator.clipboard.writeText(value);
+      notify({ tone: 'success', title: `${label} copied` });
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not copy ${label.toLowerCase()}`, detail: (error as Error).message, persistent: true });
+    }
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' || searchParams.tab === 'log' ? searchParams.tab : 'overview';
 
@@ -2670,13 +2679,19 @@ const DeviceDetail: Component = () => {
                             <td data-column-order-id="vlan#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('vlan') }}>{wan.vlan}</td>
                             <td data-column-order-id="ip address#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('ip_address') }}>
                               <div class="flex items-center gap-1.5">
-                                <span>{wan.ipAddress}</span>
+                                <Show when={wan.ipAddress !== '-'} fallback={<span>{wan.ipAddress}</span>}>
+                                  <button type="button" class="cursor-copy text-left hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" onClick={() => void copyWanAddress(wan.ipAddress, 'IP address')} aria-label={`Copy IP address ${wan.ipAddress}`} title="Click to copy IP address">{wan.ipAddress}</button>
+                                </Show>
                                 <Show when={cpeWebUiUrl(wan.ipAddress)}>
                                   {(url) => <a href={url()} target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded p-1 text-muted hover:text-primary hover:bg-elevated" aria-label={`Open CPE web interface at ${wan.ipAddress}`} title="Open CPE web interface in a new tab"><ExternalLink size={13} /></a>}
                                 </Show>
                               </div>
                             </td>
-                            <td data-column-order-id="mac address#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('mac_address') }}>{wan.macAddress}</td>
+                            <td data-column-order-id="mac address#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('mac_address') }}>
+                              <Show when={wan.macAddress !== '-'} fallback={<span>{wan.macAddress}</span>}>
+                                <button type="button" class="cursor-copy text-left hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" onClick={() => void copyWanAddress(wan.macAddress, 'MAC address')} aria-label={`Copy MAC address ${wan.macAddress}`} title="Click to copy MAC address">{wan.macAddress}</button>
+                              </Show>
+                            </td>
                             <td data-column-order-id="service#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isWanColumnVisible('service') }}>{wan.service}</td>
                             <td data-column-order-id="nat#0" class="px-3 py-2.5" classList={{ hidden: !isWanColumnVisible('nat') }}><span class={`badge ${wan.nat === 'Enabled' ? 'badge-success' : wan.nat === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.nat}</span></td>
                             <td data-column-order-id="l1#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l1') }}>
