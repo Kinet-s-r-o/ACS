@@ -7,9 +7,11 @@ import Dialog from '../components/Dialog';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
+import SortableHeader from '../components/SortableHeader';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
 import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
+import { sortRows, type SortDirection } from '../lib/sorting';
 import { usePageSize } from '../lib/usePageSize';
 import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
@@ -65,6 +67,13 @@ const featureTableColumns = [
   { id: 'input', label: 'Input', visible: true },
   { id: 'group', label: 'Collapsible box', visible: true },
 ];
+const parameterPollTableColumns = [
+  { id: 'parameter', label: 'Parameter path', visible: true },
+  { id: 'interval', label: 'Interval', visible: true },
+  { id: 'now', label: 'Now', visible: true },
+  { id: 'active', label: 'Active', visible: true },
+];
+const metricSortDefaults = { column: null as string | null, direction: 'asc' as SortDirection };
 const defaultTemplateInventory = (): TemplateInventory => ({ primary_ip_mode: 'automatic', primary_ip_parameter: '', primary_ip_interface_name: '' });
 const lanMappingFields: Array<{ key: Exclude<keyof ProvisioningLANPortMapping, 'port'>; label: string; placeholder: string }> = [
   { key: 'status_parameter', label: 'Link status', placeholder: 'Device.Ethernet.Interface.1.Status' },
@@ -106,6 +115,18 @@ const Provisioning: Component = () => {
   const metricColumns = useColumnVisibility('provisioning-metrics', metricTableColumns);
   const interfaceMetricColumns = useColumnVisibility('provisioning-interface-metrics', interfaceMetricTableColumns);
   const featureColumns = useColumnVisibility('provisioning-features', featureTableColumns);
+  const parameterPollColumns = useColumnVisibility('provisioning-parameter-polls', parameterPollTableColumns);
+  const [generalMetricSort, setGeneralMetricSort] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.provisioning.metrics.general', metricSortDefaults);
+  const [interfaceMetricSort, setInterfaceMetricSort] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.provisioning.metrics.interface', metricSortDefaults);
+  const [parameterPollSort, setParameterPollSort] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.provisioning.metrics.polling', metricSortDefaults);
+  const [generalMetricFilters, setGeneralMetricFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.provisioning.metrics.general', {});
+  const [interfaceMetricFilters, setInterfaceMetricFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.provisioning.metrics.interface', {});
+  const [parameterPollFilters, setParameterPollFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.provisioning.metrics.polling', {});
+  const toggleSort = (setter: typeof setGeneralMetricSort) => (column: string) => setter(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const setMetricFilter = (setter: typeof setGeneralMetricFilters, column: string, state: ColumnFilterState | null) => setter(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; });
+  const generalMetricValue = (def: MetricDefinition, id: string): string => String(({ name: def.name, parameter: def.parameter_name, source: def.source, min_interval: def.min_sample_interval_seconds, gpv_interval: def.gpv_poll_interval_seconds, group: def.group, active: def.active ? 'Yes' : 'No', device_match: def.device_type_match, unit: def.unit }[id] ?? ''));
+  const interfaceMetricValue = (def: InterfaceMetricDefinition, id: string): string => String(({ name: def.name, parameter: def.parameter_pattern, type: def.interface_type, source: def.source, min_interval: def.min_sample_interval_seconds, gpv_interval: def.gpv_poll_interval_seconds, unit_scale: def.unit_scale, group: def.group, active: def.active ? 'Yes' : 'No', chart: def.chart_type, transform: def.transform, multiplier: def.multiplier }[id] ?? ''));
+  const parameterPollValue = (def: ParameterPollDefinition, id: string): string => String(({ parameter: def.parameter_pattern, interval: def.interval_seconds, now: def.now ? 'Yes' : 'No', active: def.active ? 'Yes' : 'No' }[id] ?? ''));
 
   const [provRules, setProvRules] = createSignal<Awaited<ReturnType<typeof api.getProvisioningRules>> | null>(null);
   const [provTemplates, setProvTemplates] = createSignal<ProvisioningTemplate[] | null>(null);
@@ -1229,6 +1250,9 @@ const Provisioning: Component = () => {
   };
 
   const templateMetrics = createMemo(() => metrics() || []);
+  const filteredGeneralMetrics = createMemo(() => sortRows(applyColumnFilters(templateMetrics(), generalMetricFilters(), generalMetricValue), generalMetricSort().column, generalMetricSort().direction, generalMetricValue));
+  const filteredInterfaceMetrics = createMemo(() => sortRows(applyColumnFilters(interfaceMetrics() || [], interfaceMetricFilters(), interfaceMetricValue), interfaceMetricSort().column, interfaceMetricSort().direction, interfaceMetricValue));
+  const filteredParameterPolls = createMemo(() => sortRows(applyColumnFilters(parameterPolls() || [], parameterPollFilters(), parameterPollValue), parameterPollSort().column, parameterPollSort().direction, parameterPollValue));
 
   const openParameterPollModal = (definition?: ParameterPollDefinition) => {
     setEditingParameterPoll(definition || null);
@@ -1257,6 +1281,23 @@ const Provisioning: Component = () => {
       refetchParameterPolls();
       notify({ tone: 'success', title: editing ? 'Parameter polling rule updated' : 'Parameter polling rule created' });
     } catch (error) { notify({ tone: 'error', title: 'Could not save parameter polling rule', message: (error as Error).message, persistent: true }); }
+  };
+
+  const toggleParameterPoll = async (definition: ParameterPollDefinition, field: 'now' | 'active') => {
+    const template = selectedTemplate();
+    if (!template) return;
+    try {
+      await api.updateParameterPoll(template.id, definition.id, {
+        parameter_pattern: definition.parameter_pattern,
+        interval_seconds: definition.interval_seconds,
+        now: field === 'now' ? !definition.now : definition.now,
+        active: field === 'active' ? !definition.active : definition.active,
+      });
+      refetchParameterPolls();
+      notify({ tone: 'success', title: `${field === 'now' ? 'Now' : 'Active'} ${field === 'now' ? 'setting' : 'state'} updated` });
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not update parameter polling rule', detail: (error as Error).message, persistent: true });
+    }
   };
 
   const deleteParameterPoll = async (definition: ParameterPollDefinition) => {
@@ -1582,11 +1623,6 @@ const Provisioning: Component = () => {
                 <button onClick={openCreateProv} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add rule</button>
               </div>
             </Show>
-            <Show when={templateTab() === 'metrics'}>
-              <div class="mb-4 flex flex-wrap justify-end gap-2">
-                <button onClick={openCreateMetric} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add metric</button>
-              </div>
-            </Show>
             <Show when={templateTab() === 'variables'}>
               <div class="mb-4 flex justify-end gap-2">
                 <button onClick={addTemplateVariable} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add variable</button>
@@ -1835,7 +1871,7 @@ const Provisioning: Component = () => {
                 <Show when={isFullAccess()}><button type="button" class="btn btn-primary text-xs py-1.5" onClick={() => openParameterPollModal()}><Plus size={12} />Add parameter</button></Show>
               </div>
               <Show when={parameterPolls()?.length} fallback={<p class="py-3 text-xs text-muted">No additional parameter polling rules configured.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[52rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><th class="py-2 pr-3 w-[60%]">CWMP parameter path</th><th class="py-2 pr-3">Interval</th><th class="py-2 pr-3">Now</th><th class="py-2 pr-3">Active</th><th class="py-2 text-right">Actions</th></tr></thead><tbody><For each={parameterPolls() || []}>{definition => <tr class="border-t border-subtle/50 text-xs"><td class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td><td class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td><td class="py-2 pr-3"><span class={`badge ${definition.now ? 'badge-success' : 'badge-error'}`}>{definition.now ? 'Yes' : 'No'}</span></td><td class="py-2 pr-3"><span class={`badge ${definition.active ? 'badge-success' : 'badge-muted'}`}>{definition.active ? 'Yes' : 'No'}</span></td><td class="py-2 text-right"><Show when={isFullAccess()}><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openParameterPollModal(definition)} title="Edit polling rule" aria-label={`Edit ${definition.parameter_pattern}`}><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label={`Delete ${definition.parameter_pattern}`}><Trash2 size={14} /></button></div></Show></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[52rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={parameterPollTableColumns}>{column => <Show when={parameterPollColumns.isVisible(column.id)}><th class="py-2 pr-3"><SortableHeader column={column.id} label={column.label} sortBy={parameterPollSort().column} direction={parameterPollSort().direction} onSort={toggleSort(setParameterPollSort)}><ColumnFilter columnId={column.id} label={column.label} active={parameterPollFilters()[column.id] || null} onApply={state => setMetricFilter(setParameterPollFilters, column.id, state)} /></SortableHeader></th></Show>}</For><th class="py-2 text-right"><div class="flex items-center justify-end gap-2">Actions<ColumnVisibility columns={parameterPollColumns.columns} onToggle={parameterPollColumns.toggle} /></div></th></tr></thead><tbody><For each={filteredParameterPolls()}>{definition => <tr class="border-t border-subtle/50 text-xs"><Show when={parameterPollColumns.isVisible('parameter')}><td class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td></Show><Show when={parameterPollColumns.isVisible('interval')}><td class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td></Show><Show when={parameterPollColumns.isVisible('now')}><td class="py-2 pr-3"><Show when={isFullAccess()} fallback={<span class={`badge ${definition.now ? 'badge-success' : 'badge-error'}`}>{definition.now ? 'Yes' : 'No'}</span>}><button type="button" class={`badge cursor-pointer ${definition.now ? 'badge-success' : 'badge-error'}`} aria-label={`${definition.now ? 'Disable' : 'Enable'} Now for ${definition.parameter_pattern}`} aria-pressed={definition.now} onClick={() => void toggleParameterPoll(definition, 'now')}>{definition.now ? 'Yes' : 'No'}</button></Show></td></Show><Show when={parameterPollColumns.isVisible('active')}><td class="py-2 pr-3"><Show when={isFullAccess()} fallback={<span class={`badge ${definition.active ? 'badge-success' : 'badge-muted'}`}>{definition.active ? 'Yes' : 'No'}</span>}><button type="button" class={`badge cursor-pointer ${definition.active ? 'badge-success' : 'badge-muted'}`} aria-label={`${definition.active ? 'Disable' : 'Enable'} Active for ${definition.parameter_pattern}`} aria-pressed={definition.active} onClick={() => void toggleParameterPoll(definition, 'active')}>{definition.active ? 'Yes' : 'No'}</button></Show></td></Show><td class="py-2 text-right"><Show when={isFullAccess()}><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openParameterPollModal(definition)} title="Edit polling rule" aria-label={`Edit ${definition.parameter_pattern}`}><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label={`Delete ${definition.parameter_pattern}`}><Trash2 size={14} /></button></div></Show></td></tr>}</For></tbody></table></div>
               </Show>
             </section></Show>
             <Show when={metricSubTab() === 'general'}>
@@ -1848,13 +1884,13 @@ const Provisioning: Component = () => {
                 <table data-column-order-key="provisioning-metrics-general" class="data-table w-full table-auto text-left">
                   <thead>
                     <tr class="border-b border-subtle">
-                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class={`py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide ${column.id === 'parameter' ? 'w-[35%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For>
+                      <For each={metricTableColumns}>{column => <Show when={metricColumns.isVisible(column.id)}><th class={`py-2 pr-4 text-xs font-medium text-muted uppercase tracking-wide ${column.id === 'parameter' ? 'w-[35%] max-w-[40vw]' : ''}`}><SortableHeader column={column.id} label={column.label} sortBy={generalMetricSort().column} direction={generalMetricSort().direction} onSort={toggleSort(setGeneralMetricSort)}><ColumnFilter columnId={column.id} label={column.label} numeric={['min_interval', 'gpv_interval'].includes(column.id)} active={generalMetricFilters()[column.id] || null} onApply={state => setMetricFilter(setGeneralMetricFilters, column.id, state)} /></SortableHeader></th></Show>}</For>
                       <th class="py-2 text-right text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
                       <th class="py-2 pr-2"><ColumnVisibility columns={metricColumns.columns} onToggle={metricColumns.toggle} /></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={templateMetrics()}>
+                    <For each={filteredGeneralMetrics()}>
                       {(def) => (
                         <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                           <Show when={metricColumns.isVisible('name')}><td data-column-order-id={metricColumnOrderId('name')} class="px-3 py-2.5 text-primary font-medium whitespace-nowrap">
@@ -1899,7 +1935,7 @@ const Provisioning: Component = () => {
                   </tbody>
                 </table>
               </div>
-              <Show when={(templateMetrics()?.length ?? 0) === 0}>
+              <Show when={filteredGeneralMetrics().length === 0}>
                 <EmptyState compact title="No metrics match this template" description="Add a metric to start collecting time-series data for this device type." />
               </Show>
               </Show>
@@ -1910,7 +1946,7 @@ const Provisioning: Component = () => {
                 <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table data-column-order-key="provisioning-metrics-interface" class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}>{column.label}</th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={interfaceMetrics() || []}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td data-column-order-id={metricColumnOrderId('actions')} class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table data-column-order-key="provisioning-metrics-interface" class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}><SortableHeader column={column.id} label={column.label} sortBy={interfaceMetricSort().column} direction={interfaceMetricSort().direction} onSort={toggleSort(setInterfaceMetricSort)}><ColumnFilter columnId={column.id} label={column.label} numeric={['min_interval', 'gpv_interval', 'multiplier'].includes(column.id)} active={interfaceMetricFilters()[column.id] || null} onApply={state => setMetricFilter(setInterfaceMetricFilters, column.id, state)} /></SortableHeader></th></Show>}</For><th class="py-2 text-right">Actions</th><th class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={filteredInterfaceMetrics()}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td data-column-order-id={metricColumnOrderId('actions')} class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section></Show>
           </Show>
