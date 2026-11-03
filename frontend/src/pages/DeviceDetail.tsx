@@ -259,6 +259,31 @@ const DeviceDetail: Component = () => {
     { id: 'deleted_by', label: 'Deleted by', visible: true },
     { id: 'error', label: 'Error', visible: true },
   ]);
+  const { columns: wanColumns, isVisible: isWanColumnVisible, toggle: toggleWanColumn } = useColumnVisibility('wan_connections', [
+    { id: 'name', label: 'Name', visible: true },
+    { id: 'admin_status', label: 'Adm. status', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'type', label: 'Type', visible: true },
+    { id: 'vlan', label: 'VLAN', visible: true },
+    { id: 'ip_address', label: 'IP Address', visible: true },
+    { id: 'mac_address', label: 'MAC address', visible: true },
+    { id: 'service', label: 'Service', visible: true },
+    { id: 'nat', label: 'NAT', visible: true },
+    { id: 'l1', label: 'L1', visible: true },
+    { id: 'l2', label: 'L2', visible: true },
+    { id: 'l3', label: 'L3', visible: true },
+    { id: 'l4', label: 'L4', visible: true },
+    { id: 's1', label: 'S1', visible: true },
+    { id: 's2', label: 'S2', visible: true },
+    { id: 's3', label: 'S3', visible: true },
+    { id: 's4', label: 'S4', visible: true },
+    { id: 's5', label: 'S5', visible: true },
+    { id: 's6', label: 'S6', visible: true },
+    { id: 's7', label: 'S7', visible: true },
+    { id: 's8', label: 'S8', visible: true },
+    { id: 'actions', label: 'Actions', visible: true },
+  ]);
+  const wanVisibleColumnCount = () => wanColumns().filter((column) => column.visible).length;
   const toggleSort = (setSort: typeof setTaskSort, setPage: (page: number) => void) => (column: string) => { setPage(0); setSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const updateTaskFilter = (column: string, state: ColumnFilterState | null) => { setTaskColumnFilters(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; }); setTaskPage(0); };
   const updateDeviceFaultFilter = (column: string, state: ColumnFilterState | null) => { setDeviceFaultColumnFilters(previous => { const next = { ...previous }; if (state) next[column] = state; else delete next[column]; return next; }); setFaultPage(0); };
@@ -2545,10 +2570,13 @@ const DeviceDetail: Component = () => {
             <Show when={activeTab() === 'overview'}>
             {/* Row 2: WAN Information */}
             <div class="card p-5">
-              <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
-                <Network size={14} />
-                WAN Connections
-              </h2>
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
+                  <Network size={14} />
+                  WAN Connections
+                </h2>
+                <ColumnVisibility columns={wanColumns} onToggle={toggleWanColumn} title="WAN columns" />
+              </div>
               <Show when={wanProfiles().length > 0} fallback={
                 <p class="text-muted text-sm">No WAN configuration data. Click Summon to fetch.</p>
               }>
@@ -2556,27 +2584,28 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-sm min-w-[1260px]">
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b-2 border-subtle bg-base">
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Name</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Adm. status</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Status</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Type</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">VLAN</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">IP Address</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Service</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">NAT</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">L1</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">L2</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">L3</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">L4</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S1</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S2</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S3</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S4</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S5</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S6</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S7</th>
-                        <th class="text-center px-2 py-2.5 font-semibold text-primary">S8</th>
-                        <th class="text-left px-3 py-2.5 font-semibold text-primary">Actions</th>
+                        <th data-column-order-id="name#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('name') }}>Name</th>
+                        <th data-column-order-id="adm. status#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('admin_status') }}>Adm. status</th>
+                        <th data-column-order-id="status#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('status') }}>Status</th>
+                        <th data-column-order-id="type#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('type') }}>Type</th>
+                        <th data-column-order-id="vlan#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('vlan') }}>VLAN</th>
+                        <th data-column-order-id="ip address#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('ip_address') }}>IP Address</th>
+                        <th data-column-order-id="mac address#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('mac_address') }}>MAC address</th>
+                        <th data-column-order-id="service#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('service') }}>Service</th>
+                        <th data-column-order-id="nat#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('nat') }}>NAT</th>
+                        <th data-column-order-id="l1#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('l1') }}>L1</th>
+                        <th data-column-order-id="l2#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('l2') }}>L2</th>
+                        <th data-column-order-id="l3#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('l3') }}>L3</th>
+                        <th data-column-order-id="l4#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('l4') }}>L4</th>
+                        <th data-column-order-id="s1#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s1') }}>S1</th>
+                        <th data-column-order-id="s2#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s2') }}>S2</th>
+                        <th data-column-order-id="s3#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s3') }}>S3</th>
+                        <th data-column-order-id="s4#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s4') }}>S4</th>
+                        <th data-column-order-id="s5#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s5') }}>S5</th>
+                        <th data-column-order-id="s6#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s6') }}>S6</th>
+                        <th data-column-order-id="s7#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s7') }}>S7</th>
+                        <th data-column-order-id="s8#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s8') }}>S8</th>
+                        <th data-column-order-id="actions#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('actions') }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2592,7 +2621,7 @@ const DeviceDetail: Component = () => {
                           const dmzEnabled = () => ['1', 'true', 'enabled'].includes(getWanDetail('X_HW_DMZ.DMZEnable').toLowerCase());
                           return <>
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                            <td class="px-3 py-2.5 text-primary font-medium">
+                            <td data-column-order-id="name#0" class="px-3 py-2.5 text-primary font-medium" classList={{ hidden: !isWanColumnVisible('name') }}>
                               <div class="flex items-center gap-1.5" title={wan.path}>
                                 <button type="button" class="icon-button w-6 h-6 shrink-0" aria-label={`${expanded() ? 'Collapse' : 'Expand'} WAN ${wan.name}`} aria-expanded={expanded()} onClick={toggleExpanded}>
                                   <Show when={expanded()} fallback={<ChevronRight size={14} />}><ChevronDown size={14} /></Show>
@@ -2600,7 +2629,7 @@ const DeviceDetail: Component = () => {
                                 <span>{wan.name}</span>
                               </div>
                             </td>
-                            <td class="px-3 py-2.5">
+                            <td data-column-order-id="adm. status#0" class="px-3 py-2.5" classList={{ hidden: !isWanColumnVisible('admin_status') }}>
                               <Show when={isFullAccess()} fallback={<span class={`badge ${wan.enable === 'Enabled' ? 'badge-success' : wan.enable === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.enable}</span>}>
                                 <button
                                   onClick={() => handleWanEnable(wan, wan.enable !== 'Enabled')}
@@ -2612,12 +2641,12 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                            <td class="px-3 py-2.5">
+                            <td data-column-order-id="status#0" class="px-3 py-2.5" classList={{ hidden: !isWanColumnVisible('status') }}>
                               <span class={`badge ${statusBadgeClass(wan.status)}`}>{wan.status}</span>
                             </td>
-                            <td class="px-3 py-2.5 text-secondary">{wan.type}</td>
-                            <td class="px-3 py-2.5 text-primary font-mono">{wan.vlan}</td>
-                            <td class="px-3 py-2.5 text-primary font-mono">
+                            <td data-column-order-id="type#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isWanColumnVisible('type') }}>{wan.type}</td>
+                            <td data-column-order-id="vlan#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('vlan') }}>{wan.vlan}</td>
+                            <td data-column-order-id="ip address#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('ip_address') }}>
                               <div class="flex items-center gap-1.5">
                                 <span>{wan.ipAddress}</span>
                                 <Show when={cpeWebUiUrl(wan.ipAddress)}>
@@ -2625,69 +2654,70 @@ const DeviceDetail: Component = () => {
                                 </Show>
                               </div>
                             </td>
-                            <td class="px-3 py-2.5 text-secondary">{wan.service}</td>
-                            <td class="px-3 py-2.5"><span class={`badge ${wan.nat === 'Enabled' ? 'badge-success' : wan.nat === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.nat}</span></td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="mac address#0" class="px-3 py-2.5 text-primary font-mono" classList={{ hidden: !isWanColumnVisible('mac_address') }}>{wan.macAddress}</td>
+                            <td data-column-order-id="service#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isWanColumnVisible('service') }}>{wan.service}</td>
+                            <td data-column-order-id="nat#0" class="px-3 py-2.5" classList={{ hidden: !isWanColumnVisible('nat') }}><span class={`badge ${wan.nat === 'Enabled' ? 'badge-success' : wan.nat === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.nat}</span></td>
+                            <td data-column-order-id="l1#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l1') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan1} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.lan1} onChange={() => handleWanTie(wan, 1, 'lan', !wan.lan1)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L1 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="l2#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l2') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan2} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.lan2} onChange={() => handleWanTie(wan, 2, 'lan', !wan.lan2)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L2 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="l3#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l3') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan3} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.lan3} onChange={() => handleWanTie(wan, 3, 'lan', !wan.lan3)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L3 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="l4#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l4') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan4} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.lan4} onChange={() => handleWanTie(wan, 4, 'lan', !wan.lan4)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L4 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s1#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s1') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid1} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid1} onChange={() => handleWanTie(wan, 1, 'ssid', !wan.ssid1)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S1 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s2#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s2') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid2} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid2} onChange={() => handleWanTie(wan, 2, 'ssid', !wan.ssid2)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S2 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s3#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s3') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid3} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid3} onChange={() => handleWanTie(wan, 3, 'ssid', !wan.ssid3)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S3 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s4#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s4') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid4} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid4} onChange={() => handleWanTie(wan, 4, 'ssid', !wan.ssid4)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S4 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s5#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s5') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid5} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid5} onChange={() => handleWanTie(wan, 5, 'ssid', !wan.ssid5)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S5 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s6#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s6') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid6} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid6} onChange={() => handleWanTie(wan, 6, 'ssid', !wan.ssid6)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S6 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s7#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s7') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid7} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid7} onChange={() => handleWanTie(wan, 7, 'ssid', !wan.ssid7)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S7 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2.5 text-center">
+                            <td data-column-order-id="s8#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s8') }}>
                               <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid8} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
                                 <input type="checkbox" checked={wan.ssid8} onChange={() => handleWanTie(wan, 8, 'ssid', !wan.ssid8)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S8 to ${wan.name}`} />
                               </Show>
                             </td>
-                            <td class="px-2 py-2">
+                            <td data-column-order-id="actions#0" class="px-2 py-2" classList={{ hidden: !isWanColumnVisible('actions') }}>
                               <button
                                 onClick={() => setStatsInterface({ type: 'wan', name: wan.name, path: wan.path })}
                                 class="icon-button"
@@ -2709,7 +2739,7 @@ const DeviceDetail: Component = () => {
                           </tr>
                           <Show when={expanded()}>
                             <tr class="border-t border-subtle/60 bg-elevated/20">
-                              <td colspan={22} class="px-5 py-3">
+                              <td colspan={Math.max(1, wanVisibleColumnCount())} class="px-5 py-3">
                                 <div class="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">IP Address</div><div class="mt-1 text-xs font-mono text-primary break-all">{getWanDetail('ExternalIPAddress') !== '-' ? getWanDetail('ExternalIPAddress') : getWanDetail('IPAddress')}</div></div>
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">Subnet Mask</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('SubnetMask')}</div></div>

@@ -17,6 +17,7 @@ export interface WanProfile {
   username: string;
   password: string;
   ipAddress: string;
+  macAddress: string;
   service: string;
   nat: string;
   type: string;
@@ -101,6 +102,7 @@ export function getWanProfiles(parameters: WanParameter[]): WanProfile[] {
       username: ownValue('Username'),
       password: ownValue('Password'),
       ipAddress: firstValue('ExternalIPAddress', 'IPAddress'),
+      macAddress: ownValue('MACAddress'),
       service: firstValue('X_HW_SERVICELIST', 'X_HW_ServiceList', 'ServiceList', 'X_CT_ServiceList', 'X_CU_ServiceList'),
       nat: natValue === '-' ? '-' : enabled(natValue) ? 'Enabled' : 'Disabled',
       type: ownValue('ConnectionType') !== '-' ? ownValue('ConnectionType') : group.kind === 'WANPPPConnection' ? 'PPP' : 'IP',

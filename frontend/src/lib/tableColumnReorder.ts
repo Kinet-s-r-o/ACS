@@ -23,7 +23,7 @@ const DEFAULT_COLUMN_ORDERS: DefaultColumnOrder[] = [
   { route: '/tasks', matches: ['created by'], order: ['serial number', 'type', 'status', 'created', 'created by', 'completed', 'deleted by', 'error', 'actions'] },
   { route: '/devices', matches: ['last inform'], order: ['serial number', 'manufacturer', 'model', 'product class', 'ip address', 'ppp username', 'rx power', 'uptime', 'status', 'last inform', 'tags'] },
   { route: '/devices', matches: ['serial number', 'mac address', 'type'], order: ['serial number', 'name', 'type', 'status', 'ip address', 'mac address'] },
-  { route: '/device/:serial', matches: ['vlan'], order: ['name', 'adm. status', 'status', 'type', 'vlan', 'ip address', 'service', 'nat', 'l1', 'l2', 'l3', 'l4', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'actions'] },
+  { route: '/device/:serial', matches: ['vlan'], order: ['name', 'adm. status', 'status', 'type', 'vlan', 'ip address', 'mac address', 'service', 'nat', 'l1', 'l2', 'l3', 'l4', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'actions'] },
   { route: '/device/:serial', matches: ['duplex', 'speed', 'l3'], order: ['name', 'adm. status', 'status', 'mac address', 'duplex', 'speed', 'l3', 'actions'] },
   { route: '/device/:serial', matches: ['ssid name', 'security', 'ch'], order: ['index', 'adm. status', 'status', 'ssid name', 'security', 'band', 'ch', 'max rate', 'password', 'actions'] },
   { route: '/device/:serial', matches: ['writable'], order: ['name', 'writable', 'value type', 'value'] },
