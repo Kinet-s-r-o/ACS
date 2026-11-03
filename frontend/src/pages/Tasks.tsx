@@ -222,9 +222,9 @@ const Tasks: Component = () => {
         <div class="table-panel-toolbar">
             <span><strong>{pagedTasks().length}</strong> visible on this page · <strong>{taskCounts().total}</strong> total CWMP tasks</span>
           <div class="flex items-center gap-2">
-            <div class="relative">
+            <div class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-              <input type="text" value={searchQuery()} onInput={(event) => { setSearchQuery(event.currentTarget.value); setTaskPage(0); }} placeholder="Search tasks…" class="input pl-9! sm:w-72 text-sm" />
+              <input type="text" value={searchQuery()} onInput={(event) => { setSearchQuery(event.currentTarget.value); setTaskPage(0); }} placeholder="Search tasks…" class="input w-full pl-9! text-sm" />
               <Show when={searchQuery()}>
                 <button type="button" onClick={() => { setSearchQuery(''); setTaskPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button>
               </Show>

@@ -234,9 +234,9 @@ const RolesTab: Component = () => {
           <p class="text-sm text-muted mt-1">Define permission sets that can be assigned to users.</p>
         </div>
         <div class="flex items-center gap-2">
-          <div class="relative">
+          <div class="relative block w-full sm:w-72">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <input type="text" value={searchQuery()} onInput={(event) => { setRolePage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search roles…" aria-label="Search roles" class="input pl-9! w-48 text-sm" />
+            <input type="text" value={searchQuery()} onInput={(event) => { setRolePage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search roles…" aria-label="Search roles" class="input w-full pl-9! text-sm" />
             <Show when={searchQuery()}>
               <button type="button" onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear role search"><X size={12} /></button>
             </Show>

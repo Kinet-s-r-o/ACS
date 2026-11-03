@@ -117,9 +117,9 @@ const Dictionaries: Component = () => {
         <div class="flex items-center justify-between gap-3 mb-4">
           <span><strong>{pagedTags().length}</strong> visible on this page · <strong>{tags()?.length ?? 0}</strong> total tags</span>
           <div class="flex items-center gap-2">
-            <div class="relative">
+            <div class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-              <input type="text" value={searchQuery()} onInput={event => { setSearchQuery(event.currentTarget.value); setTagsPage(0); }} placeholder="Search tags..." aria-label="Search tags" class="input pl-9! w-56 text-sm" />
+              <input type="text" value={searchQuery()} onInput={event => { setSearchQuery(event.currentTarget.value); setTagsPage(0); }} placeholder="Search tags..." aria-label="Search tags" class="input w-full pl-9! text-sm" />
               <Show when={searchQuery()}><button type="button" onClick={() => { setSearchQuery(''); setTagsPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show>
             </div>
             <Show when={canManageTags()}><button type="button" onClick={openCreate} class="btn btn-primary text-xs"><Plus size={13} />New tag</button></Show>

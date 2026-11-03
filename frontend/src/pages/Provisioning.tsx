@@ -1574,9 +1574,9 @@ const Provisioning: Component = () => {
                     <button type="button" class="btn btn-secondary text-xs py-1.5 text-rose-400" onClick={() => void handleBulkProvAction('delete')} disabled={pendingAction() !== null}><Trash2 size={12} />Delete</button>
                   </div>
                 </Show>
-                <div class="relative">
+                <div class="relative block w-full sm:w-72">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                  <input type="text" value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} placeholder="Search rules…" class="input pl-9! w-56 text-sm" />
+                  <input type="text" value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} placeholder="Search rules…" class="input w-full pl-9! text-sm" />
                   <Show when={searchQuery()}><button onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show>
                 </div>
                 <button onClick={openCreateProv} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add rule</button>
