@@ -51,26 +51,6 @@ func EnsureWANParameterIndex(ctx context.Context, db *gorm.DB) error {
 		WHERE name LIKE 'InternetGatewayDevice.WANDevice.%'`).Error
 }
 
-// DropFleetAnalyticsParameterIndexes removes the global indexes that were
-// created for Fleet parameter analytics. The device-scoped unique index
-// (device_id, name) remains in place for CPE parameter reads and writes.
-func DropFleetAnalyticsParameterIndexes(ctx context.Context, db *gorm.DB) error {
-	if db.Dialector.Name() != "postgres" {
-		return nil
-	}
-	db = db.WithContext(ctx)
-	// These indexes accelerate Fleet-wide wildcard/latest-value analytics.
-	// They are much larger than the parameter heap and are no longer needed
-	// when those dashboard panels are not used. Concurrent drops preserve the
-	// table data and keep normal CPE reads and writes available.
-	for _, name := range []string{"idx_device_parameters_name_trgm", "idx_device_parameters_device_updated"} {
-		if err := db.Exec(`DROP INDEX CONCURRENTLY IF EXISTS public.` + name).Error; err != nil {
-			return fmt.Errorf("drop obsolete Fleet parameter index %s: %w", name, err)
-		}
-	}
-	return nil
-}
-
 // EnsureDeviceInventoryParameterIndex keeps the small selective index used
 // by CPE inventory RX-power lookups. It avoids rebuilding global analytics
 // indexes over every cached parameter value.

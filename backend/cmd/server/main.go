@@ -152,13 +152,6 @@ func main() {
 		}
 	}()
 	go func() {
-		log.Println("Removing oversized Fleet analytics indexes in the background...")
-		if err := database.DropFleetAnalyticsParameterIndexes(ctx, db); err != nil {
-			log.Printf("Fleet analytics index cleanup failed: %v", err)
-			return
-		}
-		log.Println("Fleet analytics index cleanup completed")
-
 		if wanBackfillNeeded {
 			log.Println("Preparing WAN interface inventory in the background...")
 			if err := database.EnsureWANParameterIndex(ctx, db); err != nil {
