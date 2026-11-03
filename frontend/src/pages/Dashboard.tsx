@@ -1,5 +1,5 @@
-import { createEffect, createMemo, createResource, createSignal, For, Index, onCleanup, onMount, Show, untrack, type Component, type JSX } from 'solid-js';
-import { A } from '@solidjs/router';
+import { createEffect, createMemo, createResource, createSignal, For, Index, onCleanup, onMount, Show, type Component, type JSX } from 'solid-js';
+import { A, useSearchParams } from '@solidjs/router';
 import { RefreshCw, Router, Settings2, Plus, Trash2, GripVertical, MoreVertical } from 'lucide-solid';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import Dialog from '../components/Dialog';
@@ -9,7 +9,7 @@ import { formatDateTime } from '../lib/dateTime';
 import { useAuth } from '../lib/auth';
 import DeviceGrowthChart from '../components/DeviceGrowthChart';
 import ColorSwatch from '../components/ColorSwatch';
-import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
+import { createPersistedSignal } from '../lib/storage';
 
 interface DistributionListProps {
   data: Record<string, number>;
@@ -46,6 +46,15 @@ const readLegacyFleetLayout = (): FleetLayout => {
     const parsed: unknown = JSON.parse(saved);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FleetLayout : defaultFleetLayout;
   } catch { return defaultFleetLayout; }
+};
+
+const readUserFleetLayout = (userID: string): FleetLayout => {
+  try {
+    const saved = localStorage.getItem(`acs.dashboard.fleet-layout:${userID}`);
+    if (!saved) return readLegacyFleetLayout();
+    const parsed: unknown = JSON.parse(saved);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FleetLayout : readLegacyFleetLayout();
+  } catch { return readLegacyFleetLayout(); }
 };
 
 const FleetPanelFrame: Component<{
@@ -279,7 +288,15 @@ const ParameterDistribution: Component<{ config: DashboardPanelConfig; refreshKe
 const Dashboard: Component = () => {
   const { confirm, notify } = useFeedback();
   const { user, isFullAccess, hasPermission } = useAuth();
-  const [savedPanelConfigs, { mutate: setSavedPanelConfigs, refetch: refetchPanelConfigs }] = createResource(loadDashboardPanelConfigs);
+  const [searchParams] = useSearchParams();
+  const dashboardTargetUserID = () => {
+    const id = Number(searchParams.dashboardUserId);
+    return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+  };
+  const targetDashboardKey = () => dashboardTargetUserID() ?? 0;
+  const managingOtherDashboard = () => targetDashboardKey() > 0;
+  const targetDashboardName = () => typeof searchParams.dashboardUserName === 'string' ? searchParams.dashboardUserName : `user #${targetDashboardKey()}`;
+  const [savedPanelConfigs, { mutate: setSavedPanelConfigs, refetch: refetchPanelConfigs }] = createResource(targetDashboardKey, (targetID) => targetID ? api.getUserDashboardPanels(targetID) : loadDashboardPanelConfigs());
   const [loadedAggregationOptions] = createResource(api.getDashboardAggregationOptions);
   const aggregationOptions = (): DashboardAggregationOption[] => loadedAggregationOptions() ?? [];
   const panelConfigs = createMemo(() => normalizeDashboardPanels(savedPanelConfigs.error ? [] : savedPanelConfigs() ?? []));
@@ -293,14 +310,17 @@ const Dashboard: Component = () => {
   const growthInterval = () => growthIntervals.some(({ id }) => id === storedGrowthInterval()) ? storedGrowthInterval() as DeviceGrowthInterval : 'daily';
   const [refreshKey, setRefreshKey] = createSignal(0);
   const userID = user()?.id ?? 'unknown';
-  const [fleetLayout, setFleetLayout] = createPersistedJsonSignal<FleetLayout>(`acs.dashboard.fleet-layout:${userID}`, readLegacyFleetLayout());
-  const [savedFleetLayout] = createResource(() => api.getDashboardLayout());
+  const [fleetLayout, setFleetLayout] = createSignal<FleetLayout>(readUserFleetLayout(String(userID)));
+  const [savedFleetLayout] = createResource(targetDashboardKey, (targetID) => targetID ? api.getUserDashboardLayout(targetID) : api.getDashboardLayout());
   const [fleetLayoutReady, setFleetLayoutReady] = createSignal(false);
+  createEffect(() => {
+    targetDashboardKey();
+    setFleetLayoutReady(false);
+  });
   createEffect(() => {
     const remote = savedFleetLayout();
     if (savedFleetLayout.loading || savedFleetLayout.error || !remote) return;
-    const cached = untrack(fleetLayout);
-    const initial = Object.keys(remote).length > 0 ? { ...defaultFleetLayout, ...remote } : { ...defaultFleetLayout, ...cached };
+    const initial = Object.keys(remote).length > 0 ? { ...defaultFleetLayout, ...remote } : managingOtherDashboard() ? { ...defaultFleetLayout } : { ...defaultFleetLayout, ...readUserFleetLayout(String(userID)) };
     setFleetLayout(normalizeFleetLayout(initial));
     setFleetLayoutReady(true);
     try { localStorage.removeItem('acs.dashboard.fleet-layout'); } catch { /* Ignore unavailable local storage. */ }
@@ -309,11 +329,15 @@ const Dashboard: Component = () => {
     if (!fleetLayoutReady()) return;
     const snapshot = normalizeFleetLayout(fleetLayout());
     const timer = window.setTimeout(() => {
-      void api.saveDashboardLayout(snapshot).catch((error) => notify({ tone: 'error', title: 'Dashboard layout was not synced', detail: (error as Error).message }));
+      const targetID = dashboardTargetUserID();
+      const save = targetID ? api.saveUserDashboardLayout(targetID, snapshot) : api.saveDashboardLayout(snapshot);
+      void save.then(() => {
+        if (!targetID) try { localStorage.setItem(`acs.dashboard.fleet-layout:${userID}`, JSON.stringify(snapshot)); } catch { /* Storage can be unavailable in private browsing. */ }
+      }).catch((error) => notify({ tone: 'error', title: 'Dashboard layout was not synced', detail: (error as Error).message }));
     }, 500);
     onCleanup(() => window.clearTimeout(timer));
   });
-  const canCopyPanels = () => isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
+  const canCopyPanels = () => !managingOtherDashboard() && isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
   const [panelAnalytics, { refetch: refetchPanelAnalytics }] = createResource(
@@ -331,6 +355,10 @@ const Dashboard: Component = () => {
     return panelConfigs().filter((config) => config.kind === 'category' && !config.hidden).map((config) => ({
       id: config.id, label: config.title, values: values[config.id] ?? {}, limit: config.limit ?? 6,
     }));
+  };
+  const savePanelConfigs = (panels: DashboardPanelConfig[]) => {
+    const targetID = dashboardTargetUserID();
+    return targetID ? api.saveUserDashboardPanels(targetID, panels) : api.saveDashboardPanels(panels);
   };
   const openPanelSettings = (config: DashboardPanelConfig) => {
     setShowCopyUsers(false);
@@ -494,7 +522,7 @@ const Dashboard: Component = () => {
       : [...current, next];
     setSavingPanel(true);
     try {
-      const saved = await api.saveDashboardPanels(panels);
+      const saved = await savePanelConfigs(panels);
       setSavedPanelConfigs(saved);
       if (closeAfterSave) closePanelSettings();
       return true;
@@ -522,7 +550,7 @@ const Dashboard: Component = () => {
     setSavingPanel(true);
     try {
       const panels = normalizeDashboardPanels(savedPanelConfigs() ?? []).filter((item) => item.id !== panel.id);
-      const saved = await api.saveDashboardPanels(panels);
+      const saved = await savePanelConfigs(panels);
       setSavedPanelConfigs(saved);
       setFleetLayout((current) => {
           const next = { ...current };
@@ -554,7 +582,13 @@ const Dashboard: Component = () => {
   };
   return (
     <div class="space-y-4">
-      <header aria-label="Fleet dashboard actions" class="flex min-h-0 flex-wrap items-center justify-end border-b border-subtle pb-2">
+      <header aria-label="Fleet dashboard actions" class="flex min-h-0 flex-wrap items-center justify-between gap-3 border-b border-subtle pb-2">
+        <Show when={managingOtherDashboard()}>
+          <div class="flex flex-wrap items-center gap-3" role="status">
+            <span class="text-sm font-medium text-primary">Editing Fleet dashboard for {targetDashboardName()}</span>
+            <A class="btn btn-secondary text-xs" href="/settings/users">Back to users</A>
+          </div>
+        </Show>
         <div class="flex flex-wrap items-center justify-end gap-2">
           <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
           <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>

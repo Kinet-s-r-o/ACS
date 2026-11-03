@@ -265,18 +265,8 @@ func (r *Router) handleGetDashboardPanels(w http.ResponseWriter, req *http.Reque
 }
 
 func (r *Router) handleGetUserDashboardPanels(w http.ResponseWriter, req *http.Request) {
-	userID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
-	if err != nil || userID <= 0 {
-		respondError(w, http.StatusBadRequest, "Invalid user ID")
-		return
-	}
-	user, err := r.userRepo.GetByID(req.Context(), userID)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to load user")
-		return
-	}
-	if user == nil {
-		respondError(w, http.StatusNotFound, "User not found")
+	userID, ok := r.dashboardTargetUserID(w, req)
+	if !ok {
 		return
 	}
 	rows, err := r.dashboardPanelRepo.List(req.Context(), userID)
@@ -296,6 +286,112 @@ func (r *Router) handleGetUserDashboardPanels(w http.ResponseWriter, req *http.R
 		configs = append(configs, config)
 	}
 	respondJSON(w, http.StatusOK, configs)
+}
+
+func (r *Router) dashboardTargetUserID(w http.ResponseWriter, req *http.Request) (int64, bool) {
+	userID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		respondError(w, http.StatusBadRequest, "Invalid user ID")
+		return 0, false
+	}
+	user, err := r.userRepo.GetByID(req.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load user")
+		return 0, false
+	}
+	if user == nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return 0, false
+	}
+	return userID, true
+}
+
+func (r *Router) handleSaveUserDashboardPanels(w http.ResponseWriter, req *http.Request) {
+	userID, ok := r.dashboardTargetUserID(w, req)
+	if !ok {
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 128*1024))
+	decoder.DisallowUnknownFields()
+	var configs []dashboardPanelConfig
+	if err := decoder.Decode(&configs); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard panel configuration")
+		return
+	}
+	if err := validateDashboardPanelConfigs(configs); err != nil {
+		if errors.Is(err, database.ErrDashboardPanelLimit) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	rows := make([]models.UserDashboardPanel, 0, len(configs))
+	for _, config := range configs {
+		encoded, err := json.Marshal(config)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid dashboard panel configuration")
+			return
+		}
+		rows = append(rows, models.UserDashboardPanel{UserID: userID, PanelID: config.ID, Config: string(encoded)})
+	}
+	if err := r.dashboardPanelRepo.Replace(req.Context(), userID, rows); err != nil {
+		logDashboardPanelError("admin save", err)
+		respondError(w, http.StatusInternalServerError, "Failed to save user dashboard panels")
+		return
+	}
+	respondJSON(w, http.StatusOK, configs)
+}
+
+func (r *Router) handleGetUserDashboardLayout(w http.ResponseWriter, req *http.Request) {
+	userID, ok := r.dashboardTargetUserID(w, req)
+	if !ok {
+		return
+	}
+	encoded, err := r.dashboardLayoutRepo.Get(req.Context(), userID)
+	if err != nil {
+		log.Printf("Error loading user dashboard layout: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to load user dashboard layout")
+		return
+	}
+	var layout dashboardLayoutConfig
+	if err := json.Unmarshal([]byte(encoded), &layout); err != nil {
+		respondError(w, http.StatusInternalServerError, "Stored dashboard layout is invalid")
+		return
+	}
+	if layout == nil {
+		layout = dashboardLayoutConfig{}
+	}
+	respondJSON(w, http.StatusOK, layout)
+}
+
+func (r *Router) handleSaveUserDashboardLayout(w http.ResponseWriter, req *http.Request) {
+	userID, ok := r.dashboardTargetUserID(w, req)
+	if !ok {
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16*1024))
+	decoder.DisallowUnknownFields()
+	var layout dashboardLayoutConfig
+	if err := decoder.Decode(&layout); err != nil || layout == nil {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard layout")
+		return
+	}
+	if err := validateDashboardLayout(layout); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	encoded, err := json.Marshal(layout)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid dashboard layout")
+		return
+	}
+	if err := r.dashboardLayoutRepo.Save(req.Context(), userID, string(encoded)); err != nil {
+		log.Printf("Error saving user dashboard layout: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to save user dashboard layout")
+		return
+	}
+	respondJSON(w, http.StatusOK, layout)
 }
 
 func (r *Router) handleDeleteUserDashboardPanel(w http.ResponseWriter, req *http.Request) {
