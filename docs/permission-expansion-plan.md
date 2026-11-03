@@ -33,6 +33,12 @@ The implementation adds these independently assignable grants: `devices.configur
 
 ## Implementation sequence
 
+DB tools → DB indexes additionally defines `database.indexes.read` for catalog,
+storage and job inspection, and `database.indexes.write` for mutations. Every
+mutation requires both grants; `settings.write` is not a compatibility grant for
+database DDL. Both are excluded from the read-only system role and granted to
+the built-in admin. See [DB indexes](database-indexes.md) for the ownership policy.
+
 1. **Inventory and map:** enumerate authenticated routes, UI actions, and existing permission gates; identify unguarded paths and routes with overly broad grants. Record the mapping in a permission catalog next to the backend model definitions.
 2. **Backend catalog:** define stable keys and descriptions centrally; update `AllPermissions`, validation, and any system-role defaults. Add route middleware that accepts the focused key and its legacy bundle during transition.
 3. **Compatibility:** preserve current effective permissions for saved roles. Add a migration or deterministic runtime expansion for legacy role grants, and document how roles behave after the transition. Do not silently downgrade access.

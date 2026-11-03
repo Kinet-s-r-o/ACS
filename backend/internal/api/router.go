@@ -275,6 +275,17 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("GET /settings/retention/stats", auth.RequirePermission(models.PermSettingsRead)(r.handleRetentionStats))
 	apiMux.HandleFunc("GET /settings/retention/compression", auth.RequirePermission(models.PermSettingsRead)(r.handleCompressionStatus))
 	apiMux.HandleFunc("GET /settings/database/statistics", auth.RequirePermission(models.PermDatabaseStatsRead)(r.handleDatabaseStatistics))
+	apiMux.HandleFunc("GET /settings/database/indexes", auth.RequirePermission(models.PermDatabaseIndexesRead)(r.handleDatabaseIndexes))
+	// Index mutation requires both grants; legacy settings.write does not imply DDL access.
+	indexWrite := func(handler http.HandlerFunc) http.HandlerFunc {
+		return auth.RequirePermission(models.PermDatabaseIndexesRead)(auth.RequirePermission(models.PermDatabaseIndexesWrite)(handler))
+	}
+	apiMux.HandleFunc("POST /settings/database/indexes/preview", indexWrite(r.handlePreviewDatabaseIndex))
+	apiMux.HandleFunc("POST /settings/database/indexes/{id}/preview", indexWrite(r.handlePreviewDatabaseIndex))
+	apiMux.HandleFunc("POST /settings/database/indexes", indexWrite(r.handleSaveDatabaseIndex))
+	apiMux.HandleFunc("PUT /settings/database/indexes/{id}", indexWrite(r.handleSaveDatabaseIndex))
+	apiMux.HandleFunc("DELETE /settings/database/indexes/{id}", indexWrite(r.handleDatabaseIndexAction))
+	apiMux.HandleFunc("POST /settings/database/indexes/{id}/cancel", indexWrite(r.handleDatabaseIndexAction))
 	apiMux.HandleFunc("PUT /settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleUpdateSettings))
 
 	// Faults endpoints

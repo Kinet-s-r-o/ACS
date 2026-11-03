@@ -58,6 +58,8 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
     { key: 'settings.read', label: 'Read', description: 'View system settings.' },
     { key: 'settings.write', label: 'Write', description: 'Change system settings.' },
     { key: 'database.stats.read', label: 'Database statistics', description: 'View database query performance statistics and SQL text.' },
+    { key: 'database.indexes.read', label: 'View DB indexes', description: 'Inspect PostgreSQL indexes, UI index jobs and storage budgets.' },
+    { key: 'database.indexes.write', label: 'Manage DB indexes', description: 'Create, replace, cancel and delete only UI-owned B-tree indexes. Also requires View DB indexes.' },
   ] },
   { label: 'Metrics', permissions: [
     { key: 'metrics.read', label: 'Read', description: 'View device metrics.' },

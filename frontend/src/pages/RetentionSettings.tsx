@@ -11,6 +11,7 @@ import type { SortDirection } from '../lib/sorting';
 import ColumnFilter from '../components/ColumnFilter';
 import type { ColumnFilterState } from '../lib/filters';
 import { createPersistedJsonSignal } from '../lib/storage';
+import DatabaseIndexes from './DatabaseIndexes';
 
 const groups = [
   { title: 'Housekeeping', fields: [
@@ -65,12 +66,12 @@ const retentionTableGroups = [
 const RetentionSettings: Component = () => {
   const { hasPermission } = useAuth();
   const { notify } = useFeedback();
-  const [settings, { refetch }] = createResource(api.getSettings);
-  const [tableStats, { refetch: refetchTableStats }] = createResource(api.getRetentionStats);
-  const [compression, { refetch: refetchCompression }] = createResource(api.getCompressionStatus);
+  const [settings, { refetch }] = createResource(() => hasPermission('settings.read'), () => api.getSettings());
+  const [tableStats, { refetch: refetchTableStats }] = createResource(() => hasPermission('settings.read'), () => api.getRetentionStats());
+  const [compression, { refetch: refetchCompression }] = createResource(() => hasPermission('settings.read'), () => api.getCompressionStatus());
   const compressionState = () => compression.error ? undefined : compression();
   const canWrite = () => hasPermission('settings.write');
-  const [activeTab, setActiveTab] = createSignal<'retention' | 'statistics'>('retention');
+  const [activeTab, setActiveTab] = createSignal<'retention' | 'statistics' | 'indexes'>(hasPermission('settings.read') ? 'retention' : hasPermission('database.indexes.read') ? 'indexes' : 'statistics');
   const [querySort, setQuerySort] = createSignal<{ column: DatabaseQuerySort; direction: SortDirection }>({ column: 'total_time', direction: 'desc' });
   const [queryFilters, setQueryFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.database-query-statements', {});
   const [queryStats, { refetch: refetchQueryStats }] = createResource(
@@ -160,12 +161,16 @@ const RetentionSettings: Component = () => {
   };
 
   return <div class="space-y-5">
-    <PageHeader title="DB retention" description="Manage database cleanup and inspect query performance." />
-    <div class="flex gap-1 border-b border-subtle">
+    <PageHeader title="DB tools" description="Manage database cleanup, query performance and controlled indexes." />
+    <div class="flex flex-wrap gap-1 border-b border-subtle" aria-label="Database tools">
+      <Show when={hasPermission('settings.read')}>
       <button type="button" aria-pressed={activeTab() === 'retention'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'retention' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('retention')}>Retention</button>
-      <button type="button" aria-pressed={activeTab() === 'statistics'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'statistics' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('statistics')}>Statistics</button>
+      </Show>
+      <Show when={hasPermission('settings.read') || hasPermission('database.stats.read')}><button type="button" aria-pressed={activeTab() === 'statistics'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'statistics' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('statistics')}>Statistics</button></Show>
+      <Show when={hasPermission('database.indexes.read')}><button type="button" aria-pressed={activeTab() === 'indexes'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'indexes' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('indexes')}>DB indexes</button></Show>
     </div>
-    <Show when={activeTab() === 'retention'}>
+    <Show when={activeTab() === 'indexes' && hasPermission('database.indexes.read')}><DatabaseIndexes /></Show>
+    <Show when={activeTab() === 'retention' && hasPermission('settings.read')}>
     <div class="space-y-5">
     <Show when={settings.error}><div class="card p-5"><ResourceError title="Retention settings are unavailable" description="Retry loading the configuration." onRetry={() => refetch()} /></div></Show>
     <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-24 w-full" /> : undefined}>
@@ -234,7 +239,7 @@ const RetentionSettings: Component = () => {
     </Show>
     <Show when={activeTab() === 'statistics'}>
       <section class="space-y-5" aria-busy={queryStats.loading}>
-        <section class="card p-5 space-y-4" aria-busy={tableStats.loading}>
+        <Show when={hasPermission('settings.read')}><section class="card p-5 space-y-4" aria-busy={tableStats.loading}>
           <div class="flex items-center justify-between gap-3">
             <div><h2 class="text-sm font-medium text-secondary">Database and table usage</h2><p class="text-xs text-muted mt-1">Estimated row counts and on-disk sizes, including indexes.</p></div>
             <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchTableStats()} disabled={tableStats.loading}>Refresh</button>
@@ -253,7 +258,7 @@ const RetentionSettings: Component = () => {
               }}</For></div>
             </section>}</For></div>
           </Show>
-        </section>
+        </section></Show>
         <Show when={hasPermission('database.stats.read')}>
         <section class="card p-5 space-y-4">
           <div class="flex flex-wrap items-end justify-between gap-3">

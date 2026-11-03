@@ -13,6 +13,8 @@
 
 ACS is a standalone TR-069/CWMP control plane for CPE inventory, monitoring, provisioning, and configuration. Its CWMP server, management API, scheduler, database layer, and web console run as one independent platform without requiring GenieACS.
 
+System settings → DB tools → [DB indexes](docs/database-indexes.md) manages optional, narrowly scoped B-tree indexes with ownership checks and monitored storage budgets. GIN creation is prohibited and existing database indexes are protected.
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="ACS fleet status dashboard" width="1280" />
   <br />

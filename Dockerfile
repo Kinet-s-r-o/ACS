@@ -81,6 +81,14 @@ ENTRYPOINT ["/app/acs"]
 
 
 # ------------------------------------------------------------
+# PostgreSQL storage probe
+# ------------------------------------------------------------
+FROM timescale/timescaledb:latest-pg17 AS postgres
+
+COPY scripts/postgres-index-storage-probe.sh /usr/local/bin/acs-postgres-index-storage-probe
+
+
+# ------------------------------------------------------------
 # Web / reverse proxy runtime
 # ------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:alpine AS web

@@ -186,6 +186,7 @@ func main() {
 		}
 		log.Println("Device inventory parameter index is ready")
 	}()
+	go database.RunManagedIndexWorker(ctx, db)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -378,6 +379,8 @@ func runAutoMigrate(db *gorm.DB) error {
 		&models.DeviceLifecycleEvent{},
 		&models.DeviceParameter{},
 		&models.DataMigrationRecord{},
+		&models.ManagedDatabaseIndex{},
+		&models.DatabaseIndexStorageProbe{},
 		&models.WANInterfaceRecord{},
 		&models.WANInterfaceBackfillState{},
 		&models.DeviceLogEntry{},

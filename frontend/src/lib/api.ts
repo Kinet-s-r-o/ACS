@@ -120,6 +120,38 @@ export type InterfaceMetricDefinition = MetricDefinition & Required<Pick<MetricD
 export interface InterfaceMetricSample { device_id: number; metric_id: number; parameter_name: string; value: number; timestamp: string }
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; excluded_tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
 export interface AuditLog { id: number; user_id?: number; username: string; action: string; resource: string; status: number; ip_address: string; user_agent?: string; created_at: string }
+
+export interface DatabaseIndexSpec {
+  label: string;
+  purpose: string;
+  recipe: 'parameter_presence' | 'parameter_freshness';
+  parameter_path: string;
+}
+export interface ManagedDatabaseIndex extends DatabaseIndexSpec {
+  id: number; status: string; message: string; active_name: string;
+  cancel_requested: boolean; created_by: number; created_at: string; updated_at: string;
+  size_bytes: number; scans: number; valid: boolean; owned: boolean;
+  phase?: string; blocks_total: number; blocks_done: number;
+  cleanup_pending: boolean;
+}
+export interface DatabaseIndexCatalogEntry {
+  oid: number; schema: string; name: string; table_name: string; method: string;
+  primary: boolean; unique: boolean; constraint: boolean; valid: boolean;
+  size_bytes: number; scans: number; definition: string;
+}
+export interface DatabaseIndexBudget {
+  max_index_bytes: number; max_total_bytes: number; max_count: number;
+  managed_bytes: number; reserved_bytes: number; free_bytes: number; total_bytes: number;
+  reserve_bytes: number; probe_fresh: boolean; measured_at: string; can_create: boolean; reason: string;
+}
+export interface DatabaseIndexOverview {
+  managed: ManagedDatabaseIndex[]; catalog: DatabaseIndexCatalogEntry[];
+  recipes: { id: DatabaseIndexSpec['recipe']; label: string; description: string }[];
+  budget: DatabaseIndexBudget;
+}
+export interface DatabaseIndexPreview {
+  estimated_rows: number; estimated_bytes: number; plan: string; budget: DatabaseIndexBudget;
+}
 export interface BlockedDevice { id: number; serial_number: string; reason: string; created_by: string; created_at: string }
 export interface Threshold {
   value: number;
@@ -305,6 +337,12 @@ export const api = {
   getConnectionRequestSecret: () => request<{ value: string }>('/settings/connection-request-secret'),
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
   getCompressionStatus: () => request<CompressionStatus>('/settings/retention/compression'),
+  getDatabaseIndexes: () => request<DatabaseIndexOverview>('/settings/database/indexes'),
+  previewDatabaseIndex: (spec: DatabaseIndexSpec, id?: number) => request<DatabaseIndexPreview>(`/settings/database/indexes${id ? `/${id}` : ''}/preview`, { method: 'POST', body: JSON.stringify(spec) }),
+  createDatabaseIndex: (spec: DatabaseIndexSpec) => request<ManagedDatabaseIndex>('/settings/database/indexes', { method: 'POST', body: JSON.stringify(spec) }),
+  updateDatabaseIndex: (id: number, spec: DatabaseIndexSpec) => request<ManagedDatabaseIndex>(`/settings/database/indexes/${id}`, { method: 'PUT', body: JSON.stringify(spec) }),
+  deleteDatabaseIndex: (id: number) => request<{ status: string }>(`/settings/database/indexes/${id}`, { method: 'DELETE' }),
+  cancelDatabaseIndex: (id: number) => request<{ status: string }>(`/settings/database/indexes/${id}/cancel`, { method: 'POST' }),
   getDatabaseStatistics: (sort: DatabaseQuerySort = 'total_time', direction: 'asc' | 'desc' = 'desc', filters: Record<string, ColumnFilterState> = {}) => {
     const params = new URLSearchParams({ sort, direction, filters: JSON.stringify(filters) });
     return request<DatabaseStatistics>(`/settings/database/statistics?${params}`);

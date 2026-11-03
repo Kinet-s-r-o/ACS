@@ -46,7 +46,7 @@ const pageNames: Record<string, string> = {
   '/settings': 'System settings',
   '/settings/general': 'General',
   '/settings/system-tasks': 'System tasks',
-  '/settings/retention': 'DB retention',
+  '/settings/retention': 'DB tools',
   '/settings/dictionaries': 'Dictionaries',
   '/settings/users': 'Users and Roles',
   '/settings/api-docs': 'API documentation',

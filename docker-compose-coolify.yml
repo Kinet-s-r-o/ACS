@@ -1,7 +1,10 @@
 services:
 
   acs-postgres:
-    image: timescale/timescaledb:latest-pg17
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: postgres
     restart: unless-stopped
     command: postgres -c shared_preload_libraries=timescaledb,pg_stat_statements
 
@@ -15,8 +18,9 @@ services:
 
     healthcheck:
       test:
-        - CMD-SHELL
-        - pg_isready -U acs -d acs
+        - CMD
+        - sh
+        - /usr/local/bin/acs-postgres-index-storage-probe
       interval: 10s
       timeout: 5s
       retries: 10
