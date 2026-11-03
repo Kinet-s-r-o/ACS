@@ -22,6 +22,7 @@ type dashboardPanelThreshold struct {
 	Label string   `json:"label"`
 	Max   *float64 `json:"max"`
 	Color string   `json:"color"`
+	Order int      `json:"order,omitempty"`
 }
 
 type dashboardPanelConfig struct {
@@ -32,6 +33,9 @@ type dashboardPanelConfig struct {
 	AggregationOptionID string                    `json:"aggregation_option_id,omitempty"`
 	Hidden              bool                      `json:"hidden,omitempty"`
 	Limit               int                       `json:"limit,omitempty"`
+	SortByCount         *bool                     `json:"sort_by_count,omitempty"`
+	SortDirection       string                    `json:"sort_direction,omitempty"`
+	ExcludeNA           bool                      `json:"exclude_na,omitempty"`
 	ParameterPattern    string                    `json:"parameter_pattern"`
 	Thresholds          []dashboardPanelThreshold `json:"thresholds"`
 }
@@ -182,6 +186,9 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 		if config.Limit < 0 || config.Limit > 100 {
 			return errors.New("dashboard panel limit must be between 0 and 100")
 		}
+		if config.SortDirection != "" && config.SortDirection != "asc" && config.SortDirection != "desc" {
+			return errors.New("dashboard panel sort direction must be asc or desc")
+		}
 		pattern := strings.TrimSpace(config.ParameterPattern)
 		if kind != "parameter" {
 			pattern = ""
@@ -203,6 +210,9 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 			label := strings.TrimSpace(threshold.Label)
 			if label == "" || len(label) > 48 || strings.EqualFold(label, "N/A") {
 				return errors.New("threshold labels must be unique, non-empty, and cannot be N/A")
+			}
+			if threshold.Order < 0 || threshold.Order >= len(config.Thresholds) {
+				return errors.New("threshold display order is invalid")
 			}
 			if _, duplicate := labels[strings.ToLower(label)]; duplicate {
 				return errors.New("threshold labels must be unique")

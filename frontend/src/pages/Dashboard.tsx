@@ -16,6 +16,10 @@ interface DistributionListProps {
   limit?: number;
   semantic?: boolean;
   colors?: Record<string, DashboardThresholdColor>;
+  order?: string[];
+  sortByCount?: boolean;
+  sortDirection?: 'asc' | 'desc';
+  excludeNA?: boolean;
 }
 
 interface DashboardPanelDraft extends Omit<DashboardPanelConfig, 'thresholds'> {
@@ -224,10 +228,16 @@ const semanticTone = (label: string) => {
 };
 
 const DistributionList: Component<DistributionListProps> = (props) => {
-  const entries = createMemo(() => Object.entries(props.data)
-    .filter(([, value]) => value > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, props.limit ?? Number.POSITIVE_INFINITY));
+  const entries = createMemo(() => {
+    const order = new Map((props.order ?? []).map((label, index) => [label, index]));
+    return Object.entries(props.data)
+      .filter(([label, value]) => value > 0 && !(props.excludeNA && label === 'N/A'))
+      .sort((a, b) => {
+        if (props.sortByCount ?? true) return props.sortDirection === 'asc' ? a[1] - b[1] : b[1] - a[1];
+        return (order.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (order.get(b[0]) ?? Number.MAX_SAFE_INTEGER);
+      })
+      .slice(0, props.limit ?? Number.POSITIVE_INFINITY);
+  });
   const maximum = createMemo(() => Math.max(...entries().map(([, value]) => value), 1));
 
   return (
@@ -280,7 +290,14 @@ const ParameterDistribution: Component<{ config: DashboardPanelConfig; refreshKe
   ]) as Record<string, DashboardThresholdColor>;
   return <Show when={!result.loading} fallback={<p class="py-4 text-xs text-muted" role="status">Loading distribution…</p>}>
     <Show when={!result()?.error} fallback={<ResourceError title="Distribution is unavailable" description={result()?.error ?? 'Retry loading this panel.'} onRetry={() => refetch()} />}>
-      <DistributionList data={result()?.data?.distribution ?? {}} colors={colors()} />
+      <DistributionList
+        data={result()?.data?.distribution ?? {}}
+        colors={colors()}
+        order={props.config.thresholds.map((threshold, index) => ({ label: threshold.label, order: threshold.order ?? index })).sort((a, b) => a.order - b.order).map(({ label }) => label)}
+        sortByCount={props.config.sort_by_count ?? true}
+        sortDirection={props.config.sort_direction ?? 'desc'}
+        excludeNA={props.config.exclude_na ?? false}
+      />
     </Show>
   </Show>;
 };
@@ -363,7 +380,8 @@ const Dashboard: Component = () => {
   const openPanelSettings = (config: DashboardPanelConfig) => {
     setShowCopyUsers(false);
     setSelectedRecipientIDs([]);
-    setPanelDraft({ ...config, thresholds: config.thresholds.map((threshold) => ({ ...threshold, max: threshold.max === null ? '' : String(threshold.max) })) });
+    const thresholds = config.thresholds.map((threshold, index) => ({ ...threshold, order: threshold.order ?? index, max: threshold.max === null ? '' : String(threshold.max) }));
+    setPanelDraft({ ...config, sort_by_count: config.sort_by_count ?? true, sort_direction: config.sort_direction ?? 'desc', thresholds: thresholds.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) });
   };
   const addPanel = () => {
     if (panelConfigs().length >= 12) {
@@ -374,7 +392,7 @@ const Dashboard: Component = () => {
     setShowCopyUsers(false);
     setSelectedRecipientIDs([]);
     setPanelDraft({
-      id, title: 'New panel', parameter_pattern: '',
+      id, title: 'New panel', parameter_pattern: '', sort_by_count: false, sort_direction: 'desc', exclude_na: false,
       thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
     });
   };
@@ -426,18 +444,29 @@ const Dashboard: Component = () => {
   const updateThresholdColor = (index: number, value: DashboardThresholdColor) => updatePanelDraft((draft) => ({
     ...draft, thresholds: draft.thresholds.map((threshold, current) => current === index ? { ...threshold, color: value } : threshold),
   }));
+  const moveThreshold = (from: number, to: number) => updatePanelDraft((draft) => {
+    if (from === to || from < 0 || to < 0 || from >= draft.thresholds.length || to >= draft.thresholds.length) return draft;
+    const thresholds = [...draft.thresholds];
+    const [moving] = thresholds.splice(from, 1);
+    thresholds.splice(to, 0, moving);
+    return { ...draft, thresholds: thresholds.map((threshold, order) => ({ ...threshold, order })) };
+  });
   const addThreshold = () => updatePanelDraft((draft) => {
     const finite = draft.thresholds.filter((threshold) => threshold.max.trim() !== '').map((threshold) => Number(threshold.max));
-    const max = finite.length ? String(finite[finite.length - 1] + 1) : '1';
+    const max = finite.length ? String(Math.max(...finite) + 1) : '1';
     const next = [...draft.thresholds];
-    next.splice(Math.max(0, next.length - 1), 0, { label: 'New threshold', max, color: 'blue' });
-    return { ...draft, thresholds: next };
+    const unboundedIndex = next.findIndex((threshold) => threshold.max.trim() === '');
+    next.splice(unboundedIndex < 0 ? next.length : unboundedIndex, 0, { label: 'New threshold', max, color: 'blue' });
+    return { ...draft, thresholds: next.map((threshold, order) => ({ ...threshold, order })) };
   });
   const removeThreshold = (index: number) => updatePanelDraft((draft) => {
     if (draft.thresholds.length <= 1) return draft;
     const next = draft.thresholds.filter((_, current) => current !== index);
-    if (index === draft.thresholds.length - 1) next[next.length - 1] = { ...next[next.length - 1], max: '' };
-    return { ...draft, thresholds: next };
+    if (draft.thresholds[index].max.trim() === '') {
+      const highest = next.reduce((best, threshold, current) => Number(threshold.max) > Number(next[best].max) ? current : best, 0);
+      next[highest] = { ...next[highest], max: '' };
+    }
+    return { ...draft, thresholds: next.map((threshold, order) => ({ ...threshold, order })) };
   });
   const buildPanelConfig = (): DashboardPanelConfig | null => {
     const draft = panelDraft();
@@ -488,17 +517,16 @@ const Dashboard: Component = () => {
       notify({ tone: 'error', title: 'Invalid thresholds', message: 'Add between 1 and 16 threshold buckets.' });
       return null;
     }
-    const thresholds: DashboardThreshold[] = [];
-    let previousMax = Number.NEGATIVE_INFINITY;
+    const thresholdsInDisplayOrder: DashboardThreshold[] = [];
     for (let index = 0; index < draft.thresholds.length; index++) {
       const threshold = draft.thresholds[index];
       const label = threshold.label.trim();
       const max = threshold.max.trim() === '' ? null : Number(threshold.max);
-      if (!label || label.length > 48 || label.toLowerCase() === 'n/a' || (max !== null && (!Number.isFinite(max) || max <= previousMax)) || (max === null && index !== draft.thresholds.length - 1)) {
-        notify({ tone: 'error', title: 'Invalid thresholds', message: 'Threshold labels are required, maximums must increase, and only the last maximum can be empty.' });
+      if (!label || label.length > 48 || label.toLowerCase() === 'n/a' || max !== null && !Number.isFinite(max)) {
+        notify({ tone: 'error', title: 'Invalid thresholds', message: 'Threshold labels are required and maximums must be finite numbers.' });
         return null;
       }
-      if (thresholds.some((saved) => saved.label.toLowerCase() === label.toLowerCase())) {
+      if (thresholdsInDisplayOrder.some((saved) => saved.label.toLowerCase() === label.toLowerCase())) {
         notify({ tone: 'error', title: 'Duplicate threshold label', message: 'Use a different label for each threshold bucket.' });
         return null;
       }
@@ -506,14 +534,25 @@ const Dashboard: Component = () => {
         notify({ tone: 'error', title: 'Invalid threshold color', message: 'Choose a supported color for each threshold.' });
         return null;
       }
-      thresholds.push({ label, max, color: threshold.color });
-      if (max !== null) previousMax = max;
+      thresholdsInDisplayOrder.push({ label, max, color: threshold.color, order: index });
+    }
+    const thresholds = [...thresholdsInDisplayOrder].sort((a, b) => a.max === null ? 1 : b.max === null ? -1 : a.max - b.max);
+    const invalidMaximumOrder = thresholds.some((threshold, index) => {
+      const previous = thresholds[index - 1];
+      return !!previous && threshold.max !== null && previous.max !== null && threshold.max <= previous.max;
+    });
+    if (thresholds.filter((threshold) => threshold.max === null).length !== 1 || invalidMaximumOrder) {
+      notify({ tone: 'error', title: 'Invalid thresholds', message: 'Use unique maximum values and leave one final bucket without a maximum.' });
+      return null;
     }
     if (thresholds[thresholds.length - 1].max !== null) {
       notify({ tone: 'error', title: 'Final threshold needs no maximum', message: 'Leave the last maximum empty so it catches all remaining values.' });
       return null;
     }
-    return { id: draft.id, title, kind: 'parameter', parameter_pattern: parameterPattern, thresholds };
+    return {
+      id: draft.id, title, kind: 'parameter', parameter_pattern: parameterPattern, thresholds,
+      sort_by_count: draft.sort_by_count ?? false, sort_direction: draft.sort_direction ?? 'desc', exclude_na: draft.exclude_na ?? false,
+    };
   };
   const persistPanelConfig = async (next: DashboardPanelConfig, closeAfterSave: boolean) => {
     const current = normalizeDashboardPanels(savedPanelConfigs() ?? []);
@@ -780,9 +819,15 @@ const Dashboard: Component = () => {
             </Show>
             <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}><section aria-label="Thresholds">
               <div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-primary">Thresholds and colors</h3><button type="button" class="btn btn-secondary text-xs" onClick={addThreshold}><Plus size={13} />Add threshold</button></div>
+              <div class="mb-4 grid gap-3 border-b border-subtle pb-3 sm:grid-cols-2">
+                <label class="flex items-center gap-2 text-xs text-primary"><input type="checkbox" checked={panelDraft()?.sort_by_count ?? true} onChange={(event) => updatePanelDraft((draft) => ({ ...draft, sort_by_count: event.currentTarget.checked }))} />Ignore manual order and sort by count</label>
+                <Show when={panelDraft()?.sort_by_count ?? true}><label class="flex items-center gap-2 text-xs text-muted">Count direction<select class="input w-24" value={panelDraft()?.sort_direction ?? 'desc'} onChange={(event) => updatePanelDraft((draft) => ({ ...draft, sort_direction: event.currentTarget.value as 'asc' | 'desc' }))}><option value="asc">ASC</option><option value="desc">DESC</option></select></label></Show>
+                <label class="flex items-center gap-2 text-xs text-primary"><input type="checkbox" checked={panelDraft()?.exclude_na ?? false} onChange={(event) => updatePanelDraft((draft) => ({ ...draft, exclude_na: event.currentTarget.checked }))} />Exclude N/A from the panel</label>
+              </div>
               <div class="space-y-2">
                 <Index each={panelDraft()?.thresholds ?? []}>{(threshold, index) => (
-                  <div class="grid grid-cols-[minmax(0,1fr)_8rem_3.5rem_2rem] items-end gap-2">
+                  <div class="grid grid-cols-[2rem_minmax(0,1fr)_8rem_3.5rem_2rem] items-end gap-2" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer?.getData('text/plain')); if (Number.isInteger(from)) moveThreshold(from, index); }}>
+                    <button type="button" draggable="true" class="icon-button" aria-label={`Reorder ${threshold().label}; use arrow keys to move`} title="Drag to reorder, or use Up/Down arrows" onDragStart={(event) => { event.dataTransfer?.setData('text/plain', String(index)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onKeyDown={(event) => { if (event.key === 'ArrowUp' && index > 0) { event.preventDefault(); moveThreshold(index, index - 1); } else if (event.key === 'ArrowDown' && index < (panelDraft()?.thresholds.length ?? 1) - 1) { event.preventDefault(); moveThreshold(index, index + 1); } }}><GripVertical size={14} /></button>
                     <label class="block min-w-0 text-xs text-muted">Label<input class="input mt-1 w-full" maxlength={48} value={threshold().label} onInput={(event) => updateThreshold(index, 'label', event.currentTarget.value)} /></label>
                     <label class="block text-xs text-muted">Maximum<input type="number" step="any" class="input mt-1 w-full" placeholder={index === (panelDraft()?.thresholds.length ?? 1) - 1 ? 'No limit' : ''} value={threshold().max} onInput={(event) => updateThreshold(index, 'max', event.currentTarget.value)} /></label>
                     <div class="block text-xs text-muted">Color<div class="mt-1"><ColorSwatch compact clearable={false} ariaLabel={`Choose color for ${threshold().label}`} value={legacyThresholdColorHex[threshold().color] ?? threshold().color} onChange={(color) => updateThresholdColor(index, color as DashboardThresholdColor)} /></div></div>

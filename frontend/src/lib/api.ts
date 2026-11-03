@@ -94,10 +94,10 @@ export interface CompressionStatus {
   operational: Array<{ table: string; compressible_columns: number }>;
 }
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray' | `#${string}`;
-export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor }
+export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor; order?: number }
 export type DashboardPanelKind = 'parameter' | 'category' | 'recency';
 export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'configured_option' | 'last_inform';
-export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; aggregation_option_id?: string; limit?: number; hidden?: boolean; parameter_pattern: string; thresholds: DashboardThreshold[] }
+export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; aggregation_option_id?: string; limit?: number; hidden?: boolean; sort_by_count?: boolean; sort_direction?: 'asc' | 'desc'; exclude_na?: boolean; parameter_pattern: string; thresholds: DashboardThreshold[] }
 export type DashboardAggregationSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter';
 export interface DashboardAggregationOption { id: string; title: string; source: DashboardAggregationSource; parameter_pattern: string }
 export interface DashboardPanelLayout { order: number; width: number; height: number }
