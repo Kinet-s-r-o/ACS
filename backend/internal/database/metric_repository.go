@@ -549,14 +549,18 @@ func (r *MetricRepository) QueryRaw(ctx context.Context, deviceID, metricID int6
 
 // ExtractAndStore matches parameters against active metric definitions for a device
 // and stores any numeric values found. deviceType is "Manufacturer/ProductClass".
-func (r *MetricRepository) ExtractAndStore(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
-	if err := r.extractStandard(ctx, deviceID, deviceType, paramMap); err != nil {
+func (r *MetricRepository) ExtractAndStore(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string, serialNumbers ...string) error {
+	serialNumber := ""
+	if len(serialNumbers) > 0 {
+		serialNumber = serialNumbers[0]
+	}
+	if err := r.extractStandard(ctx, deviceID, deviceType, paramMap, serialNumber); err != nil {
 		return err
 	}
 	return r.ExtractAndStoreInterface(ctx, deviceID, deviceType, paramMap)
 }
 
-func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string) error {
+func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, deviceType string, paramMap map[string]string, serialNumber string) error {
 	defs, err := r.TemplateMetricsForDevice(ctx, deviceType, true)
 	if err != nil || len(defs) == 0 {
 		return err
@@ -573,14 +577,14 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 		value, ok := paramMap[def.ParameterName]
 		if !ok || value == "" {
 			missed++
-			log.Printf("Metric %q (id=%d): parameter %q not found in %d Inform params for device %d (%s)",
-				def.Name, def.ID, def.ParameterName, len(paramMap), deviceID, deviceType)
+			log.Printf("[SN=%s] Metric %q (id=%d): parameter %q not found in %d Inform params for device %d (%s)",
+				serialNumber, def.Name, def.ID, def.ParameterName, len(paramMap), deviceID, deviceType)
 			continue
 		}
 		fv, err := strconv.ParseFloat(value, 64)
 		if err != nil || math.IsNaN(fv) || math.IsInf(fv, 0) {
 			missed++
-			log.Printf("Metric %q (id=%d): value %q for param %q is not numeric", def.Name, def.ID, value, def.ParameterName)
+			log.Printf("[SN=%s] Metric %q (id=%d): value %q for param %q is not numeric", serialNumber, def.Name, def.ID, value, def.ParameterName)
 			continue
 		}
 		if !def.StoresHistory() {
@@ -604,15 +608,15 @@ func (r *MetricRepository) extractStandard(ctx context.Context, deviceID int64, 
 
 	if len(samples) == 0 {
 		if matched > 0 && throttled == 0 {
-			log.Printf("No metric samples stored for device %d (%s): %d defs matched device type, %d params available, %d missed",
-				deviceID, deviceType, matched, len(paramMap), missed)
+			log.Printf("[SN=%s] No metric samples stored for device %d (%s): %d defs matched device type, %d params available, %d missed",
+				serialNumber, deviceID, deviceType, matched, len(paramMap), missed)
 		}
 		return nil
 	}
 	if err := r.BatchInsert(ctx, samples); err != nil {
 		return fmt.Errorf("batch insert metric samples: %w", err)
 	}
-	log.Printf("Stored %d metric samples for device %d", len(samples), deviceID)
+	log.Printf("[SN=%s] Stored %d metric samples for device %d", serialNumber, len(samples), deviceID)
 	return nil
 }
 

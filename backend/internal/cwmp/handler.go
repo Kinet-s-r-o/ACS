@@ -42,6 +42,14 @@ type Handler struct {
 	diagnosticSlots      chan struct{}
 }
 
+func logCWMPSession(serialNumber, sessionID, format string, args ...interface{}) {
+	if serialNumber != "" {
+		log.Printf("[SN=%s] "+format, append([]interface{}{serialNumber}, args...)...)
+		return
+	}
+	log.Printf("[Session=%s] "+format, append([]interface{}{sessionID}, args...)...)
+}
+
 func (h *Handler) SetWatchdog(watchdog *DeviceWatchdog) {
 	h.watchdog = watchdog
 }
@@ -192,7 +200,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) routeMessage(ctx context.Context, envelope *SOAPEnvelope, remoteAddr string) (interface{}, error) {
 	msgType := DetectMessageType(&envelope.Body)
-	log.Printf("Received CWMP message: %s from %s", msgType, remoteAddr)
+	serialNumber := ""
+	if msgType == "Inform" && envelope.Body.Inform != nil {
+		serialNumber = envelope.Body.Inform.DeviceId.SerialNumber
+	} else if session := h.sessions.Get(remoteAddr); session != nil {
+		serialNumber = session.SerialNumber
+	}
+	logCWMPSession(serialNumber, remoteAddr, "Received CWMP message: %s", msgType)
 
 	switch msgType {
 	case "Inform":
@@ -368,7 +382,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			for _, p := range inform.ParameterList.Parameters {
 				paramMap[p.Name] = p.Value
 			}
-			if err := h.metricRepo.ExtractAndStore(ctx, deviceID, deviceType, paramMap); err != nil {
+			if err := h.metricRepo.ExtractAndStore(ctx, deviceID, deviceType, paramMap, inform.DeviceId.SerialNumber); err != nil {
 				log.Printf("Error extracting metrics from Inform: %v", err)
 			}
 		}
@@ -780,13 +794,12 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 }
 
 func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *GetParameterValuesResp, remoteAddr string) (interface{}, error) {
-	log.Printf("Received GetParameterValuesResponse with %d parameters from %s", len(resp.ParameterList.Parameters), remoteAddr)
-
 	session := h.sessions.Get(remoteAddr)
 	if session == nil {
-		log.Printf("No active session found for %s", remoteAddr)
+		logCWMPSession("", remoteAddr, "No active session found")
 		return nil, nil
 	}
+	logCWMPSession(session.SerialNumber, remoteAddr, "Received GetParameterValuesResponse with %d parameters", len(resp.ParameterList.Parameters))
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if session.Diagnostic9005Active {
@@ -794,7 +807,7 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 	}
 
 	if session.State != StateProcessingTasks {
-		log.Printf("Session for %s not in processing state", remoteAddr)
+		logCWMPSession(session.SerialNumber, remoteAddr, "Session not in processing state")
 		return nil, nil
 	}
 
@@ -853,7 +866,7 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		for _, p := range resp.ParameterList.Parameters {
 			paramMap[p.Name] = p.Value
 		}
-		if err := h.metricRepo.ExtractAndStore(ctx, session.DeviceID, session.DeviceType, paramMap); err != nil {
+		if err := h.metricRepo.ExtractAndStore(ctx, session.DeviceID, session.DeviceType, paramMap, session.SerialNumber); err != nil {
 			log.Printf("Error extracting metrics from GPV response: %v", err)
 		}
 	}
@@ -1058,12 +1071,12 @@ func (h *Handler) handleSetParameterValuesResponse(ctx context.Context, resp *Se
 	if resp == nil {
 		return nil, errors.New("missing SetParameterValuesResponse")
 	}
-	log.Printf("SetParameterValues status: %d from %s", resp.Status, remoteAddr)
-
 	session := h.sessions.Get(remoteAddr)
 	if session == nil {
+		logCWMPSession("", remoteAddr, "SetParameterValues response received without active session")
 		return nil, nil
 	}
+	logCWMPSession(session.SerialNumber, remoteAddr, "SetParameterValues status: %d", resp.Status)
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LastSentContext = ""
@@ -1427,12 +1440,17 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 	if fault == nil {
 		return nil, errors.New("missing SOAP fault")
 	}
-	log.Printf("Received SOAP Fault: %s - %s from %s", fault.FaultCode, fault.FaultString, remoteAddr)
+	session := h.sessions.Get(remoteAddr)
+	serialNumber := ""
+	if session != nil {
+		serialNumber = session.SerialNumber
+	}
+	logCWMPSession(serialNumber, remoteAddr, "Received SOAP Fault: %s - %s", fault.FaultCode, fault.FaultString)
 
 	faultCode := fault.FaultCode
 	faultMessage := fault.FaultString
 	if fault.Detail.CWMPFault != nil {
-		log.Printf("  CWMP Fault: %s - %s",
+		logCWMPSession(serialNumber, remoteAddr, "CWMP Fault: %s - %s",
 			fault.Detail.CWMPFault.FaultCode,
 			fault.Detail.CWMPFault.FaultString,
 		)
@@ -1440,7 +1458,6 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 		faultMessage = fault.Detail.CWMPFault.FaultString
 	}
 
-	session := h.sessions.Get(remoteAddr)
 	if session == nil {
 		return nil, nil
 	}

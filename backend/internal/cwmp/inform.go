@@ -12,19 +12,18 @@ func ProcessInform(inform *Inform) (*InformResponse, error) {
 	if err := validateInform(inform); err != nil {
 		return nil, err
 	}
-	log.Printf("Inform from device: %s (SN: %s)",
+	logCWMPSession(inform.DeviceId.SerialNumber, "", "Inform from device: %s",
 		inform.DeviceId.Manufacturer,
-		inform.DeviceId.SerialNumber,
 	)
 
 	// Log events
 	for _, event := range inform.Event.Events {
-		log.Printf("  Event: %s", event.EventCode)
+		logCWMPSession(inform.DeviceId.SerialNumber, "", "Event: %s", event.EventCode)
 	}
 
 	// Extract important parameters
 	params := ExtractImportantParameters(inform.ParameterList.Parameters)
-	log.Printf("  IP: %s, Firmware: %s",
+	logCWMPSession(inform.DeviceId.SerialNumber, "", "IP: %s, Firmware: %s",
 		params["ExternalIPAddress"],
 		params["SoftwareVersion"],
 	)
