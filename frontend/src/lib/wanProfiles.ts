@@ -1,6 +1,7 @@
 export interface WanParameter {
   name: string;
   value: string;
+  writable?: boolean;
 }
 
 export interface PortParams {
@@ -10,6 +11,11 @@ export interface PortParams {
 
 export interface WanProfile {
   path: string;
+  wanDevice: number;
+  connectionDevice: number;
+  instance: number;
+  kind: 'WANPPPConnection' | 'WANIPConnection';
+  canDeleteObject: boolean;
   name: string;
   status: string;
   enable: string;
@@ -62,6 +68,7 @@ export function getWanProfiles(parameters: WanParameter[]): WanProfile[] {
 
   return profiles.map(([path, group]) => {
     const parentPath = `InternetGatewayDevice.WANDevice.${group.wanDevice}.WANConnectionDevice.${group.connectionDevice}.`;
+    const canDeleteObject = parameters.some(p => p.name === `${parentPath}${group.kind}.` && p.writable === true);
     const parent = parameters.filter(p => p.name.startsWith(parentPath) && !wanConnectionPattern.test(p.name));
     const relevant = [...group.own, ...parent];
     const ownValue = (name: string) => group.own.find(p => p.name === path + name)?.value || '-';
@@ -95,6 +102,11 @@ export function getWanProfiles(parameters: WanParameter[]): WanProfile[] {
       : undefined;
     return {
       path,
+      wanDevice: group.wanDevice,
+      connectionDevice: group.connectionDevice,
+      instance: group.instance,
+      kind: group.kind as WanProfile['kind'],
+      canDeleteObject,
       name: ownValue('Name') !== '-' ? ownValue('Name') : `WANDevice.${group.wanDevice} / WANConnectionDevice.${group.connectionDevice} / ${group.kind}.${group.instance}`,
       status: ownValue('ConnectionStatus'),
       enable: (() => { const v = ownValue('Enable'); return v === '-' ? '-' : enabled(v) ? 'Enabled' : 'Disabled'; })(),

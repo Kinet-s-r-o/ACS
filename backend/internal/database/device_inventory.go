@@ -36,6 +36,7 @@ var inventoryColumns = map[string]bool{
 	"ip_address": true, "ppp_username": true, "rx_power": true, "uptime": true,
 	"status": true, "last_inform": true, "tags": true, "software_version": true,
 	"hardware_version": true, "manufacturer_oui": true, "active_faults": true, "created_at": true,
+	"wan_interfaces_count": true,
 }
 
 func ParseDeviceInventoryFilters(value string) (map[string]DeviceInventoryColumnFilter, error) {
@@ -68,7 +69,7 @@ func ParseDeviceInventoryFilters(value string) (map[string]DeviceInventoryColumn
 				return nil, fmt.Errorf("invalid inventory filter rule")
 			}
 			if strings.HasPrefix(rule.Operator, "greater_than") || strings.HasPrefix(rule.Operator, "less_than") {
-				if column != "rx_power" && column != "uptime" && column != "active_faults" {
+				if column != "rx_power" && column != "uptime" && column != "active_faults" && column != "wan_interfaces_count" {
 					return nil, fmt.Errorf("numeric operator is not supported for this inventory column")
 				}
 			}
@@ -155,7 +156,7 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 		nullOrdering = " NULLS FIRST"
 	}
 	var devices []*models.Device
-	err := query.Select("devices.*, " + inventoryActiveFaultsExpression + " AS active_faults").
+	err := query.Select("devices.*, " + inventoryActiveFaultsExpression + " AS active_faults, " + inventoryWANInterfacesCountExpression + " AS wan_interfaces_count").
 		Order(sortExpression + " " + direction + nullOrdering).
 		Order("devices.id ASC").Limit(options.Limit).Offset(options.Offset).Find(&devices).Error
 	if err != nil {
@@ -165,6 +166,7 @@ func (r *DeviceRepository) ListInventory(ctx context.Context, options DeviceInve
 }
 
 const inventoryActiveFaultsExpression = `(SELECT COUNT(*) FROM faults WHERE faults.device_id = devices.id AND faults.resolved = FALSE)`
+const inventoryWANInterfacesCountExpression = `(SELECT COUNT(DISTINCT regexp_replace(dp.name, '(\.(WANPPPConnection|WANIPConnection)\.[0-9]+)\..*$', '\1.')) FROM device_parameters dp WHERE dp.device_id = devices.id AND dp.name ~ '^InternetGatewayDevice\.WANDevice\.[0-9]+\.WANConnectionDevice\.[0-9]+\.(WANPPPConnection|WANIPConnection)\.[0-9]+\.')`
 const inventoryStatusExpression = `CASE WHEN devices.online THEN 'Online' WHEN devices.last_inform IS NULL THEN 'Waiting' ELSE 'Offline' END`
 
 func inventoryParameterExpression(name string) string {
@@ -247,6 +249,8 @@ func inventorySortExpression(column string, includeSensitive bool) (string, bool
 		return `COALESCE(` + inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.ManufacturerOUI") + `, '-')`, true
 	case "active_faults":
 		return inventoryActiveFaultsExpression, true
+	case "wan_interfaces_count":
+		return inventoryWANInterfacesCountExpression, true
 	default:
 		return "", false
 	}
@@ -288,8 +292,12 @@ func inventoryRuleSQL(expression, column string, rule DeviceInventoryFilterRule,
 		case "uptime":
 			raw := inventoryParameterExpression("InternetGatewayDevice.DeviceInfo.UpTime")
 			numericExpression = `CASE WHEN ` + raw + ` ~ '^[0-9]+([.][0-9]+)?$' THEN (` + raw + `)::double precision END`
-		case "active_faults":
-			numericExpression = inventoryActiveFaultsExpression
+		case "active_faults", "wan_interfaces_count":
+			if column == "active_faults" {
+				numericExpression = inventoryActiveFaultsExpression
+			} else {
+				numericExpression = inventoryWANInterfacesCountExpression
+			}
 		default:
 			return "", nil, fmt.Errorf("numeric operator is not supported for this inventory column")
 		}

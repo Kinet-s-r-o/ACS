@@ -964,6 +964,16 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if h.parameterRepo != nil && session.DeviceID > 0 {
+		params := make([]models.DeviceParameter, 0, len(resp.ParameterList))
+		for _, parameter := range resp.ParameterList {
+			writable := parameter.Writable
+			params = append(params, models.DeviceParameter{Name: parameter.Name, Writable: &writable})
+		}
+		if err := h.parameterRepo.UpsertWritable(ctx, session.DeviceID, params); err != nil {
+			log.Printf("Error saving writable parameter flags: %v", err)
+		}
+	}
 	if session.DynamicDiscoveryActive {
 		if current := session.DynamicDiscoveryCurrent; current != nil {
 			for _, parameter := range resp.ParameterList {
@@ -1005,16 +1015,6 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 		session.LastSentContext = strings.Join(session.OverviewFetchParams, ", ")
 		session.LastSentParameters = append([]string(nil), session.OverviewFetchParams...)
 		return &GetParameterValues{ParameterNames: session.OverviewFetchParams}, nil
-	}
-	if h.parameterRepo != nil && session.DeviceID > 0 {
-		params := make([]models.DeviceParameter, 0, len(resp.ParameterList))
-		for _, parameter := range resp.ParameterList {
-			writable := parameter.Writable
-			params = append(params, models.DeviceParameter{Name: parameter.Name, Writable: &writable})
-		}
-		if err := h.parameterRepo.UpsertWritable(ctx, session.DeviceID, params); err != nil {
-			log.Printf("Error saving writable parameter flags: %v", err)
-		}
 	}
 	if session.FeatureObjectStage == 1 && session.CurrentTaskID > 0 {
 		names := make([]string, 0, len(resp.ParameterList))

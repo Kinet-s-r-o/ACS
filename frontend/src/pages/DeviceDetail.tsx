@@ -577,6 +577,26 @@ const DeviceDetail: Component = () => {
     } finally { setFeatureAction(null); }
   };
 
+  const deleteWANInterface = async (wan: WanProfile) => {
+    if (!isFullAccess() || featureAction() || !wan.canDeleteObject) return;
+    if (!await confirm({
+      title: `Delete WAN interface ${wan.name}?`,
+      description: 'This sends a CWMP DeleteObject request and removes this WAN profile and its settings from the ONT. It may interrupt service or disconnect ACS management if this profile carries the management connection.',
+      confirmLabel: 'Delete WAN interface',
+      tone: 'danger',
+    })) return;
+    const actionKey = `wan-delete:${wan.path}`;
+    setFeatureAction(actionKey);
+    try {
+      const task = await api.deleteWANInterface(serial(), wan.wanDevice, wan.connectionDevice, wan.kind, wan.instance);
+      setFeatureRefreshTaskID(task.id);
+      notify({ tone: 'success', title: `WAN interface ${wan.name} deletion queued`, detail: `CWMP task #${task.id} will run at the next device session.` });
+      await refetchTasks();
+    } catch (error) {
+      notify({ tone: 'error', title: `Could not delete WAN interface ${wan.name}`, detail: (error as Error).message, persistent: true });
+    } finally { setFeatureAction(null); }
+  };
+
   const addTemplateFeatureObject = async (featureID: string, key: string, label: string) => {
     if (!isFullAccess() || featureAction()) return;
     const actionKey = `${featureID}:${key}`;
@@ -2770,6 +2790,16 @@ const DeviceDetail: Component = () => {
                                   aria-label={`Edit WAN connection ${wan.name}`}
                                 >
                                   <Edit size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  class="icon-button text-rose-400"
+                                  aria-label={`Delete WAN interface ${wan.name}`}
+                                  title={wan.canDeleteObject ? 'Delete WAN interface from the ONT' : 'CPE has not reported this WAN object as writable'}
+                                  disabled={!wan.canDeleteObject || featureAction() !== null}
+                                  onClick={() => void deleteWANInterface(wan)}
+                                >
+                                  <Trash2 size={14} />
                                 </button>
                               </Show>
                             </td>

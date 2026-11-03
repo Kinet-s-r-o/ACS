@@ -45,6 +45,7 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'manufacturer_oui', label: 'Manufacturer OUI', visible: true, order: 13 },
   { id: 'active_faults', label: 'CWMP faults', visible: true, order: 14 },
   { id: 'created_at', label: 'Created at', visible: true, order: 15 },
+  { id: 'wan_interfaces_count', label: 'WAN Interfaces', visible: true, order: 16 },
 ];
 const inventoryParameterColumns = new Set([
   'ip_address', 'ppp_username', 'rx_power', 'uptime',
@@ -283,6 +284,8 @@ const Devices: Component = () => {
         return <span class="text-secondary font-mono text-xs">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI')}</span>;
       case 'active_faults':
         return <span class={`font-mono text-sm ${device.active_faults > 0 ? 'text-rose-400' : 'text-muted'}`}>{device.active_faults ?? 0}</span>;
+      case 'wan_interfaces_count':
+        return <span class="font-mono text-sm text-secondary tabular-nums">{device.wan_interfaces_count ?? 0}</span>;
       default:
         return '-';
     }
@@ -331,6 +334,7 @@ const Devices: Component = () => {
           case 'hardware_version': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion');
           case 'manufacturer_oui': return getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI');
           case 'active_faults': return String(device.active_faults ?? 0);
+          case 'wan_interfaces_count': return String(device.wan_interfaces_count ?? 0);
           default: return '';
         }
       };
@@ -511,7 +515,7 @@ const Devices: Component = () => {
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
-                    const isSortable = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'ppp_username', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults', 'created_at'].includes(col.id);
+                    const isSortable = ['serial_number', 'manufacturer', 'model', 'product_class', 'ip_address', 'ppp_username', 'rx_power', 'uptime', 'status', 'last_inform', 'tags', 'software_version', 'hardware_version', 'manufacturer_oui', 'active_faults', 'created_at', 'wan_interfaces_count'].includes(col.id);
                     const currentSort = () => sortBy();
                     const isSorted = () => currentSort()?.column === col.id;
                     
@@ -542,7 +546,7 @@ const Devices: Component = () => {
                           <ColumnFilter
                             columnId={col.id}
                             label={col.label}
-                            numeric={['rx_power', 'uptime', 'active_faults'].includes(col.id)}
+                            numeric={['rx_power', 'uptime', 'active_faults', 'wan_interfaces_count'].includes(col.id)}
                             active={columnFilters()[col.id] || null}
                             onApply={(state) => {
                               setPage(0);

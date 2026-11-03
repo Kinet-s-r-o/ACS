@@ -30,6 +30,7 @@ export interface Device {
   last_full_refresh: string | null;
   online: boolean;
   active_faults: number;
+  wan_interfaces_count: number;
   created_at: string;
   updated_at: string;
   parameters?: DeviceParameter[];
@@ -362,6 +363,7 @@ export const api = {
   setTemplateFeatureObjectParameters: (serial: string, featureId: string, key: string, instance: string, values: Record<string, string>) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/objects/${encodeURIComponent(key)}/instances/${encodeURIComponent(instance)}/parameters`, { method: 'POST', body: JSON.stringify({ values }) }),
   deleteTemplateFeatureObject: (serial: string, featureId: string, key: string, instance: string) => request<Task>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/objects/${encodeURIComponent(key)}/instances/${encodeURIComponent(instance)}`, { method: 'DELETE' }),
   deleteWifiSSID: (serial: string, instance: number) => request<Task>(`/device/${encodeURIComponent(serial)}/wifi/ssids/${instance}`, { method: 'DELETE' }),
+  deleteWANInterface: (serial: string, wanDevice: number, connectionDevice: number, kind: 'WANIPConnection' | 'WANPPPConnection', instance: number) => request<Task>(`/device/${encodeURIComponent(serial)}/wan-interfaces/${wanDevice}/${connectionDevice}/${kind}/${instance}`, { method: 'DELETE' }),
   getInterfaceMetrics: (templateId: number) => request<InterfaceMetricDefinition[]>(`/provisioning/templates/${templateId}/interface-metrics`),
   getDeviceInterfaceMetricDefinitions: (serial: string) => request<InterfaceMetricDefinition[]>(`/device/${encodeURIComponent(serial)}/interface-metric-definitions`),
   createInterfaceMetric: (templateId: number, body: Pick<InterfaceMetricDefinition, 'name' | 'description' | 'interface_type' | 'parameter_pattern' | 'unit' | 'source' | 'unit_scale' | 'color' | 'group' | 'chart_type' | 'transform' | 'multiplier' | 'active'>) => request<InterfaceMetricDefinition>(`/provisioning/templates/${templateId}/interface-metrics`, { method: 'POST', body: JSON.stringify(body) }),

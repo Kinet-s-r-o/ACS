@@ -864,3 +864,60 @@ func (r *Router) handleDeleteWifiSSID(w http.ResponseWriter, req *http.Request) 
 	}
 	respondJSON(w, http.StatusCreated, task)
 }
+
+func (r *Router) handleDeleteWANInterface(w http.ResponseWriter, req *http.Request) {
+	device, err := r.parseDeviceBySerial(req)
+	if err != nil || device == nil {
+		respondError(w, http.StatusNotFound, "Device not found")
+		return
+	}
+	parseInstance := func(name string) (uint64, bool) {
+		value, err := strconv.ParseUint(req.PathValue(name), 10, 32)
+		return value, err == nil && value > 0
+	}
+	wanDevice, okWANDevice := parseInstance("wanDevice")
+	connectionDevice, okConnectionDevice := parseInstance("connectionDevice")
+	instance, okInstance := parseInstance("instance")
+	kind := req.PathValue("kind")
+	if !okWANDevice || !okConnectionDevice || !okInstance || (kind != "WANIPConnection" && kind != "WANPPPConnection") {
+		respondError(w, http.StatusBadRequest, "Invalid WAN interface path")
+		return
+	}
+	collectionPath := fmt.Sprintf("InternetGatewayDevice.WANDevice.%d.WANConnectionDevice.%d.%s.", wanDevice, connectionDevice, kind)
+	instancePath := fmt.Sprintf("%s%d.", collectionPath, instance)
+	parameters, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to load WAN parameters")
+		return
+	}
+	exists, writable := false, false
+	for _, parameter := range parameters {
+		if strings.HasPrefix(parameter.Name, instancePath) {
+			exists = true
+		}
+		if parameter.Name == collectionPath && parameter.Writable != nil && *parameter.Writable {
+			writable = true
+		}
+	}
+	if !exists {
+		respondError(w, http.StatusConflict, "CPE does not report this WAN interface")
+		return
+	}
+	if !writable {
+		respondError(w, http.StatusConflict, "CPE does not report this WAN object as writable")
+		return
+	}
+	task, err := models.NewTaskWithPayload(device.ID, models.TaskTypeDeleteObject, map[string]string{"object_name": instancePath})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
+		task.CreatedBy = claims.Username
+	}
+	if err := r.taskRepo.Create(req.Context(), task); err != nil {
+		respondError(w, http.StatusInternalServerError, "Could not create task")
+		return
+	}
+	respondJSON(w, http.StatusCreated, task)
+}

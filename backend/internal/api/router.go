@@ -315,6 +315,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /device/{serial}/features/{featureID}/objects/{key}/instances/{instance}/parameters", auth.RequireAnyPermission(models.PermDevicesConfigure, models.PermDevicesWrite)(r.handleSetFeatureObjectParameter))
 	apiMux.HandleFunc("DELETE /device/{serial}/features/{featureID}/objects/{key}/instances/{instance}", auth.RequireAnyPermission(models.PermDevicesConfigure, models.PermDevicesWrite)(r.handleDeleteFeatureObject))
 	apiMux.HandleFunc("DELETE /device/{serial}/wifi/ssids/{instance}", auth.RequireAnyPermission(models.PermDevicesConfigure, models.PermDevicesWrite)(r.handleDeleteWifiSSID))
+	apiMux.HandleFunc("DELETE /device/{serial}/wan-interfaces/{wanDevice}/{connectionDevice}/{kind}/{instance}", auth.RequireAnyPermission(models.PermDevicesConfigure, models.PermDevicesWrite)(r.handleDeleteWANInterface))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/interface-metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleListInterfaceMetrics))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/metrics", auth.RequirePermission(models.PermProvisioningRead)(r.handleTemplateMetricDefinitions))
 	apiMux.HandleFunc("GET /provisioning/templates/{id}/parameter-polls", auth.RequirePermission(models.PermProvisioningRead)(r.handleListParameterPolls))
@@ -448,7 +449,7 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		"ppp_username": true,
 		"rx_power":     true, "uptime": true, "status": true, "last_inform": true,
 		"tags": true, "software_version": true, "hardware_version": true,
-		"manufacturer_oui": true, "active_faults": true, "created_at": true,
+		"manufacturer_oui": true, "active_faults": true, "created_at": true, "wan_interfaces_count": true,
 	}[sortColumn] {
 		respondError(w, http.StatusBadRequest, "Invalid inventory sort column")
 		return
