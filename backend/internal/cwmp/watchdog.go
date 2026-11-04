@@ -2,12 +2,14 @@ package cwmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
 	"github.com/matrix8412/acs/internal/netutil"
@@ -15,16 +17,18 @@ import (
 )
 
 type DeviceWatchdog struct {
-	db             *gorm.DB
-	deviceRepo     *database.DeviceRepository
-	faultRepo      *database.FaultRepository
-	settingsRepo   *database.SettingsRepository
-	interval       time.Duration
-	staleThreshold time.Duration
-	maxRetries     int
-	retryState     map[int64]watchdogRetry
-	recoveryMu     sync.Mutex
-	recoveryActive map[string]bool
+	communication           *cwmpcontrol.Controller
+	db                      *gorm.DB
+	deviceRepo              *database.DeviceRepository
+	faultRepo               *database.FaultRepository
+	settingsRepo            *database.SettingsRepository
+	interval                time.Duration
+	staleThreshold          time.Duration
+	maxRetries              int
+	retryState              map[int64]watchdogRetry
+	lastCommunicationChange time.Time
+	recoveryMu              sync.Mutex
+	recoveryActive          map[string]bool
 }
 
 type watchdogRetry struct {
@@ -33,8 +37,9 @@ type watchdogRetry struct {
 	updatedAt  time.Time
 }
 
-func NewDeviceWatchdog(db *gorm.DB) *DeviceWatchdog {
+func NewDeviceWatchdog(db *gorm.DB, controls ...*cwmpcontrol.Controller) *DeviceWatchdog {
 	return &DeviceWatchdog{
+		communication:  communicationControl(controls),
 		db:             db,
 		deviceRepo:     database.NewDeviceRepository(db),
 		faultRepo:      database.NewFaultRepository(db),
@@ -51,6 +56,9 @@ func NewDeviceWatchdog(db *gorm.DB) *DeviceWatchdog {
 // a device transitions from offline to online. It only resolves the watchdog
 // summon fault when the CPE accepts the request successfully.
 func (w *DeviceWatchdog) VerifyRecoveredDevice(serialNumber string) {
+	if !w.communication.Enabled() {
+		return
+	}
 	w.recoveryMu.Lock()
 	if w.recoveryActive[serialNumber] {
 		w.recoveryMu.Unlock()
@@ -129,6 +137,16 @@ func (w *DeviceWatchdog) Start(ctx context.Context) {
 }
 
 func (w *DeviceWatchdog) checkStaleDevices(ctx context.Context) {
+	if !w.communication.Enabled() {
+		return
+	}
+	if w.communication != nil {
+		state := w.communication.Snapshot()
+		if state.UpdatedAt != nil && !state.UpdatedAt.Equal(w.lastCommunicationChange) {
+			clear(w.retryState)
+			w.lastCommunicationChange = *state.UpdatedAt
+		}
+	}
 	now := time.Now()
 	for deviceID, state := range w.retryState {
 		if now.Sub(state.updatedAt) > 24*time.Hour {
@@ -168,6 +186,9 @@ func (w *DeviceWatchdog) checkStaleDevices(ctx context.Context) {
 	}
 
 	for _, device := range devices {
+		if !w.communication.Enabled() {
+			return
+		}
 		state := w.retryState[device.ID]
 		observedInform := time.Time{}
 		if device.LastInform != nil {
@@ -180,6 +201,16 @@ func (w *DeviceWatchdog) checkStaleDevices(ctx context.Context) {
 		state.updatedAt = now
 		w.retryState[device.ID] = state
 		err := w.summonDevice(ctx, device, connReqUsername, connReqPassword, useAutoCredentials)
+		if !w.communication.Enabled() {
+			state.attempts--
+			w.retryState[device.ID] = state
+			return
+		}
+		if errors.Is(err, cwmpcontrol.ErrPaused) {
+			state.attempts--
+			w.retryState[device.ID] = state
+			return
+		}
 		if err != nil {
 			log.Printf("[Watchdog] Connection request to %s failed (attempt %d/%d): %v",
 				device.SerialNumber, state.attempts, w.maxRetries, err)
@@ -217,6 +248,12 @@ func (w *DeviceWatchdog) getStaleOnlineDevices(ctx context.Context) ([]*models.D
 }
 
 func (w *DeviceWatchdog) summonDevice(ctx context.Context, device *models.Device, globalUsername, globalPassword string, useAuto bool) error {
+	bound, release, err := w.communication.Bind(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	ctx = bound
 	if device.ConnectionRequestURL == nil || *device.ConnectionRequestURL == "" {
 		return nil
 	}
@@ -255,7 +292,16 @@ func (w *DeviceWatchdog) summonDevice(ctx context.Context, device *models.Device
 		return err
 	}
 
+	if err := w.communication.Check(ctx); err != nil {
+		return err
+	}
 	resp, err := client.Do(httpReq)
+	if paused := w.communication.Check(ctx); paused != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return paused
+	}
 	if err != nil {
 		return err
 	}

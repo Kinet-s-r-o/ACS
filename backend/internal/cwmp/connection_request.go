@@ -2,10 +2,12 @@ package cwmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
 	"github.com/matrix8412/acs/internal/netutil"
@@ -20,11 +22,27 @@ type ConnectionRequestResult struct {
 type ConnectionRequestError struct {
 	StatusCode int
 	Message    string
+	Cause      error
 }
+
+func (e *ConnectionRequestError) Unwrap() error { return e.Cause }
 
 func (e *ConnectionRequestError) Error() string { return e.Message }
 
-func SendConnectionRequest(ctx context.Context, device *models.Device, settingsRepo *database.SettingsRepository) (ConnectionRequestResult, error) {
+func SendConnectionRequest(ctx context.Context, device *models.Device, settingsRepo *database.SettingsRepository, controls ...*cwmpcontrol.Controller) (result ConnectionRequestResult, resultErr error) {
+	control := communicationControl(controls)
+	bound, release, err := control.Bind(ctx)
+	if err != nil {
+		return ConnectionRequestResult{}, &ConnectionRequestError{StatusCode: http.StatusServiceUnavailable, Message: cwmpcontrol.ErrPaused.Error(), Cause: err}
+	}
+	defer release()
+	ctx = bound
+	defer func() {
+		if errors.Is(control.Check(ctx), cwmpcontrol.ErrPaused) {
+			result = ConnectionRequestResult{}
+			resultErr = &ConnectionRequestError{StatusCode: http.StatusServiceUnavailable, Message: cwmpcontrol.ErrPaused.Error(), Cause: cwmpcontrol.ErrPaused}
+		}
+	}()
 	if device.ConnectionRequestURL == nil || *device.ConnectionRequestURL == "" {
 		return ConnectionRequestResult{}, &ConnectionRequestError{StatusCode: http.StatusBadRequest, Message: "Device has no connection request URL"}
 	}
@@ -69,7 +87,16 @@ func SendConnectionRequest(ctx context.Context, device *models.Device, settingsR
 	if err != nil {
 		return ConnectionRequestResult{}, &ConnectionRequestError{StatusCode: http.StatusInternalServerError, Message: "Failed to create connection request"}
 	}
+	if err := control.Check(ctx); err != nil {
+		return ConnectionRequestResult{}, &ConnectionRequestError{StatusCode: http.StatusServiceUnavailable, Message: cwmpcontrol.ErrPaused.Error(), Cause: err}
+	}
 	response, err := client.Do(request)
+	if paused := control.Check(ctx); paused != nil {
+		if response != nil {
+			response.Body.Close()
+		}
+		return ConnectionRequestResult{}, &ConnectionRequestError{StatusCode: http.StatusServiceUnavailable, Message: cwmpcontrol.ErrPaused.Error(), Cause: paused}
+	}
 	if err != nil {
 		return ConnectionRequestResult{Status: "failed", URL: connReqURL, Message: "Device unreachable: " + err.Error()}, nil
 	}

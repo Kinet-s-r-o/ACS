@@ -16,12 +16,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
 )
 
 type Handler struct {
+	communication        *cwmpcontrol.Controller
 	sessions             *SessionManager
 	deviceRepo           *database.DeviceRepository
 	taskRepo             *database.TaskRepository
@@ -54,7 +56,7 @@ func (h *Handler) SetWatchdog(watchdog *DeviceWatchdog) {
 	h.watchdog = watchdog
 }
 
-func NewHandler(db *gorm.DB) *Handler {
+func NewHandler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Handler {
 	var deviceRepo *database.DeviceRepository
 	var taskRepo *database.TaskRepository
 	var parameterRepo *database.ParameterRepository
@@ -82,6 +84,7 @@ func NewHandler(db *gorm.DB) *Handler {
 		}
 	}
 	return &Handler{
+		communication:        communicationControl(controls),
 		sessions:             NewSessionManager(2 * time.Minute),
 		deviceRepo:           deviceRepo,
 		taskRepo:             taskRepo,
@@ -103,6 +106,10 @@ func NewHandler(db *gorm.DB) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.communication.Handler(http.HandlerFunc(h.serveHTTP)).ServeHTTP(w, r)
+}
+
+func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if !h.isNetworkAllowed(h.clientAddress(r)) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -722,6 +729,9 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 
 // nextSessionRequest continues the ACS RPC queue while the session is locked.
 func (h *Handler) nextSessionRequest(ctx context.Context, session *Session) (interface{}, string, error) {
+	if err := h.communication.Check(ctx); err != nil {
+		return nil, defaultNamespace(session.CWMPNamespace), err
+	}
 	sessionID := session.ID
 	if session.AutoFactoryResetSessionFinished {
 		return nil, defaultNamespace(session.CWMPNamespace), nil
@@ -1634,6 +1644,9 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 }
 
 func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{}, error) {
+	if err := h.communication.Check(ctx); err != nil {
+		return nil, err
+	}
 	if h.taskRepo == nil || session.DeviceID == 0 {
 		session.State = StateIdle
 		return nil, nil

@@ -18,6 +18,7 @@ import MetricModal from '../components/MetricModal';
 import ColorSwatch from '../components/ColorSwatch';
 import BooleanIndicator from '../components/BooleanIndicator';
 import { useMetricActiveToggle } from '../lib/useMetricActiveToggle';
+import { formatDateTime } from '../lib/dateTime';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
@@ -113,7 +114,7 @@ const parseObjectFieldOptions = (text: string): { options: string[]; option_labe
 };
 
 const Provisioning: Component = () => {
-  const { isFullAccess, hasAnyPermission } = useAuth();
+  const { isFullAccess, hasAnyPermission, hasPermission } = useAuth();
   const { notify, confirm } = useFeedback();
   const metricColumns = useColumnVisibility('provisioning-metrics', metricTableColumns);
   const interfaceMetricColumns = useColumnVisibility('provisioning-interface-metrics', interfaceMetricTableColumns);
@@ -136,6 +137,22 @@ const Provisioning: Component = () => {
   const [selectedTemplate, setSelectedTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [provError, setProvError] = createSignal<Error | null>(null);
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
+  const [cwmpControl, { refetch: refetchCWMPControl, mutate: setCWMPControl }] = createResource(api.getCWMPControl);
+  const [cwmpControlSaving, setCWMPControlSaving] = createSignal(false);
+  const toggleCWMPControl = async () => {
+    if (!isFullAccess() || !hasPermission('cwmp.control') || !cwmpControl() || cwmpControl.error || cwmpControlSaving()) return;
+    const enabled = !cwmpControl()!.enabled;
+    setCWMPControlSaving(true);
+    try {
+      if (!enabled && !await confirm({ title: 'Turn CWMP off?', description: 'Pause CWMP traffic for every CPE, cancel in-flight requests and stop connection requests. Already delivered device commands cannot be undone. Administration remains available; turn CWMP on here to resume.', confirmLabel: 'CWMP off', tone: 'danger' })) return;
+      setCWMPControl(await api.setCWMPControl(enabled));
+      await refetchCWMPControl();
+      notify({ tone: enabled ? 'success' : 'info', title: enabled ? 'CWMP on' : 'CWMP off', message: enabled ? 'CPE communication can resume.' : 'CPE communication is paused until an operator turns it on.' });
+    } catch (error) {
+      void refetchCWMPControl();
+      notify({ tone: 'error', title: 'Could not update or refresh CWMP state', message: 'Refresh to verify the current state before retrying.', detail: (error as Error).message, persistent: true });
+    } finally { setCWMPControlSaving(false); }
+  };
   const [showSettingsMenu, setShowSettingsMenu] = createSignal(false);
   const [showFeatureMenu, setShowFeatureMenu] = createSignal(false);
   const [showSettingsModal, setShowSettingsModal] = createSignal(false);
@@ -383,6 +400,10 @@ const Provisioning: Component = () => {
   const provDragEnabled = createMemo(() => Object.keys(columnFilters()).length === 0);
 
   onMount(() => {
+    const refreshCWMPState = () => { if (!cwmpControlSaving()) void refetchCWMPControl(); };
+    const cwmpStateTimer = window.setInterval(refreshCWMPState, 10000);
+    window.addEventListener('focus', refreshCWMPState);
+    onCleanup(() => { window.clearInterval(cwmpStateTimer); window.removeEventListener('focus', refreshCWMPState); });
     const desktop = window.matchMedia('(min-width: 1024px)');
     const updateConditionHelpLayout = () => setDesktopConditionHelp(desktop.matches);
     desktop.addEventListener('change', updateConditionHelpLayout);
@@ -1413,6 +1434,9 @@ const Provisioning: Component = () => {
         title="Provisioning"
         description="Controlled CWMP parameters applied automatically to matching CPEs based on trigger phase."
       >
+        <Show when={cwmpControl()} fallback={<button type="button" class="btn btn-secondary text-xs" disabled={cwmpControl.loading} onClick={() => void refetchCWMPControl()}>{cwmpControl.loading ? 'Loading CWMP state…' : 'Retry CWMP state'}</button>}>
+          <button type="button" class={`badge boolean-indicator ${cwmpControl()?.enabled ? 'badge-success' : 'badge-error'}`} aria-label={cwmpControl()?.enabled ? 'Turn CWMP off' : 'Turn CWMP on'} aria-pressed={cwmpControl()?.enabled} disabled={!isFullAccess() || !hasPermission('cwmp.control') || !!cwmpControl.error || cwmpControlSaving()} onClick={() => void toggleCWMPControl()}>{cwmpControl()?.enabled ? 'CWMP on' : 'CWMP off'}</button>
+        </Show>
         <div class="relative" ref={settingsMenu}>
           <button type="button" class="icon-button" aria-label="Provisioning menu" aria-haspopup="menu" aria-expanded={showSettingsMenu()} onClick={() => setShowSettingsMenu(value => !value)}>
             <MoreVertical size={18} />
@@ -1426,6 +1450,10 @@ const Provisioning: Component = () => {
           </Show>
         </div>
       </PageHeader>
+      <Show when={cwmpControl.error}><ResourceError title="CWMP state is unavailable" description="Refresh the current communication state before changing it." onRetry={() => void refetchCWMPControl()} /></Show>
+      <Show when={cwmpControl() && !cwmpControl()!.enabled}>
+        <div class="border border-error bg-error/10 p-3 text-sm text-primary" role="status">CWMP communication is off for all CPEs. Administration remains available. <Show when={cwmpControl()?.updated_by}>Changed by {cwmpControl()?.updated_by}.</Show> <Show when={cwmpControl()?.updated_at}>{formatDateTime(cwmpControl()?.updated_at)}</Show></div>
+      </Show>
 
       <Show when={isFullAccess()}>
         <Show when={!selectedTemplate()}>

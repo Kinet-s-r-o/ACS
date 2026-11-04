@@ -26,12 +26,14 @@ import (
 
 	"github.com/matrix8412/acs/internal/auth"
 	"github.com/matrix8412/acs/internal/cwmp"
+	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
 )
 
 type Router struct {
+	cwmpControl          *cwmpcontrol.Controller
 	db                   *gorm.DB
 	deviceRepo           *database.DeviceRepository
 	settingsRepo         *database.SettingsRepository
@@ -66,7 +68,7 @@ type Router struct {
 
 const maxTemplateImageSize = 5 << 20
 
-func NewRouter(db *gorm.DB) *Router {
+func NewRouter(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Router {
 	uploadDir := os.Getenv("FIRMWARE_UPLOAD_DIR")
 	if uploadDir == "" {
 		uploadDir = "./uploads/firmware"
@@ -110,6 +112,7 @@ func NewRouter(db *gorm.DB) *Router {
 		db:                   db,
 		deviceRepo:           database.NewDeviceRepository(db),
 		settingsRepo:         database.NewSettingsRepository(db),
+		cwmpControl:          firstCWMPControl(controls),
 		taskRepo:             database.NewTaskRepository(db),
 		systemTaskRepo:       database.NewSystemTaskRepository(db),
 		parameterRepo:        database.NewParameterRepository(db),
@@ -270,6 +273,8 @@ func (r *Router) Handler() http.Handler {
 
 	// Settings endpoints
 	apiMux.HandleFunc("GET /settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetSettings))
+	apiMux.HandleFunc("GET /cwmp-control", auth.RequirePermission(models.PermProvisioningRead)(r.handleCWMPControl))
+	apiMux.HandleFunc("PUT /cwmp-control/{state}", auth.RequireFullAccess(auth.RequirePermission(models.PermCWMPControl)(r.handleCWMPControl)))
 	apiMux.HandleFunc("GET /settings/connection-request-secret", auth.RequireFullAccess(auth.RequirePermission(models.PermSettingsRead)(r.handleGetConnectionRequestSecret)))
 	apiMux.HandleFunc("GET /settings/retention/stats", auth.RequirePermission(models.PermSettingsRead)(r.handleRetentionStats))
 	apiMux.HandleFunc("GET /settings/retention/compression", auth.RequirePermission(models.PermSettingsRead)(r.handleCompressionStatus))
@@ -1425,7 +1430,7 @@ func (r *Router) handleConnectionRequest(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) executeConnectionRequest(w http.ResponseWriter, req *http.Request, device *models.Device) {
-	result, err := cwmp.SendConnectionRequest(req.Context(), device, r.settingsRepo)
+	result, err := cwmp.SendConnectionRequest(req.Context(), device, r.settingsRepo, r.cwmpControl)
 	if err != nil {
 		var requestErr *cwmp.ConnectionRequestError
 		if errors.As(err, &requestErr) {

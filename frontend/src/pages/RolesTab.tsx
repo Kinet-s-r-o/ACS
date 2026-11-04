@@ -53,6 +53,7 @@ const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: str
     { key: 'provisioning.write', label: 'Write (legacy bundle)', description: 'Manage both rules and templates.' },
     { key: 'provisioning.rules.write', label: 'Manage rules', description: 'Create, edit, import, reorder, and enable rules.' },
     { key: 'provisioning.templates.write', label: 'Manage templates', description: 'Create and edit templates, advanced settings, and metrics.' },
+    { key: 'cwmp.control', label: 'CWMP on / off', description: 'Globally pause or resume CWMP traffic and CPE connection requests.' },
   ] },
   { label: 'Settings', permissions: [
     { key: 'settings.read', label: 'Read', description: 'View system settings.' },

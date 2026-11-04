@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
@@ -16,6 +17,7 @@ import (
 const systemSummonTimeout = 120 * time.Second
 
 type SystemTaskWorker struct {
+	communication  *cwmpcontrol.Controller
 	deviceRepo     *database.DeviceRepository
 	parameterRepo  *database.ParameterRepository
 	taskRepo       *database.TaskRepository
@@ -23,8 +25,9 @@ type SystemTaskWorker struct {
 	settingsRepo   *database.SettingsRepository
 }
 
-func NewSystemTaskWorker(db *gorm.DB) *SystemTaskWorker {
+func NewSystemTaskWorker(db *gorm.DB, controls ...*cwmpcontrol.Controller) *SystemTaskWorker {
 	return &SystemTaskWorker{
+		communication:  communicationControl(controls),
 		deviceRepo:     database.NewDeviceRepository(db),
 		parameterRepo:  database.NewParameterRepository(db),
 		taskRepo:       database.NewTaskRepository(db),
@@ -47,6 +50,9 @@ func (w *SystemTaskWorker) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if !w.communication.Enabled() {
+				continue
+			}
 			if err := w.reconcile(ctx); err != nil {
 				log.Printf("System task reconciliation failed: %v", err)
 			}
@@ -58,6 +64,9 @@ func (w *SystemTaskWorker) Start(ctx context.Context) {
 }
 
 func (w *SystemTaskWorker) dispatchSingle(ctx context.Context) {
+	if !w.communication.Enabled() {
+		return
+	}
 	active, err := w.systemTaskRepo.CountActive(ctx, models.SystemTaskTypeSummonFromCPE)
 	if err != nil || active > 0 {
 		if err != nil {
@@ -69,6 +78,9 @@ func (w *SystemTaskWorker) dispatchSingle(ctx context.Context) {
 }
 
 func (w *SystemTaskWorker) dispatchBulk(ctx context.Context, taskType models.SystemTaskType) {
+	if !w.communication.Enabled() {
+		return
+	}
 	var maxInFlight, intervalSeconds int
 	var err error
 	if taskType == models.SystemTaskTypeBulkRestart {
@@ -103,6 +115,9 @@ func (w *SystemTaskWorker) dispatchBulk(ctx context.Context, taskType models.Sys
 }
 
 func (w *SystemTaskWorker) dispatchOne(ctx context.Context, taskType models.SystemTaskType) {
+	if !w.communication.Enabled() {
+		return
+	}
 	task, err := w.systemTaskRepo.ClaimNext(ctx, taskType)
 	if err != nil {
 		log.Printf("Could not claim %s system task: %v", taskType, err)
@@ -115,6 +130,10 @@ func (w *SystemTaskWorker) dispatchOne(ctx context.Context, taskType models.Syst
 }
 
 func (w *SystemTaskWorker) process(ctx context.Context, systemTask *models.SystemTask) {
+	if !w.communication.Enabled() {
+		_ = w.systemTaskRepo.RequeuePaused(ctx, systemTask.ID)
+		return
+	}
 	device, err := w.deviceRepo.GetByID(ctx, systemTask.DeviceID)
 	if err != nil || device == nil {
 		message := "CPE no longer exists"
@@ -130,7 +149,9 @@ func (w *SystemTaskWorker) process(ctx context.Context, systemTask *models.Syste
 	}
 
 	var cwmpTaskID *int64
-	if systemTask.Type == models.SystemTaskTypeBulkRestart {
+	if systemTask.CWMPTaskID != nil {
+		cwmpTaskID = systemTask.CWMPTaskID
+	} else if systemTask.Type == models.SystemTaskTypeBulkRestart {
 		cwmpTask, err := models.NewTaskWithPayload(device.ID, models.TaskTypeReboot, nil)
 		if err != nil {
 			_ = w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, "Could not create CWMP restart task: "+err.Error())
@@ -165,8 +186,12 @@ func (w *SystemTaskWorker) process(ctx context.Context, systemTask *models.Syste
 		cwmpTaskID = &cwmpTask.ID
 	}
 
-	result, err := SendConnectionRequest(ctx, device, w.settingsRepo)
+	result, err := SendConnectionRequest(ctx, device, w.settingsRepo, w.communication)
 	if err != nil {
+		if errors.Is(err, cwmpcontrol.ErrPaused) {
+			_ = w.systemTaskRepo.RequeuePaused(ctx, systemTask.ID)
+			return
+		}
 		if cwmpTaskID != nil {
 			_, _ = w.taskRepo.FailPending(ctx, *cwmpTaskID, err.Error())
 		}
@@ -188,6 +213,9 @@ func (w *SystemTaskWorker) process(ctx context.Context, systemTask *models.Syste
 }
 
 func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
+	if !w.communication.Enabled() {
+		return nil
+	}
 	bulkSummonSettings, bulkSummonSettingsErr := w.settingsRepo.GetBulkSummonSettings(ctx)
 	bulkRestartSettings, bulkRestartSettingsErr := w.settingsRepo.GetBulkRestartSettings(ctx)
 	for _, taskType := range []models.SystemTaskType{models.SystemTaskTypeSummonFromCPE, models.SystemTaskTypeBulkSummon, models.SystemTaskTypeBulkRestart} {
@@ -196,6 +224,9 @@ func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
 			return err
 		}
 		for _, systemTask := range tasks {
+			if !w.communication.Enabled() {
+				return nil
+			}
 			if systemTask.Status != models.SystemTaskStatusWaiting {
 				continue
 			}

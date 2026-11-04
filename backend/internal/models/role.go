@@ -38,6 +38,7 @@ const (
 	PermUsersDashboards       = "users.dashboards"
 	PermProvisioningRules     = "provisioning.rules.write"
 	PermProvisioningTemplates = "provisioning.templates.write"
+	PermCWMPControl           = "cwmp.control"
 )
 
 // AllPermissions lists every permission key.
@@ -55,6 +56,7 @@ var AllPermissions = []string{
 	PermDevicesConfigure, PermDevicesCommand, PermDevicesReset, PermDevicesDelete,
 	PermDevicesCredentials, PermDevicesSnapshots, PermDevicesFirmware,
 	PermFirmwaresManage, PermUsersTokens, PermUsersDashboards, PermProvisioningRules, PermProvisioningTemplates,
+	PermCWMPControl,
 }
 
 // ReadPermissions lists all read-only permission keys.

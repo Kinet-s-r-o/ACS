@@ -5,6 +5,7 @@
 | External billing/API integration | [Integration guide](../integration-api.md) → `backend/internal/api/integration.go`, `api_tokens.go`, `openapi.json`, `internal/auth/api_token.go` | User-linked tokens, serial-based CPE operations, Swagger contract and tests |
 | Backend entrypoint and lifecycle | [backend/README.md](../../backend/README.md) → `backend/cmd/server/main.go` | Servers, migrations, recovery, retention, watchdog startup |
 | CWMP/TR-069 protocol behavior | [backend/README.md](../../backend/README.md) → `backend/internal/cwmp/` | SOAP sessions, Inform, RPC handling, conditions, device watchdog |
+| Global CWMP on/off | [backend/README.md](../../backend/README.md) → `backend/internal/cwmpcontrol/`, `internal/database/cwmp_control.go`, `internal/api/cwmp_control.go` | Durable gate, in-flight cancellation, session invalidation, worker/watchdog pause, `cwmp.control` permission |
 | HTTP API and authorization | [backend/README.md](../../backend/README.md) → `backend/internal/api/` and `backend/internal/auth/` | Routes, permissions, security middleware, handlers |
 | Persistence and schema | [backend/README.md](../../backend/README.md) → `backend/internal/database/` and `models/` | GORM repositories, AutoMigrate models, encryption, Timescale setup |
 | UI-managed DB indexes | [DB indexes guide](../database-indexes.md) → `managed_indexes.go`, `managed_index_worker.go`, `database_index.go`, `DatabaseIndexes.tsx` | Ownership, B-tree recipes, permissions, durable DDL jobs, disk probe and budgets |

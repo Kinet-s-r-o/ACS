@@ -22,6 +22,7 @@ import (
 	"github.com/matrix8412/acs/internal/api"
 	"github.com/matrix8412/acs/internal/auth"
 	"github.com/matrix8412/acs/internal/cwmp"
+	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
 	"github.com/matrix8412/acs/internal/models"
 	"golang.org/x/crypto/bcrypt"
@@ -106,7 +107,12 @@ func main() {
 	apiBindAddress := envOrDefault("API_BIND_ADDR", "127.0.0.1")
 
 	cwmpMux := http.NewServeMux()
-	cwmpHandler := cwmp.NewHandler(db)
+	communication, err := cwmpcontrol.New(ctx, database.NewCWMPControlStore(database.NewSettingsRepository(db)))
+	if err != nil {
+		log.Fatalf("Could not load CWMP communication state: %v", err)
+	}
+	cwmpHandler := cwmp.NewHandler(db, communication)
+	communication.OnPause(cwmpHandler.ClearSessions)
 	cwmpMux.Handle("/", cwmpHandler)
 
 	cwmpServer := &http.Server{
@@ -120,7 +126,7 @@ func main() {
 	}
 
 	apiMux := http.NewServeMux()
-	apiRouter := api.NewRouter(db)
+	apiRouter := api.NewRouter(db, communication)
 	apiMux.Handle("/", apiRouter.Handler())
 
 	apiServer := &http.Server{
@@ -133,10 +139,10 @@ func main() {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	watchdog := cwmp.NewDeviceWatchdog(db)
+	watchdog := cwmp.NewDeviceWatchdog(db, communication)
 	cwmpHandler.SetWatchdog(watchdog)
 	go watchdog.Start(ctx)
-	go cwmp.NewSystemTaskWorker(db).Start(ctx)
+	go cwmp.NewSystemTaskWorker(db, communication).Start(ctx)
 
 	go func() {
 		log.Printf("ACS CWMP server listening on %s", cwmpServer.Addr)

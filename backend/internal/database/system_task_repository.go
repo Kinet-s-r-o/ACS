@@ -159,6 +159,12 @@ func (r *SystemTaskRepository) MarkFailed(ctx context.Context, id int64, message
 	return r.db.WithContext(ctx).Model(&models.SystemTask{}).Where("id = ?", id).Updates(map[string]interface{}{"status": models.SystemTaskStatusFailed, "completed_at": now, "error_message": message}).Error
 }
 
+// Keep an interrupted contact attempt queued, including any linked CWMP task.
+func (r *SystemTaskRepository) RequeuePaused(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Model(&models.SystemTask{}).Where("id = ? AND status = ?", id, models.SystemTaskStatusProcessing).
+		Updates(map[string]interface{}{"status": models.SystemTaskStatusPending, "started_at": nil, "dispatched_at": nil, "error_message": "", "attempts": gorm.Expr("GREATEST(attempts - 1, 0)")}).Error
+}
+
 func (r *SystemTaskRepository) RetryFailed(ctx context.Context, id int64) (bool, error) {
 	updated := false
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

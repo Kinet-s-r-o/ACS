@@ -335,6 +335,8 @@ export const api = {
 
   getMeta: () => request<{ app_name: string; app_logo?: string; ui_datetime_format?: string }>('/meta'),
   getSettings: () => request<Record<string, string>>('/settings'),
+  getCWMPControl: () => request<{ enabled: boolean; updated_at?: string; updated_by?: string }>('/cwmp-control'),
+  setCWMPControl: (enabled: boolean) => request<{ enabled: boolean; updated_at?: string; updated_by?: string }>(`/cwmp-control/${enabled ? 'on' : 'off'}`, { method: 'PUT' }),
   getConnectionRequestSecret: () => request<{ value: string }>('/settings/connection-request-secret'),
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),
   getCompressionStatus: () => request<CompressionStatus>('/settings/retention/compression'),
