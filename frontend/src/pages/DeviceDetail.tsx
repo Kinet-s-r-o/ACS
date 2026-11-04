@@ -35,6 +35,7 @@ import type { SortDirection } from '../lib/sorting';
 import { formatDateTime, formatParameterDateTime } from '../lib/dateTime';
 import { hostParameterUpdates, latestParameterTimestamp } from '../lib/parameterFreshness';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
+import { featureParameterUnavailableReason } from '../lib/featureParameterState';
 
 interface HostColumnConfig {
   id: string;
@@ -1985,9 +1986,11 @@ const DeviceDetail: Component = () => {
   const renderFeatureControls = (feature: ProvisioningFeature, controls: ProvisioningFeature['controls']) => <For each={controls}>{control => {
     const parameter = () => (parameters() || []).find(item => item.name === control.parameter);
     const description = () => control.description?.trim();
-    return <Show when={control.type === 'boolean'} fallback={
+    const unavailableReason = () => featureParameterUnavailableReason(parameter());
+    return <fieldset class={`min-w-0 space-y-2 ${control.type === 'object' ? 'lg:col-span-2' : ''}`} disabled={Boolean(unavailableReason())} aria-label={control.label}>
+      <Show when={control.type === 'boolean'} fallback={
       <Show when={control.type === 'string' || control.type === 'int' || control.type === 'unsignedInt'} fallback={
-        <Show when={parameter()?.writable === true}>
+        <>
           <div class="rounded border border-subtle p-4 lg:col-span-2">
             <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><Show when={description()}><p class="mt-1 text-xs text-secondary">{description()}</p></Show></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
             <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
@@ -1998,9 +2001,9 @@ const DeviceDetail: Component = () => {
               }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
             </Show>
           </div>
-        </Show>
+        </>
       }>
-        <Show when={parameter()?.writable === true}>
+        <>
           <label class="block rounded border border-subtle p-4">
             <span class="mb-2 block text-sm font-medium text-primary">{control.label}</span>
             <Show when={description()}><p class="mb-2 text-xs text-secondary">{description()}</p></Show>
@@ -2008,16 +2011,18 @@ const DeviceDetail: Component = () => {
               <select class="input w-full" value={parameter()?.value || ''} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void setTemplateFeatureString(feature.id, control.key, control.label, event.currentTarget.value)}><Show when={!control.options?.includes(parameter()?.value || '')}><option value={parameter()?.value || ''}>{parameter()?.value || 'Select a value'}</option></Show><For each={control.options || []}>{option => <option value={option}>{option}</option>}</For></select>
             </Show>
           </label>
-        </Show>
+        </>
       </Show>
     }>
-      <Show when={parameter()?.writable === true}>
+      <>
         <label class="flex items-center justify-between gap-3 rounded border border-subtle p-4">
           <span class="min-w-0"><span class="block text-sm font-medium text-primary">{control.label}</span><Show when={description()}><span class="mt-1 block text-xs text-secondary">{description()}</span></Show></span>
-          <input type="checkbox" class="h-4 w-4 accent-sky-500" checked={parameter()?.value.toLowerCase() === (control.enabled_value || '1').toLowerCase()} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void toggleTemplateFeature(feature.id, control.key, control.label, control.group, event.currentTarget.checked)} />
+          <input type="checkbox" class="h-4 w-4 accent-sky-500" checked={parameter()?.value?.toLowerCase() === (control.enabled_value || '1').toLowerCase()} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void toggleTemplateFeature(feature.id, control.key, control.label, control.group, event.currentTarget.checked)} />
         </label>
-      </Show>
-    </Show>;
+      </>
+    </Show>
+      <Show when={unavailableReason()}><p class="text-xs text-muted" role="status">{unavailableReason()}</p></Show>
+    </fieldset>;
   }}</For>;
 
   return (
