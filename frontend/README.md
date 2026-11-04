@@ -13,6 +13,8 @@
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
 
+Fleet status defaults to Device growth only. Additional panels must be user-created (`custom-*` IDs); parameter thresholds and category aggregations use `devices.read`. Do not restore retired built-in panels or import old browser panel configurations.
+
 DB tools is `pages/RetentionSettings.tsx`; its DB indexes tab is `pages/DatabaseIndexes.tsx`. The [DB indexes guide](../docs/database-indexes.md) defines permitted recipes, API, ownership and budgets. Gate the tab by `database.indexes.read` and mutations by both index grants; existing `settings.write` does not grant DDL access. Keep form/row identities stable while background status polling replaces response objects.
 
 CPE pre-registration uses `components/CreateDeviceDialog.tsx` and `POST /devices`. `lib/deviceStatus.ts` and `components/DeviceStatusBadge.tsx` display Waiting for CPEs with no first Inform and no online state. Keep inventory filters, exports, detail badges, and fleet counts consistent with this lifecycle.

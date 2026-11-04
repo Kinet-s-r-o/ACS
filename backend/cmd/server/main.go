@@ -418,6 +418,9 @@ func runAutoMigrate(db *gorm.DB) error {
 	if err := database.MigrateInterfaceMetricRetentionSetting(context.Background(), db); err != nil {
 		return fmt.Errorf("migrate interface metric retention setting: %w", err)
 	}
+	if err := database.MigrateRetiredDashboardPanels(context.Background(), db); err != nil {
+		return fmt.Errorf("remove retired dashboard panels: %w", err)
+	}
 	if db.Migrator().HasIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type") {
 		if err := db.Migrator().DropIndex(&models.DeviceLifecycleEvent{}, "idx_device_lifecycle_device_type"); err != nil {
 			return fmt.Errorf("drop obsolete device lifecycle uniqueness index: %w", err)

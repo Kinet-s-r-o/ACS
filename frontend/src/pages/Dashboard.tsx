@@ -13,7 +13,6 @@ import ColorSwatch from '../components/ColorSwatch';
 interface DistributionListProps {
   data: Record<string, number>;
   limit?: number;
-  semantic?: boolean;
   colors?: Record<string, DashboardThresholdColor>;
   order?: string[];
   sortByCount?: boolean;
@@ -31,17 +30,12 @@ const defaultFleetLayout: FleetLayout = {
   growth: { order: 0, width: 60, height: 2, interval: 'daily' },
 };
 
-const readLegacyGrowthInterval = (): DeviceGrowthInterval => {
-  try {
-    const saved = localStorage.getItem('acs.dashboard.growth-interval');
-    return growthIntervals.some(({ id }) => id === saved) ? saved as DeviceGrowthInterval : 'daily';
-  } catch { return 'daily'; }
-};
+
 
 const normalizeFleetLayout = (layout: FleetLayout): FleetLayout => Object.fromEntries(
   Object.entries(layout).filter((entry): entry is [string, FleetPanelLayout] => {
     const item = entry[1] as FleetPanelLayout | undefined;
-    return !!item && Number.isFinite(item.order) && Number.isFinite(item.width) && Number.isFinite(item.height);
+    return (entry[0] === 'growth' || /^custom-[a-zA-Z0-9-]{1,64}$/.test(entry[0])) && !!item && Number.isFinite(item.order) && Number.isFinite(item.width) && Number.isFinite(item.height);
   }).map(([id, item]) => [id, {
     ...item,
     width: Math.max(30, Math.min(120, item.width <= 12 ? item.width * 10 : item.width)),
@@ -49,22 +43,15 @@ const normalizeFleetLayout = (layout: FleetLayout): FleetLayout => Object.fromEn
   }]),
 );
 
-const readLegacyFleetLayout = (): FleetLayout => {
-  try {
-    const saved = localStorage.getItem('acs.dashboard.fleet-layout');
-    if (!saved) return defaultFleetLayout;
-    const parsed: unknown = JSON.parse(saved);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FleetLayout : defaultFleetLayout;
-  } catch { return defaultFleetLayout; }
-};
+
 
 const readUserFleetLayout = (userID: string): FleetLayout => {
   try {
     const saved = localStorage.getItem(`acs.dashboard.fleet-layout:${userID}`);
-    if (!saved) return readLegacyFleetLayout();
+    if (!saved) return defaultFleetLayout;
     const parsed: unknown = JSON.parse(saved);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FleetLayout : readLegacyFleetLayout();
-  } catch { return readLegacyFleetLayout(); }
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FleetLayout : defaultFleetLayout;
+  } catch { return defaultFleetLayout; }
 };
 
 const FleetPanelFrame: Component<{
@@ -204,33 +191,13 @@ const growthIntervals: Array<{ id: DeviceGrowthInterval; label: string }> = [
   { id: 'monthly', label: 'Monthly' }, { id: 'yearly', label: 'Yearly' },
 ];
 
-const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => Array.isArray(panels) ? panels : [];
+const normalizeDashboardPanels = (panels: DashboardPanelConfig[]) => Array.isArray(panels)
+  ? panels.filter((panel) => /^custom-[a-zA-Z0-9-]{1,64}$/.test(panel.id) && (!panel.kind || panel.kind === 'parameter' || panel.kind === 'category'))
+  : [];
 
 const loadDashboardPanelConfigs = async (): Promise<DashboardPanelConfig[]> => {
-  const remote = await api.getDashboardPanels();
-  let legacyRaw: string | null = null;
-  try { legacyRaw = localStorage.getItem('acs.dashboard.parameter-panels'); } catch { /* Local storage may be unavailable. */ }
-  let panels = remote;
-  if (remote.length === 0 && legacyRaw) {
-    try {
-      const legacy = JSON.parse(legacyRaw) as Array<Record<string, unknown>>;
-      panels = legacy.map((panel) => ({ ...panel, parameter_pattern: panel.parameter_pattern ?? panel.parameterPattern })) as DashboardPanelConfig[];
-    } catch {
-      panels = [];
-    }
-  }
-  if (remote.length === 0 && panels.length > 0) panels = await api.saveDashboardPanels(normalizeDashboardPanels(panels));
-  if (legacyRaw) try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Ignore unavailable local storage. */ }
-  return normalizeDashboardPanels(panels);
-};
-
-const semanticTone = (label: string) => {
-  const normalized = label.toLowerCase();
-  if (normalized.includes('critical') || normalized.includes('poor')) return 'is-error';
-  if (normalized.includes('warning') || normalized.includes('fair')) return 'is-warning';
-  if (normalized.includes('good') || normalized.includes('normal') || normalized.includes('30 days')) return 'is-success';
-  if (normalized.includes('unknown')) return 'is-muted';
-  return '';
+  try { localStorage.removeItem('acs.dashboard.parameter-panels'); } catch { /* Local storage may be unavailable. */ }
+  return normalizeDashboardPanels(await api.getDashboardPanels());
 };
 
 const DistributionList: Component<DistributionListProps> = (props) => {
@@ -253,7 +220,7 @@ const DistributionList: Component<DistributionListProps> = (props) => {
           <li class="distribution-row">
             <span class="distribution-label" title={label}>{label}</span>
             <progress
-              class={`distribution-progress ${legacyThresholdColorHex[props.colors?.[label] ?? ''] ? `distribution-progress-${props.colors?.[label]}` : ''} ${props.semantic ? semanticTone(label) : ''}`}
+              class={`distribution-progress ${legacyThresholdColorHex[props.colors?.[label] ?? ''] ? `distribution-progress-${props.colors?.[label]}` : ''}`}
               data-dynamic-style={props.colors?.[label]?.startsWith('#') ? 'distribution-progress-color' : undefined}
               style={props.colors?.[label]?.startsWith('#') ? { '--distribution-progress-color': props.colors[label] } as any : undefined}
               value={value}
@@ -347,7 +314,7 @@ const Dashboard: Component = () => {
     if (savedFleetLayout.loading || savedFleetLayout.error || !remote) return;
     const initial = Object.keys(remote).length > 0 ? { ...defaultFleetLayout, ...remote } : managingOtherDashboard() ? { ...defaultFleetLayout } : { ...defaultFleetLayout, ...readUserFleetLayout(String(userID)) };
     if (!growthIntervals.some(({ id }) => id === initial.growth?.interval)) {
-      initial.growth = { ...defaultFleetLayout.growth, ...initial.growth, interval: managingOtherDashboard() ? 'daily' : readLegacyGrowthInterval() };
+      initial.growth = { ...defaultFleetLayout.growth, ...initial.growth, interval: 'daily' };
     }
     setFleetLayout(normalizeFleetLayout(initial));
     setFleetLayoutReady(true);
@@ -371,7 +338,7 @@ const Dashboard: Component = () => {
   const canCopyPanels = () => !managingOtherDashboard() && isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
-  const analyticsPanels = createMemo(() => panelConfigs().filter((panel) => !panel.hidden && (panel.kind === 'category' || panel.kind === 'recency')));
+  const analyticsPanels = createMemo(() => panelConfigs().filter((panel) => !panel.hidden && panel.kind === 'category'));
   const [panelAnalytics, { refetch: refetchPanelAnalytics }] = createResource(
     () => !savedPanelConfigs.loading && !savedPanelConfigs.error && analyticsPanels().length > 0 ? analyticsPanels() : undefined,
     (panels) => loadFleetData(() => api.getDashboardPanelAnalytics(panels)),
@@ -511,10 +478,7 @@ const Dashboard: Component = () => {
         notify({ tone: 'error', title: 'Invalid parameter path', message: 'Enter a Device. or InternetGatewayDevice. parameter path. Use * for dynamic path sections.' });
         return null;
       }
-      if (kind === 'recency' && draft.source !== 'last_inform') {
-        notify({ tone: 'error', title: 'Invalid panel source', message: 'Contact recency must use Last Inform.' });
-        return null;
-      }
+
       if (draft.source === 'custom_parameter') {
         return { id: draft.id, title, kind, source: 'custom_parameter', parameter_pattern: draft.parameter_pattern.trim(), limit: draft.limit ?? 6, thresholds: [] };
       }
@@ -730,15 +694,7 @@ const Dashboard: Component = () => {
         </section>
         </FleetPanelFrame>
 
-        <Show when={analyticsPanels().some((config) => config.id === 'contactRecency' && config.kind === 'recency')}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel fleet-content-panel">
-          <div class="data-panel-header">
-            <div><h2>{panelConfigs().find((config) => config.id === 'contactRecency')?.title ?? 'Contact recency'}</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
-            <button type="button" class="icon-button" aria-label="Configure contact recency panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'contactRecency'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button>
-          </div>
-          <div class="data-panel-body">
-            {renderAnalytics('contactRecency', { semantic: true })}
-          </div>
-        </section></FleetPanelFrame></Show>
+
 
         <Show when={savedPanelConfigs.loading}><div class="fleet-layout-status" role="status">Loading dashboard panels…</div></Show>
         <Show when={savedPanelConfigs.error}><div class="fleet-layout-status"><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></div></Show>
@@ -766,16 +722,7 @@ const Dashboard: Component = () => {
             </FleetPanelFrame>;
           }}</For>
         </Show>
-        <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
-          <For each={panelConfigs().filter((config) => config.id !== 'contactRecency' && config.kind === 'recency' && !config.hidden)}>{(config) => (
-            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, panelFallbackOrder(config.id))} onMove={movePanel} onResize={resizePanel}>
-              <section class="data-panel fleet-content-panel">
-                <div class="dashboard-configurable-heading"><h3>{config.title}</h3><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></div>
-                <div class="data-panel-body">{renderAnalytics(config.id, { semantic: true })}</div>
-              </section>
-            </FleetPanelFrame>
-          )}</For>
-        </Show>
+
         </div>
       </Show>
       <Show when={panelDraft()}>
@@ -783,9 +730,9 @@ const Dashboard: Component = () => {
           <div class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
               <label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {
-                const kind = event.currentTarget.value as 'parameter' | 'category' | 'recency';
-                return { ...draft, kind, source: kind === 'recency' ? 'last_inform' : undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : kind === 'parameter' ? draft.thresholds : [] };
-              })}><option value="parameter">Parameter thresholds</option><option value="category">Aggregation</option><option value="recency">Contact recency</option></select></label>
+                const kind = event.currentTarget.value as 'parameter' | 'category';
+                return { ...draft, kind, source: undefined, aggregation_option_id: undefined, parameter_pattern: '', thresholds: kind === 'parameter' && draft.thresholds.length === 0 ? [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }] : kind === 'parameter' ? draft.thresholds : [] };
+              })}><option value="parameter">Parameter thresholds</option><option value="category">Aggregation</option></select></label>
               <Show when={(panelDraft()?.kind ?? 'parameter') === 'parameter'}>
               <label class="block text-xs text-muted">Parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={panelDraft()?.parameter_pattern ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, parameter_pattern: event.currentTarget.value }))} placeholder="InternetGatewayDevice.DeviceInfo.UpTime" /><span class="mt-1 block">Use * to match dynamic path sections or parameter name variants.</span></label>
             </Show>

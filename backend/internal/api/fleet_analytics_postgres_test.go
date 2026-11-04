@@ -53,30 +53,7 @@ func TestFleetAnalyticsPostgres(t *testing.T) {
 		}
 	}
 	repo := database.NewDeviceRepository(db)
-	devices, total, err := repo.ListForAnalytics(context.Background(), 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 3 || len(devices) != 2 {
-		t.Fatalf("sample=%d total=%d", len(devices), total)
-	}
-	var populated, missing int
-	for _, d := range devices {
-		if d.Uptime == nil {
-			missing++
-			if d.WifiStations != 0 || d.Temperature != nil || d.AccessType != nil {
-				t.Fatalf("missing device received parameter values: %+v", d)
-			}
-			continue
-		}
-		populated++
-		if strings.TrimSpace(*d.Uptime) != "100" || d.Temperature == nil || *d.Temperature != "2560" || d.RxPowerValue == nil || *d.RxPowerValue != "100" || d.AccessType == nil || *d.AccessType != "GPON" || d.WifiStations != 7 {
-			t.Fatalf("wrong latest values or station sum: %+v", d)
-		}
-	}
-	if populated != 1 || missing != 1 {
-		t.Fatalf("populated=%d missing=%d", populated, missing)
-	}
+
 	router := &Router{deviceRepo: repo}
 	for _, tc := range []struct {
 		pattern string

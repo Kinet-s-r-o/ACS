@@ -268,14 +268,6 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .distribution-progress::-webkit-progress-bar { background: rgb(var(--bg-elevated)); }
 .distribution-progress::-webkit-progress-value { background: var(--distribution-progress-color, rgb(var(--accent))); box-shadow: inset 0 1px 0 rgb(255 255 255 / 38%), inset 0 -1px 0 rgb(15 23 42 / 15%), 0 1px 2px rgb(15 23 42 / 20%); }
 .distribution-progress::-moz-progress-bar { background: var(--distribution-progress-color, rgb(var(--accent))); box-shadow: inset 0 1px 0 rgb(255 255 255 / 38%), inset 0 -1px 0 rgb(15 23 42 / 15%), 0 1px 2px rgb(15 23 42 / 20%); }
-.distribution-progress.is-error::-webkit-progress-value { background: rgb(var(--error)); }
-.distribution-progress.is-error::-moz-progress-bar { background: rgb(var(--error)); }
-.distribution-progress.is-warning::-webkit-progress-value { background: rgb(var(--warning)); }
-.distribution-progress.is-warning::-moz-progress-bar { background: rgb(var(--warning)); }
-.distribution-progress.is-success::-webkit-progress-value { background: rgb(var(--success)); }
-.distribution-progress.is-success::-moz-progress-bar { background: rgb(var(--success)); }
-.distribution-progress.is-muted::-webkit-progress-value { background: rgb(var(--text-muted)); }
-.distribution-progress.is-muted::-moz-progress-bar { background: rgb(var(--text-muted)); }
 .distribution-progress-blue::-webkit-progress-value { background: rgb(var(--accent)); }
 .distribution-progress-blue::-moz-progress-bar { background: rgb(var(--accent)); }
 .distribution-progress-green::-webkit-progress-value { background: rgb(var(--success)); }

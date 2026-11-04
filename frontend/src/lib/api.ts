@@ -96,8 +96,8 @@ export interface CompressionStatus {
 }
 export type DashboardThresholdColor = 'blue' | 'green' | 'amber' | 'orange' | 'red' | 'gray' | `#${string}`;
 export interface DashboardThreshold { label: string; max: number | null; color: DashboardThresholdColor; order?: number }
-export type DashboardPanelKind = 'parameter' | 'category' | 'recency';
-export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'configured_option' | 'last_inform';
+export type DashboardPanelKind = 'parameter' | 'category';
+export type DashboardPanelSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter' | 'custom_parameter' | 'configured_option';
 export interface DashboardPanelConfig { id: string; title: string; kind?: DashboardPanelKind; source?: DashboardPanelSource; aggregation_option_id?: string; limit?: number; hidden?: boolean; sort_by_count?: boolean; sort_direction?: 'asc' | 'desc'; exclude_na?: boolean; parameter_pattern: string; thresholds: DashboardThreshold[] }
 export type DashboardAggregationSource = 'access_type' | 'manufacturer' | 'product_class' | 'parameter';
 export interface DashboardAggregationOption { id: string; title: string; source: DashboardAggregationSource; parameter_pattern: string }
@@ -258,7 +258,7 @@ export const api = {
   deleteTag: (id: string) => request<{ status: string }>(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getDeviceStats: () => request<DeviceStats>('/devices/stats', { signal: AbortSignal.timeout(30_000) }),
   getDeviceGrowth: (interval: DeviceGrowthInterval) => request<DeviceGrowth>(`/devices/growth?interval=${interval}`),
-  getDeviceAnalytics: () => request<{ rxPower: Record<string, number>; temperature: Record<string, number>; uptime: Record<string, number>; accessType: Record<string, number>; lastInform: Record<string, number>; wifiStations: Record<string, number>; manufacturers: Record<string, number>; productClasses: Record<string, number>; sampled: number; total: number }>('/devices/analytics', { signal: AbortSignal.timeout(30_000) }),
+
   getDeviceParameterDistribution: (body: DashboardParameterDistributionRequest, signal?: AbortSignal) => request<DashboardParameterDistribution>('/devices/analytics/distribution', { method: 'POST', body: JSON.stringify(body), signal: signal ?? AbortSignal.timeout(30_000) }),
   getDashboardPanelAnalytics: (panels: DashboardPanelConfig[]) => request<{ panels: Record<string, Record<string, number>> }>('/devices/analytics/panels', { method: 'POST', body: JSON.stringify(panels), signal: AbortSignal.timeout(30_000) }),
   getDashboardPanels: () => request<DashboardPanelConfig[]>('/dashboard/panels'),

@@ -657,88 +657,6 @@ func growthNextBucket(value time.Time, interval string) time.Time {
 	}
 }
 
-type FleetAnalyticsDevice struct {
-	Manufacturer *string    `gorm:"column:manufacturer"`
-	ProductClass *string    `gorm:"column:product_class"`
-	ModelName    *string    `gorm:"column:model_name"`
-	LastInform   *time.Time `gorm:"column:last_inform"`
-	RxPowerValue *string    `gorm:"column:rx_power_value"`
-	Temperature  *string    `gorm:"column:temperature_value"`
-	Uptime       *string    `gorm:"column:uptime_value"`
-	AccessType   *string    `gorm:"column:access_type_value"`
-	WifiStations int64      `gorm:"column:wifi_stations"`
-}
-
-const analyticsIntegerValuePattern = `^([+-]{0,1})[0-9]+$`
-
-func (r *DeviceRepository) ListForAnalytics(ctx context.Context, maxDevices int) ([]FleetAnalyticsDevice, int, error) {
-	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
-	defer cancel()
-	query := `WITH sampled_devices AS MATERIALIZED (
-		SELECT id, manufacturer, product_class, model_name, last_inform
-		FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?
-	), matching_parameters AS MATERIALIZED (
-		SELECT p.device_id, p.name, p.value, p.updated_at
-		FROM device_parameters p JOIN sampled_devices d ON d.id = p.device_id
-		WHERE p.name LIKE '%TotalAssociations%' OR p.name LIKE '%AssociatedDeviceNumberOfEntries%'
-			OR p.name LIKE '%RXPower%' OR p.name LIKE '%RxPower%' OR p.name LIKE '%Temp%'
-			OR p.name LIKE '%UpTime' OR p.name LIKE '%PONMode%' OR p.name LIKE '%AccessType%'
-	), numeric_parameters AS MATERIALIZED (
-		SELECT * FROM matching_parameters p
-		WHERE CASE WHEN LENGTH(BTRIM(p.value)) <= 256 AND BTRIM(p.value) ~ ?
-			THEN BTRIM(p.value)::numeric BETWEEN '-1.7976931348623157e308'::numeric AND '1.7976931348623157e308'::numeric
-			ELSE FALSE END
-	), selected_values AS (
-		SELECT DISTINCT ON (p.device_id, metric.kind) p.device_id, metric.kind, p.value
-		FROM numeric_parameters p
-		CROSS JOIN LATERAL (VALUES
-			('rx', p.name LIKE '%RXPower%' OR p.name LIKE '%RxPower%'),
-			('temp', p.name LIKE '%Temp%'),
-			('uptime', p.name LIKE '%UpTime')
-		) metric(kind, matches)
-		WHERE metric.matches
-		ORDER BY p.device_id, metric.kind, p.updated_at DESC, p.name
-	), device_values AS (
-		SELECT device_id,
-			MAX(value) FILTER (WHERE kind = 'rx') AS rx_power_value,
-			MAX(value) FILTER (WHERE kind = 'temp') AS temperature_value,
-			MAX(value) FILTER (WHERE kind = 'uptime') AS uptime_value
-		FROM selected_values GROUP BY device_id
-	), station_counts AS (
-		SELECT p.device_id, SUM(CASE
-			WHEN LENGTH(BTRIM(p.value)) <= 20 AND BTRIM(p.value) ~ ? THEN
-				CASE WHEN BTRIM(p.value)::numeric BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
-					THEN BTRIM(p.value)::bigint ELSE 0 END
-			ELSE 0 END) AS wifi_stations
-		FROM matching_parameters p
-		WHERE p.name LIKE '%TotalAssociations%' OR p.name LIKE '%AssociatedDeviceNumberOfEntries%'
-		GROUP BY p.device_id
-	), access_types AS (
-		SELECT DISTINCT ON (p.device_id) p.device_id, p.value
-		FROM matching_parameters p
-		WHERE (p.name LIKE '%PONMode%' OR p.name LIKE '%AccessType%') AND p.value <> ''
-		ORDER BY p.device_id, p.updated_at DESC, p.name
-	)
-	SELECT d.manufacturer, d.product_class, d.model_name, d.last_inform,
-		v.rx_power_value, v.temperature_value, v.uptime_value, access_type.value AS access_type_value,
-		COALESCE(station_counts.wifi_stations, 0) AS wifi_stations
-	FROM sampled_devices d
-	LEFT JOIN device_values v ON v.device_id = d.id
-	LEFT JOIN station_counts ON station_counts.device_id = d.id
-	LEFT JOIN access_types access_type ON access_type.device_id = d.id`
-	var devices []FleetAnalyticsDevice
-	args := []interface{}{maxDevices, analyticsNumericValuePattern, analyticsIntegerValuePattern}
-	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&devices).Error
-	if err != nil {
-		return nil, 0, err
-	}
-	var total int64
-	if err := r.db.WithContext(ctx).Model(&models.Device{}).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	return devices, int(total), nil
-}
-
 type AnalyticsDistributionThreshold struct {
 	Label string
 	Max   *float64
@@ -803,36 +721,6 @@ func (r *DeviceRepository) GetCategoricalAnalytics(ctx context.Context, source, 
 	}
 	args = append(args, limit)
 	rows, err := r.db.WithContext(ctx).Raw(query, args...).Rows()
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := make(map[string]int)
-	for rows.Next() {
-		var label string
-		var count int
-		if err := rows.Scan(&label, &count); err != nil {
-			return nil, err
-		}
-		result[label] = count
-	}
-	return result, rows.Err()
-}
-
-func (r *DeviceRepository) GetRecencyAnalytics(ctx context.Context, maxDevices int) (map[string]int, error) {
-	if maxDevices < 1 {
-		maxDevices = 10000
-	}
-	query := `SELECT CASE WHEN last_inform IS NULL THEN 'Waiting'
-		WHEN NOW() - last_inform >= INTERVAL '30 days' THEN 'Offline >30d'
-		WHEN NOW() - last_inform >= INTERVAL '7 days' THEN 'Offline >7d'
-		WHEN NOW() - last_inform >= INTERVAL '1 day' THEN 'Offline >1d'
-		WHEN NOW() - last_inform >= INTERVAL '1 hour' THEN 'Offline >1h'
-		WHEN NOW() - last_inform >= INTERVAL '30 minutes' THEN 'Offline >30m'
-		ELSE 'Online' END AS label, COUNT(*) AS count
-		FROM (SELECT last_inform FROM devices ORDER BY last_inform DESC NULLS LAST LIMIT ?) sampled
-		GROUP BY 1 ORDER BY count DESC, label`
-	rows, err := r.db.WithContext(ctx).Raw(query, maxDevices).Rows()
 	if err != nil {
 		return nil, err
 	}

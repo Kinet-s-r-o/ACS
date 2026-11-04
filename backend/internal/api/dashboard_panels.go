@@ -120,17 +120,12 @@ type dashboardLayoutItem struct {
 
 type dashboardLayoutConfig map[string]dashboardLayoutItem
 
-var builtInDashboardPanelIDs = map[string]struct{}{
-	"growth": {}, "contactRecency": {}, "uptime": {}, "temperature": {}, "rxPower": {},
-	"accessType": {}, "manufacturer": {}, "productClass": {},
-}
-
 func validateDashboardLayout(layout dashboardLayoutConfig) error {
 	if len(layout) > 32 {
 		return errors.New("dashboard layout has too many panels")
 	}
 	for id, item := range layout {
-		if _, ok := builtInDashboardPanelIDs[id]; !ok && !dashboardPanelIDRe.MatchString(id) {
+		if id != "growth" && !dashboardPanelIDRe.MatchString(id) {
 			return fmt.Errorf("invalid dashboard layout panel ID %q", id)
 		}
 		if item.Interval != "" {
@@ -170,7 +165,7 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 		if kind == "" {
 			kind = "parameter"
 		}
-		if kind != "parameter" && kind != "category" && kind != "recency" {
+		if kind != "parameter" && kind != "category" {
 			return errors.New("invalid dashboard panel kind")
 		}
 		if kind == "category" {
@@ -191,8 +186,6 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 			default:
 				return errors.New("invalid dashboard category source")
 			}
-		} else if kind == "recency" && config.Source != "last_inform" {
-			return errors.New("invalid dashboard recency source")
 		}
 		if config.Limit < 0 || config.Limit > 100 {
 			return errors.New("dashboard panel limit must be between 0 and 100")
@@ -252,12 +245,7 @@ func validateDashboardPanelConfigs(configs []dashboardPanelConfig) error {
 }
 
 func validDashboardPanelID(id string) bool {
-	switch id {
-	case "uptime", "temperature", "rxPower", "contactRecency", "accessType", "manufacturer", "productClass":
-		return true
-	default:
-		return dashboardPanelIDRe.MatchString(id)
-	}
+	return dashboardPanelIDRe.MatchString(id)
 }
 
 func (r *Router) handleGetDashboardPanels(w http.ResponseWriter, req *http.Request) {
@@ -646,36 +634,32 @@ func (r *Router) handleDashboardPanelAnalytics(w http.ResponseWriter, req *http.
 		}
 		var values map[string]int
 		var err error
-		if config.Kind == "recency" {
-			values, err = r.deviceRepo.GetRecencyAnalytics(req.Context(), 10000)
-		} else {
-			source, pattern := config.Source, config.ParameterPattern
-			if source == "custom_parameter" && config.AggregationOptionID == "" {
-				source = "parameter"
-			} else if source == "configured_option" || source == "custom_parameter" {
-				if !aggregationOptionsLoaded {
-					aggregationOptions, err = r.loadDashboardAggregationOptions(req.Context())
-					if err != nil {
-						respondError(w, http.StatusInternalServerError, "Failed to load Fleet aggregation options")
-						return
-					}
-					aggregationOptionsLoaded = true
+		source, pattern := config.Source, config.ParameterPattern
+		if source == "custom_parameter" && config.AggregationOptionID == "" {
+			source = "parameter"
+		} else if source == "configured_option" || source == "custom_parameter" {
+			if !aggregationOptionsLoaded {
+				aggregationOptions, err = r.loadDashboardAggregationOptions(req.Context())
+				if err != nil {
+					respondError(w, http.StatusInternalServerError, "Failed to load Fleet aggregation options")
+					return
 				}
-				var option *dashboardAggregationOption
-				for index := range aggregationOptions {
-					if aggregationOptions[index].ID == config.AggregationOptionID {
-						option = &aggregationOptions[index]
-						break
-					}
-				}
-				if option == nil {
-					panels[config.ID] = map[string]int{}
-					continue
-				}
-				source, pattern = option.Source, option.ParameterPattern
+				aggregationOptionsLoaded = true
 			}
-			values, err = r.deviceRepo.GetCategoricalAnalytics(req.Context(), source, pattern, 10000, config.Limit)
+			var option *dashboardAggregationOption
+			for index := range aggregationOptions {
+				if aggregationOptions[index].ID == config.AggregationOptionID {
+					option = &aggregationOptions[index]
+					break
+				}
+			}
+			if option == nil {
+				panels[config.ID] = map[string]int{}
+				continue
+			}
+			source, pattern = option.Source, option.ParameterPattern
 		}
+		values, err = r.deviceRepo.GetCategoricalAnalytics(req.Context(), source, pattern, 10000, config.Limit)
 		if err != nil {
 			log.Printf("Error getting dashboard panel analytics: %v", err)
 			respondError(w, http.StatusInternalServerError, "Failed to get dashboard panel analytics")
