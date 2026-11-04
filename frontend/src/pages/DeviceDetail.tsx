@@ -3609,10 +3609,14 @@ const DeviceDetail: Component = () => {
                     <tbody>
                       <For each={filteredAllParams()} fallback={
                         <tr>
-                          <td colspan={paramColumns().filter(column => column.visible).length + 1} class="px-4 py-8 text-center">
-                            <p class="text-muted text-sm">{allParameters.loading ? 'Loading all parameters from the database…' : allParameters.error ? 'Could not load parameters. Use refresh to retry.' : !allParametersRequested() ? 'Click refresh to load all parameters from the database.' : paramFilter() || Object.keys(paramColumnFilters()).length > 0 ? 'No parameters match the current search or filters' : 'No parameters are stored for this CPE.'}</p>
-                            <Show when={paramFilter() || Object.keys(paramColumnFilters()).length > 0}>
-                              <button type="button" class="btn btn-secondary mt-3" onClick={() => { setParamFilter(''); setParamColumnFilters({}); }}>Clear search and filters</button>
+                          <td colspan={paramColumns().filter(column => column.visible).length + 1} class="px-4 py-12 text-center">
+                            <Show when={allParametersRequested() && !allParameters.loading && !allParameters.error} fallback={<p class="text-muted text-sm">{allParameters.loading ? 'Loading all parameters from the database…' : allParameters.error ? 'Could not load parameters. Use refresh to retry.' : 'Click refresh to load all parameters from the database.'}</p>}>
+                              <EmptyState
+                                compact
+                                title={paramFilter() || Object.keys(paramColumnFilters()).length > 0 ? 'No parameters match the current search or filters' : 'No parameters are stored for this CPE.'}
+                                description={paramFilter() || Object.keys(paramColumnFilters()).length > 0 ? 'Change or clear the current search and column filters to see matching parameters.' : 'Refresh parameters after the CPE reports its parameter tree.'}
+                                action={paramFilter() || Object.keys(paramColumnFilters()).length > 0 ? <button type="button" class="btn btn-secondary" onClick={() => { setParamFilter(''); setParamColumnFilters({}); }}>Clear search and filters</button> : undefined}
+                              />
                             </Show>
                           </td>
                         </tr>
