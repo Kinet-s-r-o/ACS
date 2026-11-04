@@ -512,9 +512,6 @@ const Devices: Component = () => {
         <div class="table-panel-toolbar">
           <span><strong>{pagedDevices().length}</strong> shown · <strong>{deviceList()?.total ?? 0}</strong> matching CPEs{activeFilterCount() > 0 ? ` · ${activeFilterCount()} column filter${activeFilterCount() === 1 ? '' : 's'}` : ''}</span>
           <div class="flex items-center gap-2">
-            <Show when={hasInventoryFilter()}>
-              <button type="button" onClick={() => { setSearchQuery(''); setColumnFilters({}); setPage(0); }}>Clear search and filters</button>
-            </Show>
             <div class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               <input
@@ -560,9 +557,9 @@ const Devices: Component = () => {
             </div>
           </div>
         </div>
-        <div class="overflow-x-auto table-scroll">
-          <table data-column-order-key="cpe-inventory" data-column-order-legacy-schema="table::ip address|last inform|manufacturer|model|rx power|serial number|status|tags|uptime" class="data-table w-full">
-            <thead class="sticky top-0 z-10 opaque-table-header">
+        <div class="overflow-x-auto table-scroll isolate">
+          <table data-column-order-key="cpe-inventory" data-column-order-legacy-schema="table::ip address|last inform|manufacturer|model|rx power|serial number|status|tags|uptime" class="data-table cpe-inventory-table w-full">
+            <thead class="opaque-table-header">
               <tr class="border-b border-subtle">
                 <For each={visibleColumns()}>
                   {(col) => {
