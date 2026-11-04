@@ -65,6 +65,7 @@ Analytics tracking is intentionally not embedded in the console. Security audit 
 - **Inputs:** title, optional description, small/medium/large size, close behavior, content, and actions.
 - **Behavior:** closes on Escape and optional backdrop activation; traps Tab/Shift+Tab; restores prior focus; prevents page scroll.
 - **Sizing:** the bottom-right handle resizes width and height by pointer drag or arrow keys (Shift for larger steps, Home to reset). Clicking it opens labelled size sliders and a reset action. User dimensions stay within the viewport; content scrolls while headers/actions stay reachable. Each open dialog owns its size without persisting it across sessions.
+- **Movement:** the full title bar is draggable except its interactive controls. Arrow keys on the focused title bar move the dialog (Shift for larger steps); Home resets size and position. The resize controls also provide position sliders. Keep the entire dialog within viewport margins and preserve its current dimensions when moving.
 - **Responsive:** centered on larger screens and bottom-aligned within mobile safe areas.
 - **Usage:** use for destructive confirmation or a short form. Do not use for parameter trees or other long workflows.
 

@@ -478,6 +478,9 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .dialog-side-panel > .dialog-body { overscroll-behavior: contain; }
 .dialog-with-side-panel > .dialog-content > .dialog-body { overscroll-behavior: contain; }
 .dialog-header { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 16px 18px; border-bottom: 1px solid rgb(var(--border-subtle)); }
+.dialog-move-header { cursor: grab; touch-action: none; user-select: none; }
+.dialog-move-header:active { cursor: grabbing; }
+.dialog-move-header :is(button, a, input, select, textarea, summary) { cursor: pointer; touch-action: manipulation; }
 .dialog-header-content { min-width: 0; padding-right: 82px; }.dialog-header h2 { margin: 0; font-size: 16px; font-weight: 620; }.dialog-header p { margin: 4px 0 0; color: rgb(var(--text-muted)); font-size: 12px; line-height: 1.5; }
 .dialog-header-badge { position: absolute; top: 11px; right: 68px; display: inline-flex; align-items: center; min-height: 18px; padding: 2px 7px; color: rgb(var(--warning-text)); background: rgb(var(--warning) / .12); border: 1px solid rgb(var(--warning) / .3); border-radius: 999px; font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; }
 .dialog-body { min-height: 0; overflow-y: auto; padding: 18px; }
