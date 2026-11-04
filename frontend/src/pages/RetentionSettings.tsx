@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, For, Show } from 'solid-js';
 import { Download, Save } from 'lucide-solid';
+import { formatDateTime } from '../lib/dateTime';
 import { api, type DatabaseQuerySort } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
@@ -273,7 +274,7 @@ const RetentionSettings: Component = () => {
           <Show when={!queryStats.error} fallback={<ResourceError title="Query statistics are unavailable" description="Check database permissions and retry." onRetry={() => void refetchQueryStats()} />}>
             <Show when={queryStats()?.available} fallback={queryStats()?.reason ? <div class="border border-subtle p-4 text-sm text-secondary" role="status"><strong>Query tracking is not enabled.</strong><p class="text-xs text-muted mt-1">{queryStats()?.reason}. Enable pg_stat_statements on the PostgreSQL server and install it in this database to view statement timings.</p></div> : <div class="skeleton h-16 w-full" />}>
               <Show when={(queryStats()?.queries.length ?? 0) > 0} fallback={<p class="text-sm text-muted">{Object.keys(queryFilters()).length > 0 ? 'No statements match the active filters.' : 'No statement statistics are available yet.'}</p>}>
-                <p class="text-xs text-muted">Last reset: {queryStats()?.stats_reset ? new Date(queryStats()!.stats_reset!).toLocaleString() : 'unknown'}</p>
+                <p class="text-xs text-muted">Last reset: {queryStats()?.stats_reset ? formatDateTime(queryStats()!.stats_reset) : 'unknown'}</p>
                 <div class="overflow-x-auto border border-subtle rounded"><table class="data-table w-full text-xs text-left"><thead class="bg-surface text-muted"><tr>
                   <th scope="col" class="sticky left-0 z-10 bg-surface p-2 min-w-72"><SortableHeader column="query" label="Statement" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort}><ColumnFilter columnId="query" label="Statement" active={queryFilters().query || null} onApply={state => applyQueryFilter('query', state)} /></SortableHeader></th>
                   <th scope="col" class="p-2 text-right"><div class="flex items-center justify-end gap-1.5"><SortableHeader column="calls" label="Calls" sortBy={querySort().column} direction={querySort().direction} onSort={handleQuerySort} /><ColumnFilter columnId="calls" label="Calls" numeric active={queryFilters().calls || null} onApply={state => applyQueryFilter('calls', state)} /></div></th>

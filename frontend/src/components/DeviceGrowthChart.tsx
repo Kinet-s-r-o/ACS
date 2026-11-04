@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { createEffect, createResource, createSignal, onCleanup, Show } from 'solid-js';
+import { formatDateTime, dateTimeFormat } from '../lib/dateTime';
 import * as echarts from 'echarts/core';
 import { LineChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
@@ -26,6 +27,7 @@ const DeviceGrowthChart: Component<Props> = (props) => {
   );
 
   createEffect(() => {
+    dateTimeFormat();
     const el = element();
     themeMode();
     const points = growth()?.points ?? [];
@@ -75,12 +77,12 @@ const DeviceGrowthChart: Component<Props> = (props) => {
         formatter: (params: any) => {
           const points = Array.isArray(params) ? params : [params];
           if (!points.length) return '';
-          return [new Date(points[0].value[0]).toLocaleString(), ...points.map((point) => `${point.marker}${point.seriesName}: <strong>${Number(point.value[1]).toLocaleString()}</strong>`)].join('<br/>');
+          return [formatDateTime(points[0].value[0]), ...points.map((point) => `${point.marker}${point.seriesName}: <strong>${Number(point.value[1]).toLocaleString()}</strong>`)].join('<br/>');
         },
       },
       xAxis: {
         type: 'time',
-        axisLabel: { color: axisColor, fontSize: 12 },
+        axisLabel: { color: axisColor, fontSize: 12, formatter: (value: number) => formatDateTime(value), hideOverlap: true },
         axisLine: { lineStyle: { color: gridColor } },
         splitLine: { show: false },
       },

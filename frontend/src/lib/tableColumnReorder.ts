@@ -26,8 +26,8 @@ const DEFAULT_COLUMN_ORDERS: DefaultColumnOrder[] = [
   { route: '/device/:serial', matches: ['vlan'], order: ['name', 'adm. status', 'status', 'type', 'vlan', 'ip address', 'mac address', 'service', 'nat', 'l1', 'l2', 'l3', 'l4', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'actions'] },
   { route: '/device/:serial', matches: ['duplex', 'speed', 'l3'], order: ['name', 'adm. status', 'status', 'mac address', 'duplex', 'speed', 'l3', 'actions'] },
   { route: '/device/:serial', matches: ['ssid name', 'security', 'ch'], order: ['index', 'adm. status', 'status', 'ssid name', 'security', 'band', 'ch', 'max rate', 'password', 'actions'] },
-  { route: '/device/:serial', matches: ['writable'], order: ['name', 'writable', 'value type', 'value'] },
-  { route: '/device/:serial', matches: ['hostname'], order: ['hostname', 'ip address', 'mac address', 'interface', 'signal', 'neg. rate', 'uptime'] },
+  { route: '/device/:serial', matches: ['writable'], order: ['name', 'writable', 'value type', 'value', 'last updated'] },
+  { route: '/device/:serial', matches: ['hostname'], order: ['hostname', 'ip address', 'mac address', 'interface', 'signal', 'neg. rate', 'last updated'] },
   { route: '/device/:serial', matches: ['created by'], order: ['type', 'status', 'created', 'created by', 'completed', 'deleted by', 'error', 'actions'] },
   { route: '/device/:serial', matches: ['severity'], order: ['time', 'severity', 'message'] },
 ];
@@ -146,7 +146,7 @@ const migrateStoredOrder = (key: string, legacyKey: string, route: string, headi
         const candidateKey = localStorage.key(index);
         if (!candidateKey?.startsWith(prefix)) continue;
         const parts = candidateKey.slice(prefix.length).split('::');
-        if (parts.length < 2 || parts[parts.length - 1] !== String(occurrence) || stableHeading(parts.slice(0, -1).join('::')) !== heading) continue;
+        if (parts.length < 2 || parts[parts.length - 1] !== String(occurrence) || stableHeading(parts.length >= 3 ? parts[0] : parts.slice(0, -1).join('::')) !== heading) continue;
         saved = localStorage.getItem(candidateKey);
         if (saved) break;
       }

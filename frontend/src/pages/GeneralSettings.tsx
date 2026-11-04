@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createEffect, createResource, createSignal, Index, Show } from 'solid-js';
+import { createEffect, createResource, createSignal, For, Index, Show } from 'solid-js';
 import { Plus, Save, Settings as SettingsIcon, Trash2 } from 'lucide-solid';
 import { api, type DashboardAggregationOption, type DashboardAggregationSource } from '../lib/api';
 import PageHeader from '../components/PageHeader';
@@ -8,6 +8,7 @@ import { ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
 import { initAppName } from '../lib/appName';
 import { updateUITransitionSettings, type UITransitionStyle } from '../lib/uiTransitions';
+import { DATE_TIME_FORMATS, formatDateTime, setDateTimeFormat, type DateTimeFormat } from '../lib/dateTime';
 
 const GeneralSettings: Component = () => {
   const { isFullAccess } = useAuth();
@@ -30,7 +31,7 @@ const GeneralSettings: Component = () => {
   });
 
   const getValue = (key: string) => {
-    const defaults: Record<string, string> = { ui_transitions_enabled: 'false', ui_transition_style: 'fade-slide', ui_transition_duration: '250' };
+    const defaults: Record<string, string> = { ui_transitions_enabled: 'false', ui_transition_style: 'fade-slide', ui_transition_duration: '250', ui_datetime_format: 'locale' };
     return formData()[key] ?? settings()?.[key] ?? defaults[key] ?? '';
   };
 
@@ -98,19 +99,21 @@ const GeneralSettings: Component = () => {
     const duration = getValue('ui_transition_duration');
     setSaving(true);
     try {
-      await api.updateSettings({ ui_transitions_enabled: String(enabled), ui_transition_style: style, ui_transition_duration: duration });
+      await api.updateSettings({ ui_transitions_enabled: String(enabled), ui_transition_style: style, ui_transition_duration: duration, ui_datetime_format: getValue('ui_datetime_format') });
+      setDateTimeFormat(getValue('ui_datetime_format'));
       updateUITransitionSettings({ enabled, style: style as UITransitionStyle, duration: Number(duration) });
-      notify({ tone: 'success', title: 'UI settings saved', message: 'Animated transitions have been updated.' });
+      notify({ tone: 'success', title: 'UI settings saved', message: 'Date/time display and animated transitions have been updated.' });
       refetch();
       setFormData(previous => {
         const next = { ...previous };
         delete next.ui_transitions_enabled;
         delete next.ui_transition_style;
         delete next.ui_transition_duration;
+        delete next.ui_datetime_format;
         return next;
       });
     } catch (err) {
-      notify({ tone: 'error', title: 'UI settings were not saved', message: 'The previous animation settings remain active. Review the fields and retry.', detail: (err as Error).message, persistent: true });
+      notify({ tone: 'error', title: 'UI settings were not saved', message: 'The previous interface settings remain active. Review the fields and retry.', detail: (err as Error).message, persistent: true });
     } finally {
       setSaving(false);
     }
@@ -263,10 +266,19 @@ const GeneralSettings: Component = () => {
         </Show>
         <Show when={activeSection() === 'ui'}>
           <h2 class="text-sm font-medium text-secondary mb-2 flex items-center gap-2"><SettingsIcon size={14} />UI settings</h2>
-          <p class="text-muted text-xs mb-4">Configure animated transitions between application pages and sections.</p>
+          <p class="text-muted text-xs mb-4">Configure date/time display and animated transitions throughout the application.</p>
           <Show when={settings.error}><ResourceError title="UI settings are unavailable" description="ACS could not read the current interface preferences. Retry before making changes." onRetry={() => refetch()} /></Show>
           <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-10 w-full" /> : undefined}>
             <div class="max-w-2xl space-y-5">
+              <div>
+                <label for="ui-datetime-format" class="block text-xs text-muted">Date and time format</label>
+                <select id="ui-datetime-format" class="input mt-1 w-full" value={getValue('ui_datetime_format')} onChange={event => setFormData(previous => ({ ...previous, ui_datetime_format: event.currentTarget.value }))} disabled={!isFullAccess()}>
+                  <For each={DATE_TIME_FORMATS}>{option => <option value={option.value}>{option.label}</option>}</For>
+                </select>
+                <p class="text-xs text-muted mt-2">Applies to timestamps and dateTime parameter values for all users. Times use the browser's local timezone, except ISO 8601 which uses UTC. Durations and raw edit values are unchanged.</p>
+                <p class="text-xs text-muted mt-1">Numeric parameters such as unsignedInt are kept as numbers: their type alone cannot distinguish a Unix timestamp from uptime or a counter.</p>
+                <p class="text-xs text-secondary mt-1">Preview: <span class="font-mono">{formatDateTime(new Date(2026, 10, 6, 14, 5, 9), getValue('ui_datetime_format') as DateTimeFormat)}</span></p>
+              </div>
               <label class="flex items-start gap-3 rounded border border-subtle p-3">
                 <input type="checkbox" class="mt-0.5" checked={getValue('ui_transitions_enabled') === 'true'} onChange={event => setFormData(previous => ({ ...previous, ui_transitions_enabled: String(event.currentTarget.checked) }))} disabled={!isFullAccess()} />
                 <span><span class="block text-sm text-primary">Animated transitions</span><span class="mt-1 block text-xs text-muted">Animate navigation between application pages and tabbed sections.</span></span>

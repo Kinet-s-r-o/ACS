@@ -332,7 +332,7 @@ export const api = {
   deleteFault: (id: number) => request<{ status: string }>(`/faults/${id}`, { method: 'DELETE' }),
   deleteFaults: (ids: number[]) => request<{ deleted: number }>('/faults/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
 
-  getMeta: () => request<{ app_name: string; app_logo?: string }>('/meta'),
+  getMeta: () => request<{ app_name: string; app_logo?: string; ui_datetime_format?: string }>('/meta'),
   getSettings: () => request<Record<string, string>>('/settings'),
   getConnectionRequestSecret: () => request<{ value: string }>('/settings/connection-request-secret'),
   getRetentionStats: () => request<{ table: string; records: number; size_bytes: number }[]>('/settings/retention/stats'),

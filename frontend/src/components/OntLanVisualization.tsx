@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { createEffect, For, Show } from 'solid-js';
+import { formatDateTime } from '../lib/dateTime';
 import { formatLanSpeed, resolveLanVisualState, type OntLanPort } from '../lib/ontLan';
 import './OntLanVisualization.css';
 
@@ -75,7 +76,7 @@ const OntLanVisualization: Component<Props> = (props) => {
       }
       title.textContent = [
         label,
-        `Last reported: ${port.statusUpdatedAt ? new Date(port.statusUpdatedAt).toLocaleString() : 'N/A'}`,
+        `Last reported: ${port.statusUpdatedAt ? formatDateTime(port.statusUpdatedAt) : 'N/A'}`,
         `Speed: ${online ? formatLanSpeed(port.speed) : 'N/A'}`,
         `Duplex: ${online ? port.duplex || 'N/A' : 'N/A'}`,
       ].join('\n');

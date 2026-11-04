@@ -7,6 +7,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { api, type AggregatedMetric, type MetricDefinition, type MetricSample } from '../lib/api';
 import { thresholdLines, effectiveUnit } from '../lib/health';
 import { isTimeSeriesType } from '../lib/echartsTypes';
+import { formatDateTime, dateTimeFormat } from '../lib/dateTime';
 
 echarts.use([
   LineChart, BarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart,
@@ -348,10 +349,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
         formatter: (params: any) => {
           if (!Array.isArray(params) || params.length === 0) return '';
           const ts = params[0].value[0];
-          const date = new Date(ts);
-          const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-          const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' });
-          let html = `<div data-dynamic-style="chart-tooltip" style="margin-bottom:3px;opacity:0.7">${dateStr} ${timeStr}</div>`;
+          let html = `<div data-dynamic-style="chart-tooltip" style="margin-bottom:3px;opacity:0.7">${formatDateTime(ts)}</div>`;
           let hasVal = false;
           for (const p of params) {
             if (p.value == null || p.value[1] == null) continue;
@@ -370,7 +368,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
         type: 'time',
         axisLine: { lineStyle: { color: AXIS_COLOR } },
         axisTick: { show: false },
-        axisLabel: { color: LABEL_COLOR, fontSize: 10, fontFamily: MONO_FONT },
+        axisLabel: { color: LABEL_COLOR, fontSize: 10, fontFamily: MONO_FONT, formatter: (value: number) => formatDateTime(value), hideOverlap: true },
         splitLine: { show: false },
       },
       yAxis,
@@ -378,6 +376,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     };
   };
   const renderChart = () => {
+    dateTimeFormat();
     const el = chartEl();
     if (!el) return;
     const s = seriesData();

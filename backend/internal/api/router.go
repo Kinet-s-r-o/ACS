@@ -392,7 +392,20 @@ func (r *Router) handleMeta(w http.ResponseWriter, req *http.Request) {
 	if s, err := r.settingsRepo.Get(req.Context(), "app_logo"); err == nil && s != nil {
 		appLogo = s.Value
 	}
-	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName, "app_logo": appLogo})
+	dateTimeFormat := "locale"
+	if s, err := r.settingsRepo.Get(req.Context(), "ui_datetime_format"); err == nil && s != nil && validUIDateTimeFormat(s.Value) {
+		dateTimeFormat = s.Value
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName, "app_logo": appLogo, "ui_datetime_format": dateTimeFormat})
+}
+
+func validUIDateTimeFormat(value string) bool {
+	switch value {
+	case "locale", "dmy", "ymd", "mdy", "iso":
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *Router) handleMetaLogo(w http.ResponseWriter, req *http.Request) {
@@ -1533,6 +1546,7 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 		"auto_refresh_interval":  true,
 		"ui_transitions_enabled": true, "ui_transition_style": true,
 		"ui_transition_duration":           true,
+		"ui_datetime_format":               true,
 		dashboardAggregationOptionsSetting: true,
 	}
 	for key := range database.RetentionDefaults() {
@@ -1598,6 +1612,10 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	}
 	if value, ok := settings["ui_transitions_enabled"]; ok && value != "true" && value != "false" {
 		respondError(w, http.StatusBadRequest, "ui_transitions_enabled must be true or false")
+		return
+	}
+	if value, ok := settings["ui_datetime_format"]; ok && !validUIDateTimeFormat(value) {
+		respondError(w, http.StatusBadRequest, "ui_datetime_format must be locale, dmy, ymd, mdy, or iso")
 		return
 	}
 	if value, ok := settings["ui_transition_style"]; ok && value != "fade" && value != "slide" && value != "fade-slide" {

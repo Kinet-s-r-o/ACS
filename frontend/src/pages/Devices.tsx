@@ -187,7 +187,7 @@ const Devices: Component = () => {
   );
 
   const formatDate = (dateStr: string | null) => {
-    return formatRelativeTime(dateStr);
+    return formatDateTime(dateStr);
   };
 
   const toggleColumn = (id: string) => {
@@ -277,7 +277,7 @@ const Devices: Component = () => {
       case 'status':
         return <DeviceStatusBadge device={device} />;
       case 'last_inform':
-        return <span class="text-muted text-xs" title={formatDateTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
+        return <span class="text-muted text-xs" title={formatRelativeTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
       case 'created_at':
         return <span class="text-muted text-xs">{formatDateTime(device.created_at)}</span>;
       case 'tags':

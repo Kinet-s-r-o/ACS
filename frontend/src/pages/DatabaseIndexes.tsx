@@ -1,5 +1,6 @@
 import { createMemo, createResource, createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js';
 import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-solid';
+import { formatDateTime } from '../lib/dateTime';
 import { api, type DatabaseIndexPreview, type DatabaseIndexSpec, type ManagedDatabaseIndex } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import Dialog from '../components/Dialog';
@@ -97,7 +98,7 @@ const DatabaseIndexes: Component = () => {
         <p class="text-xs text-muted">UI indexes exceeding a size limit or the disk reserve are automatically removed. PostgreSQL checks run every two seconds; limits are monitored budgets, not filesystem quotas. Index use depends on matching query predicates and the query planner.</p>
         <Show when={current().budget.reserved_bytes > 0}><p class="text-xs text-secondary">Queued construction reserve: {formatBytes(current().budget.reserved_bytes)}.</p></Show>
         <Show when={!current().budget.can_create}><p class="text-xs text-warning" role="status">{current().budget.reason}</p></Show>
-        <Show when={current().budget.probe_fresh}><p class="text-xs text-muted">Disk measured: {new Date(current().budget.measured_at).toLocaleString()}.</p></Show>
+        <Show when={current().budget.probe_fresh}><p class="text-xs text-muted">Disk measured: {formatDateTime(current().budget.measured_at)}.</p></Show>
       </section>
 
       <section class="card p-4 space-y-3" aria-label="UI-managed indexes">

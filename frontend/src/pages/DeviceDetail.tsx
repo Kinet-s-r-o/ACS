@@ -32,7 +32,8 @@ import DeviceTagPicker from '../components/DeviceTagPicker';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import SortableHeader from '../components/SortableHeader';
 import type { SortDirection } from '../lib/sorting';
-import { formatDateTime } from '../lib/dateTime';
+import { formatDateTime, formatParameterDateTime } from '../lib/dateTime';
+import { hostParameterUpdates, latestParameterTimestamp } from '../lib/parameterFreshness';
 import { useColumnVisibility } from '../lib/useColumnVisibility';
 
 interface HostColumnConfig {
@@ -50,6 +51,7 @@ const defaultHostColumns: HostColumnConfig[] = [
   { id: 'negRate', label: 'Neg. rate', visible: true },
   { id: 'interface', label: 'Interface', visible: true },
   { id: 'rssi', label: 'Signal', visible: true },
+  { id: 'updated_at', label: 'Last updated', visible: true },
 ];
 
 interface ParamColumnConfig {
@@ -96,6 +98,7 @@ const defaultParamColumns: ParamColumnConfig[] = [
   { id: 'writable', label: 'Writable', visible: false },
   { id: 'value_type', label: 'Value type', visible: false },
   { id: 'value', label: 'Value', visible: true },
+  { id: 'updated_at', label: 'Last updated', visible: true },
 ];
 
 const cpeWebUiUrl = (address: string): string | null => {
@@ -693,7 +696,7 @@ const DeviceDetail: Component = () => {
   const [showLanNetworkModal, setShowLanNetworkModal] = createSignal(false);
   const [wanModalPath, setWanModalPath] = createSignal<string | null>(null);
 
-  const [selectedParam, setSelectedParam] = createSignal<{ name: string; value: string } | null>(null);
+  const [selectedParam, setSelectedParam] = createSignal<{ name: string; value: string; value_type?: string } | null>(null);
   const [showSensitive, setShowSensitive] = createSignal(false);
   const [showFactoryResetModal, setShowFactoryResetModal] = createSignal(false);
   const [factoryResetPassword, setFactoryResetPassword] = createSignal('');
@@ -856,7 +859,8 @@ const DeviceDetail: Component = () => {
           case 'name': return param.name;
           case 'writable': return param.writable ? 'yes' : 'no';
           case 'value_type': return param.value_type || '';
-          case 'value': return displayParameterValue(param.name, param.value);
+          case 'value': return displayParameterValue(param.name, param.value, param.value_type);
+          case 'updated_at': return formatDateTime(param.updated_at);
           default: return '';
         }
       });
@@ -1785,7 +1789,8 @@ const DeviceDetail: Component = () => {
   const getHosts = createMemo(() => {
     const params = parameters() || [];
     const valueByName = new Map(params.map(parameter => [parameter.name, parameter.value]));
-    const hosts: Array<{ index: number; hostname: string; ip: string; ipv6: string; mac: string; negRate: string; interface: string; rssi?: string }> = [];
+    const updatedByPrefix = hostParameterUpdates(params);
+    const hosts: Array<{ index: number; hostname: string; ip: string; ipv6: string; mac: string; negRate: string; interface: string; rssi?: string; updated_at: string | null }> = [];
     
     const hostPaths = [...new Set(params.map(p => p.name.match(/^(?:InternetGatewayDevice|Device)\.LANDevice\.\d+\.Hosts\.Host\.\d+\./)?.[0]).filter((path): path is string => Boolean(path)))];
 
@@ -1849,6 +1854,7 @@ const DeviceDetail: Component = () => {
       hosts.push({
         index: index + 1,
         hostname: getVal('HostName'),
+        updated_at: updatedByPrefix.get(prefix) || null,
         ip: getVal('IPAddress'),
         ipv6: getVal('IPv6Address'),
         mac: getVal('MACAddress'),
@@ -1882,10 +1888,12 @@ const DeviceDetail: Component = () => {
         existing.negRate = pick(getVal('X_HW_NegotiatedRate'), existing.negRate);
         existing.interface = interfaceType;
         existing.rssi = pickRssi(getVal('X_HW_RSSI'), existing.rssi || '-');
+        existing.updated_at = latestParameterTimestamp(existing.updated_at, updatedByPrefix.get(prefix));
       } else {
         hosts.push({
           index: hosts.length + 1,
           hostname: pick(getVal('X_HW_AssociatedDevicedescriptions'), getVal('HostName')),
+          updated_at: updatedByPrefix.get(prefix) || null,
           ip: pickIp(getVal('AssociatedDeviceIPAddress')),
           ipv6: getVal('AssociatedDeviceIPv6Address'),
           mac,
@@ -1912,7 +1920,8 @@ const DeviceDetail: Component = () => {
         case 'name': return p.name || '';
         case 'writable': return p.writable ? 'yes' : 'no';
         case 'value_type': return p.value_type || '';
-        case 'value': return p.value || '';
+        case 'value': return formatParameterDateTime(p.value || '', p.value_type);
+        case 'updated_at': return formatDateTime(p.updated_at);
         default: return '';
       }
     });
@@ -1938,6 +1947,7 @@ const DeviceDetail: Component = () => {
         case 'negRate': return h.negRate || '';
         case 'interface': return h.interface || '';
         case 'rssi': return h.rssi || '';
+        case 'updated_at': return formatDateTime(h.updated_at);
         default: return '';
       }
     });
@@ -1948,7 +1958,7 @@ const DeviceDetail: Component = () => {
   };
 
   const isSensitiveParameter = (name: string) => /password|passphrase|presharedkey|privatekey|secret/i.test(name);
-  const displayParameterValue = (name: string, value: string) => isSensitiveParameter(name) && !showSensitive() ? '••••••••' : value;
+  const displayParameterValue = (name: string, value: string, valueType?: string) => isSensitiveParameter(name) && !showSensitive() ? '••••••••' : formatParameterDateTime(value, valueType);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -2139,10 +2149,12 @@ const DeviceDetail: Component = () => {
                 </h2>
                 <div class="space-y-2 text-sm lg:col-start-1 lg:row-start-2">
                   <For each={matchingProvisioningTemplate()?.cpe_info_fields || []}>{field => {
-                    const value = (field.source || 'parameter') === 'acs'
-                      ? formatDateTime(field.acs_field === 'last_bootstrap' ? d().last_bootstrap : field.acs_field === 'last_boot' ? d().last_boot : d().last_inform)
-                      : parameters()?.find(parameter => parameter.name === field.parameter_name)?.value?.trim() || '-';
-                    return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value}</span></div>;
+                    const value = () => {
+                      if ((field.source || 'parameter') === 'acs') return formatDateTime(field.acs_field === 'last_bootstrap' ? d().last_bootstrap : field.acs_field === 'last_boot' ? d().last_boot : d().last_inform);
+                      const parameter = parameters()?.find(parameter => parameter.name === field.parameter_name);
+                      return parameter ? formatParameterDateTime(parameter.value, parameter.value_type) : '-';
+                    };
+                    return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value()}</span></div>;
                   }}</For>
                 </div>
                 <div class="mt-4 min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0 lg:self-center">
@@ -2472,8 +2484,8 @@ const DeviceDetail: Component = () => {
                                         <input type="checkbox" checked={selectedCount() === row.descendants.length} ref={(element) => { element.indeterminate = selectedCount() > 0 && selectedCount() < row.descendants.length; }} onChange={() => toggleSnapshotPath(row)} disabled={!isFullAccess()} />
                                         <span class={isBranch ? 'text-secondary font-medium' : 'text-primary font-mono truncate'} title={row.path}>{row.label}</span>
                                       </div>
-                                      <span class="font-mono text-secondary truncate" title={row.parameter?.value}>{row.parameter?.value || ''}</span>
-                                      <span class="font-mono text-muted truncate" title={row.currentValue}>{row.currentValue || ''}</span>
+                                      <span class="font-mono text-secondary truncate" title={row.parameter?.value}>{formatParameterDateTime(row.parameter?.value || '', row.parameter?.value_type)}</span>
+                                      <span class="font-mono text-muted truncate" title={row.currentValue}>{formatParameterDateTime(row.currentValue || '', row.parameter?.value_type)}</span>
                                     </div>
                                   );
                                 }}
@@ -3071,7 +3083,7 @@ const DeviceDetail: Component = () => {
                   <EmptyState compact title="No connected hosts are reported" description="The stored parameter set contains no active LAN or Wi-Fi clients. Refresh connected hosts to request current data from the CPE." />
                 }>
                 <div class="overflow-x-auto">
-                  <table class="data-table w-full text-sm min-w-[960px]">
+                  <table class="data-table w-full text-sm min-w-[960px]" data-column-order-key="connected-hosts">
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b border-subtle bg-base">
                         <Show when={hostColumns().find(column => column.id === 'hostname')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
@@ -3109,6 +3121,7 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="rssi" label="Signal" numeric active={hostColumnFilters()['rssi'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['rssi'] = s; else delete n['rssi']; return n; }); }} />
                           </div>
                         </th></Show>
+                        <Show when={hostColumns().find(column => column.id === 'updated_at')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Last updated<ColumnFilter columnId="updated_at" label="Last updated" active={hostColumnFilters().updated_at || null} onApply={state => setHostColumnFilters(previous => { const next = { ...previous }; if (state) next.updated_at = state; else delete next.updated_at; return next; })} /></div></th></Show>
                         <th class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} /></th>
                       </tr>
                     </thead>
@@ -3135,6 +3148,7 @@ const DeviceDetail: Component = () => {
                             <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><td data-column-order-id="signal#0" class="px-3 py-2 text-secondary">
                               {host.rssi && host.rssi !== '-' && host.rssi !== '0' ? `${host.rssi} dBm` : '-'}
                             </td></Show>
+                            <Show when={hostColumns().find(column => column.id === 'updated_at')?.visible}><td data-column-order-id="last updated#0" class="px-3 py-2 text-muted text-xs whitespace-nowrap" title="Most recent stored update among this host's parameters; not necessarily a value change.">{formatDateTime(host.updated_at)}</td></Show>
                             <td class="px-2 py-2"></td>
                           </tr>
                         )}
@@ -3560,7 +3574,7 @@ const DeviceDetail: Component = () => {
                 </div>
               }>
                 <div class="max-h-96 overflow-auto">
-                  <table class="data-table w-full text-sm">
+                  <table class="data-table w-full text-sm" data-column-order-key="all-parameters">
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
                         <Show when={paramColumns().find(c => c.id === 'object')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
@@ -3588,6 +3602,7 @@ const DeviceDetail: Component = () => {
                             <ColumnFilter columnId="value" label="Value" active={paramColumnFilters()['value'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['value'] = s; else delete n['value']; return n; }); }} />
                           </div>
                         </th></Show>
+                        <Show when={paramColumns().find(column => column.id === 'updated_at')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Last updated<ColumnFilter columnId="updated_at" label="Last updated" active={paramColumnFilters().updated_at || null} onApply={state => setParamColumnFilters(previous => { const next = { ...previous }; if (state) next.updated_at = state; else delete next.updated_at; return next; })} /></div></th></Show>
                         <th class="px-2 py-2"><ColumnVisibility columns={paramColumns} onToggle={toggleParamColumn} /></th>
                       </tr>
                     </thead>
@@ -3595,16 +3610,17 @@ const DeviceDetail: Component = () => {
                       <For each={filteredAllParams()}>
                         {(param) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <Show when={paramColumns().find(c => c.id === 'object')?.visible}><td class="px-4 py-2 text-muted font-mono text-xs truncate" title={param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}>{param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}</td></Show>
-                            <Show when={paramColumns().find(c => c.id === 'name')?.visible}><td class="px-4 py-2 text-secondary font-mono text-xs truncate" title={param.name}><button type="button" class="data-link font-mono text-left" onClick={() => setSelectedParam(param)}>{param.name}</button></td></Show>
-                            <Show when={paramColumns().find(c => c.id === 'writable')?.visible}><td class="px-4 py-2 text-xs">
+                            <Show when={paramColumns().find(c => c.id === 'object')?.visible}><td data-column-order-id="object#0" class="px-4 py-2 text-muted font-mono text-xs truncate" title={param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}>{param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}</td></Show>
+                            <Show when={paramColumns().find(c => c.id === 'name')?.visible}><td data-column-order-id="name#0" class="px-4 py-2 text-secondary font-mono text-xs truncate" title={param.name}><button type="button" class="data-link font-mono text-left" onClick={() => setSelectedParam(param)}>{param.name}</button></td></Show>
+                            <Show when={paramColumns().find(c => c.id === 'writable')?.visible}><td data-column-order-id="writable#0" class="px-4 py-2 text-xs">
                               <Show when={param.writable}><span class="text-emerald-400">✓</span></Show>
                               <Show when={!param.writable}><span class="text-muted">—</span></Show>
                             </td></Show>
-                            <Show when={paramColumns().find(c => c.id === 'value_type')?.visible}><td class="px-4 py-2 text-muted text-xs">{param.value_type || '—'}</td></Show>
-                            <Show when={paramColumns().find(c => c.id === 'value')?.visible}><td class="px-4 py-2 text-primary text-xs truncate max-w-xs">
-                              {displayParameterValue(param.name, param.value).length > 100 ? displayParameterValue(param.name, param.value).slice(0, 100) + '...' : displayParameterValue(param.name, param.value)}
+                            <Show when={paramColumns().find(c => c.id === 'value_type')?.visible}><td data-column-order-id="value type#0" class="px-4 py-2 text-muted text-xs">{param.value_type || '—'}</td></Show>
+                            <Show when={paramColumns().find(c => c.id === 'value')?.visible}><td data-column-order-id="value#0" class="px-4 py-2 text-primary text-xs truncate max-w-xs">
+                              {displayParameterValue(param.name, param.value, param.value_type).length > 100 ? displayParameterValue(param.name, param.value, param.value_type).slice(0, 100) + '...' : displayParameterValue(param.name, param.value, param.value_type)}
                             </td></Show>
+                            <Show when={paramColumns().find(c => c.id === 'updated_at')?.visible}><td data-column-order-id="last updated#0" class="px-4 py-2 text-muted text-xs whitespace-nowrap" title="Stored parameter record update, including unchanged values or writable metadata updates.">{formatDateTime(param.updated_at)}</td></Show>
                             <td class="px-2 py-2"></td>
                           </tr>
                         )}
@@ -3728,7 +3744,7 @@ const DeviceDetail: Component = () => {
             </div>
             <div class="flex-1 overflow-auto">
               <span class="text-xs text-muted">Stored value</span>
-              <pre class="mt-1 p-3 bg-elevated/50 rounded-lg text-primary text-sm font-mono whitespace-pre-wrap break-all overflow-auto max-h-96">{selectedParam() ? displayParameterValue(selectedParam()!.name, selectedParam()!.value) : ''}</pre>
+              <pre class="mt-1 p-3 bg-elevated/50 rounded-lg text-primary text-sm font-mono whitespace-pre-wrap break-all overflow-auto max-h-96">{selectedParam() ? displayParameterValue(selectedParam()!.name, selectedParam()!.value, selectedParam()!.value_type) : ''}</pre>
             </div>
         </Dialog>
       </Show>

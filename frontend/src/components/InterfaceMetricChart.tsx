@@ -6,6 +6,7 @@ import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, To
 import { CanvasRenderer } from 'echarts/renderers';
 import { api, type InterfaceMetricDefinition } from '../lib/api';
 import { computeUnitScale, effectiveUnit } from '../lib/health';
+import { formatDateTime, dateTimeFormat } from '../lib/dateTime';
 
 echarts.use([LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, ToolboxComponent, CanvasRenderer]);
 
@@ -119,6 +120,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
   };
 
   createEffect(() => {
+    dateTimeFormat();
     const el = element();
     const { series: data, summaries } = visibleChartData();
     if (!el || data.length === 0) return;
@@ -137,7 +139,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
         trigger: 'axis',
         formatter: (params: any) => {
           const points = Array.isArray(params) ? params : [params];
-          const heading = points.length ? new Date(points[0].value[0]).toLocaleString() : '';
+          const heading = points.length ? formatDateTime(points[0].value[0]) : '';
           return [heading, ...points.map(point => {
             const summary = summaries[point.seriesIndex];
             return `${point.seriesName}: ${formatValue(point.value[1])}${summary?.unit ? ` ${summary.unit}` : ''}`;
@@ -156,7 +158,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
         },
       },
       grid: { left: 60, right: 18, top: 34, bottom: 48 },
-      xAxis: { type: 'time', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false } },
+      xAxis: { type: 'time', axisLabel: { color: '#71717a', fontSize: 10, formatter: (value: number) => formatDateTime(value), hideOverlap: true }, splitLine: { show: false } },
       yAxis: { type: 'value', name: unitLabel(), nameTextStyle: { color: '#71717a', fontSize: 10 }, axisLabel: { color: '#71717a', fontSize: 10, formatter: (value: number) => formatValue(value) }, splitLine: { lineStyle: { color: 'rgba(71,85,105,0.15)' } } },
       dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4 }],
       series: data,
