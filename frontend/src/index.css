@@ -404,7 +404,7 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .filter-toggle:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
 .filter-toggle-active { color: rgb(var(--accent)); }
 .filter-badge { position: absolute; top: -4px; right: -4px; min-width: 12px; height: 12px; display: grid; place-items: center; padding: 0 2px; font-size: 8px; font-weight: 700; color: white; background: rgb(var(--accent)); border-radius: 6px; line-height: 1; }
-.filter-dropdown { z-index: 50; width: 320px; max-width: calc(100vw - 16px); box-sizing: border-box; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
+.filter-dropdown { z-index: 110; width: 320px; max-width: calc(100vw - 16px); box-sizing: border-box; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
 .filter-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
 .filter-dropdown-title { font-size: 11px; font-weight: 600; color: rgb(var(--text-primary)); }
 .filter-dropdown-close { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }
@@ -444,12 +444,12 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .table-filter-chip > span { overflow: hidden; text-overflow: ellipsis; }
 .table-filter-chip button { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
 .table-filter-chip button:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-hover)); }
-.column-dropdown { z-index: 50; width: 220px; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
-.column-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
+.column-dropdown { position: fixed; z-index: 110; display: flex; flex-direction: column; width: 220px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
+.column-dropdown-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
 .column-dropdown-title { font-size: 11px; font-weight: 600; color: rgb(var(--text-primary)); }
 .column-dropdown-close { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }
 .column-dropdown-close:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
-.column-dropdown-body { padding: 4px 8px 10px; display: grid; gap: 2px; max-height: 320px; overflow-y: auto; }
+.column-dropdown-body { min-height: 0; padding: 4px 8px 10px; display: grid; gap: 2px; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
 .column-toggle-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; color: rgb(var(--text-secondary)); }
 .column-toggle-row:hover { background: rgb(var(--bg-elevated)); }
 .column-toggle-checkbox { width: 14px; height: 14px; accent-color: rgb(var(--accent)); cursor: pointer; flex-shrink: 0; }
@@ -681,4 +681,8 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .data-table th[data-column-fixed="visibility"], .data-table td[data-column-fixed="visibility"] { position: sticky; left: auto; right: 0; z-index: 3; width: 40px; min-width: 40px; max-width: 40px; padding-inline: 8px; background: rgb(var(--bg-surface)); }
 .data-table th[data-column-fixed="actions"], .data-table td[data-column-fixed="actions"] { position: sticky; left: auto; right: 40px; z-index: 2; background: rgb(var(--bg-surface)); box-shadow: -1px 0 0 rgb(var(--border-subtle)); }
 .data-table thead th[data-column-fixed] { z-index: 4; }
-.data-table thead th[data-column-fixed="actions"] { text-align: center; }
+.data-table thead th[data-column-fixed="actions"] { text-align: center; background: color-mix(in srgb, rgb(var(--bg-elevated)) 58%, rgb(var(--bg-surface))); }
+.data-table thead.opaque-table-header th[data-column-fixed="actions"] { background: rgb(var(--bg-elevated)); }
+.data-table thead tr.bg-base th[data-column-fixed="actions"] { background: rgb(var(--bg-base)); }
+.data-table td[data-column-fixed="actions"] { text-align: center; vertical-align: middle; }
+.data-table td[data-column-fixed="actions"] > :is(.flex, .inline-flex) { justify-content: center; }

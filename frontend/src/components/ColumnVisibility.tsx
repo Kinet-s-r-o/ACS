@@ -1,6 +1,8 @@
 import type { Component } from 'solid-js';
-import { createSignal, Show, For, onCleanup } from 'solid-js';
+import { createEffect, createSignal, createUniqueId, Show, For, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { List, X } from 'lucide-solid';
+import { floatingPanelPosition } from '../lib/floatingPanel';
 
 export interface ColumnOption {
   id: string;
@@ -17,8 +19,6 @@ interface ColumnVisibilityProps {
   title?: string;
 }
 
-const DROPDOWN_WIDTH = 220;
-
 /**
  * Right-end table control: a "three horizontal lines" button that opens a
  * fixed-position multiselect dropdown for toggling column visibility.
@@ -26,7 +26,8 @@ const DROPDOWN_WIDTH = 220;
  */
 const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
   const [open, setOpen] = createSignal(false);
-  const [pos, setPos] = createSignal<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [pos, setPos] = createSignal<{ top: number; left: number } | null>(null);
+  const panelId = createUniqueId();
   let btnRef: HTMLButtonElement | undefined;
   let panelRef: HTMLDivElement | undefined;
 
@@ -37,18 +38,38 @@ const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
     }
   };
 
-  const toggle = () => {
-    if (!open() && btnRef) {
-      const rect = btnRef.getBoundingClientRect();
-      let left = rect.right + 4;
-      if (left + DROPDOWN_WIDTH > window.innerWidth) left = Math.max(8, rect.left - DROPDOWN_WIDTH - 4);
-      setPos({ top: rect.bottom + 4, left });
+  const positionPanel = () => {
+    if (!open() || !btnRef || !panelRef) return;
+    const anchor = btnRef.getBoundingClientRect();
+    if (anchor.bottom < 0 || anchor.top > window.innerHeight || anchor.right < 0 || anchor.left > window.innerWidth) {
+      setOpen(false);
+      return;
     }
+    setPos(floatingPanelPosition(anchor, panelRef.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }));
+  };
+
+  const toggle = () => {
+    if (!open()) setPos(null);
     setOpen(!open());
   };
 
-  onCleanup(() => {
-    document.removeEventListener('click', handleClickOutside);
+  const close = () => { setOpen(false); btnRef?.focus(); };
+
+  createEffect(() => {
+    if (!open()) return;
+    queueMicrotask(positionPanel);
+    const handleScroll = (event: Event) => {
+      if (event.target instanceof Node && panelRef?.contains(event.target)) return;
+      positionPanel();
+    };
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', positionPanel);
+    onCleanup(() => {
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', positionPanel);
+    });
   });
 
   return (
@@ -60,24 +81,26 @@ const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
           onClick={(e) => { e.stopPropagation(); toggle(); }}
           aria-label="Stĺpce"
           aria-expanded={open()}
+          aria-controls={open() ? panelId : undefined}
         >
           <List size={14} />
       </button>
       <Show when={open()}>
+        <Portal>
         <div
+          id={panelId}
           class="column-dropdown"
-          ref={(el) => {
-            panelRef = el;
-            el.style.position = 'fixed';
-            el.style.top = `${pos().top}px`;
-            el.style.left = `${pos().left}px`;
-            if (el) document.addEventListener('click', handleClickOutside);
+          ref={panelRef}
+          data-dynamic-style="Column menu anchored to its trigger and constrained to the viewport"
+          style={{ top: `${pos()?.top ?? 8}px`, left: `${pos()?.left ?? 8}px`, visibility: pos() ? 'visible' : 'hidden' }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <div class="column-dropdown-header">
             <span class="column-dropdown-title">{props.title ?? 'Stĺpce'}</span>
-            <button type="button" class="column-dropdown-close" onClick={() => setOpen(false)} aria-label="Zavrieť">
+            <button type="button" class="column-dropdown-close" onClick={close} aria-label="Zavrieť">
               <X size={12} />
             </button>
           </div>
@@ -97,6 +120,7 @@ const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
             </For>
           </div>
         </div>
+        </Portal>
       </Show>
     </>
   );
