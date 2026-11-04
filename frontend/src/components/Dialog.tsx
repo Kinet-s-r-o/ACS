@@ -1,6 +1,7 @@
-import { createMemo, createUniqueId, onCleanup, onMount, type JSX, type ParentComponent } from 'solid-js';
+import { createEffect, createMemo, createSignal, createUniqueId, onCleanup, onMount, Show, type JSX, type ParentComponent } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { X } from 'lucide-solid';
+import { Maximize2, X } from 'lucide-solid';
+import { fitDialogRect, type DialogRect } from '../lib/dialogResize';
 
 interface DialogProps {
   title: string;
@@ -27,8 +28,44 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
   const titleId = createUniqueId();
   const descriptionId = createUniqueId();
   const sidePanel = createMemo(() => props.sidePanel);
+  const [userRect, setUserRect] = createSignal<DialogRect>();
+  const [sizeControlsOpen, setSizeControlsOpen] = createSignal(false);
+  const [viewport, setViewport] = createSignal({ width: window.innerWidth, height: window.innerHeight });
+  const resizeHintId = createUniqueId();
+  const sizeControlsId = createUniqueId();
+  const availableSize = createMemo(() => {
+    const margin = viewport().width < 640 ? 16 : 32;
+    return { width: Math.max(1, viewport().width - margin), height: Math.max(1, viewport().height - margin) };
+  });
+  let suppressResizeClick = false;
+  let drag: { pointerId: number; x: number; y: number; rect: DialogRect } | undefined;
+  let resizeHandle: HTMLButtonElement | undefined;
   let panel: HTMLDivElement | undefined;
   const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  const currentRect = (): DialogRect => {
+    const rect = userRect() ?? panel!.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  };
+  const resizeTo = (rect: DialogRect) => setUserRect(fitDialogRect(rect, viewport().width, viewport().height, sidePanel() ? 800 : 320));
+  const stopResize = () => {
+    if (drag && resizeHandle?.hasPointerCapture(drag.pointerId)) resizeHandle.releasePointerCapture(drag.pointerId);
+    drag = undefined;
+  };
+  const resetSize = () => { stopResize(); setUserRect(undefined); };
+  // Help expansion retains the form DOM while restoring its intended width.
+  createEffect(() => { sidePanel(); resetSize(); });
+
+  const handleResizeKey = (event: KeyboardEvent) => {
+    const step = event.shiftKey ? 40 : 10;
+    const changes: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (event.key === 'Home') { event.preventDefault(); resetSize(); return; }
+    const change = changes[event.key];
+    if (!change) return;
+    event.preventDefault();
+    const rect = currentRect();
+    resizeTo({ ...rect, width: rect.width + change[0], height: rect.height + change[1] });
+  };
 
   const focusableElements = () => Array.from(panel?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
 
@@ -37,6 +74,11 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
     if (dialogs[dialogs.length - 1] !== panel) return;
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (sizeControlsOpen()) {
+        setSizeControlsOpen(false);
+        resizeHandle?.focus();
+        return;
+      }
       props.onClose();
       return;
     }
@@ -59,6 +101,12 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
   };
 
   onMount(() => {
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+      if (userRect()) resizeTo(userRect()!);
+    };
+    window.addEventListener('resize', updateViewport);
+    onCleanup(() => { window.removeEventListener('resize', updateViewport); stopResize(); });
     const previousPanels = Array.from(document.querySelectorAll<HTMLElement>('.dialog-panel'))
       .filter((element) => element !== panel)
       .map((element) => ({ element, inert: element.inert }));
@@ -89,6 +137,9 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
         <div
           ref={panel}
           class={`dialog-panel dialog-${props.size ?? 'medium'}${sidePanel() ? ' dialog-with-side-panel' : ''}`}
+          classList={{ 'dialog-user-sized': !!userRect() }}
+          data-dynamic-style="User-selected dialog dimensions, constrained to the viewport"
+          style={userRect() ? { width: `${userRect()!.width}px`, height: `${userRect()!.height}px`, left: `${userRect()!.left}px`, top: `${userRect()!.top}px` } : undefined}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
@@ -110,6 +161,43 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
             {sidePanel()}
           </div>
           {props.actions && <footer class="dialog-actions">{props.actions}</footer>}
+          <div class="dialog-resize-bar">
+            <span id={resizeHintId} class="sr-only">Drag to resize. Arrow keys change width or height; Shift uses larger steps. Home restores the default size. Click for size controls.</span>
+            <Show when={sizeControlsOpen()}>
+              <div id={sizeControlsId} class="dialog-size-controls" role="group" aria-label="Dialog size">
+                <label>Width<input type="range" min={Math.min(sidePanel() ? 800 : 320, availableSize().width)} max={availableSize().width} value={Math.round(userRect()?.width ?? panel?.clientWidth ?? 560)} onInput={(event) => resizeTo({ ...currentRect(), width: Number(event.currentTarget.value) })} /></label>
+                <label>Height<input type="range" min={Math.min(180, availableSize().height)} max={availableSize().height} value={Math.round(userRect()?.height ?? panel?.clientHeight ?? 400)} onInput={(event) => resizeTo({ ...currentRect(), height: Number(event.currentTarget.value) })} /></label>
+                <button type="button" class="btn btn-secondary" onClick={resetSize}>Reset size</button>
+              </div>
+            </Show>
+            <button ref={resizeHandle} type="button" class="dialog-resize-handle" aria-label="Resize dialog" aria-describedby={resizeHintId} aria-controls={sizeControlsOpen() ? sizeControlsId : undefined} aria-expanded={sizeControlsOpen()} title="Drag to resize or click for size controls"
+              onKeyDown={handleResizeKey}
+              onClick={(event) => {
+                if (suppressResizeClick && event.detail !== 0) { suppressResizeClick = false; return; }
+                suppressResizeClick = false;
+                setSizeControlsOpen(open => !open);
+              }}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                suppressResizeClick = false;
+                drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, rect: currentRect() };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (!drag || event.pointerId !== drag.pointerId) return;
+                const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+                if (Math.abs(dx) + Math.abs(dy) < 4) return;
+                resizeTo({ ...drag.rect, width: drag.rect.width + dx, height: drag.rect.height + dy });
+              }}
+              onPointerUp={(event) => {
+                const moved = drag && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) >= 4;
+                suppressResizeClick = !!moved;
+                stopResize();
+              }}
+              onPointerCancel={stopResize} onLostPointerCapture={stopResize}>
+              <Maximize2 size={14} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </Portal>

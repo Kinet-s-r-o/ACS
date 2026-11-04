@@ -462,6 +462,16 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .dialog-panel { width: 100%; max-height: min(760px, calc(100vh - 32px)); overflow: hidden; display: flex; flex-direction: column; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 24px 64px rgb(0 0 0 / .32); }
 .dialog-small { max-width: 420px; }.dialog-medium { max-width: 560px; }.dialog-large { max-width: 880px; }
 .dialog-content { display: flex; min-height: 0; overflow: hidden; }
+.dialog-panel.dialog-user-sized { position: absolute; max-width: none; max-height: none; }
+.dialog-user-sized > .dialog-content { flex: 1; }
+.dialog-header, .dialog-actions, .dialog-resize-bar { flex-shrink: 0; }
+.dialog-resize-bar { position: relative; display: flex; justify-content: flex-end; border-top: 1px solid rgb(var(--border-subtle)); }
+.dialog-resize-handle { display: grid; place-items: center; width: 32px; height: 24px; color: rgb(var(--text-secondary)); cursor: nwse-resize; touch-action: none; user-select: none; }
+.dialog-resize-handle:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
+.dialog-size-controls { position: absolute; bottom: 100%; right: 0; display: grid; gap: 12px; width: min(280px, 100%); max-height: 50vh; overflow: auto; padding: 12px; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); }
+.dialog-size-controls label { display: grid; gap: 6px; font-size: 12px; color: rgb(var(--text-secondary)); }
+.dialog-size-controls input { width: 100%; }
+@media (pointer: coarse) { .dialog-resize-handle { width: 44px; height: 44px; } }
 .dialog-content > .dialog-body { flex: 1; min-width: 0; }
 .dialog-with-side-panel { max-width: 1120px; }
 .dialog-side-panel { display: flex; flex-direction: column; flex: 0 0 50%; min-width: 0; min-height: 0; border-left: 1px solid rgb(var(--border-subtle)); }

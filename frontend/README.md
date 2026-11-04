@@ -13,6 +13,8 @@
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
 
+Every shared Dialog has a bottom-right resize handle: pointer drag, arrow keys (Shift for larger steps), Home to reset, or click for width/height sliders. Dimensions are local to the open dialog, clamped to viewport bounds on resize, and reset when a side panel opens/closes. Keep form identities and nested-dialog focus behavior intact. This presentation control uses the caller's existing permissions and introduces no API grant.
+
 Provisioning's Condition question mark opens `components/ProvisioningConditionHelp.tsx`. At widths of 1024px and above, it expands the rule Dialog with a right-hand reference panel; the form and help scroll independently within one focus trap. Smaller screens retain the nested help modal. Keep the form mounted when toggling help or crossing the breakpoint so unsaved text and focus survive. Keep examples and limitations aligned with `backend/internal/cwmp/condition.go` and the live existence probes in `handler.go`.
 
 Fleet status defaults to Device growth only. Additional panels must be user-created (`custom-*` IDs); parameter thresholds and category aggregations use `devices.read`. Do not restore retired built-in panels or import old browser panel configurations.
