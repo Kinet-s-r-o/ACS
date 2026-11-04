@@ -205,6 +205,7 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fault-filter-count { display: block; margin-top: 7px; color: rgb(var(--text-primary)); font-family: "IBM Plex Mono", monospace; font-size: 24px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .fault-filter-card.is-online .fault-filter-count { color: rgb(var(--success-text)); }
 .fault-filter-card.is-offline .fault-filter-count { color: rgb(var(--error-text)); }
+.fault-filter-card.is-warning .fault-filter-count { color: rgb(var(--warning-text)); }
 .fault-filter-description { display: block; margin-top: 7px; color: rgb(var(--text-muted)); font-size: 10px; }
 .ops-register.fault-center-register { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .fault-center-register .ops-register-cell { padding-inline: clamp(6px, 1vw, 16px); }

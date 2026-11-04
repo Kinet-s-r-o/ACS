@@ -171,6 +171,12 @@ const Devices: Component = () => {
     },
   );
   const [tagCatalog] = createResource(api.getTags);
+  const [deviceStats, { refetch: refetchStats }] = createResource(api.getDeviceStats);
+
+  const refreshInventory = () => {
+    void refetch();
+    void refetchStats();
+  };
 
   const getDeviceTagLabels = (device: Device) => (device.tags || []).map(id => tagCatalog()?.find(tag => tag.id === id)?.name || id).join(', ');
 
@@ -292,6 +298,19 @@ const Devices: Component = () => {
   };
 
   const activeFilterCount = createMemo(() => Object.keys(columnFilters()).length);
+  const selectedStatus = createMemo(() => {
+    const rules = columnFilters().status?.rules ?? [];
+    return rules.length === 1 && rules[0].operator === 'equals' ? rules[0].value : undefined;
+  });
+  const selectStatus = (status?: 'Online' | 'Waiting' | 'Offline') => {
+    setColumnFilters(previous => {
+      const next = { ...previous };
+      if (status) next.status = { logic: 'all', rules: [{ operator: 'equals', value: status }] };
+      else delete next.status;
+      return next;
+    });
+    setPage(0);
+  };
   const hasInventoryFilter = createMemo(() => Boolean(searchQuery().trim()) || activeFilterCount() > 0);
   const sortedDevices = createMemo(() => deviceList()?.devices || []);
   const pagedDevices = sortedDevices;
@@ -453,6 +472,38 @@ const Devices: Component = () => {
       </Show>
 
       <Show when={activeTab() === 'cpes'}>
+      <Show when={deviceStats.loading && !deviceStats()}>
+        <div class="ops-register fleet-register" aria-label="Loading CPE status">
+          <For each={[1, 2, 3, 4]}>{() => <div class="ops-register-cell"><div class="skeleton h-3 w-24" /><div class="skeleton h-7 w-16 mt-3" /><div class="skeleton h-2 w-32 mt-3" /></div>}</For>
+        </div>
+      </Show>
+      <Show when={deviceStats.error}>
+        <div class="card"><ResourceError title="CPE status is unavailable" description="ACS could not load the device counts. Retry to refresh the status register." onRetry={() => refetchStats()} /></div>
+      </Show>
+      <Show when={!deviceStats.error && deviceStats()}>
+        {(stats) => <div class="ops-register fleet-register" role="group" aria-label="Filter CPEs by status">
+          <button type="button" class="ops-register-cell fault-filter-card is-online" onClick={() => selectStatus('Online')} aria-pressed={selectedStatus() === 'Online'}>
+            <span class="fault-filter-label">Online</span>
+            <strong class="fault-filter-count">{stats().online.toLocaleString()}</strong>
+            <span class="fault-filter-description">Reporting within threshold</span>
+          </button>
+          <button type="button" class="ops-register-cell fault-filter-card is-warning" onClick={() => selectStatus('Waiting')} aria-pressed={selectedStatus() === 'Waiting'}>
+            <span class="fault-filter-label">Waiting</span>
+            <strong class="fault-filter-count">{stats().waiting.toLocaleString()}</strong>
+            <span class="fault-filter-description">Awaiting the first CWMP Inform</span>
+          </button>
+          <button type="button" class="ops-register-cell fault-filter-card is-offline" onClick={() => selectStatus('Offline')} aria-pressed={selectedStatus() === 'Offline'}>
+            <span class="fault-filter-label">Offline</span>
+            <strong class="fault-filter-count">{stats().offline.toLocaleString()}</strong>
+            <span class="fault-filter-description">Requires operator review</span>
+          </button>
+          <button type="button" class="ops-register-cell fault-filter-card" onClick={() => selectStatus()} aria-pressed={!columnFilters().status?.rules.length}>
+            <span class="fault-filter-label">Managed devices</span>
+            <strong class="fault-filter-count">{stats().total.toLocaleString()}</strong>
+            <span class="fault-filter-description">Registered CPE inventory</span>
+          </button>
+        </div>}
+      </Show>
       <Show when={deviceList.error}>
         <div class="card"><ResourceError title="CPE inventory is unavailable" description="The inventory request failed. Check the API service status and retry without losing the current search or column settings." onRetry={() => refetch()} /></div>
       </Show>
@@ -481,7 +532,7 @@ const Devices: Component = () => {
                 </button>
               </Show>
             </div>
-            <button type="button" class="icon-button" onClick={() => void refetch()} disabled={deviceList.loading} title="Refresh CPE inventory" aria-label="Refresh CPE inventory">
+            <button type="button" class="icon-button" onClick={refreshInventory} disabled={deviceList.loading || deviceStats.loading} title="Refresh CPE inventory" aria-label="Refresh CPE inventory">
               <RefreshCw size={15} class={deviceList.loading ? 'animate-spin' : ''} aria-hidden="true" />
             </button>
             <button type="button" class="icon-button" onClick={() => void exportDevicesCSV()} disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} title="Export filtered CPEs as CSV" aria-label={`Export ${deviceList()?.total ?? 0} filtered CPEs as CSV`}>
@@ -617,7 +668,7 @@ const Devices: Component = () => {
           setPage(0);
           setSearchQuery(device.serial_number);
           setDebouncedSearch(device.serial_number);
-          void refetch();
+          refreshInventory();
           notify({ tone: 'success', title: 'CPE added', message: device.factory_reset_on_first_inform ? `${device.serial_number} is waiting. Factory reset is armed for its first CWMP Inform.` : `${device.serial_number} is waiting for its first CWMP Inform.` });
         }} />
       </Show>
