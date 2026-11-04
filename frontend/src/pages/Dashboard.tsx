@@ -371,9 +371,17 @@ const Dashboard: Component = () => {
   const canCopyPanels = () => !managingOtherDashboard() && isFullAccess() && hasPermission('users.read') && hasPermission('users.write');
   const [shareUsers] = createResource(showCopyUsers, (show) => show && canCopyPanels() ? api.getUsers() : Promise.resolve([] as User[]));
   const [dashboard, { refetch }] = createResource(() => loadFleetData(api.getDeviceStats));
+  const analyticsPanels = createMemo(() => panelConfigs().filter((panel) => !panel.hidden && (panel.kind === 'category' || panel.kind === 'recency')));
   const [panelAnalytics, { refetch: refetchPanelAnalytics }] = createResource(
-    () => savedPanelConfigs() ? normalizeDashboardPanels(savedPanelConfigs() ?? []) : undefined,
-    (panels) => loadFleetData(() => api.getDashboardPanelAnalytics(panels.filter((panel) => !panel.hidden))),
+    () => !savedPanelConfigs.loading && !savedPanelConfigs.error && analyticsPanels().length > 0 ? analyticsPanels() : undefined,
+    (panels) => loadFleetData(() => api.getDashboardPanelAnalytics(panels)),
+  );
+  const renderAnalytics = (id: string, options: Omit<DistributionListProps, 'data'> = {}) => (
+    <Show when={!panelAnalytics.loading} fallback={<p class="py-4 text-xs text-muted" role="status">Loading distribution…</p>}>
+      <Show when={!panelAnalytics()?.error} fallback={<ResourceError title="Distribution is unavailable" description="ACS could not load this panel's data. Retry the request." onRetry={() => refetchPanelAnalytics()} />}>
+        <DistributionList data={panelAnalytics()?.data?.panels[id] ?? {}} {...options} />
+      </Show>
+    </Show>
   );
   const stats = createMemo(() => dashboard()?.data);
   const onlinePercent = createMemo(() => {
@@ -381,10 +389,8 @@ const Dashboard: Component = () => {
     return total > 0 ? Math.round(((stats()?.online ?? 0) / total) * 1000) / 10 : 0;
   });
   const categoryPanelEntries = () => {
-    const values = panelAnalytics()?.data?.panels;
-    if (!values) return [];
-    return panelConfigs().filter((config) => config.kind === 'category' && !config.hidden).map((config) => ({
-      id: config.id, label: config.title, values: values[config.id] ?? {}, limit: config.limit ?? 6,
+    return analyticsPanels().filter((config) => config.kind === 'category').map((config) => ({
+      id: config.id, label: config.title, limit: config.limit ?? 6,
     }));
   };
   const savePanelConfigs = (panels: DashboardPanelConfig[]) => {
@@ -410,7 +416,7 @@ const Dashboard: Component = () => {
       thresholds: [{ label: 'At most 0', max: '0', color: 'blue' }, { label: 'Above 0', max: '', color: 'gray' }],
     });
   };
-  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); refetchPanelAnalytics(); };
+  const refreshDashboard = () => { setRefreshKey((value) => value + 1); refetch(); if (analyticsPanels().length > 0) refetchPanelAnalytics(); };
   onMount(() => {
     const closeMenu = (event: MouseEvent) => {
       if (!panelActionsMenu?.contains(event.target as Node)) setShowPanelActionsMenu(false);
@@ -704,11 +710,6 @@ const Dashboard: Component = () => {
           </div>
         </dl>
 
-        <Show when={panelAnalytics.loading}><p class="text-xs text-muted" role="status">Loading fleet analytics…</p></Show>
-        <Show when={panelAnalytics()?.error}>
-          <div class="data-panel"><ResourceError title="Fleet analytics are unavailable" description={panelAnalytics()?.error ?? 'Retry loading fleet analytics.'} onRetry={() => refetchPanelAnalytics()} /></div>
-        </Show>
-
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
         <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel}>
         <section class="data-panel fleet-content-panel">
@@ -729,15 +730,13 @@ const Dashboard: Component = () => {
         </section>
         </FleetPanelFrame>
 
-        <Show when={panelAnalytics()?.data && panelConfigs().some((config) => config.id === 'contactRecency' && config.kind === 'recency')}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel fleet-content-panel">
+        <Show when={analyticsPanels().some((config) => config.id === 'contactRecency' && config.kind === 'recency')}><FleetPanelFrame id="contactRecency" layout={layoutFor('contactRecency')} onMove={movePanel} onResize={resizePanel}><section class="data-panel fleet-content-panel">
           <div class="data-panel-header">
             <div><h2>{panelConfigs().find((config) => config.id === 'contactRecency')?.title ?? 'Contact recency'}</h2><p>Time elapsed since the latest Inform received from each CPE.</p></div>
             <button type="button" class="icon-button" aria-label="Configure contact recency panel" title="Configure panel" onClick={() => { const config = panelConfigs().find((item) => item.id === 'contactRecency'); if (config) openPanelSettings(config); }}><Settings2 size={14} /></button>
           </div>
           <div class="data-panel-body">
-            <Show when={panelAnalytics()?.data?.panels.contactRecency} fallback={<p class="text-xs text-muted">Loading distribution…</p>}>
-              <DistributionList data={panelAnalytics()!.data!.panels.contactRecency} semantic />
-            </Show>
+            {renderAnalytics('contactRecency', { semantic: true })}
           </div>
         </section></FleetPanelFrame></Show>
 
@@ -754,25 +753,25 @@ const Dashboard: Component = () => {
           )}</For>
         </Show>
 
-        <Show when={panelAnalytics()?.data}>
+        <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
           <For each={categoryPanelEntries()}>{(panel) => {
             const config = () => panelConfigs().find((item) => item.id === panel.id);
             return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, panelFallbackOrder(panel.id))} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel data-panel-section fleet-content-panel">
                 <div class="dashboard-configurable-heading"><h3>{config()?.title ?? panel.label}</h3><button type="button" class="icon-button" aria-label={`Configure ${panel.label} panel`} title="Configure panel" onClick={() => config() && openPanelSettings(config()!)}><Settings2 size={14} /></button></div>
-                <Show when={(config()?.source === 'configured_option' || config()?.source === 'custom_parameter' && !!config()?.aggregation_option_id) && !aggregationOptions().some((option) => option.id === config()?.aggregation_option_id)} fallback={<DistributionList data={panel.values ?? {}} limit={panel.limit} />}>
+                <Show when={(config()?.source === 'configured_option' || config()?.source === 'custom_parameter' && !!config()?.aggregation_option_id) && !aggregationOptions().some((option) => option.id === config()?.aggregation_option_id)} fallback={renderAnalytics(panel.id, { limit: panel.limit })}>
                   <p class="py-4 text-center text-xs text-muted">This aggregation option is no longer configured. Choose an available option in panel settings.</p>
                 </Show>
               </section>
             </FleetPanelFrame>;
           }}</For>
         </Show>
-        <Show when={panelAnalytics()?.data}>
+        <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
           <For each={panelConfigs().filter((config) => config.id !== 'contactRecency' && config.kind === 'recency' && !config.hidden)}>{(config) => (
             <FleetPanelFrame id={config.id} layout={layoutFor(config.id, panelFallbackOrder(config.id))} onMove={movePanel} onResize={resizePanel}>
               <section class="data-panel fleet-content-panel">
                 <div class="dashboard-configurable-heading"><h3>{config.title}</h3><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></div>
-                <div class="data-panel-body"><DistributionList data={panelAnalytics()!.data!.panels[config.id] ?? {}} semantic /></div>
+                <div class="data-panel-body">{renderAnalytics(config.id, { semantic: true })}</div>
               </section>
             </FleetPanelFrame>
           )}</For>
