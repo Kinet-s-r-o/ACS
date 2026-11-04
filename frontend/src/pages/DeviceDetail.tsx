@@ -3573,11 +3573,6 @@ const DeviceDetail: Component = () => {
                   </button>
                 </div>
               </div>
-              <Show when={filteredAllParams().length > 0} fallback={
-                <div class="p-8 text-center">
-                  <p class="text-muted text-sm">{allParameters.loading ? 'Loading all parameters from the database…' : allParameters.error ? 'Could not load parameters. Use refresh to retry.' : allParametersRequested() ? 'No parameters are stored for this CPE.' : 'Click refresh to load all parameters from the database.'}</p>
-                </div>
-              }>
                 <div class="max-h-96 overflow-auto">
                   <table class="data-table w-full text-sm" data-column-order-key="all-parameters">
                     <thead class="bg-base sticky top-0 z-10">
@@ -3612,7 +3607,16 @@ const DeviceDetail: Component = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      <For each={filteredAllParams()}>
+                      <For each={filteredAllParams()} fallback={
+                        <tr>
+                          <td colspan={paramColumns().filter(column => column.visible).length + 1} class="px-4 py-8 text-center">
+                            <p class="text-muted text-sm">{allParameters.loading ? 'Loading all parameters from the database…' : allParameters.error ? 'Could not load parameters. Use refresh to retry.' : !allParametersRequested() ? 'Click refresh to load all parameters from the database.' : paramFilter() || Object.keys(paramColumnFilters()).length > 0 ? 'No parameters match the current search or filters' : 'No parameters are stored for this CPE.'}</p>
+                            <Show when={paramFilter() || Object.keys(paramColumnFilters()).length > 0}>
+                              <button type="button" class="btn btn-secondary mt-3" onClick={() => { setParamFilter(''); setParamColumnFilters({}); }}>Clear search and filters</button>
+                            </Show>
+                          </td>
+                        </tr>
+                      }>
                         {(param) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
                             <Show when={paramColumns().find(c => c.id === 'object')?.visible}><td data-column-order-id="object#0" class="px-4 py-2 text-muted font-mono text-xs truncate" title={param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}>{param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}</td></Show>
@@ -3633,7 +3637,6 @@ const DeviceDetail: Component = () => {
                     </tbody>
                   </table>
                 </div>
-              </Show>
             </div>
             </Show>
           </>
