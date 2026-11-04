@@ -1580,8 +1580,9 @@ const Provisioning: Component = () => {
                   </div>
                   <Show when={cpeInfoFields().length > 0} fallback={<EmptyState compact title="No ONT information fields" description="Add a display name and choose a CWMP parameter or ACS timestamp to show on the CPE overview." />}>
                     <div class="space-y-3">
-                      <Index each={cpeInfoFields()}>{(field, index) => <div onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderCPEInfoField(index); }} class={`grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[auto_repeat(3,minmax(0,1fr))_auto] ${cpeInfoDraggedIndex() === index ? 'opacity-50' : ''}`}>
+                      <Index each={cpeInfoFields()}>{(field, index) => <div onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); reorderCPEInfoField(index); }} class={`grid grid-cols-[auto_minmax(0,1fr)] items-end gap-3 rounded border border-subtle p-3 md:grid-cols-[auto_minmax(0,1fr)_auto] ${cpeInfoDraggedIndex() === index ? 'opacity-50' : ''}`}>
                         <button type="button" draggable={isFullAccess() && !cpeInfoSaving()} class={`icon-button text-muted ${isFullAccess() ? 'cursor-grab active:cursor-grabbing' : ''}`} aria-label={`Drag to reorder ONT information field ${index + 1}`} title="Drag to reorder" onDragStart={event => { setCPEInfoDraggedIndex(index); event.dataTransfer?.setData('text/plain', String(index)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setCPEInfoDraggedIndex(null)}><GripVertical size={15} /></button>
+                        <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <label class="block text-xs text-muted">Name
                           <input class="input mt-1 w-full" value={field().name} onInput={event => updateCPEInfoField(index, 'name', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="e.g. Optical receive power" />
                         </label>
@@ -1602,14 +1603,19 @@ const Provisioning: Component = () => {
                             </select>
                           </label>
                         </Show>
+                        <label class="block text-xs text-muted">Postfix (optional)
+                          <input class="input mt-1 w-full" value={field().postfix || ''} onInput={event => updateCPEInfoField(index, 'postfix', event.currentTarget.value)} disabled={!isFullAccess()} maxLength={32} placeholder="e.g. %, °C or dBm" title="Appended exactly as entered. Include a leading space if needed, for example:  dBm" />
+                        </label>
+                        </div>
                         <Show when={isFullAccess()}>
-                          <div class="flex items-center gap-1">
+                          <div class="col-start-2 flex items-center gap-1 md:col-start-auto">
                             <button type="button" class="icon-button" aria-label={`Move ONT information field ${index + 1} up`} title="Move up" disabled={index === 0 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index - 1)}><ArrowUp size={14} /></button>
                             <button type="button" class="icon-button" aria-label={`Move ONT information field ${index + 1} down`} title="Move down" disabled={index === cpeInfoFields().length - 1 || cpeInfoSaving()} onClick={() => moveCPEInfoField(index, index + 1)}><ArrowDown size={14} /></button>
                             <button type="button" class="icon-button text-rose-400" aria-label={`Remove ONT information field ${index + 1}`} title="Remove field" onClick={() => setCPEInfoFields(current => current.filter((_, fieldIndex) => fieldIndex !== index))}><Trash2 size={15} /></button>
                           </div>
                         </Show>
                       </div>}</Index>
+                      <p class="text-xs text-muted">Postfix is appended after the displayed value. Include a leading space for units such as <code class="whitespace-pre"> dBm</code>; leave empty for no postfix.</p>
                     </div>
                   </Show>
                 </section>

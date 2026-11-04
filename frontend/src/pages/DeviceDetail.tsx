@@ -2154,7 +2154,7 @@ const DeviceDetail: Component = () => {
                       const parameter = parameters()?.find(parameter => parameter.name === field.parameter_name);
                       return parameter ? formatParameterDateTime(parameter.value, parameter.value_type) : '-';
                     };
-                    return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value()}</span></div>;
+                    return <div><span class="text-muted">{field.name}:</span> <span class="text-primary break-all">{value()}<Show when={value() !== '' && value() !== '-' && value() !== '—'}><span class="whitespace-pre-wrap">{field.postfix || ''}</span></Show></span></div>;
                   }}</For>
                 </div>
                 <div class="mt-4 min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0 lg:self-center">

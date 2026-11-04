@@ -37,6 +37,7 @@ type ProvisioningLANPortMapping struct {
 
 type ProvisioningCPEInfoField struct {
 	Name          string `json:"name"`
+	Postfix       string `json:"postfix,omitempty"`
 	ParameterName string `json:"parameter_name,omitempty"`
 	Source        string `json:"source,omitempty"`
 	ACSField      string `json:"acs_field,omitempty"`

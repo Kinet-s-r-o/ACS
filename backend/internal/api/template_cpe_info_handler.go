@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/matrix8412/acs/internal/models"
 )
@@ -57,6 +59,9 @@ func validateTemplateCPEInfoFields(fields []models.ProvisioningCPEInfoField) ([]
 		field.ParameterName = strings.TrimSpace(field.ParameterName)
 		field.Source = strings.TrimSpace(field.Source)
 		field.ACSField = strings.TrimSpace(field.ACSField)
+		if utf8.RuneCountInString(field.Postfix) > 32 || strings.ContainsFunc(field.Postfix, unicode.IsControl) {
+			return nil, fmt.Errorf("CPE info field %d postfix must be at most 32 characters without control characters", index+1)
+		}
 		if field.Name == "" || len(field.Name) > 128 {
 			return nil, fmt.Errorf("CPE info field %d requires a valid name", index+1)
 		}
