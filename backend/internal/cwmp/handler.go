@@ -621,6 +621,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DynamicDiscoveryQueue = nil
 	session.DynamicDiscoveryCurrent = nil
 	session.DynamicDiscoveryNames = nil
+	session.DynamicDiscoveryVerification = nil
 	if h.deviceRepo == nil {
 		session.AutoFetchReady = session.AutoFetchReady || (isNewSession && fullInterval > 0)
 	} else if deviceID > 0 {
@@ -1007,6 +1008,9 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.DynamicDiscoveryVerification != nil {
+		return h.handleDynamicInstanceVerification(ctx, session, resp)
+	}
 	if path := session.ConditionalExistsCurrent; path != "" {
 		value := "false"
 		for _, parameter := range resp.ParameterList {
@@ -1054,23 +1058,7 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 			}
 		}
 		session.DynamicDiscoveryCurrent = nil
-		if len(session.DynamicDiscoveryQueue) > 0 {
-			return nextDynamicDiscoveryRequest(session), nil
-		}
-		seen := make(map[string]bool, len(session.OverviewFetchParams)+len(session.DynamicDiscoveryNames))
-		for _, name := range session.OverviewFetchParams {
-			seen[name] = true
-		}
-		for _, name := range session.DynamicDiscoveryNames {
-			if !seen[name] {
-				session.OverviewFetchParams = append(session.OverviewFetchParams, name)
-				seen[name] = true
-			}
-		}
-		session.State = StateProcessingTasks
-		session.LastSentContext = strings.Join(session.OverviewFetchParams, ", ")
-		session.LastSentParameters = append([]string(nil), session.OverviewFetchParams...)
-		return &GetParameterValues{ParameterNames: session.OverviewFetchParams}, nil
+		return h.continueDynamicDiscovery(ctx, session)
 	}
 	if session.FeatureObjectStage == 1 && session.CurrentTaskID > 0 {
 		names := make([]string, 0, len(resp.ParameterList))
@@ -1545,6 +1533,10 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 	defer session.mu.Unlock()
 
 	if session.State == StateProcessingTasks {
+		if session.DynamicDiscoveryVerification != nil {
+			logCWMPSession(session.SerialNumber, session.ID, "Dynamic instance verification failed: %s - %s", faultCode, faultMessage)
+			return h.failDynamicInstanceVerification(ctx, session)
+		}
 		if path := session.ConditionalExistsCurrent; path != "" {
 			value := "unknown"
 			// An invalid parent path proves that its child is absent. Other
@@ -1558,6 +1550,9 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 			return request, err
 		}
 		if faultCode == "9005" {
+			if request := startDynamicInstanceVerification(session, faultMessage); request != nil {
+				return request, nil
+			}
 			if session.Diagnostic9005Active {
 				return h.handle9005DiagnosticFault(ctx, session)
 			}
@@ -1597,8 +1592,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 		}
 		if session.OverviewFetchActive {
 			session.OverviewFetchActive = false
-			session.DynamicDiscoveryActive = false
-			session.DynamicDiscoveryNames = nil
+			clearDynamicDiscovery(session)
 			return h.getNextTask(ctx, session)
 		}
 

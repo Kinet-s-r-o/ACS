@@ -44,6 +44,7 @@ type Session struct {
 	DynamicDiscoveryQueue           []DynamicDiscoveryStep
 	DynamicDiscoveryCurrent         *DynamicDiscoveryStep
 	DynamicDiscoveryNames           []string
+	DynamicDiscoveryVerification    *DynamicInstanceVerification
 	InformEvents                    []string
 	Provisioning                    *SetParameterValues
 	ProvisioningRules               []models.ProvisioningApplication
