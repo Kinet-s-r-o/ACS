@@ -1,4 +1,4 @@
-import { createUniqueId, onCleanup, onMount, type JSX, type ParentComponent } from 'solid-js';
+import { createMemo, createUniqueId, onCleanup, onMount, type JSX, type ParentComponent } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { X } from 'lucide-solid';
 
@@ -7,6 +7,7 @@ interface DialogProps {
   description?: string;
   headerBadge?: JSX.Element;
   actions?: JSX.Element;
+  sidePanel?: JSX.Element;
   size?: 'small' | 'medium' | 'large';
   closeLabel?: string;
   closeOnBackdrop?: boolean;
@@ -25,6 +26,7 @@ const focusableSelector = [
 const Dialog: ParentComponent<DialogProps> = (props) => {
   const titleId = createUniqueId();
   const descriptionId = createUniqueId();
+  const sidePanel = createMemo(() => props.sidePanel);
   let panel: HTMLDivElement | undefined;
   const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
@@ -86,7 +88,7 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
       >
         <div
           ref={panel}
-          class={`dialog-panel dialog-${props.size ?? 'medium'}`}
+          class={`dialog-panel dialog-${props.size ?? 'medium'}${sidePanel() ? ' dialog-with-side-panel' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
@@ -103,7 +105,10 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
               <X size={17} />
             </button>
           </header>
-          <div class="dialog-body">{props.children}</div>
+          <div class="dialog-content">
+            <div class="dialog-body">{props.children}</div>
+            {sidePanel()}
+          </div>
           {props.actions && <footer class="dialog-actions">{props.actions}</footer>}
         </div>
       </div>

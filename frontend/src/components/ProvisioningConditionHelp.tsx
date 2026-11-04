@@ -1,4 +1,5 @@
-import { For, type Component } from 'solid-js';
+import { For, Show, type Component } from 'solid-js';
+import { X } from 'lucide-solid';
 import Dialog from './Dialog';
 
 const examples = [
@@ -13,10 +14,7 @@ const examples = [
   ['Group alternatives and exclude a tag', "(hasTag('branch-a') OR hasTag('branch-b')) AND notHasTag('blocked')"],
 ];
 
-const ProvisioningConditionHelp: Component<{ onClose: () => void }> = (props) => (
-  <Dialog title="Condition help" size="large" onClose={props.onClose}
-    description="Apply a provisioning rule only when an expression is true."
-    actions={<button type="button" class="btn btn-secondary" onClick={props.onClose}>Close help</button>}>
+const ConditionHelpContent: Component = () => (
     <div class="space-y-5 text-sm text-secondary">
       <section class="space-y-2">
         <h3 class="font-semibold text-primary">When conditions run</h3>
@@ -63,7 +61,24 @@ const ProvisioningConditionHelp: Component<{ onClose: () => void }> = (props) =>
         <p>Use paths from the target CPE's data model. <code>Device</code> and <code>InternetGatewayDevice</code> are different roots and are not automatically translated.</p>
       </section>
     </div>
-  </Dialog>
+);
+
+const ProvisioningConditionHelp: Component<{ onClose: () => void; inline?: boolean }> = (props) => (
+  <Show when={props.inline} fallback={
+    <Dialog title="Condition help" size="large" onClose={props.onClose}
+      description="Apply a provisioning rule only when an expression is true."
+      actions={<button type="button" class="btn btn-secondary" onClick={props.onClose}>Close help</button>}>
+      <ConditionHelpContent />
+    </Dialog>
+  }>
+    <aside id="provisioning-condition-help" class="dialog-side-panel" aria-label="Condition help">
+      <header class="dialog-header">
+        <div class="dialog-header-content"><h2>Condition help</h2><p>Apply a provisioning rule only when an expression is true.</p></div>
+        <button type="button" class="icon-button" onClick={props.onClose} aria-label="Close condition help"><X size={17} aria-hidden="true" /></button>
+      </header>
+      <div class="dialog-body" tabindex="0" role="region" aria-label="Condition help reference"><ConditionHelpContent /></div>
+    </aside>
+  </Show>
 );
 
 export default ProvisioningConditionHelp;

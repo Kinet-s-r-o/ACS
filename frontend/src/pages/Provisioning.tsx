@@ -146,6 +146,11 @@ const Provisioning: Component = () => {
   let provisioningImportInput: HTMLInputElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
   const [showConditionHelp, setShowConditionHelp] = createSignal(false);
+  const [desktopConditionHelp, setDesktopConditionHelp] = createSignal(window.matchMedia('(min-width: 1024px)').matches);
+  const closeConditionHelp = () => {
+    setShowConditionHelp(false);
+    document.getElementById('provisioning-condition-help-trigger')?.focus();
+  };
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
   const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], excluded_tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
   const [provForm, setProvForm] = createSignal({ ...emptyProvisioningRule });
@@ -374,6 +379,10 @@ const Provisioning: Component = () => {
   const provDragEnabled = createMemo(() => Object.keys(columnFilters()).length === 0);
 
   onMount(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const updateConditionHelpLayout = () => setDesktopConditionHelp(desktop.matches);
+    desktop.addEventListener('change', updateConditionHelpLayout);
+    onCleanup(() => desktop.removeEventListener('change', updateConditionHelpLayout));
     loadProvTemplates();
     const closeMenu = (event: MouseEvent) => {
       if (!settingsMenu?.contains(event.target as Node)) setShowSettingsMenu(false);
@@ -1982,6 +1991,7 @@ const Provisioning: Component = () => {
         <Dialog
           title={editingProv() ? 'Edit provisioning rule' : copyingProv() ? 'Duplicate provisioning rule' : 'Add provisioning rule'}
           onClose={closeProvModal}
+          sidePanel={desktopConditionHelp() && showConditionHelp() ? <ProvisioningConditionHelp inline onClose={closeConditionHelp} /> : undefined}
         >
           <form onSubmit={(e) => { e.preventDefault(); editingProv() ? handleUpdateProv() : handleCreateProv(); }} class="space-y-4">
             <Show when={provFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
@@ -2061,7 +2071,7 @@ const Provisioning: Component = () => {
             <div>
               <div class="flex items-center gap-1 mb-1.5">
                 <label for="provisioning-condition" class="text-xs text-muted">Condition (optional)</label>
-                <button type="button" class="icon-button" aria-label="Condition help" aria-haspopup="dialog" onClick={() => setShowConditionHelp(true)}><CircleHelp size={14} aria-hidden="true" /></button>
+                <button id="provisioning-condition-help-trigger" type="button" class="icon-button" aria-label="Condition help" aria-haspopup={desktopConditionHelp() ? undefined : 'dialog'} aria-expanded={showConditionHelp()} aria-controls={desktopConditionHelp() && showConditionHelp() ? 'provisioning-condition-help' : undefined} onClick={() => setShowConditionHelp(open => !open)}><CircleHelp size={14} aria-hidden="true" /></button>
               </div>
               <textarea id="provisioning-condition" rows={2} value={provForm().condition} onInput={(e) => setProvForm(f => ({ ...f, condition: e.currentTarget.value }))} class="input w-full font-mono text-xs" placeholder="InternetGatewayDevice.DeviceInfo.Manufacturer == 'SkyDash' AND Device.Model contains 'AC1000'" />
               <p class="text-xs text-muted mt-1">Rule applies only when the condition is true. Use <code>exists('path')</code> for an object or parameter, or <code>NOT exists('path')</code> for absence. Leave empty to always apply. Open the question mark for operators and examples.</p>
@@ -2079,8 +2089,8 @@ const Provisioning: Component = () => {
           </form>
         </Dialog>
       </Show>
-      <Show when={showProvModal() && showConditionHelp()}>
-        <ProvisioningConditionHelp onClose={() => setShowConditionHelp(false)} />
+      <Show when={showProvModal() && showConditionHelp() && !desktopConditionHelp()}>
+        <ProvisioningConditionHelp onClose={closeConditionHelp} />
       </Show>
       <Show when={featureEditorOpen()}>
         <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit advanced settings field' : 'Add advanced settings field') : (editingFeatureID() ? 'Edit advanced settings section' : 'Add advanced settings section')} size="large" onClose={closeFeatureEditor}>

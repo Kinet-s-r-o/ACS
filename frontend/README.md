@@ -13,7 +13,7 @@
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
 
-Provisioning's Condition question mark opens `components/ProvisioningConditionHelp.tsx`. Keep examples and limitations aligned with `backend/internal/cwmp/condition.go` and the live existence probes in `handler.go`. The shared Dialog handles keyboard events only for the topmost dialog so closing help preserves the underlying rule form.
+Provisioning's Condition question mark opens `components/ProvisioningConditionHelp.tsx`. At widths of 1024px and above, it expands the rule Dialog with a right-hand reference panel; the form and help scroll independently within one focus trap. Smaller screens retain the nested help modal. Keep the form mounted when toggling help or crossing the breakpoint so unsaved text and focus survive. Keep examples and limitations aligned with `backend/internal/cwmp/condition.go` and the live existence probes in `handler.go`.
 
 Fleet status defaults to Device growth only. Additional panels must be user-created (`custom-*` IDs); parameter thresholds and category aggregations use `devices.read`. Do not restore retired built-in panels or import old browser panel configurations.
 
