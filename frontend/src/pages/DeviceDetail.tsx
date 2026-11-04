@@ -1991,11 +1991,11 @@ const DeviceDetail: Component = () => {
           <div class="rounded border border-subtle p-4 lg:col-span-2">
             <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-sm font-medium text-primary">{control.label}</h3><Show when={description()}><p class="mt-1 text-xs text-secondary">{description()}</p></Show></div><button type="button" class="btn btn-secondary text-xs" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void addTemplateFeatureObject(feature.id, control.key, control.label)}><Plus size={13} />Add object</button></div>
             <Show when={featureObjectInstances(control.parameter).length > 0} fallback={<div class="py-3 text-xs text-muted">No objects exist yet. Create one to discover its parameters.</div>}>
-              <div class="overflow-x-auto"><table class="data-table w-full min-w-max text-xs"><thead><tr><th class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th class="text-left">{control.object_fields?.find(field => field.name === column)?.label || column}</th>}</For><th class="text-right">Actions</th></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => {
+              <div class="overflow-x-auto"><table class="data-table w-full min-w-max text-xs"><thead><tr><th data-column-order-id="instance#0" class="text-left">Instance</th><For each={featureObjectColumns(control.parameter)}>{column => <th data-column-order-id={`field:${column}`} class="text-left">{control.object_fields?.find(field => field.name === column)?.label || column}</th>}</For><th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right">Actions</th><th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead><tbody><For each={featureObjectInstances(control.parameter)}>{instance => <tr><td data-column-order-id="instance#0" class="font-mono">{instance}</td><For each={featureObjectColumns(control.parameter)}>{column => {
                 const path = `${control.parameter}${instance}.${column}`;
                 const value = () => (parameters() || []).find(item => item.name === path)?.value || '—';
-                return <td class="max-w-64 truncate">{value()}</td>;
-              }}</For><td class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td></tr>}</For></tbody></table></div>
+                return <td data-column-order-id={`field:${column}`} class="max-w-64 truncate">{value()}</td>;
+              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
             </Show>
           </div>
         </Show>
@@ -2374,20 +2374,20 @@ const DeviceDetail: Component = () => {
                                 <table class="data-table w-full text-xs min-w-[620px]">
                                   <thead>
                                     <tr class="border-b border-subtle">
-                                      <th class="text-left px-3 py-2 font-medium text-muted">Hop</th>
-                                      <th class="text-left px-3 py-2 font-medium text-muted">HopRTTimes</th>
-                                      <th class="text-left px-3 py-2 font-medium text-muted">HopHost</th>
-                                      <th class="text-left px-3 py-2 font-medium text-muted">HopHostAddress</th>
+                                      <th data-column-order-id="hop#0" class="text-left px-3 py-2 font-medium text-muted">Hop</th>
+                                      <th data-column-order-id="hoprttimes#0" class="text-left px-3 py-2 font-medium text-muted">HopRTTimes</th>
+                                      <th data-column-order-id="hophost#0" class="text-left px-3 py-2 font-medium text-muted">HopHost</th>
+                                      <th data-column-order-id="hophostaddress#0" class="text-left px-3 py-2 font-medium text-muted">HopHostAddress</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     <For each={rows}>
                                       {(row) => (
                                         <tr class="border-t border-subtle/50">
-                                          <td class="px-3 py-2 text-primary font-mono">{row.hop}</td>
-                                          <td class="px-3 py-2 text-primary font-mono">{row.hopRTTimes}</td>
-                                          <td class="px-3 py-2 text-primary">{row.hopHost}</td>
-                                          <td class="px-3 py-2 text-primary font-mono">{row.hopHostAddress}</td>
+                                          <td data-column-order-id="hop#0" class="px-3 py-2 text-primary font-mono">{row.hop}</td>
+                                          <td data-column-order-id="hoprttimes#0" class="px-3 py-2 text-primary font-mono">{row.hopRTTimes}</td>
+                                          <td data-column-order-id="hophost#0" class="px-3 py-2 text-primary">{row.hopHost}</td>
+                                          <td data-column-order-id="hophostaddress#0" class="px-3 py-2 text-primary font-mono">{row.hopHostAddress}</td>
                                         </tr>
                                       )}
                                     </For>
@@ -2638,7 +2638,7 @@ const DeviceDetail: Component = () => {
                   <Network size={14} />
                   WAN Connections
                 </h2>
-                <ColumnVisibility columns={wanColumns} onToggle={toggleWanColumn} title="WAN columns" />
+
               </div>
               <Show when={wanProfiles().length > 0} fallback={
                 <p class="text-muted text-sm">No WAN configuration data. Click Summon to fetch.</p>
@@ -2668,8 +2668,8 @@ const DeviceDetail: Component = () => {
                         <th data-column-order-id="s6#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s6') }}>S6</th>
                         <th data-column-order-id="s7#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s7') }}>S7</th>
                         <th data-column-order-id="s8#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('s8') }}>S8</th>
-                        <th data-column-order-id="actions#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('actions') }}>Actions</th>
-                      </tr>
+                        <th data-column-fixed="actions" data-column-order-id="actions#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isWanColumnVisible('actions') }}>Actions</th>
+                      <th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"><ColumnVisibility columns={wanColumns} onToggle={toggleWanColumn} title="WAN columns" /></th></tr>
                     </thead>
                     <tbody>
                       <For each={wanProfiles()}>
@@ -2815,10 +2815,10 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                          </tr>
+                          <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
                           <Show when={expanded()}>
                             <tr class="border-t border-subtle/60 bg-elevated/20">
-                              <td colspan={Math.max(1, wanVisibleColumnCount())} class="px-5 py-3">
+                              <td colspan={(Math.max(1, wanVisibleColumnCount())) + 1} class="px-5 py-3">
                                 <div class="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">IP Address</div><div class="mt-1 text-xs font-mono text-primary break-all">{getWanDetail('ExternalIPAddress') !== '-' ? getWanDetail('ExternalIPAddress') : getWanDetail('IPAddress')}</div></div>
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">Subnet Mask</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('SubnetMask')}</div></div>
@@ -2847,7 +2847,7 @@ const DeviceDetail: Component = () => {
                   LAN Interfaces ({getLanInterfaces().length})
                 </h2>
                 <div class="flex items-center gap-2">
-                  <ColumnVisibility columns={lanColumns} onToggle={toggleLanColumn} title="LAN columns" />
+
                   <Show when={isFullAccess()}>
                     <div class="relative" ref={lanContextMenu}>
                       <button type="button" class="icon-button" aria-label="LAN Interfaces menu" aria-haspopup="menu" aria-expanded={showLanContextMenu()} onClick={() => setShowLanContextMenu(value => !value)}>
@@ -2878,8 +2878,8 @@ const DeviceDetail: Component = () => {
                         <th data-column-order-id="duplex#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('duplex') }}>Duplex</th>
                         <th data-column-order-id="speed#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('speed') }}>Speed</th>
                         <th data-column-order-id="l3#0" class="text-center px-2 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('l3') }}>L3</th>
-                        <th data-column-order-id="actions#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('actions') }}>Actions</th>
-                      </tr>
+                        <th data-column-fixed="actions" data-column-order-id="actions#0" class="text-left px-3 py-2.5 font-semibold text-primary" classList={{ hidden: !isLanColumnVisible('actions') }}>Actions</th>
+                      <th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"><ColumnVisibility columns={lanColumns} onToggle={toggleLanColumn} title="LAN columns" /></th></tr>
                     </thead>
                     <tbody>
                       <For each={getLanInterfaces()}>
@@ -2935,7 +2935,7 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                          </tr>
+                          <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
                         )}
                       </For>
                     </tbody>
@@ -2976,7 +2976,7 @@ const DeviceDetail: Component = () => {
                     </div>
                   </Show>
                 </h2>
-                <ColumnVisibility columns={wifiColumns} onToggle={toggleWifiColumn} title="Wi-Fi columns" />
+
               </div>
               <Show when={!parameters.loading || (parameters()?.length ?? 0) > 0} fallback={<div class="space-y-2" aria-label="Loading Wi-Fi configuration"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-3/4" /></div>}>
                 <Show when={getWlanConfigs().length > 0} fallback={
@@ -2995,8 +2995,8 @@ const DeviceDetail: Component = () => {
                         <th data-column-order-id="ch#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('channel') }}>Ch</th>
                         <th data-column-order-id="max rate#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('max_rate') }}>Max Rate</th>
                         <th data-column-order-id="password#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('password') }}>Password</th>
-                        <th data-column-order-id="actions#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('actions') }}>Actions</th>
-                      </tr>
+                        <th data-column-fixed="actions" data-column-order-id="actions#0" class="text-left px-2 py-2 font-medium text-secondary" classList={{ hidden: !isWifiColumnVisible('actions') }}>Actions</th>
+                      <th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"><ColumnVisibility columns={wifiColumns} onToggle={toggleWifiColumn} title="Wi-Fi columns" /></th></tr>
                     </thead>
                     <tbody>
                       <For each={getWlanConfigs()}>
@@ -3046,7 +3046,7 @@ const DeviceDetail: Component = () => {
                                 </button>
                               </Show>
                             </td>
-                          </tr>
+                          <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
                         )}
                       </For>
                     </tbody>
@@ -3086,43 +3086,43 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-sm min-w-[960px]" data-column-order-key="connected-hosts">
                     <thead class="sticky top-0 bg-base z-10">
                       <tr class="border-b border-subtle bg-base">
-                        <Show when={hostColumns().find(column => column.id === 'hostname')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'hostname')?.visible}><th data-column-order-id="hostname#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Hostname
                             <ColumnFilter columnId="hostname" label="Hostname" active={hostColumnFilters()['hostname'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['hostname'] = s; else delete n['hostname']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'ip')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'ip')?.visible}><th data-column-order-id="ip address#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">IP address
                             <ColumnFilter columnId="ip" label="IP address" active={hostColumnFilters()['ip'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['ip'] = s; else delete n['ip']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'ipv6')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'ipv6')?.visible}><th data-column-order-id="ipv6 address#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">IPv6 address
                             <ColumnFilter columnId="ipv6" label="IPv6 address" active={hostColumnFilters()['ipv6'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['ipv6'] = s; else delete n['ipv6']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'mac')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'mac')?.visible}><th data-column-order-id="mac address#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">MAC address
                             <ColumnFilter columnId="mac" label="MAC address" active={hostColumnFilters()['mac'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['mac'] = s; else delete n['mac']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'negRate')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'negRate')?.visible}><th data-column-order-id="neg. rate#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Neg. rate
                             <ColumnFilter columnId="negRate" label="Neg. rate" numeric active={hostColumnFilters()['negRate'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['negRate'] = s; else delete n['negRate']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'interface')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'interface')?.visible}><th data-column-order-id="interface#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Interface
                             <ColumnFilter columnId="interface" label="Interface" active={hostColumnFilters()['interface'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['interface'] = s; else delete n['interface']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted">
+                        <Show when={hostColumns().find(column => column.id === 'rssi')?.visible}><th data-column-order-id="signal#0" class="text-left px-3 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Signal
                             <ColumnFilter columnId="rssi" label="Signal" numeric active={hostColumnFilters()['rssi'] || null} onApply={(s) => { setHostColumnFilters((prev) => { const n = { ...prev }; if (s) n['rssi'] = s; else delete n['rssi']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={hostColumns().find(column => column.id === 'updated_at')?.visible}><th class="text-left px-3 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Last updated<ColumnFilter columnId="updated_at" label="Last updated" active={hostColumnFilters().updated_at || null} onApply={state => setHostColumnFilters(previous => { const next = { ...previous }; if (state) next.updated_at = state; else delete next.updated_at; return next; })} /></div></th></Show>
-                        <th class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} /></th>
+                        <Show when={hostColumns().find(column => column.id === 'updated_at')?.visible}><th data-column-order-id="last updated#0" class="text-left px-3 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Last updated<ColumnFilter columnId="updated_at" label="Last updated" active={hostColumnFilters().updated_at || null} onApply={state => setHostColumnFilters(previous => { const next = { ...previous }; if (state) next.updated_at = state; else delete next.updated_at; return next; })} /></div></th></Show>
+                        <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={hostColumns} onToggle={toggleHostColumn} /></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3149,7 +3149,7 @@ const DeviceDetail: Component = () => {
                               {host.rssi && host.rssi !== '-' && host.rssi !== '0' ? `${host.rssi} dBm` : '-'}
                             </td></Show>
                             <Show when={hostColumns().find(column => column.id === 'updated_at')?.visible}><td data-column-order-id="last updated#0" class="px-3 py-2 text-muted text-xs whitespace-nowrap" title="Most recent stored update among this host's parameters; not necessarily a value change.">{formatDateTime(host.updated_at)}</td></Show>
-                            <td class="px-2 py-2"></td>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td>
                           </tr>
                         )}
                       </For>
@@ -3188,59 +3188,59 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-sm min-w-[980px]">
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
-                        <Show when={isDeviceTaskColumnVisible('type')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('type')}><th data-column-order-id="type#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="type" label="Type" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="type" label="Type" active={taskColumnFilters()['type'] || null} onApply={(s) => updateTaskFilter('type', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('trigger_event')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('trigger_event')}><th data-column-order-id="trigger event#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="trigger_event" label="Trigger event" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="trigger_event" label="Trigger event" active={taskColumnFilters()['trigger_event'] || null} onApply={(s) => updateTaskFilter('trigger_event', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('status')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('status')}><th data-column-order-id="status#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="status" label="Status" active={taskColumnFilters()['status'] || null} onApply={(s) => updateTaskFilter('status', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('created_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('created_at')}><th data-column-order-id="created#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Created" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="created_at" label="Created" active={taskColumnFilters()['created_at'] || null} onApply={(s) => updateTaskFilter('created_at', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('completed_at')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('completed_at')}><th data-column-order-id="completed#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="completed_at" label="Completed" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="completed_at" label="Completed" active={taskColumnFilters()['completed_at'] || null} onApply={(s) => updateTaskFilter('completed_at', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('created_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('created_by')}><th data-column-order-id="created by#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="created_by" label="Created by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="created_by" label="Created by" active={taskColumnFilters()['created_by'] || null} onApply={(s) => updateTaskFilter('created_by', s)} />
                           </div>
                         </th></Show>
-                        <Show when={isDeviceTaskColumnVisible('deleted_by')}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} /></th></Show>
-                        <Show when={isDeviceTaskColumnVisible('error')}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={isDeviceTaskColumnVisible('deleted_by')}><th data-column-order-id="deleted by#0" class="text-left px-4 py-2 text-xs font-medium text-muted"><SortableHeader column="deleted_by" label="Deleted by" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} /></th></Show>
+                        <Show when={isDeviceTaskColumnVisible('error')}><th data-column-order-id="error#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5"><SortableHeader column="error" label="Error" sortBy={taskSort().column} direction={taskSort().direction} onSort={toggleSort(setTaskSort, setTaskPage)} />
                             <ColumnFilter columnId="error" label="Error" active={taskColumnFilters()['error'] || null} onApply={(s) => updateTaskFilter('error', s)} />
                           </div>
                         </th></Show>
-                        <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
-                        <th class="px-2 py-2"><ColumnVisibility columns={deviceTaskColumns} onToggle={toggleDeviceTaskColumn} /></th>
+                        <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
+                        <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={deviceTaskColumns} onToggle={toggleDeviceTaskColumn} /></th>
                       </tr>
                     </thead>
                     <tbody>
                       <For each={pagedTasks()}>
                         {(task) => (
                           <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <Show when={isDeviceTaskColumnVisible('type')}><td class="px-4 py-2 text-primary">{task.type}<Show when={task.automatic_factory_reset}> <span class="badge badge-warning">First Inform</span></Show></td></Show>
-                            <Show when={isDeviceTaskColumnVisible('trigger_event')}><td class="px-4 py-2 text-secondary text-xs">{formatTaskTriggerEvents(task.trigger_events)}</td></Show>
-                            <Show when={isDeviceTaskColumnVisible('status')}><td class="px-4 py-2"><span class={`badge ${getStatusBadge(task.status)}`}>{task.status}</span></td></Show>
-                            <Show when={isDeviceTaskColumnVisible('created_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>
-                            <Show when={isDeviceTaskColumnVisible('completed_at')}><td class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
-                            <Show when={isDeviceTaskColumnVisible('created_by')}><td class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td></Show>
-                            <Show when={isDeviceTaskColumnVisible('deleted_by')}><td class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td></Show>
-                            <Show when={isDeviceTaskColumnVisible('error')}><td class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td></Show>
-                            <td class="px-4 py-2 text-right">
+                            <Show when={isDeviceTaskColumnVisible('type')}><td data-column-order-id="type#0" class="px-4 py-2 text-primary">{task.type}<Show when={task.automatic_factory_reset}> <span class="badge badge-warning">First Inform</span></Show></td></Show>
+                            <Show when={isDeviceTaskColumnVisible('trigger_event')}><td data-column-order-id="trigger event#0" class="px-4 py-2 text-secondary text-xs">{formatTaskTriggerEvents(task.trigger_events)}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('status')}><td data-column-order-id="status#0" class="px-4 py-2"><span class={`badge ${getStatusBadge(task.status)}`}>{task.status}</span></td></Show>
+                            <Show when={isDeviceTaskColumnVisible('created_at')}><td data-column-order-id="created#0" class="px-4 py-2 text-muted text-xs">{formatDate(task.created_at)}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('completed_at')}><td data-column-order-id="completed#0" class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('created_by')}><td data-column-order-id="created by#0" class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('deleted_by')}><td data-column-order-id="deleted by#0" class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('error')}><td data-column-order-id="error#0" class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td></Show>
+                            <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-2 text-right">
                               <div class="inline-flex items-center gap-1">
                                 <button
                                   class="btn btn-ghost btn-xs"
@@ -3254,7 +3254,7 @@ const DeviceDetail: Component = () => {
                                 </Show>
                               </div>
                             </td>
-                            <td></td>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0"></td>
                           </tr>
                         )}
                       </For>
@@ -3289,9 +3289,9 @@ const DeviceDetail: Component = () => {
                   <Show when={taskDetailTab() === 'requested'}>
                     <Show when={selectedTask()!.payload != null} fallback={<p class="text-sm text-muted">No payload for this task type.</p>}>
                       <Show when={Array.isArray(selectedTask()!.payload)} fallback={
-                        <div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody>
+                        <div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th data-column-order-id="key#0" class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th data-column-order-id="value#0" class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody>
                           <For each={Object.entries(selectedTask()!.payload as Record<string, unknown>)}>
-                            {([key, value]) => (<tr class="border-t border-subtle/50"><td class="px-3 py-1.5 font-mono text-xs text-primary">{key}</td><td class="px-3 py-1.5 text-xs">{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}</td></tr>)}
+                            {([key, value]) => (<tr class="border-t border-subtle/50"><td data-column-order-id="key#0" class="px-3 py-1.5 font-mono text-xs text-primary">{key}</td><td data-column-order-id="value#0" class="px-3 py-1.5 text-xs">{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}</td></tr>)}
                           </For>
                         </tbody></table></div>
                       }>
@@ -3308,9 +3308,9 @@ const DeviceDetail: Component = () => {
                       <Show when={typeof selectedTask()!.result === 'object' && !Array.isArray(selectedTask()!.result) && selectedTask()!.result !== null} fallback={
                         <pre class="text-xs font-mono bg-elevated/50 rounded p-3 overflow-x-auto">{JSON.stringify(selectedTask()!.result, null, 2)}</pre>
                       }>
-                        <div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody>
+                        <div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th data-column-order-id="key#0" class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th data-column-order-id="value#0" class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody>
                           <For each={Object.entries(selectedTask()!.result as Record<string, unknown>)}>
-                            {([key, value]) => (<tr class="border-t border-subtle/50"><td class="px-3 py-1.5 font-mono text-xs text-primary">{key}</td><td class="px-3 py-1.5 text-xs">{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}</td></tr>)}
+                            {([key, value]) => (<tr class="border-t border-subtle/50"><td data-column-order-id="key#0" class="px-3 py-1.5 font-mono text-xs text-primary">{key}</td><td data-column-order-id="value#0" class="px-3 py-1.5 text-xs">{typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}</td></tr>)}
                           </For>
                         </tbody></table></div>
                       </Show>
@@ -3363,33 +3363,33 @@ const DeviceDetail: Component = () => {
                               <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
                             </th>
                           </Show>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                          <th data-column-order-id="code#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                             <div class="flex items-center gap-1.5"><SortableHeader column="code" label="Code" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
                               <ColumnFilter columnId="code" label="Code" numeric active={deviceFaultColumnFilters()['code'] || null} onApply={(s) => updateDeviceFaultFilter('code', s)} />
                             </div>
                           </th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                          <th data-column-order-id="message#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                             <div class="flex items-center gap-1.5"><SortableHeader column="message" label="Message" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
                               <ColumnFilter columnId="message" label="Message" active={deviceFaultColumnFilters()['message'] || null} onApply={(s) => updateDeviceFaultFilter('message', s)} />
                             </div>
                           </th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                          <th data-column-order-id="parameter#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                             <div class="flex items-center gap-1.5"><SortableHeader column="parameter" label="Parameter" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
                               <ColumnFilter columnId="parameter" label="Parameter" active={deviceFaultColumnFilters()['parameter'] || null} onApply={(s) => updateDeviceFaultFilter('parameter', s)} />
                             </div>
                           </th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                          <th data-column-order-id="time#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                             <div class="flex items-center gap-1.5"><SortableHeader column="time" label="Time" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
                               <ColumnFilter columnId="time" label="Time" active={deviceFaultColumnFilters()['time'] || null} onApply={(s) => updateDeviceFaultFilter('time', s)} />
                             </div>
                           </th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                          <th data-column-order-id="status#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                             <div class="flex items-center gap-1.5"><SortableHeader column="status" label="Status" sortBy={faultSort().column} direction={faultSort().direction} onSort={toggleSort(setFaultSort, setFaultPage)} />
                               <ColumnFilter columnId="status" label="Status" active={deviceFaultColumnFilters()['status'] || null} onApply={(s) => updateDeviceFaultFilter('status', s)} />
                             </div>
                           </th>
-                          <th class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
-                        </tr>
+                          <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right px-4 py-2 text-xs font-medium text-muted">Actions</th>
+                        <th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr>
                       </thead>
                       <tbody>
                         <For each={pagedDeviceFaults()}>
@@ -3407,24 +3407,24 @@ const DeviceDetail: Component = () => {
                                   <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
                                 </td>
                               </Show>
-                              <td class="px-4 py-2">
+                              <td data-column-order-id="code#0" class="px-4 py-2">
                                 <span class={`font-mono font-semibold ${parseInt(fault.fault_code) >= 9000 ? 'text-rose-400' : parseInt(fault.fault_code) >= 8000 ? 'text-amber-400' : 'text-sky-400'}`}>
                                   {fault.fault_code}
                                 </span>
                               </td>
-                              <td class="px-4 py-2 text-secondary max-w-xs truncate" title={fault.fault_string}>
+                              <td data-column-order-id="message#0" class="px-4 py-2 text-secondary max-w-xs truncate" title={fault.fault_string}>
                                 {fault.fault_string.length > 50 ? fault.fault_string.slice(0, 50) + '...' : fault.fault_string}
                               </td>
-                              <td class="px-4 py-2 text-muted font-mono text-xs max-w-xs truncate" title={fault.parameter_name}>
+                              <td data-column-order-id="parameter#0" class="px-4 py-2 text-muted font-mono text-xs max-w-xs truncate" title={fault.parameter_name}>
                                 {fault.parameter_name || '-'}
                               </td>
-                              <td class="px-4 py-2 text-muted text-xs">{formatDate(fault.created_at)}</td>
-                              <td class="px-4 py-2">
+                              <td data-column-order-id="time#0" class="px-4 py-2 text-muted text-xs">{formatDate(fault.created_at)}</td>
+                              <td data-column-order-id="status#0" class="px-4 py-2">
                                 <span class={`badge ${fault.resolved ? 'badge-success' : 'badge-error'}`}>
                                   {fault.resolved ? 'Resolved' : 'Active'}
                                 </span>
                               </td>
-                              <td class="px-4 py-2 text-right">
+                              <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-2 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                   <Show when={!fault.resolved && isFullAccess()}>
                                     <button
@@ -3448,10 +3448,10 @@ const DeviceDetail: Component = () => {
                                   </Show>
                                 </div>
                               </td>
-                            </tr>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
                             <Show when={expanded()}>
                               <tr id={`fault-details-${fault.id}`} class="border-t border-subtle/50 bg-elevated/30">
-                                <td colSpan={isFullAccess() ? 8 : 7} class="px-4 py-4">
+                                <td colSpan={(isFullAccess() ? 8 : 7) + 1} class="px-4 py-4">
                                   <dl class="grid grid-cols-1 gap-3 text-sm">
                                     <For each={[
                                       ['ID', String(fault.id)],
@@ -3508,19 +3508,19 @@ const DeviceDetail: Component = () => {
                     <div class="max-h-[36rem] overflow-auto">
                       <table class="data-table w-full text-sm">
                         <thead class="sticky top-0 z-10 opaque-table-header"><tr>
-                          <Show when={isDeviceLogColumnVisible('time')}><th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="time" label="Time" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="time" label="Time" active={deviceLogColumnFilters().time || null} onApply={state => updateDeviceLogColumnFilter('time', state)} /></SortableHeader></th></Show>
-                          <Show when={isDeviceLogColumnVisible('severity')}><th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="severity" label="Severity" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="severity" label="Severity" active={deviceLogColumnFilters().severity || null} onApply={state => updateDeviceLogColumnFilter('severity', state)} /></SortableHeader></th></Show>
-                          <Show when={isDeviceLogColumnVisible('message')}><th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="message" label="Message" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="message" label="Message" active={deviceLogColumnFilters().message || null} onApply={state => updateDeviceLogColumnFilter('message', state)} /></SortableHeader></th></Show>
-                          <th class="px-2 py-2"><ColumnVisibility columns={deviceLogColumns} onToggle={toggleDeviceLogColumn} /></th>
+                          <Show when={isDeviceLogColumnVisible('time')}><th data-column-order-id="time#0" scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="time" label="Time" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="time" label="Time" active={deviceLogColumnFilters().time || null} onApply={state => updateDeviceLogColumnFilter('time', state)} /></SortableHeader></th></Show>
+                          <Show when={isDeviceLogColumnVisible('severity')}><th data-column-order-id="severity#0" scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="severity" label="Severity" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="severity" label="Severity" active={deviceLogColumnFilters().severity || null} onApply={state => updateDeviceLogColumnFilter('severity', state)} /></SortableHeader></th></Show>
+                          <Show when={isDeviceLogColumnVisible('message')}><th data-column-order-id="message#0" scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted"><SortableHeader column="message" label="Message" sortBy={deviceLogSort().column} direction={deviceLogSort().direction} onSort={toggleDeviceLogSort}><ColumnFilter columnId="message" label="Message" active={deviceLogColumnFilters().message || null} onApply={state => updateDeviceLogColumnFilter('message', state)} /></SortableHeader></th></Show>
+                          <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={deviceLogColumns} onToggle={toggleDeviceLogColumn} /></th>
                         </tr></thead>
                         <tbody><For each={filteredDeviceLog()}>{entry => {
                           const severity = entry.severity.toLowerCase();
                           const badgeClass = severity === 'critical' || severity === 'error' ? 'badge-error' : severity === 'warning' ? 'badge-warning' : 'badge-info';
                           return <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                            <Show when={isDeviceLogColumnVisible('time')}><td class="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted">{entry.timestamp || '—'}</td></Show>
-                            <Show when={isDeviceLogColumnVisible('severity')}><td class="px-4 py-2">{entry.severity ? <span class={`badge ${badgeClass}`}>{entry.severity}</span> : <span class="text-muted">—</span>}</td></Show>
-                            <Show when={isDeviceLogColumnVisible('message')}><td class="px-4 py-2 font-mono text-xs text-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.message}</td></Show>
-                            <td class="px-2 py-2"></td>
+                            <Show when={isDeviceLogColumnVisible('time')}><td data-column-order-id="time#0" class="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted">{entry.timestamp || '—'}</td></Show>
+                            <Show when={isDeviceLogColumnVisible('severity')}><td data-column-order-id="severity#0" class="px-4 py-2">{entry.severity ? <span class={`badge ${badgeClass}`}>{entry.severity}</span> : <span class="text-muted">—</span>}</td></Show>
+                            <Show when={isDeviceLogColumnVisible('message')}><td data-column-order-id="message#0" class="px-4 py-2 font-mono text-xs text-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.message}</td></Show>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td>
                           </tr>;
                         }}</For></tbody>
                       </table>
@@ -3577,33 +3577,33 @@ const DeviceDetail: Component = () => {
                   <table class="data-table w-full text-sm" data-column-order-key="all-parameters">
                     <thead class="bg-base sticky top-0 z-10">
                       <tr class="bg-base">
-                        <Show when={paramColumns().find(c => c.id === 'object')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={paramColumns().find(c => c.id === 'object')?.visible}><th data-column-order-id="object#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Object
                             <ColumnFilter columnId="object" label="Object" active={paramColumnFilters()['object'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['object'] = s; else delete n['object']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={paramColumns().find(c => c.id === 'name')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={paramColumns().find(c => c.id === 'name')?.visible}><th data-column-order-id="name#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Name
                             <ColumnFilter columnId="name" label="Name" active={paramColumnFilters()['name'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['name'] = s; else delete n['name']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={paramColumns().find(c => c.id === 'writable')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={paramColumns().find(c => c.id === 'writable')?.visible}><th data-column-order-id="writable#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Writable
                             <ColumnFilter columnId="writable" label="Writable" active={paramColumnFilters()['writable'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['writable'] = s; else delete n['writable']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={paramColumns().find(c => c.id === 'value_type')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={paramColumns().find(c => c.id === 'value_type')?.visible}><th data-column-order-id="value type#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Value type
                             <ColumnFilter columnId="value_type" label="Value type" active={paramColumnFilters()['value_type'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['value_type'] = s; else delete n['value_type']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={paramColumns().find(c => c.id === 'value')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted">
+                        <Show when={paramColumns().find(c => c.id === 'value')?.visible}><th data-column-order-id="value#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
                           <div class="flex items-center gap-1.5">Value
                             <ColumnFilter columnId="value" label="Value" active={paramColumnFilters()['value'] || null} onApply={(s) => { setParamColumnFilters((prev) => { const n = { ...prev }; if (s) n['value'] = s; else delete n['value']; return n; }); }} />
                           </div>
                         </th></Show>
-                        <Show when={paramColumns().find(column => column.id === 'updated_at')?.visible}><th class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Last updated<ColumnFilter columnId="updated_at" label="Last updated" active={paramColumnFilters().updated_at || null} onApply={state => setParamColumnFilters(previous => { const next = { ...previous }; if (state) next.updated_at = state; else delete next.updated_at; return next; })} /></div></th></Show>
-                        <th class="px-2 py-2"><ColumnVisibility columns={paramColumns} onToggle={toggleParamColumn} /></th>
+                        <Show when={paramColumns().find(column => column.id === 'updated_at')?.visible}><th data-column-order-id="last updated#0" class="text-left px-4 py-2 text-xs font-medium text-muted"><div class="flex items-center gap-1.5">Last updated<ColumnFilter columnId="updated_at" label="Last updated" active={paramColumnFilters().updated_at || null} onApply={state => setParamColumnFilters(previous => { const next = { ...previous }; if (state) next.updated_at = state; else delete next.updated_at; return next; })} /></div></th></Show>
+                        <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={paramColumns} onToggle={toggleParamColumn} /></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3621,7 +3621,7 @@ const DeviceDetail: Component = () => {
                               {displayParameterValue(param.name, param.value, param.value_type).length > 100 ? displayParameterValue(param.name, param.value, param.value_type).slice(0, 100) + '...' : displayParameterValue(param.name, param.value, param.value_type)}
                             </td></Show>
                             <Show when={paramColumns().find(c => c.id === 'updated_at')?.visible}><td data-column-order-id="last updated#0" class="px-4 py-2 text-muted text-xs whitespace-nowrap" title="Stored parameter record update, including unchanged values or writable metadata updates.">{formatDateTime(param.updated_at)}</td></Show>
-                            <td class="px-2 py-2"></td>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td>
                           </tr>
                         )}
                       </For>

@@ -170,7 +170,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                           );
                         }}
                       </For>
-                      <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                      <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -179,15 +179,15 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                         const webUrl = () => cpeWebUiUrl(row.ip_address);
                         return (
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
-                            <Show when={isVisible('serial_number')}><td class="px-4 py-3">
+                            <Show when={isVisible('serial_number')}><td data-column-order-id="serial number#0" class="px-4 py-3">
                               <A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(row.serial_number)}`} aria-label={`Open CPE ${row.serial_number}`}>
                                 {row.serial_number}
                               </A>
                             </td></Show>
-                            <Show when={isVisible('name')}><td class="px-4 py-3 text-primary">{row.name}</td></Show>
-                            <Show when={isVisible('type')}><td class="px-4 py-3 text-secondary">{row.type || '-'}</td></Show>
-                            <Show when={isVisible('status')}><td class="px-4 py-3"><span class={`badge ${statusBadgeClass(row.status)}`}>{row.status}</span></td></Show>
-                            <Show when={isVisible('ip_address')}><td class="px-4 py-3 text-primary font-mono">
+                            <Show when={isVisible('name')}><td data-column-order-id="name#0" class="px-4 py-3 text-primary">{row.name}</td></Show>
+                            <Show when={isVisible('type')}><td data-column-order-id="type#0" class="px-4 py-3 text-secondary">{row.type || '-'}</td></Show>
+                            <Show when={isVisible('status')}><td data-column-order-id="status#0" class="px-4 py-3"><span class={`badge ${statusBadgeClass(row.status)}`}>{row.status}</span></td></Show>
+                            <Show when={isVisible('ip_address')}><td data-column-order-id="ip address#0" class="px-4 py-3 text-primary font-mono">
                               <div class="flex items-center gap-1.5">
                                 <span>{row.ip_address}</span>
                                 <Show when={webUrl()}>
@@ -195,9 +195,9 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                                 </Show>
                               </div>
                             </td></Show>
-                            <Show when={isVisible('mac_address')}><td class="px-4 py-3 text-secondary font-mono">{row.mac_address}</td></Show>
-                            <Show when={isVisible('tags')}><td class="px-4 py-3"><div class="flex flex-wrap gap-1.5">{row.tags?.length ? <For each={row.tags}>{tag => <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-elevated text-primary whitespace-nowrap"><span class="tag-color-swatch" data-dynamic-style="tag-color" style={{ '--tag-color': tagColor(tag) } as any} />{tag}</span>}</For> : <span class="text-muted">-</span>}</div></td></Show>
-                            <td></td>
+                            <Show when={isVisible('mac_address')}><td data-column-order-id="mac address#0" class="px-4 py-3 text-secondary font-mono">{row.mac_address}</td></Show>
+                            <Show when={isVisible('tags')}><td data-column-order-id="device tags#0" class="px-4 py-3"><div class="flex flex-wrap gap-1.5">{row.tags?.length ? <For each={row.tags}>{tag => <span class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-elevated text-primary whitespace-nowrap"><span class="tag-color-swatch" data-dynamic-style="tag-color" style={{ '--tag-color': tagColor(tag) } as any} />{tag}</span>}</For> : <span class="text-muted">-</span>}</div></td></Show>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0"></td>
                           </tr>
                         );
                       }}

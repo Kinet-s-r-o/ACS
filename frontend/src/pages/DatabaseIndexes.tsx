@@ -105,7 +105,7 @@ const DatabaseIndexes: Component = () => {
         <h3 class="text-sm font-medium text-secondary">UI-managed indexes</h3>
         <Show when={current().managed.length > 0} fallback={<EmptyState title="No UI-managed indexes" description="Create an index for a specific query after reviewing its estimate. Existing PostgreSQL indexes remain protected." />}>
           <div class="overflow-x-auto"><table class="data-table w-full text-xs" data-column-order-key="database-managed-indexes">
-            <thead><tr><th data-column-order-id="label">Name and purpose</th><th data-column-order-id="path">Parameter and recipe</th><th data-column-order-id="status">Status</th><th data-column-order-id="size">Size / scans</th><th data-column-order-id="actions">Actions</th></tr></thead>
+            <thead><tr><th data-column-order-id="label">Name and purpose</th><th data-column-order-id="path">Parameter and recipe</th><th data-column-order-id="status">Status</th><th data-column-order-id="size">Size / scans</th><th data-column-fixed="actions" data-column-order-id="actions">Actions</th><th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead>
             <tbody><Index each={current().managed}>{index => <tr class="align-top border-t border-subtle">
               <td data-column-order-id="label"><span class="font-medium text-primary">{index().label}</span><p class="text-muted mt-1 max-w-xs break-words">{index().purpose}</p></td>
               <td data-column-order-id="path"><span class="font-mono break-all">{index().parameter_path}</span><p class="text-muted mt-1">{recipeLabel(index().recipe)}</p></td>
@@ -122,7 +122,7 @@ const DatabaseIndexes: Component = () => {
                 </Show>
                 <Show when={['queued', 'building'].includes(index().status)}><button type="button" class="icon-button" aria-label={`Cancel build of ${index().label}`} disabled={index().cancel_requested || actionID() !== null || !!data.error} onClick={() => void act(index(), 'cancel')}><X size={15} /></button></Show>
               </div></Show></td>
-            </tr>}</Index></tbody>
+            <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</Index></tbody>
           </table></div>
         </Show>
       </section>

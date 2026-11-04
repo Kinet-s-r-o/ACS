@@ -5,6 +5,8 @@ import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import ColorSwatch from '../components/ColorSwatch';
+import BooleanIndicator from '../components/BooleanIndicator';
+import { useMetricActiveToggle } from '../lib/useMetricActiveToggle';
 import { useFeedback } from '../components/Feedback';
 import { useAuth } from '../lib/auth';
 import ColumnFilter from '../components/ColumnFilter';
@@ -59,6 +61,7 @@ const Settings: Component = () => {
 
   // Metrics CRUD
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
+  const metricActive = useMetricActiveToggle(() => refetchMetrics());
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
@@ -256,58 +259,58 @@ const Settings: Component = () => {
               <thead class="sticky top-0 bg-base z-10">
                 <tr class="border-b-2 border-subtle bg-base">
                   <Show when={isVisible('name')}>
-                    <th class="text-left px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="name#0" class="text-left px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Name
                         <ColumnFilter columnId="name" label="Name" active={columnFilters()['name'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['name'] = s; else delete n['name']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isVisible('parameter_name')}>
-                    <th class="text-left px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="parameter#0" class="text-left px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Parameter
                         <ColumnFilter columnId="parameter_name" label="Parameter" active={columnFilters()['parameter_name'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['parameter_name'] = s; else delete n['parameter_name']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isVisible('device_type_match')}>
-                    <th class="text-left px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="device match#0" class="text-left px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Device Match
                         <ColumnFilter columnId="device_type_match" label="Device Match" active={columnFilters()['device_type_match'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['device_type_match'] = s; else delete n['device_type_match']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isVisible('source')}>
-                    <th class="text-left px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="source#0" class="text-left px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Source
                         <ColumnFilter columnId="source" label="Source" active={columnFilters()['source'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['source'] = s; else delete n['source']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isVisible('unit')}>
-                    <th class="text-left px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="unit#0" class="text-left px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Unit
                         <ColumnFilter columnId="unit" label="Unit" active={columnFilters()['unit'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['unit'] = s; else delete n['unit']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isVisible('group')}>
-                    <th class="text-left px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="group#0" class="text-left px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Group
                         <ColumnFilter columnId="group" label="Group" active={columnFilters()['group'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['group'] = s; else delete n['group']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isVisible('active')}>
-                    <th class="text-center px-3 py-2.5 font-semibold text-primary">
+                    <th data-column-order-id="active#0" class="text-center px-3 py-2.5 font-semibold text-primary">
                       <div class="flex items-center gap-1.5">Active
                         <ColumnFilter columnId="active" label="Active" active={columnFilters()['active'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['active'] = s; else delete n['active']; return n; }); }} />
                       </div>
                     </th>
                   </Show>
                   <Show when={isFullAccess()}>
-                    <th class="text-right px-3 py-2.5 font-semibold text-primary"></th>
+                    <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right px-3 py-2.5 font-semibold text-primary">Actions</th>
                   </Show>
-                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                  <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
               <tbody>
@@ -315,23 +318,23 @@ const Settings: Component = () => {
                   {(def) => (
                     <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                       <Show when={isVisible('name')}>
-                        <td class="px-3 py-2.5 text-primary font-medium">
+                        <td data-column-order-id="name#0" class="px-3 py-2.5 text-primary font-medium">
                           {def.name}
                           <Show when={def.description}>
                             <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                           </Show>
                         </td>
                       </Show>
-                      <Show when={isVisible('parameter_name')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.parameter_name}</td></Show>
-                      <Show when={isVisible('device_type_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
+                      <Show when={isVisible('parameter_name')}><td data-column-order-id="parameter#0" class="px-3 py-2.5 text-secondary font-mono text-xs">{def.parameter_name}</td></Show>
+                      <Show when={isVisible('device_type_match')}><td data-column-order-id="device match#0" class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
                       <Show when={isVisible('source')}>
-                        <td class="px-3 py-2.5">
+                        <td data-column-order-id="source#0" class="px-3 py-2.5">
                           <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                         </td>
                       </Show>
-                      <Show when={isVisible('unit')}><td class="px-3 py-2.5 text-secondary">{def.unit || '-'}</td></Show>
+                      <Show when={isVisible('unit')}><td data-column-order-id="unit#0" class="px-3 py-2.5 text-secondary">{def.unit || '-'}</td></Show>
                       <Show when={isVisible('group')}>
-                        <td class="px-3 py-2.5 text-secondary">
+                        <td data-column-order-id="group#0" class="px-3 py-2.5 text-secondary">
                           <div class="flex items-center gap-1.5">
                             <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
                             <span class="text-xs">{def.group || '-'}</span>
@@ -339,12 +342,12 @@ const Settings: Component = () => {
                         </td>
                       </Show>
                       <Show when={isVisible('active')}>
-                        <td class="px-3 py-2.5 text-center">
-                          <span class={`badge ${def.active ? 'badge-success' : 'badge-error'}`}>{def.active ? 'Yes' : 'No'}</span>
+                        <td data-column-order-id="active#0" class="px-3 py-2.5 text-center">
+                          <BooleanIndicator value={def.active} label={`Active for metric ${def.name}`} editable={metricActive.canEdit(def)} disabled={pendingAction() !== null || metricActive.pending() !== null} onToggle={() => metricActive.toggle(def)} />
                         </td>
                       </Show>
                       <Show when={isFullAccess()}>
-                        <td class="px-3 py-2.5 text-right">
+                        <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-3 py-2.5 text-right">
                           <div class="flex gap-1 justify-end">
                             <button onClick={() => openEditMetric(def)} class="icon-button" aria-label={`Edit ${def.name}`}>
                               <Edit size={13} />
@@ -355,7 +358,7 @@ const Settings: Component = () => {
                           </div>
                         </td>
                       </Show>
-                      <td class="px-2 py-2.5"></td>
+                      <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2.5"></td>
                     </tr>
                   )}
                 </For>

@@ -230,54 +230,54 @@ const Firmwares: Component = () => {
             <thead>
               <tr class="border-b border-subtle">
                 <Show when={isVisible('filename')}>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-muted">
+                  <th data-column-order-id="filename#0" class="px-4 py-3 text-left text-xs font-medium text-muted">
                     <div class="flex items-center gap-1.5"><SortableHeader column="filename" label="Filename" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="filename" label="Filename" active={columnFilters()['filename'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['filename'] = s; else delete n['filename']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('version')}>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-muted">
+                  <th data-column-order-id="version#0" class="px-4 py-3 text-left text-xs font-medium text-muted">
                     <div class="flex items-center gap-1.5"><SortableHeader column="version" label="Version" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="version" label="Version" active={columnFilters()['version'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['version'] = s; else delete n['version']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('manufacturer')}>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-muted">
+                  <th data-column-order-id="manufacturer#0" class="px-4 py-3 text-left text-xs font-medium text-muted">
                     <div class="flex items-center gap-1.5"><SortableHeader column="manufacturer" label="Manufacturer" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="manufacturer" label="Manufacturer" active={columnFilters()['manufacturer'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['manufacturer'] = s; else delete n['manufacturer']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('file_size')}>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-muted">
+                  <th data-column-order-id="size#0" class="px-4 py-3 text-left text-xs font-medium text-muted">
                     <div class="flex items-center gap-1.5"><SortableHeader column="file_size" label="Size" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="file_size" label="Size" numeric active={columnFilters()['file_size'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['file_size'] = s; else delete n['file_size']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
                 <Show when={isVisible('created_at')}>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-muted">
+                  <th data-column-order-id="uploaded#0" class="px-4 py-3 text-left text-xs font-medium text-muted">
                     <div class="flex items-center gap-1.5"><SortableHeader column="created_at" label="Uploaded" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort} />
                       <ColumnFilter columnId="created_at" label="Uploaded" active={columnFilters()['created_at'] || null} onApply={(s) => { setColumnFilters((prev) => { const n = { ...prev }; if (s) n['created_at'] = s; else delete n['created_at']; return n; }); }} />
                     </div>
                   </th>
                 </Show>
-                <th class="px-4 py-3 text-left text-xs font-medium text-muted">Actions</th>
-                <th class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                <th data-column-order-id="actions#0" data-column-fixed="actions" class="px-4 py-3 text-left text-xs font-medium text-muted">Actions</th>
+                <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-3"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
               </tr>
             </thead>
             <tbody>
               <For each={pagedFirmwares()}>
                 {(fw: Firmware) => (
                   <tr class="border-t border-subtle/50 hover:bg-elevated/30 transition-fast">
-                    <Show when={isVisible('filename')}><td class="px-4 py-3 text-primary font-mono text-sm">{fw.filename}</td></Show>
-                    <Show when={isVisible('version')}><td class="px-4 py-3 font-mono text-xs text-secondary">{fw.version}</td></Show>
-                    <Show when={isVisible('manufacturer')}><td class="px-4 py-3 text-secondary text-sm">{fw.manufacturer || '-'}</td></Show>
-                    <Show when={isVisible('file_size')}><td class="px-4 py-3 text-secondary text-sm">{formatSize(fw.file_size)}</td></Show>
-                    <Show when={isVisible('created_at')}><td class="px-4 py-3 text-muted text-xs">{formatDate(fw.created_at)}</td></Show>
-                    <td class="px-4 py-3">
+                    <Show when={isVisible('filename')}><td data-column-order-id="filename#0" class="px-4 py-3 text-primary font-mono text-sm">{fw.filename}</td></Show>
+                    <Show when={isVisible('version')}><td data-column-order-id="version#0" class="px-4 py-3 font-mono text-xs text-secondary">{fw.version}</td></Show>
+                    <Show when={isVisible('manufacturer')}><td data-column-order-id="manufacturer#0" class="px-4 py-3 text-secondary text-sm">{fw.manufacturer || '-'}</td></Show>
+                    <Show when={isVisible('file_size')}><td data-column-order-id="size#0" class="px-4 py-3 text-secondary text-sm">{formatSize(fw.file_size)}</td></Show>
+                    <Show when={isVisible('created_at')}><td data-column-order-id="uploaded#0" class="px-4 py-3 text-muted text-xs">{formatDate(fw.created_at)}</td></Show>
+                    <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-3">
                       <Show when={canManageLibrary()}><button
                         onClick={() => handleDelete(fw.id, fw.filename)}
                         class="text-rose-400 hover:text-rose-300 text-sm flex items-center gap-1 transition-fast"
@@ -286,7 +286,7 @@ const Firmwares: Component = () => {
                         Delete
                       </button></Show>
                     </td>
-                    <td class="px-2 py-3"></td>
+                    <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-3"></td>
                   </tr>
                 )}
               </For>

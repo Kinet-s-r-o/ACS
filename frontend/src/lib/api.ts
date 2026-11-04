@@ -1,4 +1,5 @@
 import type { ColumnFilterState } from './filters';
+import { metricActiveRequest } from './metricActiveRequest';
 
 export const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:7548`;
 
@@ -430,6 +431,10 @@ export const api = {
   getDeviceMetricDefinitions: (serial: string) => request<MetricDefinition[]>(`/device/${encodeURIComponent(serial)}/metric-definitions`),
   createMetricDefinition: (body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>('/metrics/definitions', { method: 'POST', body: JSON.stringify(body) }),
   updateMetricDefinition: (id: number, body: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>) => request<MetricDefinition>(`/metrics/definitions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  setMetricActive: (definition: MetricDefinition, active: boolean) => {
+    const { endpoint, body } = metricActiveRequest(definition, active);
+    return request<MetricDefinition>(endpoint, { method: 'PUT', body: JSON.stringify(body) });
+  },
   deleteMetricDefinition: (id: number) => request<{ status: string }>(`/metrics/definitions/${id}`, { method: 'DELETE' }),
   getDeviceMetrics: (serial: string, metricId: number, bucket = '15min', hours = 24) => {
     const from = new Date(Date.now() - hours * 3600_000).toISOString();

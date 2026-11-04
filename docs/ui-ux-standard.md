@@ -87,8 +87,10 @@ Analytics tracking is intentionally not embedded in the console. Security audit 
 
 - **Purpose:** structured comparison of operational records.
 - **Behavior:** visible labels and units, consistent formatting, loading/error/empty states, and fixed first identifier on narrow screens.
+- **Trailing controls:** show/hide controls have their own final column; Actions are penultimate. Reserve the final control slot even when no selector exists. Both columns stay at the right edge while scrolling and cannot be reordered by pointer or keyboard; old saved orders cannot override their positions.
 - **Responsive:** hide low-priority columns where appropriate; otherwise allow deliberate horizontal scroll with a fixed identifier. Essential actions remain visible.
 - **Accessibility:** real links for navigation, buttons for actions and sorting, `aria-sort` for sortable columns, and accessible names for icon-only controls.
+- **Boolean Active cells:** green Yes and red No indicators; authorized editors toggle them with a real button exposing `aria-pressed`. Disable while saving, retain the last confirmed value until refresh, and show persistent errors on failure. Read-only users see the same colored text without mutation controls. Preserve consequence confirmations and self-account protections.
 
 ### Page header and operational register
 

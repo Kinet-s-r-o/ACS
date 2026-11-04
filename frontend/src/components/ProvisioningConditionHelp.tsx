@@ -32,13 +32,13 @@ const ConditionHelpContent: Component = () => (
         <p>Write a parameter path, an operator and a value. Put text in single or double quotes; numbers can be unquoted. Parameter names, text values and tags are case-sensitive.</p>
         <div class="overflow-x-auto table-scroll">
           <table class="data-table w-full text-left text-xs">
-            <thead><tr><th scope="col">Operator</th><th scope="col">Meaning</th></tr></thead>
+            <thead><tr><th data-column-order-id="operator#0" scope="col">Operator</th><th data-column-order-id="meaning#0" scope="col">Meaning</th></tr></thead>
             <tbody>
-              <tr><td class="font-mono">== / !=</td><td>Equal / not equal (text comparison)</td></tr>
-              <tr><td class="font-mono">&gt; / &lt; / &gt;= / &lt;=</td><td>Numeric comparison when both values are numeric; otherwise text order</td></tr>
-              <tr><td class="font-mono">contains</td><td>Value contains the given text</td></tr>
-              <tr><td class="font-mono">matches</td><td>Value matches a Go regular expression; use ^ and $ for a full match</td></tr>
-              <tr><td class="font-mono">AND / OR / NOT</td><td>Both / either / negate; precedence is NOT, then AND, then OR</td></tr>
+              <tr><td data-column-order-id="operator#0" class="font-mono">== / !=</td><td data-column-order-id="meaning#0">Equal / not equal (text comparison)</td></tr>
+              <tr><td data-column-order-id="operator#0" class="font-mono">&gt; / &lt; / &gt;= / &lt;=</td><td data-column-order-id="meaning#0">Numeric comparison when both values are numeric; otherwise text order</td></tr>
+              <tr><td data-column-order-id="operator#0" class="font-mono">contains</td><td data-column-order-id="meaning#0">Value contains the given text</td></tr>
+              <tr><td data-column-order-id="operator#0" class="font-mono">matches</td><td data-column-order-id="meaning#0">Value matches a Go regular expression; use ^ and $ for a full match</td></tr>
+              <tr><td data-column-order-id="operator#0" class="font-mono">AND / OR / NOT</td><td data-column-order-id="meaning#0">Both / either / negate; precedence is NOT, then AND, then OR</td></tr>
             </tbody>
           </table>
         </div>

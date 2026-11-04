@@ -19,6 +19,7 @@ import RolesTab from './RolesTab';
 import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage';
 import { formatDateTime } from '../lib/dateTime';
 import SortableHeader from '../components/SortableHeader';
+import BooleanIndicator from '../components/BooleanIndicator';
 import { sortRows, type SortDirection } from '../lib/sorting';
 
 const UsersPage: Component = () => {
@@ -148,7 +149,7 @@ const UsersPage: Component = () => {
     if (pendingAction()) return;
     if (!active && !await confirm({ title: 'Deactivate operator?', description: `${target.username} will no longer be able to sign in. Existing web sessions and API tokens will be blocked while the account is inactive; account data and dashboard settings will be retained.`, confirmLabel: 'Deactivate operator', tone: 'danger' })) return;
     setPendingAction(`set-user-active-${target.id}`);
-    try { await api.setUserActive(target.id, active); notify({ tone: 'success', title: `Operator ${active ? 'activated' : 'deactivated'}`, message: target.username }); refetchUsers(); }
+    try { await api.setUserActive(target.id, active); notify({ tone: 'success', title: `Operator ${active ? 'activated' : 'deactivated'}`, message: target.username }); await refetchUsers(); }
     catch (error) { notify({ tone: 'error', title: `Could not ${active ? 'activate' : 'deactivate'} operator`, message: 'The account status was not changed.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
   };
@@ -200,56 +201,56 @@ const UsersPage: Component = () => {
             <thead>
               <tr class="border-b border-subtle">
                 <Show when={isVisible('username')}>
-                  <th class="text-left py-2 text-xs text-muted font-medium">
+                  <th data-column-order-id="username#0" class="text-left py-2 text-xs text-muted font-medium">
                     <SortableHeader column="username" label="Username" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>
                       <ColumnFilter columnId="username" label="Username" active={columnFilters()['username'] || null} onApply={(state) => applyUserFilter('username', state)} />
                     </SortableHeader>
                   </th>
                 </Show>
-                <Show when={isVisible('active')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="active" label="Active" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="active" label="Active" active={columnFilters()['active'] || null} onApply={(state) => applyUserFilter('active', state)} /></SortableHeader></th></Show>
-                <Show when={isVisible('first_name')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="first_name" label="First name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="first_name" label="First name" active={columnFilters()['first_name'] || null} onApply={(state) => applyUserFilter('first_name', state)} /></SortableHeader></th></Show>
-                <Show when={isVisible('last_name')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="last_name" label="Last name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_name" label="Last name" active={columnFilters()['last_name'] || null} onApply={(state) => applyUserFilter('last_name', state)} /></SortableHeader></th></Show>
-                <Show when={isVisible('email')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="email" label="Email" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="email" label="Email" active={columnFilters()['email'] || null} onApply={(state) => applyUserFilter('email', state)} /></SortableHeader></th></Show>
-                <Show when={isVisible('required_2fa')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="required_2fa" label="Required 2FA" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="required_2fa" label="Required 2FA" active={columnFilters()['required_2fa'] || null} onApply={(state) => applyUserFilter('required_2fa', state)} /></SortableHeader></th></Show>
-                <Show when={isVisible('two_factor_configured')}><th class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="two_factor_configured" label="Authenticator" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="two_factor_configured" label="Authenticator" active={columnFilters()['two_factor_configured'] || null} onApply={(state) => applyUserFilter('two_factor_configured', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('active')}><th data-column-order-id="active#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="active" label="Active" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="active" label="Active" active={columnFilters()['active'] || null} onApply={(state) => applyUserFilter('active', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('first_name')}><th data-column-order-id="first name#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="first_name" label="First name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="first_name" label="First name" active={columnFilters()['first_name'] || null} onApply={(state) => applyUserFilter('first_name', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('last_name')}><th data-column-order-id="last name#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="last_name" label="Last name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_name" label="Last name" active={columnFilters()['last_name'] || null} onApply={(state) => applyUserFilter('last_name', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('email')}><th data-column-order-id="email#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="email" label="Email" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="email" label="Email" active={columnFilters()['email'] || null} onApply={(state) => applyUserFilter('email', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('required_2fa')}><th data-column-order-id="required 2fa#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="required_2fa" label="Required 2FA" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="required_2fa" label="Required 2FA" active={columnFilters()['required_2fa'] || null} onApply={(state) => applyUserFilter('required_2fa', state)} /></SortableHeader></th></Show>
+                <Show when={isVisible('two_factor_configured')}><th data-column-order-id="authenticator#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="two_factor_configured" label="Authenticator" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="two_factor_configured" label="Authenticator" active={columnFilters()['two_factor_configured'] || null} onApply={(state) => applyUserFilter('two_factor_configured', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('role')}>
-                  <th class="text-left py-2 text-xs text-muted font-medium">
+                  <th data-column-order-id="role#0" class="text-left py-2 text-xs text-muted font-medium">
                     <SortableHeader column="role" label="Role" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="role" label="Role" active={columnFilters()['role'] || null} onApply={(state) => applyUserFilter('role', state)} /></SortableHeader>
                   </th>
                 </Show>
                 <Show when={isVisible('last_login')}>
-                  <th class="text-left py-2 text-xs text-muted font-medium">
+                  <th data-column-order-id="last login#0" class="text-left py-2 text-xs text-muted font-medium">
                     <SortableHeader column="last_login" label="Last Login" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_login" label="Last Login" active={columnFilters()['last_login'] || null} onApply={(state) => applyUserFilter('last_login', state)} /></SortableHeader>
                   </th>
                 </Show>
-                <th class="text-right py-2 text-xs text-muted font-medium">Actions</th>
-                <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right py-2 text-xs text-muted font-medium">Actions</th>
+                <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
               </tr>
             </thead>
             <tbody>
               <For each={pagedUsers()}>
                 {(u) => (
                   <tr class="border-b border-subtle/50">
-                    <Show when={isVisible('username')}><td class="py-2 text-primary">{u.username}</td></Show>
-                    <Show when={isVisible('active')}><td class="py-2"><span class={`badge ${u.active ? 'badge-success' : 'badge-muted'}`}>{u.active ? 'Yes' : 'No'}</span></td></Show>
-                    <Show when={isVisible('first_name')}><td class="py-2 text-primary">{u.first_name || '—'}</td></Show>
-                    <Show when={isVisible('last_name')}><td class="py-2 text-primary">{u.last_name || '—'}</td></Show>
-                    <Show when={isVisible('email')}><td class="py-2 text-secondary">{u.email || '—'}</td></Show>
-                    <Show when={isVisible('required_2fa')}><td class="py-2"><span class={`badge ${u.required_2fa ? 'badge-success' : 'badge-muted'}`}>{u.required_2fa ? 'Required' : 'Off'}</span></td></Show>
-                    <Show when={isVisible('two_factor_configured')}><td class="py-2 text-secondary">{u.two_factor_configured ? 'Paired' : 'Not paired'}</td></Show>
+                    <Show when={isVisible('username')}><td data-column-order-id="username#0" class="py-2 text-primary">{u.username}</td></Show>
+                    <Show when={isVisible('active')}><td data-column-order-id="active#0" class="py-2"><BooleanIndicator value={u.active} label={`Active for operator ${u.username}`} editable={isFullAccess() && hasPermission('users.write')} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)} onToggle={() => handleSetUserActive(u)} /></td></Show>
+                    <Show when={isVisible('first_name')}><td data-column-order-id="first name#0" class="py-2 text-primary">{u.first_name || '—'}</td></Show>
+                    <Show when={isVisible('last_name')}><td data-column-order-id="last name#0" class="py-2 text-primary">{u.last_name || '—'}</td></Show>
+                    <Show when={isVisible('email')}><td data-column-order-id="email#0" class="py-2 text-secondary">{u.email || '—'}</td></Show>
+                    <Show when={isVisible('required_2fa')}><td data-column-order-id="required 2fa#0" class="py-2"><span class={`badge ${u.required_2fa ? 'badge-success' : 'badge-muted'}`}>{u.required_2fa ? 'Required' : 'Off'}</span></td></Show>
+                    <Show when={isVisible('two_factor_configured')}><td data-column-order-id="authenticator#0" class="py-2 text-secondary">{u.two_factor_configured ? 'Paired' : 'Not paired'}</td></Show>
                     <Show when={isVisible('role')}>
-                      <td class="py-2">
+                      <td data-column-order-id="role#0" class="py-2">
                         <span class={`badge ${u.role_id?.toString() === systemRoleId('full') || (!u.role_id && u.role === 'full') ? 'badge-success' : 'badge-warning'}`}>
                           {roleName(u)}
                         </span>
                       </td>
                     </Show>
                     <Show when={isVisible('last_login')}>
-                      <td class="py-2 text-muted text-xs">
+                      <td data-column-order-id="last login#0" class="py-2 text-muted text-xs">
                         <span title={u.last_login ? formatDateTime(u.last_login) : undefined}>{u.last_login ? formatDateTime(u.last_login) : 'Never'}</span>
                       </td>
                     </Show>
-                    <td class="py-2 text-right">
+                    <td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right">
                       <div class="flex items-center justify-end gap-1">
                         <Show when={isFullAccess() && hasPermission('users.read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
                         <Show when={hasPermission('users.dashboards')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
@@ -261,7 +262,7 @@ const UsersPage: Component = () => {
                         </Show>
                       </div>
                     </td>
-                    <td class="px-2 py-2"></td>
+                    <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td>
                   </tr>
                 )}
               </For>

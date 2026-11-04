@@ -42,6 +42,19 @@ for (const path of sourceFiles) {
   }
 
   if (extname(path) === '.tsx') {
+    for (const match of source.matchAll(/<ColumnVisibility\b/g)) {
+      const before = source.slice(0, match.index);
+      const headers = [...before.matchAll(/<th\b/g)];
+      const start = headers.at(-1)?.index ?? -1;
+      if (start < before.lastIndexOf('</th>') || !before.slice(start).includes('data-column-fixed="visibility"')) {
+        violations.push(`${relativePath}:${lineNumber(source, match.index)} column visibility must have its own fixed table header`);
+      }
+    }
+    for (const match of source.matchAll(/<th\b[^>]*>\s*Actions\s*<\/th>/g)) {
+      if (!match[0].includes('data-column-fixed="actions"')) {
+        violations.push(`${relativePath}:${lineNumber(source, match.index)} Actions must be a fixed table column`);
+      }
+    }
     for (const match of source.matchAll(/<label\b([^>]*)>/g)) {
       const openingTag = match[0];
       const start = (match.index ?? 0) + openingTag.length;

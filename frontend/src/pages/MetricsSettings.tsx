@@ -5,6 +5,8 @@ import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import ColorSwatch from '../components/ColorSwatch';
+import BooleanIndicator from '../components/BooleanIndicator';
+import { useMetricActiveToggle } from '../lib/useMetricActiveToggle';
 import { useFeedback } from '../components/Feedback';
 import { useAuth } from '../lib/auth';
 import ColumnFilter from '../components/ColumnFilter';
@@ -66,6 +68,7 @@ const MetricsSettings: Component = () => {
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
 
   const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
+  const metricActive = useMetricActiveToggle(() => refetchMetrics());
   const [deviceTypes] = createResource(api.getDeviceTypes);
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -350,9 +353,9 @@ const MetricsSettings: Component = () => {
                     {renderSortHeader('active', 'Active', 'center')}
                   </Show>
                   <Show when={isFullAccess()}>
-                    <th class="text-right px-3 py-2.5 font-semibold text-primary"></th>
+                    <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right px-3 py-2.5 font-semibold text-primary">Actions</th>
                   </Show>
-                  <th class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                  <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2.5"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
               <tbody>
@@ -360,23 +363,23 @@ const MetricsSettings: Component = () => {
                   {(def) => (
                     <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                       <Show when={isVisible('name')}>
-                        <td class="px-3 py-2.5 text-primary font-medium">
+                        <td data-column-order-id="name#0" class="px-3 py-2.5 text-primary font-medium">
                           {def.name}
                           <Show when={def.description}>
                             <div class="text-[10px] text-muted mt-0.5">{def.description}</div>
                           </Show>
                         </td>
                       </Show>
-                      <Show when={isVisible('parameter_name')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.parameter_name}</td></Show>
-                      <Show when={isVisible('device_type_match')}><td class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
+                      <Show when={isVisible('parameter_name')}><td data-column-order-id="parameter#0" class="px-3 py-2.5 text-secondary font-mono text-xs">{def.parameter_name}</td></Show>
+                      <Show when={isVisible('device_type_match')}><td data-column-order-id="device match#0" class="px-3 py-2.5 text-secondary font-mono text-xs">{def.device_type_match}</td></Show>
                       <Show when={isVisible('source')}>
-                        <td class="px-3 py-2.5">
+                        <td data-column-order-id="source#0" class="px-3 py-2.5">
                           <span class={`badge ${def.source === 'active' ? 'badge-warning' : def.source === 'universal' ? 'badge-success' : ''}`}>{def.source}</span>
                         </td>
                       </Show>
-                      <Show when={isVisible('unit')}><td class="px-3 py-2.5 text-secondary">{def.unit || '—'}</td></Show>
+                      <Show when={isVisible('unit')}><td data-column-order-id="unit#0" class="px-3 py-2.5 text-secondary">{def.unit || '—'}</td></Show>
                       <Show when={isVisible('group')}>
-                        <td class="px-3 py-2.5 text-secondary">
+                        <td data-column-order-id="group#0" class="px-3 py-2.5 text-secondary">
                           <div class="flex items-center gap-1.5">
                             <span class="chart-color-swatch w-2.5 h-2.5 rounded-[2px]" data-dynamic-style="chart-color" style={{ '--chart-color': def.color || '#475569' } as any} />
                             <span class="text-xs">{def.group || '—'}</span>
@@ -384,12 +387,12 @@ const MetricsSettings: Component = () => {
                         </td>
                       </Show>
                       <Show when={isVisible('active')}>
-                        <td class="px-3 py-2.5 text-center">
-                          <span class={`badge ${def.active ? 'badge-success' : 'badge-muted'}`}>{def.active ? 'Yes' : 'No'}</span>
+                        <td data-column-order-id="active#0" class="px-3 py-2.5 text-center">
+                          <BooleanIndicator value={def.active} label={`Active for metric ${def.name}`} editable={metricActive.canEdit(def)} disabled={pendingAction() !== null || metricActive.pending() !== null} onToggle={() => metricActive.toggle(def)} />
                         </td>
                       </Show>
                       <Show when={isFullAccess()}>
-                        <td class="px-3 py-2.5 text-right">
+                        <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-3 py-2.5 text-right">
                           <div class="flex justify-end gap-1">
                             <button onClick={() => openEditMetric(def)} class="btn btn-ghost text-xs" title="Edit">
                               <Edit size={12} />
@@ -403,7 +406,7 @@ const MetricsSettings: Component = () => {
                           </div>
                         </td>
                       </Show>
-                      <td class="px-2 py-2.5"></td>
+                      <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2.5"></td>
                     </tr>
                   )}
                 </For>

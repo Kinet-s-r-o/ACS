@@ -262,26 +262,26 @@ const RolesTab: Component = () => {
             <table class="data-table w-full text-sm">
               <thead>
                 <tr class="border-b border-border bg-muted/30">
-                  <Show when={isVisible('name')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="name" label="Name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="name" label="Name" active={columnFilters().name || null} onApply={state => applyRoleFilter('name', state)} /></SortableHeader></th></Show>
-                  <Show when={isVisible('description')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyRoleFilter('description', state)} /></SortableHeader></th></Show>
-                  <Show when={isVisible('permissions')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="permissions" label="Permissions" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="permissions" label="Permissions" active={columnFilters().permissions || null} onApply={state => applyRoleFilter('permissions', state)} /></SortableHeader></th></Show>
-                  <Show when={isVisible('type')}><th class="px-3 py-2 text-left font-medium"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="type" label="Type" active={columnFilters().type || null} onApply={state => applyRoleFilter('type', state)} /></SortableHeader></th></Show>
-                  <th class="px-3 py-2 text-right">Actions</th>
-                  <th class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+                  <Show when={isVisible('name')}><th data-column-order-id="name#0" class="px-3 py-2 text-left font-medium"><SortableHeader column="name" label="Name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="name" label="Name" active={columnFilters().name || null} onApply={state => applyRoleFilter('name', state)} /></SortableHeader></th></Show>
+                  <Show when={isVisible('description')}><th data-column-order-id="description#0" class="px-3 py-2 text-left font-medium"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyRoleFilter('description', state)} /></SortableHeader></th></Show>
+                  <Show when={isVisible('permissions')}><th data-column-order-id="permissions#0" class="px-3 py-2 text-left font-medium"><SortableHeader column="permissions" label="Permissions" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="permissions" label="Permissions" active={columnFilters().permissions || null} onApply={state => applyRoleFilter('permissions', state)} /></SortableHeader></th></Show>
+                  <Show when={isVisible('type')}><th data-column-order-id="type#0" class="px-3 py-2 text-left font-medium"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="type" label="Type" active={columnFilters().type || null} onApply={state => applyRoleFilter('type', state)} /></SortableHeader></th></Show>
+                  <th data-column-order-id="actions#0" data-column-fixed="actions" class="px-3 py-2 text-right">Actions</th>
+                  <th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
                 </tr>
               </thead>
               <tbody>
                 <For each={pagedRoles()}>
                   {(role) => (
                     <tr class="border-b border-border/50 hover:bg-muted/20">
-                      <Show when={isVisible('name')}><td class="px-3 py-2 font-medium">{role.name}</td></Show>
-                      <Show when={isVisible('description')}><td class="px-3 py-2 text-muted">{role.description || '—'}</td></Show>
-                      <Show when={isVisible('permissions')}><td class="px-3 py-2"><span class="badge">{role.permissions.length} / {PERMISSION_COUNT}</span></td></Show>
-                      <Show when={isVisible('type')}><td class="px-3 py-2">
+                      <Show when={isVisible('name')}><td data-column-order-id="name#0" class="px-3 py-2 font-medium">{role.name}</td></Show>
+                      <Show when={isVisible('description')}><td data-column-order-id="description#0" class="px-3 py-2 text-muted">{role.description || '—'}</td></Show>
+                      <Show when={isVisible('permissions')}><td data-column-order-id="permissions#0" class="px-3 py-2"><span class="badge">{role.permissions.length} / {PERMISSION_COUNT}</span></td></Show>
+                      <Show when={isVisible('type')}><td data-column-order-id="type#0" class="px-3 py-2">
                         <Show when={role.is_system}><span class="badge badge-info">System</span></Show>
                         <Show when={!role.is_system}><span class="badge">Custom</span></Show>
                       </td></Show>
-                      <td class="px-3 py-2">
+                      <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-3 py-2">
                         <div class="flex gap-1 justify-end">
                           <Show when={canWrite() && !role.is_system}>
                             <button type="button" class="btn btn-ghost btn-sm" onClick={() => openEditRole(role)} title="Edit role"><Pencil size={14} /></button>
@@ -289,7 +289,7 @@ const RolesTab: Component = () => {
                           </Show>
                         </div>
                       </td>
-                      <td></td>
+                      <td data-column-fixed="visibility" data-column-order-id="__visibility#0"></td>
                     </tr>
                   )}
                 </For>

@@ -322,6 +322,9 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .badge { display: inline-flex; align-items: center; gap: 5px; min-height: 20px; padding: 1px 7px; border: 1px solid transparent; border-radius: 3px; font-size: 10px; font-weight: 600; letter-spacing: .015em; }
 .badge-success { color: rgb(var(--success-text)); background: rgb(var(--success) / .1); border-color: rgb(var(--success) / .22); }
 .badge-error { color: rgb(var(--error-text)); background: rgb(var(--error) / .1); border-color: rgb(var(--error) / .22); }
+.boolean-indicator { min-width: 44px; min-height: 24px; cursor: pointer; }
+.boolean-indicator:disabled { cursor: not-allowed; opacity: .65; }
+@media (pointer: coarse) { .boolean-indicator { min-height: 44px; } }
 .badge-warning { color: rgb(var(--warning-text)); background: rgb(var(--warning) / .1); border-color: rgb(var(--warning) / .22); }
 .btn { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 6px 12px; border: 1px solid transparent; border-radius: var(--radius-control); font-size: 12px; font-weight: 600; transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease; }
 .btn:disabled { opacity: .48; cursor: not-allowed; }
@@ -674,3 +677,8 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 @media (orientation: landscape) and (max-height: 600px) {
   .table-scroll { max-height: none; }
 }
+
+.data-table th[data-column-fixed="visibility"], .data-table td[data-column-fixed="visibility"] { position: sticky; left: auto; right: 0; z-index: 3; width: 40px; min-width: 40px; max-width: 40px; padding-inline: 8px; background: rgb(var(--bg-surface)); }
+.data-table th[data-column-fixed="actions"], .data-table td[data-column-fixed="actions"] { position: sticky; left: auto; right: 40px; z-index: 2; background: rgb(var(--bg-surface)); box-shadow: -1px 0 0 rgb(var(--border-subtle)); }
+.data-table thead th[data-column-fixed] { z-index: 4; }
+.data-table thead th[data-column-fixed="actions"] { text-align: center; }

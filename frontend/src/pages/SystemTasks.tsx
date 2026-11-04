@@ -224,33 +224,33 @@ const SystemTasks: Component = () => {
                     <div class="overflow-x-auto table-scroll">
                       <table class="data-table w-full text-sm min-w-[950px]">
                         <thead><tr class="border-b border-subtle bg-surface/50">
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">ID</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">CPE</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">Status</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">Attempts</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">Created</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">Username</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">CWMP task</th>
-                          <th class="text-left px-3 py-2.5 text-xs font-medium text-muted">Error</th>
-                          <th class="text-right px-3 py-2.5 text-xs font-medium text-muted">Actions</th>
-                        </tr></thead>
+                          <th data-column-order-id="id#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">ID</th>
+                          <th data-column-order-id="cpe#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">CPE</th>
+                          <th data-column-order-id="status#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Status</th>
+                          <th data-column-order-id="attempts#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Attempts</th>
+                          <th data-column-order-id="created#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Created</th>
+                          <th data-column-order-id="username#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Username</th>
+                          <th data-column-order-id="cwmp task#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">CWMP task</th>
+                          <th data-column-order-id="error#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Error</th>
+                          <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right px-3 py-2.5 text-xs font-medium text-muted">Actions</th>
+                        <th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead>
                         <tbody>
                           <For each={rows()}>{task => (
                             <tr class="border-b border-subtle">
-                              <td class="px-3 py-2.5 font-mono text-xs text-secondary">{task.id}</td>
-                              <td class="px-3 py-2.5"><A class="text-accent hover:underline font-mono text-xs" href={`/device/${encodeURIComponent(task.serial_number)}`}>{task.serial_number}</A></td>
-                              <td class="px-3 py-2.5"><span class={`badge ${statusClass(task.status)}`}>{task.status}</span></td>
-                              <td class="px-3 py-2.5 font-mono text-xs">{task.attempts}</td>
-                              <td class="px-3 py-2.5 text-xs text-secondary whitespace-nowrap">{formatDateTime(task.created_at)}</td>
-                              <td class="px-3 py-2.5 text-xs text-secondary">{task.created_by || '—'}</td>
-                              <td class="px-3 py-2.5 font-mono text-xs">{task.cwmp_task_id ?? '—'}</td>
-                              <td class="px-3 py-2.5 text-xs text-error max-w-[280px] truncate" title={task.error_message}>{task.error_message || '—'}</td>
-                              <td class="px-3 py-2.5 text-right">
+                              <td data-column-order-id="id#0" class="px-3 py-2.5 font-mono text-xs text-secondary">{task.id}</td>
+                              <td data-column-order-id="cpe#0" class="px-3 py-2.5"><A class="text-accent hover:underline font-mono text-xs" href={`/device/${encodeURIComponent(task.serial_number)}`}>{task.serial_number}</A></td>
+                              <td data-column-order-id="status#0" class="px-3 py-2.5"><span class={`badge ${statusClass(task.status)}`}>{task.status}</span></td>
+                              <td data-column-order-id="attempts#0" class="px-3 py-2.5 font-mono text-xs">{task.attempts}</td>
+                              <td data-column-order-id="created#0" class="px-3 py-2.5 text-xs text-secondary whitespace-nowrap">{formatDateTime(task.created_at)}</td>
+                              <td data-column-order-id="username#0" class="px-3 py-2.5 text-xs text-secondary">{task.created_by || '—'}</td>
+                              <td data-column-order-id="cwmp task#0" class="px-3 py-2.5 font-mono text-xs">{task.cwmp_task_id ?? '—'}</td>
+                              <td data-column-order-id="error#0" class="px-3 py-2.5 text-xs text-error max-w-[280px] truncate" title={task.error_message}>{task.error_message || '—'}</td>
+                              <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-3 py-2.5 text-right">
                                 <Show when={task.status === 'failed' && canManageTasks()}>
                                   <button type="button" class="icon-button" onClick={() => void retryTask(task)} disabled={busyAction() === `retry-${task.id}`} title={`Retry failed ${group.type === 'bulk_restart' ? 'Restart' : 'Summon'}`} aria-label={`Retry ${group.type === 'bulk_restart' ? 'Restart' : 'Summon'} for ${task.serial_number}`}><RotateCw size={14} aria-hidden="true" /></button>
                                 </Show>
                               </td>
-                            </tr>
+                            <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
                           )}</For>
                         </tbody>
                       </table>

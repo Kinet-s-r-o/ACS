@@ -1,9 +1,13 @@
+import { orderTableColumns } from './tableColumnOrder';
+
 const STORAGE_PREFIX = 'acs_table_column_order_';
 
 interface ReorderableHeader {
   id: string;
   cell: HTMLTableCellElement;
   index: number;
+  fixed?: 'actions' | 'visibility';
+  legacyId: string;
 }
 
 interface DefaultColumnOrder {
@@ -49,17 +53,28 @@ const getHeaders = (table: HTMLTableElement): ReorderableHeader[] => {
   const occurrences = new Map<string, number>();
   return Array.from(row.cells).flatMap((cell, index) => {
     const label = headerLabel(cell);
-    if (!label || cell.querySelector('.column-toggle')) return [];
+    const fixed = cell.dataset.columnFixed === 'visibility' || cell.querySelector('.column-toggle') ? 'visibility'
+      : cell.dataset.columnFixed === 'actions' || label === 'actions' ? 'actions' : undefined;
+    if (!label && !fixed) return [];
     const occurrence = occurrences.get(label) ?? 0;
     occurrences.set(label, occurrence + 1);
-    const id = `${label}#${occurrence}`;
+    const legacyId = `${label}#${occurrence}`;
+    const id = fixed === 'visibility' ? '__visibility#0' : cell.dataset.columnOrderId || legacyId;
     cell.dataset.columnOrderId = id;
-    cell.draggable = true;
-    cell.tabIndex = 0;
-    cell.setAttribute('aria-description', 'Drag to reorder. Use Alt+Left or Alt+Right to move this column.');
-    cell.title = 'Drag to reorder · Alt+←/→ to move';
-    cell.classList.add('column-reorderable');
-    return [{ id, cell, index }];
+    cell.draggable = !fixed;
+    if (fixed) {
+      cell.dataset.columnFixed = fixed;
+      cell.removeAttribute('tabindex');
+      cell.removeAttribute('aria-description');
+      cell.classList.remove('column-reorderable');
+      if (cell.title.startsWith('Drag to reorder')) cell.removeAttribute('title');
+    } else {
+      cell.tabIndex = 0;
+      cell.setAttribute('aria-description', 'Drag to reorder. Use Alt+Left or Alt+Right to move this column.');
+      cell.title = 'Drag to reorder · Alt+←/→ to move';
+      cell.classList.add('column-reorderable');
+    }
+    return [{ id, cell, index, fixed, legacyId }];
   });
 };
 
@@ -74,34 +89,40 @@ const readOrder = (key: string): string[] => {
 
 const defaultOrder = (route: string, headers: ReorderableHeader[]) => {
   const normalizedRoute = route.replace(/^\/device\/[^/]+/, '/device/:serial');
-  const labels = headers.map((header) => header.id.split('#')[0]);
+  const labels = headers.map((header) => headerLabel(header.cell));
   const config = DEFAULT_COLUMN_ORDERS.find((candidate) => candidate.route === normalizedRoute && candidate.matches.some((label) => labels.includes(label)));
   if (!config) return [];
-  const preferred = config.order.flatMap((label) => headers.filter((header) => header.id.split('#')[0] === label).map((header) => header.id));
+  const preferred = config.order.flatMap((label) => headers.filter((header) => headerLabel(header.cell) === label).map((header) => header.id));
   return [...preferred, ...headers.filter((header) => !preferred.includes(header.id)).map((header) => header.id)];
 };
 
 const applyOrder = (table: HTMLTableElement, key: string, route: string) => {
   const headers = getHeaders(table);
-  const order = readOrder(key);
+  const order = readOrder(key).map(id => headers.find(header => header.id === id || header.legacyId === id)?.id ?? id);
   const desiredOrder = order.length ? order : defaultOrder(route, headers);
-  if (headers.length < 2 || desiredOrder.length === 0) return;
-  const rank = new Map(desiredOrder.map((id, index) => [id, index]));
-  const desired = [...headers].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  if (headers.length < 2) return;
+  const desired = orderTableColumns(headers, desiredOrder);
   const slots = headers.map((header) => header.index);
   for (const row of Array.from(table.rows)) {
     if (row.cells.length !== table.tHead?.rows[0]?.cells.length || Array.from(row.cells).some((cell) => cell.colSpan !== 1)) continue;
     const cells = Array.from(row.cells);
     const taggedCells = new Map(cells.filter((cell) => cell.dataset.columnOrderId).map((cell) => [cell.dataset.columnOrderId!, cell]));
     const dataCells = new Map(headers.map((header) => [header.id, taggedCells.get(header.id) ?? cells[header.index]]));
+    for (const header of headers) {
+      const cell = dataCells.get(header.id)!;
+      if (header.fixed) cell.dataset.columnFixed = header.fixed;
+    }
     const nextCells = [...cells];
     desired.forEach((header, index) => { nextCells[slots[index]] = dataCells.get(header.id)!; });
-    if (nextCells.some((cell, index) => cell !== cells[index])) row.replaceChildren(...nextCells);
+    if (nextCells.some((cell, index) => cell !== cells[index])) {
+      // Keep Solid's comment anchors alive when moving the cell elements.
+      for (const cell of nextCells) row.appendChild(cell);
+    }
   }
 };
 
 const moveColumn = (table: HTMLTableElement, key: string, fromId: string, toId: string) => {
-  const headers = getHeaders(table);
+  const headers = getHeaders(table).filter(header => !header.fixed);
   const from = headers.findIndex((header) => header.id === fromId);
   const to = headers.findIndex((header) => header.id === toId);
   if (from < 0 || to < 0 || from === to) return;
@@ -116,7 +137,7 @@ const moveColumn = (table: HTMLTableElement, key: string, fromId: string, toId: 
 
 const tableHeading = (table: HTMLTableElement) => table.closest('.card')?.querySelector('h1, h2, h3, h4')?.textContent || '';
 
-const tableSchema = (table: HTMLTableElement) => getHeaders(table).map((header) => header.id.split('#')[0]).sort().join('|');
+const tableSchema = (table: HTMLTableElement) => getHeaders(table).filter(header => header.fixed !== 'visibility').map((header) => headerLabel(header.cell)).sort().join('|');
 
 const makeTableKey = (table: HTMLTableElement, route: string, occurrence: number) => {
   const explicitKey = table.dataset.columnOrderKey;
@@ -188,7 +209,10 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
     requestAnimationFrame(() => { scheduled = false; refresh(); });
   };
 
-  const headerFrom = (target: EventTarget | null) => target instanceof Element ? target.closest<HTMLTableCellElement>('th[data-column-order-id]') : null;
+  const headerFrom = (target: EventTarget | null) => {
+    const header = target instanceof Element ? target.closest<HTMLTableCellElement>('th[data-column-order-id]') : null;
+    return header && !header.dataset.columnFixed ? header : null;
+  };
   const dragStart = (event: DragEvent) => {
     const header = headerFrom(event.target);
     const table = header?.closest<HTMLTableElement>('table.data-table');
@@ -225,7 +249,7 @@ export const enableTableColumnReordering = (getRoute: () => string) => {
     const table = header?.closest<HTMLTableElement>('table.data-table');
     const key = table && tableKeys.get(table);
     if (!header || !table || !key) return;
-    const headers = getHeaders(table);
+    const headers = getHeaders(table).filter(column => !column.fixed);
     const index = headers.findIndex((column) => column.cell === header);
     const next = headers[index + (event.key === 'ArrowLeft' ? -1 : 1)];
     if (!next) return;

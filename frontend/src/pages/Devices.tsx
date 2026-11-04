@@ -614,7 +614,7 @@ const Devices: Component = () => {
                     );
                   }}
                 </For>
-                <th><ColumnVisibility columns={columns} onToggle={toggleColumn} /></th>
+                <th data-column-order-id="__visibility#0" data-column-fixed="visibility"><ColumnVisibility columns={columns} onToggle={toggleColumn} /></th>
               </tr>
             </thead>
             <tbody>
@@ -648,7 +648,7 @@ const Devices: Component = () => {
                             </td>
                           )}
                         </For>
-                        <td class="px-2 py-3"></td>
+                        <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-3"></td>
                       </tr>
                     )}
                   </For>
