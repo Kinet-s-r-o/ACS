@@ -66,6 +66,9 @@ type Session struct {
 	PendingConditionalParams []string
 	ConditionalFetchActive   bool
 	PendingConditionalData   []*models.ProvisioningRule
+	ConditionalExistsPaths   []string
+	ConditionalExistsCurrent string
+	ConditionalExistsResults map[string]string
 
 	// Metric collection state
 	DeviceType       string

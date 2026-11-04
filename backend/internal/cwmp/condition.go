@@ -16,6 +16,7 @@ const (
 	OpNot
 	OpHasTag
 	OpNotHasTag
+	OpExists
 )
 
 // CompareOp is the comparison operator.
@@ -64,6 +65,7 @@ const (
 	tokRParen
 	tokHasTag
 	tokNotHasTag
+	tokExists
 )
 
 type token struct {
@@ -183,6 +185,8 @@ func (l *conditionLexer) lexWord() error {
 		l.tokens = append(l.tokens, token{tokHasTag, word})
 	case "NOTHASTAG":
 		l.tokens = append(l.tokens, token{tokNotHasTag, word})
+	case "EXISTS":
+		l.tokens = append(l.tokens, token{tokExists, word})
 	default:
 		l.tokens = append(l.tokens, token{tokIdent, word})
 	}
@@ -271,6 +275,20 @@ func (p *conditionParser) parseNot() (*Condition, error) {
 
 // parsePrimary parses a primary expression: parenthesized expr, hasTag/notHasTag call, or comparison.
 func (p *conditionParser) parsePrimary() (*Condition, error) {
+	if p.peek().typ == tokExists {
+		p.next()
+		if _, err := p.expect(tokLParen); err != nil {
+			return nil, fmt.Errorf("expected '(' after exists")
+		}
+		path, err := p.expect(tokString)
+		if err != nil || !conditionExistsPath.MatchString(path.val) {
+			return nil, fmt.Errorf("exists requires a quoted, exact Device or InternetGatewayDevice path (no wildcards)")
+		}
+		if _, err := p.expect(tokRParen); err != nil {
+			return nil, fmt.Errorf("missing ')' after exists path")
+		}
+		return &Condition{Op: OpExists, Right: strings.TrimSuffix(path.val, ".")}, nil
+	}
 	if p.peek().typ == tokLParen {
 		p.next()
 		expr, err := p.parseExpression()
@@ -427,6 +445,12 @@ func Evaluate(cond *Condition, params map[string]string) (bool, error) {
 		return hasTag(cond.Right, params), nil
 	case OpNotHasTag:
 		return !hasTag(cond.Right, params), nil
+	case OpExists:
+		value, ok := params[conditionExistsKey(cond.Right)]
+		if !ok || (value != "true" && value != "false") {
+			return false, fmt.Errorf("existence could not be verified for %s", cond.Right)
+		}
+		return value == "true", nil
 	case OpCompare:
 		return evaluateCompare(cond, params)
 	default:
@@ -557,4 +581,25 @@ func isParamPath(s string) bool {
 		return false
 	}
 	return s[0] >= 'A' && s[0] <= 'Z'
+}
+
+var conditionExistsPath = regexp.MustCompile(`^(Device|InternetGatewayDevice)(\.[A-Za-z0-9_-]+)*\.?$`)
+
+// Keep probe results separate from CPE-supplied values and device attributes.
+func conditionExistsKey(path string) string {
+	return "\x00exists:" + strings.TrimSuffix(path, ".")
+}
+
+func extractExistsPaths(cond *Condition, seen map[string]bool, paths *[]string) {
+	if cond == nil {
+		return
+	}
+	if cond.Op == OpExists && !seen[cond.Right] {
+		seen[cond.Right] = true
+		*paths = append(*paths, cond.Right)
+	}
+	extractExistsPaths(cond.Sub, seen, paths)
+	for _, child := range cond.Children {
+		extractExistsPaths(child, seen, paths)
+	}
 }

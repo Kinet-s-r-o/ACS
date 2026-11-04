@@ -13,6 +13,8 @@
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
 
+Provisioning's Condition question mark opens `components/ProvisioningConditionHelp.tsx`. Keep examples and limitations aligned with `backend/internal/cwmp/condition.go` and the live existence probes in `handler.go`. The shared Dialog handles keyboard events only for the topmost dialog so closing help preserves the underlying rule form.
+
 Fleet status defaults to Device growth only. Additional panels must be user-created (`custom-*` IDs); parameter thresholds and category aggregations use `devices.read`. Do not restore retired built-in panels or import old browser panel configurations.
 
 DB tools is `pages/RetentionSettings.tsx`; its DB indexes tab is `pages/DatabaseIndexes.tsx`. The [DB indexes guide](../docs/database-indexes.md) defines permitted recipes, API, ownership and budgets. Gate the tab by `database.indexes.read` and mutations by both index grants; existing `settings.write` does not grant DDL access. Keep form/row identities stable while background status polling replaces response objects.

@@ -31,6 +31,8 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
   const focusableElements = () => Array.from(panel?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    const dialogs = document.querySelectorAll('.dialog-panel');
+    if (dialogs[dialogs.length - 1] !== panel) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       props.onClose();
@@ -55,6 +57,10 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
   };
 
   onMount(() => {
+    const previousPanels = Array.from(document.querySelectorAll<HTMLElement>('.dialog-panel'))
+      .filter((element) => element !== panel)
+      .map((element) => ({ element, inert: element.inert }));
+    for (const { element } of previousPanels) element.inert = true;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeyDown);
@@ -65,6 +71,7 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
     onCleanup(() => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyDown);
+      for (const { element, inert } of previousPanels) element.inert = inert;
       previouslyFocused?.focus();
     });
   });

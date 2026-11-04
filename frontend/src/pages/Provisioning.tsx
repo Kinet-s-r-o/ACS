@@ -1,9 +1,10 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
+import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, CircleHelp, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
+import ProvisioningConditionHelp from '../components/ProvisioningConditionHelp';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
@@ -144,6 +145,7 @@ const Provisioning: Component = () => {
   let featureMenu: HTMLDivElement | undefined;
   let provisioningImportInput: HTMLInputElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
+  const [showConditionHelp, setShowConditionHelp] = createSignal(false);
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
   const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], excluded_tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
   const [provForm, setProvForm] = createSignal({ ...emptyProvisioningRule });
@@ -2057,9 +2059,12 @@ const Provisioning: Component = () => {
               <input id="provisioning-description" type="text" value={provForm().description} onInput={(e) => setProvForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="Migrate the ACS URL" />
             </div>
             <div>
-              <label for="provisioning-condition" class="block text-xs text-muted mb-1.5">Condition (optional)</label>
+              <div class="flex items-center gap-1 mb-1.5">
+                <label for="provisioning-condition" class="text-xs text-muted">Condition (optional)</label>
+                <button type="button" class="icon-button" aria-label="Condition help" aria-haspopup="dialog" onClick={() => setShowConditionHelp(true)}><CircleHelp size={14} aria-hidden="true" /></button>
+              </div>
               <textarea id="provisioning-condition" rows={2} value={provForm().condition} onInput={(e) => setProvForm(f => ({ ...f, condition: e.currentTarget.value }))} class="input w-full font-mono text-xs" placeholder="InternetGatewayDevice.DeviceInfo.Manufacturer == 'SkyDash' AND Device.Model contains 'AC1000'" />
-              <p class="text-xs text-muted mt-1">Rule applies only when the condition is true. Operators: <code>==</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> <code>contains</code> <code>matches</code>. Device functions: <code>hasTag('…')</code> <code>notHasTag('…')</code>. Combine with <code>AND</code>, <code>OR</code>, <code>NOT</code> and parentheses. Leave empty to always apply.</p>
+              <p class="text-xs text-muted mt-1">Rule applies only when the condition is true. Use <code>exists('path')</code> for an object or parameter, or <code>NOT exists('path')</code> for absence. Leave empty to always apply. Open the question mark for operators and examples.</p>
             </div>
             <div class="flex items-center gap-2">
               <input id="provisioning-enabled" type="checkbox" checked={provForm().enabled} onChange={(e) => setProvForm(f => ({ ...f, enabled: e.currentTarget.checked }))} class="rounded" />
@@ -2073,6 +2078,9 @@ const Provisioning: Component = () => {
             </div>
           </form>
         </Dialog>
+      </Show>
+      <Show when={showProvModal() && showConditionHelp()}>
+        <ProvisioningConditionHelp onClose={() => setShowConditionHelp(false)} />
       </Show>
       <Show when={featureEditorOpen()}>
         <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit advanced settings field' : 'Add advanced settings field') : (editingFeatureID() ? 'Edit advanced settings section' : 'Add advanced settings section')} size="large" onClose={closeFeatureEditor}>

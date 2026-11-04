@@ -590,6 +590,17 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.PendingConditionalParams = sessionPendingParams
 	session.PendingConditionalData = sessionPendingData
 	session.ConditionalFetchActive = sessionCondFetchActive
+	session.ConditionalExistsPaths = nil
+	session.ConditionalExistsCurrent = ""
+	session.ConditionalExistsResults = make(map[string]string)
+	seenExists := make(map[string]bool)
+	for _, cond := range session.PendingConditionalConds {
+		extractExistsPaths(cond, seenExists, &session.ConditionalExistsPaths)
+	}
+	if len(session.ConditionalExistsPaths) > 0 {
+		session.ConditionalFetchActive = true
+		sessionImmediateEval = false
+	}
 	if sessionImmediateEval {
 		h.evaluateConditionalRules(session, h.buildDeviceAttrs(ctx, deviceID))
 	}
@@ -706,6 +717,12 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	return h.nextSessionRequest(ctx, session)
+}
+
+// nextSessionRequest continues the ACS RPC queue while the session is locked.
+func (h *Handler) nextSessionRequest(ctx context.Context, session *Session) (interface{}, string, error) {
+	sessionID := session.ID
 	if session.AutoFactoryResetSessionFinished {
 		return nil, defaultNamespace(session.CWMPNamespace), nil
 	}
@@ -714,6 +731,9 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 	request, err := h.getNextTask(ctx, session)
 	if err != nil || request != nil {
 		return request, namespace, err
+	}
+	if session.ConditionalFetchActive && len(session.ConditionalExistsPaths) == 0 && len(session.PendingConditionalParams) == 0 {
+		h.evaluateConditionalRules(session, h.buildDeviceAttrs(ctx, session.DeviceID))
 	}
 	if len(session.AddObjectQueue) > 0 && session.AddObjectPhase < len(session.AddObjectQueue) {
 		nextObj := session.AddObjectQueue[session.AddObjectPhase]
@@ -725,6 +745,19 @@ func (h *Handler) handleEmptyPost(ctx context.Context, sessionID string) (interf
 		return nextObj, namespace, nil
 	}
 	// Conditional provisioning: fetch params needed for condition evaluation
+	if session.ConditionalFetchActive && len(session.ConditionalExistsPaths) > 0 {
+		path := session.ConditionalExistsPaths[0]
+		session.ConditionalExistsPaths = session.ConditionalExistsPaths[1:]
+		session.ConditionalExistsCurrent = path
+		session.State = StateProcessingTasks
+		parent := ""
+		if dot := strings.LastIndex(path, "."); dot >= 0 {
+			parent = path[:dot+1]
+		}
+		session.LastSentContext = parent
+		session.LastSentParameters = nil
+		return &GetParameterNames{ParameterPath: parent, NextLevel: true}, namespace, nil
+	}
 	if session.ConditionalFetchActive && len(session.PendingConditionalParams) > 0 {
 		session.ConditionalFetchActive = false
 		session.State = StateProcessingTasks
@@ -899,8 +932,8 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 			}
 		}
 		h.evaluateConditionalRules(session, paramMap)
-		// After evaluation, the next empty post will send the SPV if any rules were satisfied
-		return h.getNextTask(ctx, session)
+		request, _, err := h.nextSessionRequest(ctx, session)
+		return request, err
 	}
 
 	if session.AutoFetchPhase > 0 {
@@ -964,6 +997,19 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if path := session.ConditionalExistsCurrent; path != "" {
+		value := "false"
+		for _, parameter := range resp.ParameterList {
+			if strings.TrimSuffix(parameter.Name, ".") == path {
+				value = "true"
+				break
+			}
+		}
+		session.ConditionalExistsResults[conditionExistsKey(path)] = value
+		session.ConditionalExistsCurrent = ""
+		request, _, err := h.nextSessionRequest(ctx, session)
+		return request, err
+	}
 	if h.parameterRepo != nil && session.DeviceID > 0 {
 		params := make([]models.DeviceParameter, 0, len(resp.ParameterList))
 		for _, parameter := range resp.ParameterList {
@@ -1283,6 +1329,12 @@ func (h *Handler) evaluateConditionalRules(session *Session, params map[string]s
 	if len(session.PendingConditionalConds) == 0 {
 		return
 	}
+	if params == nil {
+		params = make(map[string]string)
+	}
+	for key, value := range session.ConditionalExistsResults {
+		params[key] = value
+	}
 
 	var satisfiedApps []models.ProvisioningApplication
 	var spvParams []ParameterValueStruct
@@ -1338,6 +1390,9 @@ func (h *Handler) evaluateConditionalRules(session *Session, params map[string]s
 	session.PendingConditionalParams = nil
 	session.PendingConditionalData = nil
 	session.ConditionalFetchActive = false
+	session.ConditionalExistsPaths = nil
+	session.ConditionalExistsCurrent = ""
+	session.ConditionalExistsResults = nil
 }
 
 func (h *Handler) handleRebootResponse(ctx context.Context, remoteAddr string) (interface{}, error) {
@@ -1480,6 +1535,18 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 	defer session.mu.Unlock()
 
 	if session.State == StateProcessingTasks {
+		if path := session.ConditionalExistsCurrent; path != "" {
+			value := "unknown"
+			// An invalid parent path proves that its child is absent. Other
+			// faults must not make NOT exists(...) apply a rule.
+			if faultCode == "9005" {
+				value = "false"
+			}
+			session.ConditionalExistsResults[conditionExistsKey(path)] = value
+			session.ConditionalExistsCurrent = ""
+			request, _, err := h.nextSessionRequest(ctx, session)
+			return request, err
+		}
 		if faultCode == "9005" {
 			if session.Diagnostic9005Active {
 				return h.handle9005DiagnosticFault(ctx, session, faultMessage)
