@@ -446,9 +446,6 @@ const Devices: Component = () => {
           <button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button>
           <button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button>
         </nav>
-        <Show when={activeTab() === 'cpes' && hasAnyPermission('devices.create', 'devices.write')}>
-          <button type="button" class="btn btn-primary" onClick={() => setCreateDeviceOpen(true)}><Plus size={14} />Add CPE</button>
-        </Show>
       </div>
 
       <Show when={activeTab() === 'wans'}>
@@ -490,6 +487,9 @@ const Devices: Component = () => {
             <button type="button" class="icon-button" onClick={() => void exportDevicesCSV()} disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} title="Export filtered CPEs as CSV" aria-label={`Export ${deviceList()?.total ?? 0} filtered CPEs as CSV`}>
               <Download size={15} aria-hidden="true" />
             </button>
+            <Show when={hasAnyPermission('devices.create', 'devices.write')}>
+              <button type="button" class="btn btn-primary whitespace-nowrap" onClick={() => setCreateDeviceOpen(true)}><Plus size={14} aria-hidden="true" />Add CPE</button>
+            </Show>
             <div class="relative" ref={inventoryActionsMenu}>
               <button type="button" class="icon-button" onClick={() => setShowInventoryActions(value => !value)} aria-label="CPE inventory actions" aria-haspopup="menu" aria-expanded={showInventoryActions()} title="CPE inventory actions">
                 <MoreVertical size={16} aria-hidden="true" />
