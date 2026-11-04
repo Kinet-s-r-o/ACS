@@ -89,6 +89,7 @@ type Session struct {
 	Diagnostic9005Original  []string
 	Diagnostic9005Requests  int
 	Diagnostic9005StartedAt time.Time
+	Diagnostic9005Cancel    func()
 
 	State        SessionState
 	CreatedAt    time.Time

@@ -1559,7 +1559,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 		}
 		if faultCode == "9005" {
 			if session.Diagnostic9005Active {
-				return h.handle9005DiagnosticFault(ctx, session, faultMessage)
+				return h.handle9005DiagnosticFault(ctx, session)
 			}
 			if request, started, err := h.start9005Diagnostic(ctx, session); err != nil {
 				return nil, err
