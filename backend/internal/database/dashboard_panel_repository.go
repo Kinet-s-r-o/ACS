@@ -13,29 +13,6 @@ import (
 
 var ErrDashboardPanelLimit = errors.New("a user can have at most 12 dashboard panels")
 
-// MigrateRetiredDashboardPanels keeps Device growth and user-created panels.
-func MigrateRetiredDashboardPanels(ctx context.Context, db *gorm.DB) error {
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("panel_id !~ ? OR COALESCE(config::jsonb->>'kind', 'parameter') NOT IN ?", `^custom-[a-zA-Z0-9-]{1,64}$`, []string{"", "parameter", "category"}).Delete(&models.UserDashboardPanel{}).Error; err != nil {
-			return err
-		}
-		return tx.Exec(`UPDATE user_dashboard_layouts AS layout SET config = (
-			SELECT COALESCE(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)::text
-			FROM jsonb_each(layout.config::jsonb) AS entry
-			WHERE entry.key = 'growth' OR EXISTS (
-				SELECT 1 FROM user_dashboard_panels AS panel
-				WHERE panel.user_id = layout.user_id AND panel.panel_id = entry.key
-			)
-		) WHERE EXISTS (
-			SELECT 1 FROM jsonb_object_keys(layout.config::jsonb) AS entry(key)
-			WHERE entry.key <> 'growth' AND NOT EXISTS (
-				SELECT 1 FROM user_dashboard_panels AS panel
-				WHERE panel.user_id = layout.user_id AND panel.panel_id = entry.key
-			)
-		)`).Error
-	})
-}
-
 type DashboardPanelRepository struct {
 	db *gorm.DB
 }
