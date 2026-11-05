@@ -23,6 +23,7 @@ const GeneralSettings = lazy(() => import('./pages/GeneralSettings'));
 const RetentionSettings = lazy(() => import('./pages/RetentionSettings'));
 const Dictionaries = lazy(() => import('./pages/Dictionaries'));
 const SystemTasks = lazy(() => import('./pages/SystemTasks'));
+const AuthenticationSettings = lazy(() => import('./pages/AuthenticationSettings'));
 
 // Initialize theme on app load
 useTheme();
@@ -58,6 +59,7 @@ const App: Component = () => {
             <Route path="/security" component={Security} />
             <Route path="/settings" component={Settings} />
             <Route path="/settings/users" component={Users} />
+            <Route path="/settings/authentication" component={AuthenticationSettings} />
             <Route path="/settings/api-docs" component={APIDocs} />
             <Route path="/settings/delivery" component={Delivery} />
             <Route path="/settings/provisioning" component={Provisioning} />

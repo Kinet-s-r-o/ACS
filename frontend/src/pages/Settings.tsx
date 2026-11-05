@@ -222,7 +222,8 @@ const Settings: Component = () => {
             <button
               onClick={() => setShowPasswordModal(true)}
               class="btn btn-secondary text-xs"
-              disabled={pendingAction() !== null}
+              disabled={pendingAction() !== null || (user()?.auth_provider || 'local') !== 'local'}
+              title={(user()?.auth_provider || 'local') !== 'local' ? 'Change your password through your external authentication service' : undefined}
             >
               <Key size={12} />
               Change password

@@ -5,6 +5,7 @@
 | `cmd/server/main.go` | Configuration, database connection, migrations, two HTTP servers, maintenance loops | [Root README](../README.md) deployment and security sections |
 | `internal/api/` | Authenticated REST handlers and route registration | `router.go`, relevant handler, API client contract |
 | `internal/auth/` | JWT, password policy, permission middleware | `SECURITY.md` |
+| `internal/authn/` | Extensible credential modules, local and RADIUS UDP/TLS verification | [Module router](internal/authn/README.md) and [operator guide](../docs/authentication.md) |
 | `internal/cwmp/` | CWMP/SOAP sessions, Inform/RPC handling, conditions, watchdog | CWMP settings and protocol tests |
 | `internal/database/` | Repositories, encryption, settings, task/fault/metric persistence | Models and migration code in `cmd/server/main.go` |
 | `internal/models/` | GORM entities and status/permission types | Repository using the model and AutoMigrate list |

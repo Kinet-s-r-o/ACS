@@ -17,6 +17,10 @@ import { sortRows, type SortDirection } from '../lib/sorting';
 import { usePageSize } from '../lib/usePageSize';
 
 const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; description: string }[] }[] = [
+  { label: 'Authentication', permissions: [
+    { key: 'auth.settings.read', label: 'Read', description: 'View authentication module configuration without secrets.' },
+    { key: 'auth.settings.write', label: 'Write', description: 'Configure and test authentication modules; also requires full access and authentication read permission.' },
+  ] },
   { label: 'Users', permissions: [
     { key: 'users.read', label: 'Read', description: 'View user accounts.' },
     { key: 'users.write', label: 'Write', description: 'Create, edit, activate, and deactivate users.' },

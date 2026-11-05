@@ -12,6 +12,7 @@ const (
 type User struct {
 	ID                     int64      `json:"id" gorm:"primaryKey;autoIncrement"`
 	Username               string     `json:"username" gorm:"uniqueIndex:idx_users_username;not null"`
+	AuthProvider           string     `json:"auth_provider" gorm:"size:64;not null;default:'local'"`
 	FirstName              string     `json:"first_name" gorm:"size:100;not null;default:''"`
 	LastName               string     `json:"last_name" gorm:"size:100;not null;default:''"`
 	Email                  string     `json:"email" gorm:"size:254;not null;default:''"`
@@ -49,24 +50,26 @@ type LoginResponse struct {
 }
 
 type CreateUserRequest struct {
-	Username    string   `json:"username"`
-	FirstName   string   `json:"first_name"`
-	LastName    string   `json:"last_name"`
-	Email       string   `json:"email"`
-	Required2FA bool     `json:"required_2fa"`
-	Password    string   `json:"password"`
-	Role        UserRole `json:"role"`
-	RoleID      *int64   `json:"role_id"`
+	AuthProvider string   `json:"auth_provider"`
+	Username     string   `json:"username"`
+	FirstName    string   `json:"first_name"`
+	LastName     string   `json:"last_name"`
+	Email        string   `json:"email"`
+	Required2FA  bool     `json:"required_2fa"`
+	Password     string   `json:"password"`
+	Role         UserRole `json:"role"`
+	RoleID       *int64   `json:"role_id"`
 }
 
 type UpdateUserRequest struct {
-	Username    string   `json:"username,omitempty"`
-	FirstName   *string  `json:"first_name,omitempty"`
-	LastName    *string  `json:"last_name,omitempty"`
-	Email       *string  `json:"email,omitempty"`
-	Required2FA *bool    `json:"required_2fa,omitempty"`
-	Reset2FA    bool     `json:"reset_2fa,omitempty"`
-	Password    string   `json:"password,omitempty"`
-	Role        UserRole `json:"role,omitempty"`
-	RoleID      *int64   `json:"role_id"`
+	AuthProvider *string  `json:"auth_provider,omitempty"`
+	Username     string   `json:"username,omitempty"`
+	FirstName    *string  `json:"first_name,omitempty"`
+	LastName     *string  `json:"last_name,omitempty"`
+	Email        *string  `json:"email,omitempty"`
+	Required2FA  *bool    `json:"required_2fa,omitempty"`
+	Reset2FA     bool     `json:"reset_2fa,omitempty"`
+	Password     string   `json:"password,omitempty"`
+	Role         UserRole `json:"role,omitempty"`
+	RoleID       *int64   `json:"role_id"`
 }

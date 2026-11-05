@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/matrix8412/acs/internal/auth"
+	"github.com/matrix8412/acs/internal/authn"
 	"github.com/matrix8412/acs/internal/cwmp"
 	"github.com/matrix8412/acs/internal/cwmpcontrol"
 	"github.com/matrix8412/acs/internal/database"
@@ -33,6 +34,7 @@ import (
 )
 
 type Router struct {
+	authModules          *authn.Registry
 	cwmpControl          *cwmpcontrol.Controller
 	db                   *gorm.DB
 	deviceRepo           *database.DeviceRepository
@@ -108,7 +110,7 @@ func NewRouter(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Router {
 		log.Printf("Template image storage is not writable: %v", templateImageInitErr)
 	}
 
-	return &Router{
+	router := &Router{
 		db:                   db,
 		deviceRepo:           database.NewDeviceRepository(db),
 		settingsRepo:         database.NewSettingsRepository(db),
@@ -141,6 +143,8 @@ func NewRouter(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Router {
 		templateImageDir:     templateImageDir,
 		templateImageInitErr: templateImageInitErr,
 	}
+	router.authModules = authn.NewRegistry(authn.Radius{Load: router.loadRadiusConfig})
+	return router
 }
 
 func (r *Router) Handler() http.Handler {
@@ -273,6 +277,13 @@ func (r *Router) Handler() http.Handler {
 
 	// Settings endpoints
 	apiMux.HandleFunc("GET /settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetSettings))
+	apiMux.HandleFunc("GET /auth/providers", auth.RequirePermission(models.PermUsersRead)(r.handleAuthProviders))
+	apiMux.HandleFunc("GET /settings/authentication/radius", requireAuthSettingsPermission(models.PermAuthSettingsRead, r.handleRadiusSettings))
+	authSettingsWrite := func(handler http.HandlerFunc) http.HandlerFunc {
+		return auth.RequireFullAccess(requireAuthSettingsPermission(models.PermAuthSettingsRead, requireAuthSettingsPermission(models.PermAuthSettingsWrite, handler)))
+	}
+	apiMux.HandleFunc("PUT /settings/authentication/radius", authSettingsWrite(r.handleRadiusSettings))
+	apiMux.HandleFunc("POST /settings/authentication/radius/test", authSettingsWrite(r.handleTestRadius))
 	apiMux.HandleFunc("GET /cwmp-control", auth.RequirePermission(models.PermProvisioningRead)(r.handleCWMPControl))
 	apiMux.HandleFunc("PUT /cwmp-control/{state}", auth.RequireFullAccess(auth.RequirePermission(models.PermCWMPControl)(r.handleCWMPControl)))
 	apiMux.HandleFunc("GET /settings/connection-request-secret", auth.RequireFullAccess(auth.RequirePermission(models.PermSettingsRead)(r.handleGetConnectionRequestSecret)))
@@ -1406,8 +1417,12 @@ func (r *Router) verifyCurrentPassword(w http.ResponseWriter, req *http.Request,
 		respondError(w, http.StatusInternalServerError, "Failed to verify current password")
 		return false
 	}
-	if user == nil || !auth.CheckPassword(currentPassword, user.PasswordHash) {
-		respondError(w, http.StatusForbidden, "Current password is incorrect")
+	if err := r.authenticateUser(req.Context(), user, currentPassword); err != nil {
+		status, message := authenticationError(err)
+		if status == http.StatusUnauthorized {
+			status = http.StatusForbidden
+		}
+		respondError(w, status, message)
 		return false
 	}
 	r.loginLimiter.Reset(key)
@@ -1459,6 +1474,9 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 		result[key] = value
 	}
 	for _, s := range settings {
+		if s.Key == radiusConfigKey {
+			continue
+		}
 		if isSecretSetting(s.Key) && s.Value != "" {
 			result[s.Key] = "••••••••"
 		} else {
@@ -3197,9 +3215,10 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !auth.CheckPassword(loginReq.Password, user.PasswordHash) {
-		r.recordLoginAudit(req, loginReq.Username, http.StatusUnauthorized)
-		respondError(w, http.StatusUnauthorized, "Invalid username or password")
+	if err := r.authenticateUser(req.Context(), user, loginReq.Password); err != nil {
+		status, message := authenticationError(err)
+		r.recordLoginAudit(req, loginReq.Username, status)
+		respondError(w, status, message)
 		return
 	}
 	if !user.Active {
@@ -3439,6 +3458,7 @@ func (r *Router) recordLoginAudit(req *http.Request, username string, status int
 	}
 	if user, err := r.userRepo.GetByUsername(req.Context(), username); err == nil && user != nil {
 		entry.UserID = &user.ID
+		entry.AuthProvider = authn.Normalize(user.AuthProvider)
 	}
 	if err := r.auditRepo.Create(req.Context(), entry); err != nil {
 		log.Printf("Failed to record login audit event: %v", err)
@@ -3494,6 +3514,10 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	if authn.Normalize(user.AuthProvider) != "local" {
+		respondError(w, http.StatusBadRequest, "Change this password through your external authentication service")
+		return
+	}
 	if !auth.CheckPassword(body.CurrentPassword, user.PasswordHash) {
 		respondError(w, http.StatusForbidden, "Current password is incorrect")
 		return
@@ -3554,8 +3578,9 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusBadRequest, "Username must be 3-64 characters and use only letters, numbers, dot, dash, or underscore")
 		return
 	}
-	if err := auth.ValidatePassword(body.Password); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+	body.AuthProvider = authn.Normalize(body.AuthProvider)
+	if !r.authenticationModules().Supports(body.AuthProvider) {
+		respondError(w, http.StatusBadRequest, "Unknown authentication module")
 		return
 	}
 	body.FirstName = strings.TrimSpace(body.FirstName)
@@ -3572,13 +3597,24 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	hash, err := auth.HashPassword(body.Password)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to hash password")
+	var hash string
+	if body.AuthProvider == "local" {
+		if err := auth.ValidatePassword(body.Password); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hash, err = auth.HashPassword(body.Password)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to hash password")
+			return
+		}
+	} else if body.Password != "" {
+		respondError(w, http.StatusBadRequest, "External accounts cannot have a local password")
 		return
 	}
 
 	user := &models.User{
+		AuthProvider: body.AuthProvider,
 		Username:     body.Username,
 		FirstName:    body.FirstName,
 		LastName:     body.LastName,
@@ -3628,6 +3664,22 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var passwordHash string
+	provider := authn.Normalize(user.AuthProvider)
+	if body.AuthProvider != nil {
+		provider = authn.Normalize(*body.AuthProvider)
+	}
+	if !r.authenticationModules().Supports(provider) {
+		respondError(w, http.StatusBadRequest, "Unknown authentication module")
+		return
+	}
+	if provider != "local" && body.Password != "" {
+		respondError(w, http.StatusBadRequest, "External accounts cannot have a local password")
+		return
+	}
+	if provider == "local" && authn.Normalize(user.AuthProvider) != "local" && body.Password == "" {
+		respondError(w, http.StatusBadRequest, "A new local password is required")
+		return
+	}
 	if body.Password != "" {
 		if err := auth.ValidatePassword(body.Password); err != nil {
 			respondError(w, http.StatusBadRequest, err.Error())
@@ -3674,8 +3726,8 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		user.Role = legacyRole
 	}
 
-	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.FirstName, user.LastName, user.Email, user.Required2FA, body.Reset2FA, user.Role, user.RoleID, passwordHash); err != nil {
-		if errors.Is(err, database.ErrLastFullAdmin) {
+	if err := r.userRepo.UpdateAccount(req.Context(), id, user.Username, user.FirstName, user.LastName, user.Email, user.Required2FA, body.Reset2FA, user.Role, user.RoleID, passwordHash, provider); err != nil {
+		if errors.Is(err, database.ErrLastFullAdmin) || errors.Is(err, database.ErrLastLocalAdmin) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -3687,6 +3739,7 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	user.AuthProvider = provider
 	user.TwoFactorConfigured = user.TwoFactorSecret != "" && !body.Reset2FA
 	respondJSON(w, http.StatusOK, user)
 }
@@ -3765,7 +3818,7 @@ func (r *Router) handleSetUserActive(w http.ResponseWriter, req *http.Request) {
 			respondError(w, http.StatusNotFound, "User not found")
 			return
 		}
-		if errors.Is(err, database.ErrLastFullAdmin) {
+		if errors.Is(err, database.ErrLastFullAdmin) || errors.Is(err, database.ErrLastLocalAdmin) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}

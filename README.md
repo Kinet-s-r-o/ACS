@@ -52,6 +52,7 @@ The screenshots below use representative lab data and do not contain production 
 - Get/Set parameter operations, reboot, factory reset, connection requests, and firmware delivery
 - Full-access and read-only roles with revocable session-scoped tokens
 - Password policy, login throttling, audit logging, and device admission blocklist
+- Pluggable operator authentication with local accounts and redundant RADIUS UDP/TLS servers; see the [authentication guide](docs/authentication.md)
 - CWMP Basic Authentication over TLS, CIDR allowlists, and trusted-proxy validation
 - DNS-rebinding and redirect-resistant SSRF protection for connection request URLs
 - Signed firmware URLs with random tokens and expiry; firmware tasks expire after 24 hours

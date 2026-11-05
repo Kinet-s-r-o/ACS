@@ -126,7 +126,7 @@ func (r *SettingsRepository) SetMultiple(ctx context.Context, settings map[strin
 }
 
 func isSensitiveSettingKey(key string) bool {
-	return key == "connection_request_password"
+	return key == "connection_request_password" || key == "auth_radius_config"
 }
 
 func (r *SettingsRepository) EncryptLegacySensitiveValues(ctx context.Context) (int64, error) {

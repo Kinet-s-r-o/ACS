@@ -5,12 +5,14 @@ import (
 	"errors"
 	"time"
 
+	"github.com/matrix8412/acs/internal/authn"
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
 )
 
 var (
-	ErrLastFullAdmin = errors.New("cannot demote or deactivate the last active full-access administrator")
+	ErrLastFullAdmin  = errors.New("cannot demote or deactivate the last active full-access administrator")
+	ErrLastLocalAdmin = errors.New("at least one active local full-access administrator must remain")
 )
 
 type UserRepository struct {
@@ -64,7 +66,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id int64, passwordH
 		}).Error
 }
 
-func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, firstName, lastName, email string, required2FA, reset2FA bool, role models.UserRole, roleID *int64, passwordHash string) error {
+func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, firstName, lastName, email string, required2FA, reset2FA bool, role models.UserRole, roleID *int64, passwordHash, authProvider string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
 			return err
@@ -72,6 +74,11 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, 
 		var current models.User
 		if err := tx.First(&current, id).Error; err != nil {
 			return err
+		}
+		if current.Active && current.Role == models.RoleFull && authn.Normalize(current.AuthProvider) == "local" && (role != models.RoleFull || authProvider != "local") {
+			if err := requireOtherLocalAdmin(tx, id); err != nil {
+				return err
+			}
 		}
 		if current.Role == models.RoleFull && current.Active && role != models.RoleFull {
 			var count int64
@@ -83,6 +90,7 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, 
 			}
 		}
 		updates := map[string]interface{}{
+			"auth_provider": authProvider,
 			"username":      username,
 			"first_name":    firstName,
 			"last_name":     lastName,
@@ -92,7 +100,9 @@ func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, 
 			"role_id":       roleID,
 			"token_version": gorm.Expr("token_version + 1"),
 		}
-		if passwordHash != "" {
+		if authProvider != "local" {
+			updates["password_hash"] = ""
+		} else if passwordHash != "" {
 			updates["password_hash"] = passwordHash
 		}
 		if reset2FA {
@@ -145,6 +155,11 @@ func (r *UserRepository) SetActive(ctx context.Context, id int64, active bool) e
 		if user.Active == active {
 			return nil
 		}
+		if !active && user.Role == models.RoleFull && authn.Normalize(user.AuthProvider) == "local" {
+			if err := requireOtherLocalAdmin(tx, id); err != nil {
+				return err
+			}
+		}
 		if !active && user.Role == models.RoleFull {
 			var count int64
 			if err := tx.Model(&models.User{}).Where("role = ? AND active = ?", models.RoleFull, true).Count(&count).Error; err != nil {
@@ -159,6 +174,17 @@ func (r *UserRepository) SetActive(ctx context.Context, id int64, active bool) e
 			"token_version": gorm.Expr("token_version + 1"),
 		}).Error
 	})
+}
+
+func requireOtherLocalAdmin(tx *gorm.DB, id int64) error {
+	var count int64
+	if err := tx.Model(&models.User{}).Where("id <> ? AND role = ? AND active = ? AND auth_provider = ?", id, models.RoleFull, true, "local").Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrLastLocalAdmin
+	}
+	return nil
 }
 
 func (r *UserRepository) UpdateLastLogin(ctx context.Context, id int64) error {

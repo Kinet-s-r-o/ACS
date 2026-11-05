@@ -7,6 +7,7 @@
 | CWMP/TR-069 protocol behavior | [backend/README.md](../../backend/README.md) → `backend/internal/cwmp/` | SOAP sessions, Inform, RPC handling, conditions, device watchdog |
 | Global CWMP on/off | [backend/README.md](../../backend/README.md) → `backend/internal/cwmpcontrol/`, `internal/database/cwmp_control.go`, `internal/api/cwmp_control.go` | Durable gate, in-flight cancellation, session invalidation, worker/watchdog pause, `cwmp.control` permission |
 | HTTP API and authorization | [backend/README.md](../../backend/README.md) → `backend/internal/api/` and `backend/internal/auth/` | Routes, permissions, security middleware, handlers |
+| Operator authentication modules and RADIUS | [Authentication guide](../authentication.md) → [module router](../../backend/internal/authn/README.md), `internal/api/authentication.go`, console `AuthenticationSettings.tsx` | Local/RADIUS providers, ordered UDP/RadSec pools, encrypted secrets and focused permissions |
 | Persistence and schema | [backend/README.md](../../backend/README.md) → `backend/internal/database/` and `models/` | GORM repositories, AutoMigrate models, encryption, Timescale setup |
 | UI-managed DB indexes | [DB indexes guide](../database-indexes.md) → `managed_indexes.go`, `managed_index_worker.go`, `database_index.go`, `DatabaseIndexes.tsx` | Ownership, B-tree recipes, permissions, durable DDL jobs, disk probe and budgets |
 | Console routes and screens | [frontend/README.md](../../frontend/README.md) → `frontend/src/pages/` | SolidJS routes are registered in `frontend/src/App.tsx` |

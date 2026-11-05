@@ -5,6 +5,8 @@ import "time"
 // Permission keys for granular access control.
 const (
 	PermUsersRead             = "users.read"
+	PermAuthSettingsRead      = "auth.settings.read"
+	PermAuthSettingsWrite     = "auth.settings.write"
 	PermUsersWrite            = "users.write"
 	PermRolesRead             = "roles.read"
 	PermRolesWrite            = "roles.write"
@@ -43,6 +45,7 @@ const (
 
 // AllPermissions lists every permission key.
 var AllPermissions = []string{
+	PermAuthSettingsRead, PermAuthSettingsWrite,
 	PermUsersRead, PermUsersWrite,
 	PermRolesRead, PermRolesWrite,
 	PermDevicesRead, PermDevicesWrite, PermDevicesCreate,

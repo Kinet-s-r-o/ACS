@@ -55,6 +55,9 @@ func CheckPassword(password, hash string) bool {
 }
 
 func GenerateToken(user *models.User) (string, error) {
+	if user.AuthProvider != "" && user.AuthProvider != "local" {
+		return generateToken(user, "", time.Hour)
+	}
 	return generateToken(user, "", 24*time.Hour)
 }
 

@@ -37,11 +37,12 @@ const UsersPage: Component = () => {
     if (!hasPermission('roles.read')) return [];
     return api.getRoles();
   });
+  const [authProviders] = createResource(() => api.getAuthProviders());
 
   const [showUserModal, setShowUserModal] = createSignal(false);
   const [tokenUser, setTokenUser] = createSignal<User | null>(null);
   const [editingUser, setEditingUser] = createSignal<User | null>(null);
-  const [userForm, setUserForm] = createSignal({ username: '', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read' as 'full' | 'read', roleId: '' });
+  const [userForm, setUserForm] = createSignal({ username: '', authProvider: 'local', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read' as 'full' | 'read', roleId: '' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.users', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.users');
   const { columns, isVisible, toggle } = useColumnVisibility('users', [
@@ -116,10 +117,10 @@ const UsersPage: Component = () => {
     setPendingAction('create-user');
     try {
       const selected = selectedRole();
-      await api.createUser({ username: userForm().username, first_name: userForm().firstName, last_name: userForm().lastName, email: userForm().email, required_2fa: userForm().required2FA, password: userForm().password, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) });
+      await api.createUser({ username: userForm().username, auth_provider: userForm().authProvider, first_name: userForm().firstName, last_name: userForm().lastName, email: userForm().email, required_2fa: userForm().required2FA, password: userForm().authProvider === 'local' ? userForm().password : '', role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) });
       notify({ tone: 'success', title: 'Operator account created', message: userForm().username });
       setShowUserModal(false);
-      setUserForm({ username: '', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read', roleId: '' });
+      setUserForm({ username: '', authProvider: 'local', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read', roleId: '' });
       refetchUsers();
     } catch (error) { notify({ tone: 'error', title: 'Could not create operator', message: 'The operator account was not created. The entered values are preserved.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
@@ -131,14 +132,14 @@ const UsersPage: Component = () => {
     if (userForm().reset2FA && !await confirm({ title: 'Reset authenticator pairing?', description: `The paired authenticator for ${u.username} will be removed. They must scan a new QR code at their next sign-in if Required 2FA is enabled.`, confirmLabel: 'Reset authenticator', tone: 'danger' })) return;
     setPendingAction('update-user');
     const selected = selectedRole();
-    const body: Partial<{ username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }> = { username: userForm().username, first_name: userForm().firstName, last_name: userForm().lastName, email: userForm().email, required_2fa: userForm().required2FA, reset_2fa: userForm().reset2FA, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) };
-    if (userForm().password) body.password = userForm().password;
+    const body: Partial<{ username: string; auth_provider: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }> = { username: userForm().username, auth_provider: userForm().authProvider, first_name: userForm().firstName, last_name: userForm().lastName, email: userForm().email, required_2fa: userForm().required2FA, reset_2fa: userForm().reset2FA, role: selected?.name === 'admin' ? 'full' : 'read', role_id: Number(userForm().roleId) };
+    if (userForm().authProvider === 'local' && userForm().password) body.password = userForm().password;
     try {
       await api.updateUser(u.id, body);
       notify({ tone: 'success', title: 'Operator account updated', message: userForm().username });
       setShowUserModal(false);
       setEditingUser(null);
-      setUserForm({ username: '', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read', roleId: '' });
+      setUserForm({ username: '', authProvider: 'local', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read', roleId: '' });
       refetchUsers();
     } catch (error) { notify({ tone: 'error', title: 'Could not update operator', message: 'The existing account remains unchanged. The entered values are preserved.', detail: (error as Error).message, persistent: true }); }
     finally { setPendingAction(null); }
@@ -156,13 +157,13 @@ const UsersPage: Component = () => {
 
   const openEditUser = (u: User) => {
     setEditingUser(u);
-    setUserForm({ username: u.username, firstName: u.first_name || '', lastName: u.last_name || '', email: u.email || '', required2FA: u.required_2fa, reset2FA: false, password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
+    setUserForm({ username: u.username, authProvider: u.auth_provider || 'local', firstName: u.first_name || '', lastName: u.last_name || '', email: u.email || '', required2FA: u.required_2fa, reset2FA: false, password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
     setShowUserModal(true);
   };
 
   const openCreateUser = () => {
     setEditingUser(null);
-    setUserForm({ username: '', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read', roleId: systemRoleId('read') });
+    setUserForm({ username: '', authProvider: 'local', firstName: '', lastName: '', email: '', required2FA: false, reset2FA: false, password: '', role: 'read', roleId: systemRoleId('read') });
     setShowUserModal(true);
   };
 
@@ -231,7 +232,7 @@ const UsersPage: Component = () => {
               <For each={pagedUsers()}>
                 {(u) => (
                   <tr class="border-b border-subtle/50">
-                    <Show when={isVisible('username')}><td data-column-order-id="username#0" class="py-2 text-primary">{u.username}</td></Show>
+                    <Show when={isVisible('username')}><td data-column-order-id="username#0" class="py-2 text-primary">{u.username}<span class="block text-xs text-muted">{u.auth_provider || 'local'}</span></td></Show>
                     <Show when={isVisible('active')}><td data-column-order-id="active#0" class="py-2"><BooleanIndicator value={u.active} label={`Active for operator ${u.username}`} editable={isFullAccess() && hasPermission('users.write')} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)} onToggle={() => handleSetUserActive(u)} /></td></Show>
                     <Show when={isVisible('first_name')}><td data-column-order-id="first name#0" class="py-2 text-primary">{u.first_name || '—'}</td></Show>
                     <Show when={isVisible('last_name')}><td data-column-order-id="last name#0" class="py-2 text-primary">{u.last_name || '—'}</td></Show>
@@ -311,8 +312,15 @@ const UsersPage: Component = () => {
               <input id="operator-email" type="email" value={userForm().email} onInput={(e) => setUserForm(f => ({ ...f, email: e.currentTarget.value }))} class="input w-full" maxlength={254} />
             </div>
             <div>
+              <label for="operator-auth-provider" class="block text-xs text-muted mb-1.5">Authentication module</label>
+              <select id="operator-auth-provider" class="input w-full" value={userForm().authProvider} disabled={authProviders.loading || !!authProviders.error} onChange={event => setUserForm(value => ({ ...value, authProvider: event.currentTarget.value, password: '' }))}>
+                <For each={authProviders() || ['local', 'radius']}>{provider => <option value={provider}>{provider}</option>}</For>
+              </select>
+              <p class="text-xs text-muted mt-1.5">External accounts use the same username at their authentication service. ACS controls their role and activation.</p>
+            </div>
+            <Show when={userForm().authProvider === 'local'}><div>
               <label for="operator-password" class="block text-xs text-muted mb-1.5">
-                Password {editingUser() && '(leave blank to preserve the current password)'}
+                Password {editingUser() && (editingUser()?.auth_provider || 'local') === 'local' && '(leave blank to preserve the current password)'}
               </label>
               <input
                 id="operator-password"
@@ -322,9 +330,9 @@ const UsersPage: Component = () => {
                 class="input w-full"
                 placeholder="Password"
                 minlength={12}
-                required={!editingUser()}
+                required={!editingUser() || (editingUser()?.auth_provider || 'local') !== 'local'}
               />
-            </div>
+            </div></Show>
             <div>
               <label for="operator-role" class="block text-xs text-muted mb-1.5">Role</label>
               <select

@@ -105,7 +105,9 @@ export interface DashboardAggregationOption { id: string; title: string; source:
 export interface DashboardPanelLayout { order: number; width: number; height: number; interval?: DeviceGrowthInterval }
 export interface DashboardParameterDistributionRequest { parameter_pattern: string; thresholds: Array<Pick<DashboardThreshold, 'label' | 'max'>> }
 export interface DashboardParameterDistribution { distribution: Record<string, number>; sampled: number; total: number }
-export interface User { id: number; username: string; first_name: string; last_name: string; email: string; active: boolean; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
+export interface User { id: number; username: string; auth_provider: string; first_name: string; last_name: string; email: string; active: boolean; required_2fa: boolean; two_factor_configured: boolean; role: 'full' | 'read'; role_id: number | null; created_at: string; last_login: string | null }
+export interface RadiusServer { id: string; address: string; transport: 'udp' | 'tls'; timeout_seconds: number; attempts: number; secret?: string; secret_set?: boolean; server_name?: string; ca_pem?: string; client_cert_pem?: string; client_key_pem?: string; client_key_set?: boolean }
+export interface RadiusConfig { enabled: boolean; nas_identifier: string; servers: RadiusServer[] }
 export interface TagDefinition { id: string; name: string; color: string; description?: string; created_at: string; updated_at: string }
 export interface Role { id: number; name: string; description: string; permissions: string[]; is_system: boolean; created_at: string; updated_at: string }
 export interface ProvisioningTransform { function: string; args?: Record<string, string>; key_configured?: boolean }
@@ -351,13 +353,17 @@ export const api = {
     return request<DatabaseStatistics>(`/settings/database/statistics?${params}`);
   },
   updateSettings: (settings: Record<string, string>) => request<{ status: string }>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  getAuthProviders: () => request<string[]>('/auth/providers'),
+  getRadiusSettings: () => request<RadiusConfig>('/settings/authentication/radius'),
+  saveRadiusSettings: (settings: RadiusConfig) => request<RadiusConfig>('/settings/authentication/radius', { method: 'PUT', body: JSON.stringify(settings) }),
+  testRadius: (username: string, password: string) => request<{ status: string }>('/settings/authentication/radius/test', { method: 'POST', body: JSON.stringify({ username, password }) }),
   getUsers: () => request<User[]>('/users'),
   getAPITokens: (userId: number) => request<APIToken[]>(`/users/${userId}/api-tokens`),
   createAPIToken: (userId: number, body: { name: string; description: string; expires_in_days: number }) => request<APIToken & { token: string }>(`/users/${userId}/api-tokens`, { method: 'POST', body: JSON.stringify(body) }),
   revokeAPIToken: (userId: number, tokenId: number) => request<{ status: string }>(`/users/${userId}/api-tokens/${tokenId}`, { method: 'DELETE' }),
   getIntegrationSpec: () => request<Record<string, unknown>>('/openapi.json'),
-  createUser: (body: { username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
-  updateUser: (id: number, body: Partial<{ username: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createUser: (body: { username: string; auth_provider: string; first_name: string; last_name: string; email: string; required_2fa: boolean; password: string; role: 'full' | 'read'; role_id?: number }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser: (id: number, body: Partial<{ username: string; auth_provider: string; first_name: string; last_name: string; email: string; required_2fa: boolean; reset_2fa: boolean; password: string; role: 'full' | 'read'; role_id: number }>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   setUserActive: (id: number, active: boolean) => request<{ status: string; active: boolean }>(`/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active }) }),
   getRoles: () => request<Role[]>('/roles'),
   createRole: (body: { name: string; description: string; permissions: string[] }) => request<Role>('/roles', { method: 'POST', body: JSON.stringify(body) }),

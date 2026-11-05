@@ -8,6 +8,7 @@ type AuditLog struct {
 	ID           int64     `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserID       *int64    `json:"user_id,omitempty" gorm:"index"`
 	Username     string    `json:"username" gorm:"size:128;not null"`
+	AuthProvider string    `json:"auth_provider,omitempty" gorm:"size:64;not null;default:''"`
 	APITokenID   *int64    `json:"api_token_id,omitempty" gorm:"index"`
 	APITokenName string    `json:"api_token_name,omitempty" gorm:"size:128"`
 	Action       string    `json:"action" gorm:"size:32;not null;index"`
