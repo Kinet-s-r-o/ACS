@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var ErrDashboardPanelLimit = errors.New("a user can have at most 12 dashboard panels")
@@ -28,10 +30,28 @@ func (r *DashboardPanelRepository) List(ctx context.Context, userID int64) ([]mo
 }
 
 func (r *DashboardPanelRepository) Replace(ctx context.Context, userID int64, panels []models.UserDashboardPanel) error {
+	return r.ReplaceChecked(ctx, userID, panels, nil)
+}
+
+// Check the persisted snapshot while holding the dashboard owner's row lock.
+func (r *DashboardPanelRepository) ReplaceChecked(ctx context.Context, userID int64, panels []models.UserDashboardPanel, check func([]models.UserDashboardPanel) error) error {
 	if len(panels) > 12 {
 		return ErrDashboardPanelLimit
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var owner struct{ ID int64 }
+		if err := tx.Model(&models.User{}).Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).Take(&owner).Error; err != nil {
+			return err
+		}
+		if check != nil {
+			var previous []models.UserDashboardPanel
+			if err := tx.Where("user_id = ?", userID).Find(&previous).Error; err != nil {
+				return err
+			}
+			if err := check(previous); err != nil {
+				return err
+			}
+		}
 		if err := tx.Where("user_id = ?", userID).Delete(&models.UserDashboardPanel{}).Error; err != nil {
 			return err
 		}
@@ -47,11 +67,22 @@ func (r *DashboardPanelRepository) Replace(ctx context.Context, userID int64, pa
 }
 
 func (r *DashboardPanelRepository) DeletePanel(ctx context.Context, userID int64, panelID string) (bool, error) {
-	result := r.db.WithContext(ctx).Where("user_id = ? AND panel_id = ?", userID, panelID).Delete(&models.UserDashboardPanel{})
-	return result.RowsAffected > 0, result.Error
+	deleted := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var owner struct{ ID int64 }
+		if err := tx.Model(&models.User{}).Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).Take(&owner).Error; err != nil {
+			return err
+		}
+		result := tx.Where("user_id = ? AND panel_id = ?", userID, panelID).Delete(&models.UserDashboardPanel{})
+		deleted = result.RowsAffected > 0
+		return result.Error
+	})
+	return deleted, err
 }
 
 func (r *DashboardPanelRepository) CopyToUsers(ctx context.Context, sourceConfig string, userIDs []int64) error {
+	userIDs = append([]int64{}, userIDs...)
+	slices.Sort(userIDs)
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing int64
 		if err := tx.Model(&models.User{}).Where("id IN ?", userIDs).Count(&existing).Error; err != nil {
@@ -61,6 +92,10 @@ func (r *DashboardPanelRepository) CopyToUsers(ctx context.Context, sourceConfig
 			return gorm.ErrRecordNotFound
 		}
 		for _, userID := range userIDs {
+			var owner struct{ ID int64 }
+			if err := tx.Model(&models.User{}).Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).Take(&owner).Error; err != nil {
+				return err
+			}
 			var count int64
 			if err := tx.Model(&models.UserDashboardPanel{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
 				return err

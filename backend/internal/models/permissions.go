@@ -2,96 +2,84 @@ package models
 
 import "strings"
 
-// Full applies to one section only. Parents never grant access to descendants.
-var PermissionActions = []string{"full", "read", "edit", "delete", "import", "export"}
+// The catalog follows operator tasks. Child screens use their owning section.
+var PermissionActions = []string{"full", "add", "read", "write", "edit", "delete", "remove", "import", "export"}
 
 type PermissionSection struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Parent string `json:"parent,omitempty"`
-	Path   string `json:"path,omitempty"`
+	ID      string   `json:"id"`
+	Label   string   `json:"label"`
+	Parent  string   `json:"parent,omitempty"`
+	Path    string   `json:"path,omitempty"`
+	Actions []string `json:"actions"`
 }
 
-// Keep this tree aligned with menu entries, page tabs and nested tabs.
 var PermissionSections = []PermissionSection{
-	{"fleet", "Fleet status", "", "/"},
-	{"inventory", "CPE inventory", "", "/devices"},
-	{"inventory.cpes", "CPEs", "inventory", "/devices"},
-	{"inventory.wans", "WANs", "inventory", "/devices?tab=wans"},
-	{"inventory.cpes.overview", "Overview", "inventory.cpes", ""},
-	{"inventory.cpes.overview.wifi", "Wi-Fi settings", "inventory.cpes.overview", ""},
-	{"inventory.cpes.overview.wifi.general", "General", "inventory.cpes.overview.wifi", ""},
-	{"inventory.cpes.overview.wifi.security", "Security", "inventory.cpes.overview.wifi", ""},
-	{"inventory.cpes.overview.wifi.advanced", "Advanced", "inventory.cpes.overview.wifi", ""},
-	{"inventory.cpes.overview.lan", "LAN settings", "inventory.cpes.overview", ""},
-	{"inventory.cpes.overview.lan.general", "General", "inventory.cpes.overview.lan", ""},
-	{"inventory.cpes.overview.lan.advanced", "Advanced", "inventory.cpes.overview.lan", ""},
-	{"inventory.cpes.overview.wan", "WAN settings", "inventory.cpes.overview", ""},
-	{"inventory.cpes.overview.wan.general", "General", "inventory.cpes.overview.wan", ""},
-	{"inventory.cpes.overview.wan.ipv4", "IPv4", "inventory.cpes.overview.wan", ""},
-	{"inventory.cpes.overview.wan.ipv6", "IPv6", "inventory.cpes.overview.wan", ""},
-	{"inventory.cpes.overview.wan.advanced", "Advanced", "inventory.cpes.overview.wan", ""},
-	{"inventory.cpes.hosts", "Connected Hosts", "inventory.cpes", ""},
-	{"inventory.cpes.metrics", "Metrics", "inventory.cpes", ""},
-	{"inventory.cpes.features", "Advanced settings", "inventory.cpes", ""},
-	{"inventory.cpes.snapshots", "Snapshots", "inventory.cpes", ""},
-	{"inventory.cpes.tasks", "Tasks", "inventory.cpes", ""},
-	{"inventory.cpes.tasks.requested", "Requested", "inventory.cpes.tasks", ""},
-	{"inventory.cpes.tasks.result", "Result", "inventory.cpes.tasks", ""},
-	{"inventory.cpes.faults", "Faults", "inventory.cpes", ""},
-	{"inventory.cpes.credentials", "Credentials", "inventory.cpes", ""},
-	{"inventory.cpes.maintenance", "Maintenance", "inventory.cpes", ""},
-	{"inventory.cpes.maintenance.diagnostic", "Diagnostic", "inventory.cpes.maintenance", ""},
-	{"inventory.cpes.log", "Device log", "inventory.cpes", ""},
-	{"tasks", "CWMP tasks", "", "/tasks"},
-	{"tasks.requested", "Requested", "tasks", ""},
-	{"tasks.result", "Result", "tasks", ""},
-	{"faults", "CWMP faults", "", "/faults"},
-	{"firmwares", "Firmware library", "", "/firmwares"},
-	{"security", "Access controls", "", "/security"},
-	{"security.audit", "Operator audit trail", "security", ""},
-	{"security.blocklist", "Blocked CPEs", "security", ""},
-	{"settings", "System settings", "", "/settings"},
-	{"settings.metrics", "Metric definitions", "settings", ""},
-	{"settings.metrics.metric", "Metric", "settings.metrics", ""},
-	{"settings.metrics.health", "Health", "settings.metrics", ""},
-	{"settings.general", "General", "settings", "/settings/general"},
-	{"settings.general.general", "General", "settings.general", ""},
-	{"settings.general.ui", "UI settings", "settings.general", ""},
-	{"settings.general.aggregations", "Fleet aggregations", "settings.general", ""},
-	{"settings.system_tasks", "System tasks", "settings", "/settings/system-tasks"},
-	{"settings.system_tasks.summon_from_cpe", "Summon from CPE", "settings.system_tasks", ""},
-	{"settings.system_tasks.bulk_summon", "Bulk summon", "settings.system_tasks", ""},
-	{"settings.system_tasks.bulk_restart", "Bulk restart", "settings.system_tasks", ""},
-	{"settings.database", "DB tools", "settings", "/settings/retention"},
-	{"settings.database.retention", "Retention", "settings.database", ""},
-	{"settings.database.statistics", "Statistics", "settings.database", ""},
-	{"settings.database.indexes", "DB indexes", "settings.database", ""},
-	{"settings.dictionaries", "Dictionaries", "settings", "/settings/dictionaries"},
-	{"settings.dictionaries.tags", "Tags", "settings.dictionaries", ""},
-	{"settings.users", "Users and Roles", "settings", "/settings/users"},
-	{"settings.users.users", "Users", "settings.users", ""},
-	{"settings.users.users.tokens", "API tokens", "settings.users.users", ""},
-	{"settings.users.users.dashboards", "Fleet dashboards", "settings.users.users", ""},
-	{"settings.users.roles", "Roles", "settings.users", ""},
-	{"settings.authentication", "Authentication", "settings", "/settings/authentication"},
-	{"settings.authentication.radius", "RADIUS", "settings.authentication", "/settings/authentication/radius"},
-	{"settings.api_docs", "API documentation", "settings", "/settings/api-docs"},
-	{"settings.delivery", "Delivery & Connection", "settings", "/settings/delivery"},
-	{"settings.provisioning", "Provisioning", "settings", "/settings/provisioning"},
-	{"settings.provisioning.templates", "Templates", "settings.provisioning", ""},
-	{"settings.provisioning.rules", "Rules", "settings.provisioning", ""},
-	{"settings.provisioning.variables", "Variables", "settings.provisioning", ""},
-	{"settings.provisioning.metrics", "Metrics", "settings.provisioning", ""},
-	{"settings.provisioning.metrics.general", "General Metrics", "settings.provisioning.metrics", ""},
-	{"settings.provisioning.metrics.general.metric", "Metric", "settings.provisioning.metrics.general", ""},
-	{"settings.provisioning.metrics.general.health", "Health", "settings.provisioning.metrics.general", ""},
-	{"settings.provisioning.metrics.interface", "Per-interface metrics", "settings.provisioning.metrics", ""},
-	{"settings.provisioning.metrics.polling", "Additional polling", "settings.provisioning.metrics", ""},
-	{"settings.provisioning.features", "Advanced settings", "settings.provisioning", ""},
-	{"settings.provisioning.cpe_detail", "CPE detail", "settings.provisioning", ""},
-	{"settings.provisioning.cpe_detail.lan", "LAN ports", "settings.provisioning.cpe_detail", ""},
-	{"settings.provisioning.cpe_detail.info", "CPE info", "settings.provisioning.cpe_detail", ""},
+	{"fleet", "Fleet status", "", "/", []string{"full", "add", "read", "edit", "delete"}},
+	{"inventory", "CPE inventory", "", "/devices", []string{"full", "add", "read", "write", "export"}},
+	{"cpe", "CPE overview", "", "", []string{"full", "read", "write", "delete", "export"}},
+	{"tasks", "CWMP tasks", "", "/tasks", []string{"full", "read", "delete", "export"}},
+	{"faults", "CWMP faults", "", "/faults", []string{"full", "read", "write", "delete", "export"}},
+	{"firmwares", "Firmware library", "", "/firmwares", []string{"full", "read", "write", "delete"}},
+	{"security", "Access controls", "", "", []string{}},
+	{"security.blocklist", "Device block list", "security", "/security", []string{"full", "read", "add", "remove"}},
+	{"security.audit", "Operator audit", "security", "/security?tab=audit", []string{"read"}},
+	{"settings", "System settings", "", "", []string{}},
+	{"settings.general", "General", "settings", "/settings/general", []string{"full", "read", "write"}},
+	{"settings.system_tasks", "System tasks", "settings", "/settings/system-tasks", []string{"full", "read", "write", "delete"}},
+	{"settings.database", "DB tools", "settings", "/settings/retention", []string{"full", "read", "write", "delete"}},
+	{"settings.dictionaries", "Dictionaries", "settings", "/settings/dictionaries", []string{"full", "read", "write", "delete", "export"}},
+	{"settings.users", "Users and Roles", "settings", "/settings/users", []string{"full", "read", "write", "delete", "import", "export"}},
+	{"settings.authentication", "Authentication", "settings", "/settings/authentication", []string{"full", "read", "write"}},
+	{"settings.delivery", "Delivery & connection", "settings", "/settings/delivery", []string{"full", "read", "write"}},
+	{"settings.provisioning", "Provisioning", "settings", "/settings/provisioning", []string{"full", "read", "write", "delete"}},
+	{"settings.api_docs", "API documentation", "settings", "/settings/api-docs", []string{"full", "read", "write"}},
+}
+
+// CanonicalPermission adapts internal screen IDs; saved roles accept catalog keys only.
+func CanonicalPermission(section, action string) (string, string) {
+	original := section
+	switch {
+	case strings.HasPrefix(section, "inventory.cpes."):
+		section = "cpe"
+	case section == "inventory" || strings.HasPrefix(section, "inventory."):
+		section = "inventory"
+	case strings.HasPrefix(section, "tasks."):
+		section = "tasks"
+	case strings.HasPrefix(section, "settings.metrics"):
+		section = "settings.provisioning"
+	default:
+		for _, parent := range []string{"fleet", "cpe", "faults", "firmwares", "security.blocklist", "security.audit", "settings.general", "settings.system_tasks", "settings.database", "settings.dictionaries", "settings.users", "settings.authentication", "settings.delivery", "settings.provisioning", "settings.api_docs"} {
+			if strings.HasPrefix(section, parent+".") {
+				section = parent
+				break
+			}
+		}
+	}
+	if action == "edit" && section != "fleet" {
+		action = "write"
+	}
+	if section == "security.blocklist" {
+		if action == "write" {
+			action = "add"
+		}
+		if action == "delete" {
+			action = "remove"
+		}
+	}
+	if original == "inventory.cpes" && action == "delete" {
+		section = "cpe"
+	}
+	if strings.HasPrefix(original, "inventory.cpes.tasks") && action == "delete" {
+		section = "tasks"
+	}
+	if strings.HasPrefix(original, "inventory.cpes.faults") && action != "read" {
+		section = "faults"
+	}
+	// Snapshot deletion is not the Delete CPE action.
+	if original == "inventory.cpes.snapshots" && action == "delete" {
+		action = "full"
+	}
+	return section, action
 }
 
 func PermissionKey(section, action string) string { return "access." + section + "." + action }
@@ -99,25 +87,27 @@ func PermissionKey(section, action string) string { return "access." + section +
 func permissionKeys(readOnly bool) []string {
 	keys := []string{}
 	for _, section := range PermissionSections {
-		for _, action := range PermissionActions {
-			if readOnly && (action != "read" || section.ID == "settings.database.statistics" || section.ID == "settings.database.indexes" || section.ID == "inventory.cpes.credentials") {
-				continue
+		for _, action := range section.Actions {
+			if !readOnly || action == "read" {
+				keys = append(keys, PermissionKey(section.ID, action))
 			}
-			keys = append(keys, PermissionKey(section.ID, action))
 		}
 	}
 	return keys
 }
 
 func HasSectionPermission(permissions []string, section, action string) bool {
+	section, action = CanonicalPermission(section, action)
+	if section == "security" && action == "read" {
+		return HasSectionPermission(permissions, "security.blocklist", "read") || HasSectionPermission(permissions, "security.audit", "read")
+	}
 	full, requested := PermissionKey(section, "full"), PermissionKey(section, action)
-	read := action == "read" || action == "full"
-	granted := false
+	read, granted := action == "read" || action == "full", false
 	for _, key := range permissions {
-		if key == full {
+		if key == full && IsSectionPermission(full) {
 			return true
 		}
-		if key == requested {
+		if key == requested && IsSectionPermission(requested) {
 			granted = true
 		}
 		if key == PermissionKey(section, "read") {
@@ -128,13 +118,12 @@ func HasSectionPermission(permissions []string, section, action string) bool {
 }
 
 func CanVisitSection(permissions []string, section string) bool {
-	for _, key := range permissions {
-		if !strings.HasPrefix(key, "access."+section+".") {
-			continue
-		}
-		index := strings.LastIndex(key, ".")
-		action := key[index+1:]
-		if (action == "read" || action == "full") && HasSectionPermission(permissions, key[7:index], "read") {
+	section, _ = CanonicalPermission(section, "read")
+	if HasSectionPermission(permissions, section, "read") {
+		return true
+	}
+	for _, entry := range PermissionSections {
+		if strings.HasPrefix(entry.ID, section+".") && HasSectionPermission(permissions, entry.ID, "read") {
 			return true
 		}
 	}
@@ -142,9 +131,11 @@ func CanVisitSection(permissions []string, section string) bool {
 }
 
 func IsSectionPermission(key string) bool {
-	for _, valid := range AllPermissions {
-		if key == valid {
-			return true
+	for _, section := range PermissionSections {
+		for _, action := range section.Actions {
+			if key == PermissionKey(section.ID, action) {
+				return true
+			}
 		}
 	}
 	return false

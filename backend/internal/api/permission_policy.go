@@ -135,24 +135,6 @@ func (m *permissionMux) HandleFunc(pattern string, next http.HandlerFunc) {
 			administrator = user.Role == models.RoleFull
 		}
 		requestScopes := append([]string{}, scopes...)
-		if (req.Method == "GET" && isOverviewConsumer(req.URL.Path)) || strings.HasSuffix(req.URL.Path, "/set-parameters") {
-			requestScopes = append(requestScopes, networkSections()...)
-		}
-		if featureID := req.PathValue("featureID"); featureID != "" {
-			parent := "settings.provisioning.features"
-			if strings.HasPrefix(req.URL.Path, "/device/") {
-				parent = "inventory.cpes.features"
-			}
-			requestScopes = []string{parent + "." + featureID}
-		} else if (req.Method == "GET" && (isOverviewConsumer(req.URL.Path) || strings.HasSuffix(req.URL.Path, "/image"))) || (req.Method == "PUT" && strings.HasSuffix(req.URL.Path, "/features")) {
-			for _, key := range permissions {
-				section, _, valid := splitPermission(key)
-				provisioningConsumer := req.URL.Path == "/provisioning/templates" || req.Method == "PUT" || strings.HasSuffix(req.URL.Path, "/image")
-				if valid && ((provisioningConsumer && strings.HasPrefix(section, "settings.provisioning.features.")) || (req.Method == "GET" && strings.HasPrefix(section, "inventory.cpes.features."))) {
-					requestScopes = append(requestScopes, section)
-				}
-			}
-		}
 		if strings.Contains(pattern, "/provisioning/import") || strings.Contains(pattern, "/provisioning/export") {
 			for _, section := range provisioningTransferSections {
 				if !administrator && !models.HasSectionPermission(permissions, section, action) {
@@ -160,6 +142,16 @@ func (m *permissionMux) HandleFunc(pattern string, next http.HandlerFunc) {
 					return
 				}
 			}
+		}
+		if req.Method == "PUT" && req.URL.Path == "/dashboard/panels" {
+			for _, candidate := range []string{"add", "edit", "delete"} {
+				if administrator || models.HasSectionPermission(permissions, "fleet", candidate) {
+					next(w, req.WithContext(auth.WithOperation(req.Context(), "fleet", candidate)))
+					return
+				}
+			}
+			respondError(w, http.StatusForbidden, "Fleet Add, Edit or Delete permission required")
+			return
 		}
 		for _, scope := range requestScopes {
 			operationAction := action
@@ -179,6 +171,54 @@ func (m *permissionMux) HandleFunc(pattern string, next http.HandlerFunc) {
 // Every authenticated endpoint belongs to a section and one of the six actions.
 // Shared reference data lists explicit consumers; parent permissions never satisfy a child.
 func endpointPermissions(pattern string) ([]string, string, bool) {
+	method, path, _ := strings.Cut(pattern, " ")
+	switch {
+	case path == "/dashboard/panels/copy":
+		return []string{"settings.users"}, "write", false
+
+	case (path == "/devices" || path == "/v1/devices") && method == "POST":
+		return []string{"inventory"}, "add", false
+	case path == "/devices/stats":
+		return []string{"fleet", "inventory"}, "read", false
+	case path == "/security/overview":
+		return []string{"security.blocklist", "security.audit"}, "read", false
+	case method == "POST" && (path == "/system-tasks/bulk-summon" || path == "/system-tasks/bulk-restart"):
+		return []string{"inventory", "settings.system_tasks"}, "write", false
+	case method == "POST" && path == "/system-tasks/summon":
+		return []string{"cpe", "settings.system_tasks"}, "write", false
+	case method == "GET" && path == "/system-tasks/{id}":
+		return []string{"settings.system_tasks", "cpe", "inventory"}, "read", false
+	case (strings.HasPrefix(path, "/device/") || strings.HasPrefix(path, "/devices/") || strings.HasPrefix(path, "/v1/devices/")) && strings.HasSuffix(path, "/factory-reset"):
+		return []string{"cpe"}, "write", false
+	case method == "DELETE" && strings.HasPrefix(path, "/device/") && (strings.Contains(path, "/wifi/") || strings.Contains(path, "/wan-interfaces/") || strings.Contains(path, "/features/")):
+		return []string{"cpe"}, "write", false
+	case method == "GET" && ((strings.HasPrefix(path, "/device/") && strings.Count(path, "/") == 2) || (strings.HasPrefix(path, "/devices/") && strings.Count(path, "/") == 2) || (strings.HasPrefix(path, "/v1/devices/") && strings.Count(path, "/") == 3)):
+		return []string{"cpe"}, "read", false
+	case method != "GET" && method != "DELETE" && !strings.HasPrefix(path, "/devices/analytics/") && (strings.HasPrefix(path, "/device/") || strings.HasPrefix(path, "/devices/") || strings.HasPrefix(path, "/v1/devices/")):
+		return []string{"cpe"}, "write", false
+	}
+	scopes, action, sessionOnly := internalEndpointPermissions(pattern)
+	if sessionOnly {
+		return scopes, action, true
+	}
+	canonical, seen := []string{}, map[string]bool{}
+	inputAction := action
+	for _, section := range scopes {
+		target, targetAction := models.CanonicalPermission(section, inputAction)
+		if !models.IsSectionPermission(models.PermissionKey(target, targetAction)) {
+			// Unlisted operations (for example provisioning backups) require Full.
+			targetAction = "full"
+		}
+		action = targetAction
+		if !seen[target] {
+			canonical = append(canonical, target)
+			seen[target] = true
+		}
+	}
+	return canonical, action, false
+}
+
+func internalEndpointPermissions(pattern string) ([]string, string, bool) {
 	method, path, _ := strings.Cut(pattern, " ")
 	action := "edit"
 	if method == "GET" {
@@ -222,7 +262,7 @@ func endpointPermissions(pattern string) ([]string, string, bool) {
 		return scope("inventory.wans")
 	case "/firmwares":
 		if method == "POST" {
-			action = "import"
+			action = "write"
 		}
 		return scope("firmwares")
 	case "/devices/device-types":

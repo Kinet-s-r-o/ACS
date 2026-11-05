@@ -96,7 +96,7 @@ const Devices: Component = () => {
   const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', { column: 'created_at', direction: 'desc' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
-  const { isFullAccess, hasAnyPermission, user, can, canVisit } = useAuth();
+  const { isFullAccess, user, can, canVisit } = useAuth();
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
@@ -256,9 +256,9 @@ const Devices: Component = () => {
     switch (columnId) {
       case 'serial_number':
         return (
-          <A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(device.serial_number)}`} aria-label={`Open CPE ${device.serial_number}`}>
+          <Show when={can('cpe', 'read')} fallback={<span class="font-mono text-sm">{device.serial_number}</span>}><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(device.serial_number)}`} aria-label={`Open CPE ${device.serial_number}`}>
             {device.serial_number}
-          </A>
+          </A></Show>
         );
       case 'manufacturer':
         return <span class="text-secondary text-sm">{device.manufacturer || '-'}</span>;
@@ -282,7 +282,7 @@ const Devices: Component = () => {
       case 'created_at':
         return <span class="text-muted text-xs">{formatDateTime(device.created_at)}</span>;
       case 'tags':
-        return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={hasAnyPermission('devices.configure', 'devices.write')} onUpdated={() => { void refetch(); }} /></Show>;
+        return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={can('cpe', 'write')} onUpdated={() => { void refetch(); }} /></Show>;
       case 'software_version':
         return <span class="text-secondary text-sm">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion')}</span>;
       case 'hardware_version':
@@ -536,10 +536,10 @@ const Devices: Component = () => {
             <button type="button" class="icon-button" onClick={() => void exportDevicesCSV()} disabled={!can('inventory.cpes', 'export') || deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} title="Export filtered CPEs as CSV" aria-label={`Export ${deviceList()?.total ?? 0} filtered CPEs as CSV`}>
               <Download size={15} aria-hidden="true" />
             </button>
-            <Show when={hasAnyPermission('devices.create', 'devices.write')}>
+            <Show when={can('inventory', 'add')}>
               <button type="button" class="btn btn-primary whitespace-nowrap" onClick={() => setCreateDeviceOpen(true)}><Plus size={14} aria-hidden="true" />Add CPE</button>
             </Show>
-            <div class="relative" ref={inventoryActionsMenu}>
+<Show when={can('inventory', 'write')}><div class="relative" ref={inventoryActionsMenu}>
               <button type="button" class="icon-button" onClick={() => setShowInventoryActions(value => !value)} aria-label="CPE inventory actions" aria-haspopup="menu" aria-expanded={showInventoryActions()} title="CPE inventory actions">
                 <MoreVertical size={16} aria-hidden="true" />
               </button>
@@ -555,7 +555,7 @@ const Devices: Component = () => {
                   </Show>
                 </div>
               </Show>
-            </div>
+            </div></Show>
           </div>
         </div>
         <div class="overflow-x-auto table-scroll isolate">
@@ -660,7 +660,7 @@ const Devices: Component = () => {
       <Pagination page={page()} totalPages={totalPages()} totalItems={deviceList()?.total ?? 0} pageSize={pageSize()} onPageChange={setPage} storageKey="devices" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setPage(0); }} />
       </Show>
       <Show when={createDeviceOpen()}>
-        <CreateDeviceDialog canAutoFactoryReset={hasAnyPermission('devices.reset', 'devices.write')} requiresTOTP={user()?.two_factor_configured ?? false} onClose={() => setCreateDeviceOpen(false)} onCreated={device => {
+        <CreateDeviceDialog canAutoFactoryReset={can('cpe', 'write')} requiresTOTP={user()?.two_factor_configured ?? false} onClose={() => setCreateDeviceOpen(false)} onCreated={device => {
           setCreateDeviceOpen(false);
           setColumnFilters({});
           setPage(0);

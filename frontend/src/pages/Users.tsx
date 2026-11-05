@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createEffect, createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { Users, ShieldCheck, Ban, Check, Edit2, Plus, Search, X, KeyRound, LayoutDashboard } from 'lucide-solid';
+import { Users, ShieldCheck, Ban, Check, Edit2, Plus, Search, X, KeyRound, LayoutDashboard, Trash2 } from 'lucide-solid';
 import UserAPITokens from '../components/UserAPITokens';
 import AccountTransferActions from '../components/AccountTransferActions';
 import { api, type User } from '../lib/api';
@@ -159,6 +159,15 @@ const UsersPage: Component = () => {
     finally { setPendingAction(null); }
   };
 
+  const handleDeleteUser = async (target: User) => {
+    if (!can('settings.users', 'delete') || pendingAction() || target.id === currentUser()?.id) return;
+    if (!await confirm({ title: `Delete operator ${target.username}?`, description: 'This permanently removes the account, its API tokens and saved Fleet dashboard. Existing audit records are retained.', confirmLabel: 'Delete operator', tone: 'danger' })) return;
+    setPendingAction(`delete-user-${target.id}`);
+    try { await api.deleteUser(target.id); await refetchUsers(); notify({ tone: 'success', title: 'Operator deleted', message: target.username }); }
+    catch (error) { notify({ tone: 'error', title: 'Could not delete operator', detail: (error as Error).message, persistent: true }); }
+    finally { setPendingAction(null); }
+  };
+
   const openEditUser = (u: User) => {
     setEditingUser(u);
     setUserForm({ username: u.username, authProvider: u.auth_provider || 'local', firstName: u.first_name || '', lastName: u.last_name || '', email: u.email || '', required2FA: u.required_2fa, reset2FA: false, password: '', role: u.role, roleId: u.role_id?.toString() || systemRoleId(u.role) });
@@ -193,10 +202,10 @@ const UsersPage: Component = () => {
               </Show>
             </div>
             <AccountTransferActions kind="users" ids={sortedUsers().map(user => user.id)} loading={users.loading || !!users.error} onImported={() => refetchUsers()} />
-            <button onClick={openCreateUser} class="btn btn-primary text-xs py-1.5">
+            <Show when={can('settings.users', 'write')}><button onClick={openCreateUser} class="btn btn-primary text-xs py-1.5">
               <Plus size={12} />
               Add operator
-            </button>
+            </button></Show>
           </div>
         </div>
 
@@ -259,13 +268,14 @@ const UsersPage: Component = () => {
                     <td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right">
                       <div class="flex items-center justify-end gap-1">
                         <Show when={can('settings.users.users.tokens', 'read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
-                        <Show when={can('settings.users.users.dashboards', 'read')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
+                        <Show when={can('settings.users', 'write') && can('fleet', 'read')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
                         <Show when={isFullAccess() && hasPermission('users.write')}>
                           <button type="button" onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}><Edit2 size={14} /></button>
                           <button type="button" onClick={() => void handleSetUserActive(u)} class={`icon-button ${u.active ? 'text-amber-400' : 'text-emerald-400'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
                             {u.active ? <Ban size={14} /> : <Check size={14} />}
                           </button>
                         </Show>
+                        <Show when={can('settings.users', 'delete')}><button type="button" class="icon-button text-error" aria-label={`Delete operator ${u.username}`} onClick={() => void handleDeleteUser(u)} disabled={pendingAction() !== null || currentUser()?.id === u.id}><Trash2 size={14} /></button></Show>
                       </div>
                     </td>
                     <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td>
@@ -277,7 +287,7 @@ const UsersPage: Component = () => {
           <div class="mt-3">
           </div>
         </Show>
-        <Show when={!users.loading && !users.error && (users()?.length ?? 0) === 0}><EmptyState compact title="No additional operators exist" description="Create a named operator account instead of sharing administrative credentials." action={<button type="button" class="btn btn-primary" onClick={openCreateUser}>Add operator</button>} /></Show>
+        <Show when={!users.loading && !users.error && (users()?.length ?? 0) === 0}><EmptyState compact title="No additional operators exist" description="Create a named operator account instead of sharing administrative credentials." action={can('settings.users', 'write') ? <button type="button" class="btn btn-primary" onClick={openCreateUser}>Add operator</button> : undefined} /></Show>
       </div>
       <Pagination page={userPage()} totalPages={userTotalPages()} totalItems={filteredUsers().length} pageSize={pageSize()} onPageChange={setUserPage} storageKey="users" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setUserPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setUserPage(0); }} />
       </Show>

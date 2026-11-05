@@ -21,6 +21,7 @@ const DEFAULT_COLUMN_ORDERS: DefaultColumnOrder[] = [
   { route: '/settings/provisioning', matches: ['group'], order: ['name', 'parameter', 'source', 'min interval', 'gpv interval', 'group', 'active', 'device match', 'unit', 'actions'] },
   { route: '/settings/provisioning', matches: ['#'], order: ['#', 'cwmp path', 'active', 'phase', 'value type', 'value', 'tags', 'actions'] },
   { route: '/settings/users', matches: ['username'], order: ['username', 'first name', 'last name', 'email', 'required 2fa', 'authenticator', 'role', 'last login', 'actions'] },
+  { route: '/settings/users', matches: ['section / tab'], order: ['section / tab', 'full', 'add', 'read', 'write', 'edit', 'delete', 'remove', 'import', 'export'] },
   { route: '/settings/users', matches: ['permissions'], order: ['name', 'description', 'permissions', 'type', 'actions'] },
   { route: '/settings/dictionaries', matches: ['tag'], order: ['tag', 'description', 'color', 'actions'] },
   { route: '/security', matches: ['actor'], order: ['time', 'actor', 'action', 'resource', 'source', 'http status'] },

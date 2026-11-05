@@ -548,32 +548,8 @@ func runAutoMigrate(db *gorm.DB) error {
 		}
 	}
 
-	// Migrate existing users to use RoleID.
-	var customRoles []models.Role
-	sections, err := database.NewRoleRepository(db).PermissionCatalog(context.Background())
-	if err != nil {
-		return err
-	}
-	validPermissions := map[string]bool{}
-	for _, key := range database.CatalogPermissionKeys(sections) {
-		validPermissions[key] = true
-	}
-	if err := db.Where("is_system = ?", false).Find(&customRoles).Error; err != nil {
-		return err
-	}
-	for _, role := range customRoles {
-		permissions := []string{}
-		for _, permission := range role.Permissions {
-			if validPermissions[permission] {
-				permissions = append(permissions, permission)
-			}
-		}
-		if !slices.Equal(role.Permissions, permissions) {
-			role.Permissions = permissions
-			if err := db.Save(&role).Error; err != nil {
-				return err
-			}
-		}
+	if err := database.MigrateOperatorPermissionCatalog(context.Background(), db); err != nil {
+		return fmt.Errorf("migrate operator permission catalog: %w", err)
 	}
 	if err := migrateUsersToRoles(db); err != nil {
 		return fmt.Errorf("migrate users to roles: %w", err)

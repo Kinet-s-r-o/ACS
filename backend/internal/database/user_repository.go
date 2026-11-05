@@ -66,6 +66,51 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id int64, passwordH
 		}).Error
 }
 
+func (r *UserRepository) Delete(ctx context.Context, id int64) error {
+	return r.DeleteChecked(ctx, id, nil)
+}
+
+func (r *UserRepository) DeleteChecked(ctx context.Context, id int64, check func(*gorm.DB, *models.User) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("LOCK TABLE roles, users IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
+			return err
+		}
+		var user models.User
+		if err := tx.Select("id", "role", "role_id", "active", "auth_provider").First(&user, id).Error; err != nil {
+			return err
+		}
+		if check != nil {
+			if err := check(tx, &user); err != nil {
+				return err
+			}
+		}
+		if user.Active && user.Role == models.RoleFull {
+			if authn.Normalize(user.AuthProvider) == "local" {
+				if err := requireOtherLocalAdmin(tx, id); err != nil {
+					return err
+				}
+			}
+			var count int64
+			if err := tx.Model(&models.User{}).Where("id <> ? AND role = ? AND active = ?", id, models.RoleFull, true).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return ErrLastFullAdmin
+			}
+		}
+		if err := tx.Where("user_id = ?", id).Delete(&models.APIToken{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", id).Delete(&models.UserDashboardPanel{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", id).Delete(&models.UserDashboardLayout{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&models.User{}, id).Error
+	})
+}
+
 func (r *UserRepository) UpdateAccount(ctx context.Context, id int64, username, firstName, lastName, email string, required2FA, reset2FA bool, role models.UserRole, roleID *int64, passwordHash, authProvider string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {

@@ -35,7 +35,7 @@ export const AuthProvider: ParentComponent = (props) => {
   const can = (section: string, action: PermissionAction) => user()?.role === 'full' || canSection(permissions(), section, action);
   const canVisit = (section: string) => user()?.role === 'full' || canVisitSection(permissions(), section);
   const canCurrent = (action: PermissionAction) => can(activePermissionSection(), action);
-  const isFullAccess = () => permissions().some(key => key.startsWith(`access.${activePermissionSection()}.`) && (key.endsWith('.edit') || key.endsWith('.full')) && can(key.slice(7, key.lastIndexOf('.')), 'edit')) || can(activePermissionSection(), 'edit');
+  const isFullAccess = () => can(activePermissionSection(), 'edit');
   const hasPermission = (perm: string) => legacyPermission(permissions(), perm, activePermissionSection());
   const hasAnyPermission = (...perms: string[]) => perms.some(hasPermission);
 

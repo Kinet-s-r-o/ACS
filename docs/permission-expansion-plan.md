@@ -1,32 +1,46 @@
-# Section and tab permissions
+# Operator permission catalog
 
-## Model
+Roles use `access.<section>.<action>` keys. The catalog is defined in `backend/internal/models/permissions.go`; authenticated `GET /permissions` returns section rows and each row's supported `actions`. The role editor displays only those supported choices. Other controls use internal screen aliases that resolve to these section grants.
 
-Saved roles use `access.<section>.<action>` keys. The only actions are **Full, Read, Edit, Delete, Import, Export**. Each menu entry, submenu and nested tab has its own row. This includes Requested/Result task tabs, Metric/Health, Wi-Fi/LAN/WAN dialogs and user-defined Advanced settings tabs.
+| Section | Actions |
+| --- | --- |
+| Fleet status (`fleet`) | Full, Add, Read, Edit, Delete |
+| CPE inventory (`inventory`) | Full, Add, Read, Write, Export |
+| CPE overview (`cpe`) | Full, Read, Write, Delete, Export |
+| CWMP tasks (`tasks`) | Full, Read, Delete, Export |
+| CWMP faults (`faults`) | Full, Read, Write, Delete, Export |
+| Firmware library (`firmwares`) | Full, Read, Write, Delete |
+| Access controls / Device block list (`security.blocklist`) | Full, Read, Add, Remove |
+| Access controls / Operator audit (`security.audit`) | Read |
+| System settings / General (`settings.general`) | Full, Read, Write |
+| System settings / System tasks (`settings.system_tasks`) | Full, Read, Write, Delete |
+| System settings / DB tools (`settings.database`) | Full, Read, Write, Delete |
+| System settings / Dictionaries (`settings.dictionaries`) | Full, Read, Write, Delete, Export |
+| System settings / Users and Roles (`settings.users`) | Full, Read, Write, Delete, Import, Export |
+| System settings / Authentication (`settings.authentication`) | Full, Read, Write |
+| System settings / Delivery & connection (`settings.delivery`) | Full, Read, Write |
+| System settings / Provisioning (`settings.provisioning`) | Full, Read, Write, Delete |
+| System settings / API documentation (`settings.api_docs`) | Full, Read, Write |
 
-Full grants all actions on its own row only. It never grants a child or sibling row. Other actions require Read on the same row; the role editor selects Read automatically. A parent can be traversed when a descendant is readable, without granting operations on the parent. Shared reference endpoints explicitly name their consumers.
+Access controls and System settings are navigation groups without their own grants. A section's grants cover its existing and future subtabs. CPE overview is an independent section: CPE inventory Read covers CPEs, WANs and future inventory tabs, but does not grant device-detail access. Metric definitions uses Provisioning grants.
 
-Edit covers create/update and operational commands; Delete covers removals; Import/Export cover transfers where supported. Factory reset requires Full on `inventory.cpes.maintenance.diagnostic` and the existing fresh verification. Full provisioning backup/clone requires the relevant action on every included section and dynamic tab. Replacing configuration during import also requires Delete on replaced sections.
+Full grants every operation in its section, including existing transfer operations that have no standalone catalog action. It does not grant sibling sections. Other actions require Read; selecting an action in the role editor automatically selects Read. Read does not imply Add, Write, Edit, Delete, Remove, Import or Export.
 
-## Catalog and enforcement
+## Operations
 
-- Static catalog: `backend/internal/models/permissions.go`.
-- Dynamic catalog: `backend/internal/database/permission_catalog.go`; Advanced settings feature IDs create separate rows under `settings.provisioning.features` and `inventory.cpes.features`.
-- Console discovery: authenticated `GET /permissions` returns actions and ordered section rows; `RolesTab.tsx` renders the six-column matrix.
-- API policies: `backend/internal/api/permission_policy.go`; every authenticated console/integration route must have an explicit policy. Shared payload handlers additionally validate fields against their own tab. Metric/Health updates preserve inaccessible fields; filtered Advanced settings saves preserve unsubmitted tabs and use explicit `deleted_ids` for tab deletion.
-- Network parameter policies: `permission_network_fields.go` mirrors editable suffixes in `frontend/src/lib/{wifi,lan,wan}Fields.ts`. New fields require a matching tab policy. Diagnostic access remains a separate explicit raw-parameter workflow.
-- Console visibility: `frontend/src/lib/permissions.ts`, `SectionPage.tsx`, menu filtering and page/tab checks. UI visibility is not an authorization boundary.
+- Fleet Add creates panels; Edit changes panel configuration and saved layout; Delete removes panels. The shared panel-save endpoint compares the new list with the locked persisted snapshot so an addition cannot smuggle an edit or deletion. Read does not save layout or expose editing controls. Administrative edits to another user's dashboard remain under Users and Roles Write.
+- Inventory Add creates a waiting CPE. Inventory Write queues Summon visible and Restart visible. CPE overview Write changes parameters/tags and queues Summon, Reboot, Factory reset and network-object changes. Delete on CPE overview removes the CPE record, not task/fault history. Existing fresh password/TOTP verification remains mandatory for reset/restart operations.
+- CWMP task deletion and fault resolving/deletion retain their own Tasks/Faults permissions, including actions entered from device detail. Snapshot deletion requires CPE Full. Read-only parameter and credential responses stay redacted; inventory Full does not reveal independent CPE secrets.
+- Firmware Write includes upload. Device block list Add blocks a serial, Remove unblocks it. Operator audit has Read only.
+- Users and Roles shares one set of grants across both tabs, including independent Import and Export. Write includes creating/updating accounts and roles. Delete removes accounts or custom roles; self-deletion, last-administrator protection and delegation limits remain enforced. Deleting an account removes its tokens and saved dashboard, retaining audit records.
+- Provisioning Write covers all configuration subtabs, Metric/Health and future Advanced settings tabs. Delete controls configuration removal. Existing provisioning JSON import/export require Full. API documentation Read shows the specification; Write enables Swagger command testing, which still requires a token authorized for the target API operation.
 
-Legacy constants and component adapters remain internal implementation details. Legacy keys are neither accepted in saved role updates nor advertised as permission types. The authoritative section middleware runs before internal legacy wrappers.
+## Migration and system accounts
 
-## System accounts and rollout
+`database.MigrateOperatorPermissionCatalog` performs a one-time, transaction-protected migration recorded in the existing settings table. A consolidated grant is retained only when the old grants covered all former boundaries for that operation. Partial granular grants are not promoted into broader section permissions. Review existing custom roles after upgrading; incompatible partial grants can be removed. Re-running startup preserves roles already configured with the new catalog.
 
-The built-in system `admin` always resolves the entire current catalog, including dynamic rows, regardless of its persisted permission snapshot. Only this role maps to the administrative account role. Sessions and API tokens resolve current permissions on each request and fail closed on lookup errors.
+Built-in admin/viewer defaults are synchronized at startup. The system administrator always resolves the entire current catalog; viewer receives the supported Read grants. Sessions and API tokens resolve current role permissions on every request and fail closed on lookup errors. No schema changes or new indexes are needed.
 
-At startup, built-in admin/viewer defaults are synchronized. Obsolete keys are removed from custom roles without migration into broader grants. **Existing custom roles must be configured again after upgrading.** No new database columns or indexes are required. Viewer defaults exclude credential access, SQL statistics and index administration; dynamic tabs require explicit grants.
+## Verification
 
-## Verification and future changes
-
-Tests cover own-row Full, navigation without inheritance, action independence, field isolation, explicit dynamic-tab deletion, privilege delegation limits, default admin access and current permissions for API tokens. PostgreSQL tests use `TEST_DATABASE_URL` and isolated schemas. Run the backend race/vet checks and frontend UI/test/build commands from the area routers.
-
-For each new section/tab, add its catalog row, backend route/payload policy and frontend visibility in the same change. Never introduce another action type or authorize a child through its parent.
+Tests cover the exact catalog, future-subtab inheritance, inventory/detail separation, independent actions, route and payload authorization, secret redaction, privilege delegation and conservative migration. PostgreSQL fixtures cover migration idempotency, Fleet mutations, account deletion and JSON transfers without creating application indexes. Run backend race/vet and frontend UI/test/build checks from their area roots.

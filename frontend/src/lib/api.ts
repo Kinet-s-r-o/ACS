@@ -360,6 +360,7 @@ export const api = {
   saveRadiusSettings: (settings: RadiusConfig) => request<RadiusConfig>('/settings/authentication/radius', { method: 'PUT', body: JSON.stringify(settings) }),
   testRadius: (username: string, password: string) => request<{ status: string }>('/settings/authentication/radius/test', { method: 'POST', body: JSON.stringify({ username, password }) }),
   getUsers: () => request<User[]>('/users'),
+  deleteUser: (id: number) => request<void>(`/users/${id}`, { method: 'DELETE' }),
   exportAccounts: (kind: 'users' | 'roles', ids: number[]) => requestBlob(`/${kind}/export`, { method: 'POST', body: JSON.stringify({ ids }) }),
   importAccounts: (kind: 'users' | 'roles', backup: unknown) => request<{ created: number; skipped: number }>(`/${kind}/import`, { method: 'POST', body: JSON.stringify(backup) }),
   getAPITokens: (userId: number) => request<APIToken[]>(`/users/${userId}/api-tokens`),

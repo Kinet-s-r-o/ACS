@@ -57,6 +57,7 @@ const readUserFleetLayout = (userID: string): FleetLayout => {
 const FleetPanelFrame: Component<{
   id: string;
   layout: FleetPanelLayout;
+  editable?: boolean;
   onMove: (source: string, target: string, after: boolean) => void;
   onResize?: (id: string, width: number, height?: number) => void;
   children: JSX.Element;
@@ -100,7 +101,7 @@ const FleetPanelFrame: Component<{
     window.addEventListener('pointercancel', end, { once: true });
   };
   const dragStart = (event: PointerEvent) => {
-    if (event.button !== 0) return;
+    if (!props.editable || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     setDragging(true);
@@ -173,7 +174,7 @@ const FleetPanelFrame: Component<{
   >
     <div class="fleet-panel-shell" ref={shell}>
       {props.children}
-      <button type="button" class="fleet-panel-drag-handle" aria-label="Move panel" title="Drag to move panel" onPointerDown={dragStart}><GripVertical size={14} aria-hidden="true" /></button>
+      <Show when={props.editable}><button type="button" class="fleet-panel-drag-handle" aria-label="Move panel" title="Drag to move panel" onPointerDown={dragStart}><GripVertical size={14} aria-hidden="true" /></button></Show>
       <Show when={props.onResize}><button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge to resize width" onPointerDown={(event) => resizeStart(event, 'x')} />
       <button type="button" class="fleet-panel-resize-y" aria-label="Resize panel height" title="Drag bottom edge to resize height" onPointerDown={(event) => resizeStart(event, 'y')} /></Show>
     </div>
@@ -277,7 +278,7 @@ const ParameterDistribution: Component<{ config: DashboardPanelConfig; refreshKe
 
 const Dashboard: Component = () => {
   const { confirm, notify } = useFeedback();
-  const { user, isFullAccess, hasPermission } = useAuth();
+  const { user, isFullAccess, hasPermission, can } = useAuth();
   const [searchParams] = useSearchParams();
   const dashboardTargetUserID = () => {
     const id = Number(searchParams.dashboardUserId);
@@ -286,6 +287,12 @@ const Dashboard: Component = () => {
   const targetDashboardKey = () => dashboardTargetUserID() ?? 0;
   const managingOtherDashboard = () => targetDashboardKey() > 0;
   const targetDashboardName = () => typeof searchParams.dashboardUserName === 'string' ? searchParams.dashboardUserName : `user #${targetDashboardKey()}`;
+  const canAddPanel = () => managingOtherDashboard() ? can('settings.users', 'write') : can('fleet', 'add');
+  const canEditPanel = () => managingOtherDashboard() ? can('settings.users', 'write') : can('fleet', 'edit');
+  const canRemovePanel = () => managingOtherDashboard() ? can('settings.users', 'write') : can('fleet', 'delete');
+  const existingDraft = () => panelConfigs().some(panel => panel.id === panelDraft()?.id);
+  const canSaveDraft = () => existingDraft() ? canEditPanel() : canAddPanel();
+
   const [savedPanelConfigs, { mutate: setSavedPanelConfigs, refetch: refetchPanelConfigs }] = createResource(targetDashboardKey, (targetID) => targetID ? api.getUserDashboardPanels(targetID) : loadDashboardPanelConfigs());
   const [loadedAggregationOptions] = createResource(api.getDashboardAggregationOptions);
   const aggregationOptions = (): DashboardAggregationOption[] => loadedAggregationOptions() ?? [];
@@ -321,7 +328,7 @@ const Dashboard: Component = () => {
     try { localStorage.removeItem('acs.dashboard.fleet-layout'); } catch { /* Ignore unavailable local storage. */ }
   });
   createEffect(() => {
-    if (!fleetLayoutReady()) return;
+    if (!fleetLayoutReady() || !canEditPanel()) return;
     const snapshot = normalizeFleetLayout(fleetLayout());
     const timer = window.setTimeout(() => {
       const targetID = dashboardTargetUserID();
@@ -371,6 +378,7 @@ const Dashboard: Component = () => {
     setPanelDraft({ ...config, sort_by_count: config.sort_by_count ?? true, sort_direction: config.sort_direction ?? 'desc', thresholds: thresholds.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) });
   };
   const addPanel = () => {
+    if (!canAddPanel()) return;
     if (panelConfigs().length >= 12) {
       notify({ tone: 'error', title: 'Panel limit reached', message: 'A maximum of 12 user panels can be shown on the dashboard.' });
       return;
@@ -557,10 +565,12 @@ const Dashboard: Component = () => {
     }
   };
   const savePanelSettings = async () => {
+    if (!canSaveDraft()) return;
     const next = buildPanelConfig();
     if (next) await persistPanelConfig(next, true);
   };
   const deletePanel = async () => {
+    if (!canRemovePanel() || !existingDraft()) return;
     const panel = panelDraft();
     const isCustom = panel !== null;
     if (!panel) return;
@@ -615,7 +625,7 @@ const Dashboard: Component = () => {
         <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
           <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
           <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
-          <div class="relative" ref={panelActionsMenu}>
+          <Show when={canAddPanel()}><div class="relative" ref={panelActionsMenu}>
             <button type="button" class="icon-button" aria-label="Fleet panel actions" aria-haspopup="menu" aria-expanded={showPanelActionsMenu()} onClick={() => setShowPanelActionsMenu((visible) => !visible)}>
               <MoreVertical size={18} />
             </button>
@@ -626,7 +636,7 @@ const Dashboard: Component = () => {
                 </button>
               </div>
             </Show>
-          </div>
+          </div></Show>
         </div>
       </header>
 
@@ -675,7 +685,7 @@ const Dashboard: Component = () => {
         </dl>
 
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
-        <FleetPanelFrame id="growth" layout={layoutFor('growth')} onMove={movePanel}>
+        <FleetPanelFrame id="growth" layout={layoutFor('growth')} editable={canEditPanel()} onMove={movePanel}>
         <section class="data-panel fleet-content-panel">
           <div class="data-panel-header">
             <div><h2>Device growth</h2><p>Active CPE count at the end of each period, including registrations and deletions.</p></div>
@@ -700,9 +710,9 @@ const Dashboard: Component = () => {
         <Show when={savedPanelConfigs.error}><div class="fleet-layout-status"><ResourceError title="Panel settings are unavailable" description="Retry loading the saved dashboard panels." onRetry={() => refetchPanelConfigs()} /></div></Show>
         <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
           <For each={panelConfigs().filter((config) => (config.kind ?? 'parameter') === 'parameter' && !config.hidden)}>{(config) => (
-            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, panelFallbackOrder(config.id))} onMove={movePanel} onResize={resizePanel}>
+            <FleetPanelFrame id={config.id} layout={layoutFor(config.id, panelFallbackOrder(config.id))} editable={canEditPanel()} onMove={movePanel} onResize={canEditPanel() ? resizePanel : undefined}>
               <section class="data-panel fleet-content-panel">
-                <div class="dashboard-configurable-heading"><h3>{config.title}</h3><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></div>
+                <div class="dashboard-configurable-heading"><h3>{config.title}</h3><Show when={canEditPanel() || canRemovePanel()}><button type="button" class="icon-button" aria-label={`Configure ${config.title} panel`} title="Configure panel" onClick={() => openPanelSettings(config)}><Settings2 size={14} /></button></Show></div>
                 <div class="data-panel-body"><ParameterDistribution config={config} refreshKey={refreshKey()} /></div>
               </section>
             </FleetPanelFrame>
@@ -712,9 +722,9 @@ const Dashboard: Component = () => {
         <Show when={!savedPanelConfigs.loading && !savedPanelConfigs.error}>
           <For each={categoryPanelEntries()}>{(panel) => {
             const config = () => panelConfigs().find((item) => item.id === panel.id);
-            return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, panelFallbackOrder(panel.id))} onMove={movePanel} onResize={resizePanel}>
+            return <FleetPanelFrame id={panel.id} layout={layoutFor(panel.id, panelFallbackOrder(panel.id))} editable={canEditPanel()} onMove={movePanel} onResize={canEditPanel() ? resizePanel : undefined}>
               <section class="data-panel data-panel-section fleet-content-panel">
-                <div class="dashboard-configurable-heading"><h3>{config()?.title ?? panel.label}</h3><button type="button" class="icon-button" aria-label={`Configure ${panel.label} panel`} title="Configure panel" onClick={() => config() && openPanelSettings(config()!)}><Settings2 size={14} /></button></div>
+                <div class="dashboard-configurable-heading"><h3>{config()?.title ?? panel.label}</h3><Show when={canEditPanel() || canRemovePanel()}><button type="button" class="icon-button" aria-label={`Configure ${panel.label} panel`} title="Configure panel" onClick={() => config() && openPanelSettings(config()!)}><Settings2 size={14} /></button></Show></div>
                 <Show when={(config()?.source === 'configured_option' || config()?.source === 'custom_parameter' && !!config()?.aggregation_option_id) && !aggregationOptions().some((option) => option.id === config()?.aggregation_option_id)} fallback={renderAnalytics(panel.id, { limit: panel.limit })}>
                   <p class="py-4 text-center text-xs text-muted">This aggregation option is no longer configured. Choose an available option in panel settings.</p>
                 </Show>
@@ -726,8 +736,8 @@ const Dashboard: Component = () => {
         </div>
       </Show>
       <Show when={panelDraft()}>
-        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex items-center justify-between gap-3"><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
-          <div class="space-y-4">
+        <Dialog title={`Configure ${panelDraft()?.title || 'dashboard panel'}`} description="Set the panel name, data source, and aggregation or threshold settings." size="large" onClose={closePanelSettings} actions={<div class="flex items-center justify-between gap-3"><Show when={canRemovePanel() && existingDraft()}><button type="button" class="btn btn-danger" disabled={savingPanel() || savedPanelConfigs.loading} onClick={() => void deletePanel()}><Trash2 size={14} />Remove panel</button></Show><div class="ml-auto flex items-center gap-2"><button type="button" class="btn btn-secondary" onClick={closePanelSettings}>Cancel</button><button type="button" class="btn btn-primary" disabled={!canSaveDraft() || savingPanel() || savedPanelConfigs.loading} onClick={() => void savePanelSettings()}>Save panel</button></div></div>}>
+          <fieldset disabled={!canSaveDraft()} class="space-y-4">
             <label class="block text-xs text-muted">Panel name<input class="input mt-1 w-full" maxlength={48} value={panelDraft()?.title ?? ''} onInput={(event) => updatePanelDraft((draft) => ({ ...draft, title: event.currentTarget.value }))} /></label>
               <label class="block text-xs text-muted">Panel type<select class="input mt-1 w-full" value={(panelDraft()?.kind ?? 'parameter')} onChange={(event) => updatePanelDraft((draft) => {
                 const kind = event.currentTarget.value as 'parameter' | 'category';
@@ -797,7 +807,7 @@ const Dashboard: Component = () => {
               </div>
               <p class="mt-2 text-xs text-muted">Buckets are checked in order using value ≤ maximum. Leave the final maximum empty to include all remaining values; missing or nonnumeric values appear as N/A.</p>
             </section></Show>
-          </div>
+          </fieldset>
         </Dialog>
       </Show>
     </div>

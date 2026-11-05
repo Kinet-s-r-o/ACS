@@ -8,7 +8,9 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -518,6 +520,60 @@ func (r *Router) handleSaveDashboardLayout(w http.ResponseWriter, req *http.Requ
 	respondJSON(w, http.StatusOK, layout)
 }
 
+var errDashboardPermission = errors.New("Fleet permission required for the requested panel changes")
+
+func authorizeDashboardChanges(previous, next []dashboardPanelConfig, can func(string) bool) error {
+	before, after := map[string]dashboardPanelConfig{}, map[string]dashboardPanelConfig{}
+	for _, panel := range previous {
+		before[panel.ID] = panel
+	}
+	for _, panel := range next {
+		after[panel.ID] = panel
+	}
+	for id, panel := range after {
+		old, exists := before[id]
+		if exists && old.Hidden != panel.Hidden {
+			action := "add"
+			if panel.Hidden {
+				action = "delete"
+			}
+			if !can(action) {
+				return errDashboardPermission
+			}
+			old.Hidden = panel.Hidden
+		}
+		if (!exists && !can("add")) || (exists && !reflect.DeepEqual(old, panel) && !can("edit")) {
+			return errDashboardPermission
+		}
+	}
+	beforeOrder, afterOrder := []string{}, []string{}
+	for _, panel := range previous {
+		if _, exists := after[panel.ID]; exists {
+			beforeOrder = append(beforeOrder, panel.ID)
+		}
+	}
+	newSeen := false
+	for _, panel := range next {
+		if _, exists := before[panel.ID]; exists {
+			if newSeen && !can("edit") {
+				return errDashboardPermission
+			}
+			afterOrder = append(afterOrder, panel.ID)
+		} else {
+			newSeen = true
+		}
+	}
+	if !slices.Equal(beforeOrder, afterOrder) && !can("edit") {
+		return errDashboardPermission
+	}
+	for id := range before {
+		if _, exists := after[id]; !exists && !can("delete") {
+			return errDashboardPermission
+		}
+	}
+	return nil
+}
+
 func (r *Router) handleSaveDashboardPanels(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
 	if claims == nil {
@@ -548,7 +604,22 @@ func (r *Router) handleSaveDashboardPanels(w http.ResponseWriter, req *http.Requ
 		}
 		rows = append(rows, models.UserDashboardPanel{UserID: claims.UserID, PanelID: config.ID, Config: string(encoded)})
 	}
-	if err := r.dashboardPanelRepo.Replace(req.Context(), claims.UserID, rows); err != nil {
+	check := func(previous []models.UserDashboardPanel) error {
+		configsBefore := make([]dashboardPanelConfig, 0, len(previous))
+		for _, row := range previous {
+			var config dashboardPanelConfig
+			if err := json.Unmarshal([]byte(row.Config), &config); err != nil {
+				return err
+			}
+			configsBefore = append(configsBefore, config)
+		}
+		return authorizeDashboardChanges(configsBefore, configs, func(action string) bool { return requestCan(req, "fleet", action) })
+	}
+	if err := r.dashboardPanelRepo.ReplaceChecked(req.Context(), claims.UserID, rows, check); err != nil {
+		if errors.Is(err, errDashboardPermission) {
+			respondError(w, http.StatusForbidden, err.Error())
+			return
+		}
 		logDashboardPanelError("save", err)
 		respondError(w, http.StatusInternalServerError, "Failed to save dashboard panels")
 		return

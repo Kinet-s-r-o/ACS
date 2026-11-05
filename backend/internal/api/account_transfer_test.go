@@ -48,7 +48,7 @@ func TestAccountTransferRejectsInvalidFiles(t *testing.T) {
 
 func TestAccountTransferUsesIndependentPermissions(t *testing.T) {
 	for _, kind := range []string{"users", "roles"} {
-		section := "settings.users." + kind
+		section := "settings.users"
 		for _, operation := range []string{"import", "export"} {
 			for _, action := range []string{"read", "edit", "import", "export", "full"} {
 				mux := newPermissionMux()
@@ -108,7 +108,7 @@ func TestAccountTransferPostgres(t *testing.T) {
 		mux.ServeHTTP(w, scopedRequest("POST", path, grants, body))
 		return w
 	}
-	grants := []string{"access.settings.users.users.full", "access.settings.users.roles.full", "access.fleet.read"}
+	grants := []string{"access.settings.users.full", "access.fleet.read"}
 	roleFile := `{"format":"acs-roles","version":1,"roles":[{"name":"Support","description":"Support role","permissions":["access.fleet.read"]},{"name":"viewer","is_system":true}]}`
 	for i := 0; i < 2; i++ {
 		w := call("roles", "import", roleFile, grants)
@@ -152,11 +152,11 @@ func TestAccountTransferPostgres(t *testing.T) {
 	if w.Code != 400 || err != nil || rolledBack != nil {
 		t.Fatal("invalid user import was not fully rolled back")
 	}
-	w = call("roles", "import", `{"format":"acs-roles","version":1,"roles":[{"name":"Escalation","permissions":["access.settings.general.ui.full"]}]}`, grants)
+	w = call("roles", "import", `{"format":"acs-roles","version":1,"roles":[{"name":"Escalation","permissions":["access.settings.general.full"]}]}`, grants)
 	if w.Code != 403 {
 		t.Fatalf("role import did not reject privilege escalation: %d", w.Code)
 	}
-	broader := models.Role{Name: "Broader", Permissions: []string{"access.settings.general.ui.full"}}
+	broader := models.Role{Name: "Broader", Permissions: []string{"access.settings.general.full"}}
 	if err := db.Create(&broader).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -117,7 +117,7 @@ const cpeWebUiUrl = (address: string): string | null => {
 const DeviceDetail: Component = () => {
   const params = useParams<{ serial: string }>();
   const navigate = useNavigate();
-  const { isFullAccess, user, can, canVisit, canCurrent } = useAuth();
+  const { isFullAccess, user, can, canVisit } = useAuth();
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const copyTextToClipboard = async (value: string, label: string) => {
@@ -572,7 +572,7 @@ const DeviceDetail: Component = () => {
   };
 
   const deleteFeatureObject = async (featureID: string, key: string, label: string, instance: string) => {
-    if (!canCurrent('delete') || featureAction() || !await confirm({ title: `Delete ${label} ${instance}?`, description: 'This removes the object and all of its settings from the device.', confirmLabel: 'Delete object', tone: 'danger' })) return;
+    if (!can('cpe', 'write') || featureAction() || !await confirm({ title: `Delete ${label} ${instance}?`, description: 'This removes the object and all of its settings from the device.', confirmLabel: 'Delete object', tone: 'danger' })) return;
     const actionKey = `${featureID}:${key}:${instance}`;
     setFeatureAction(actionKey);
     try {
@@ -586,7 +586,7 @@ const DeviceDetail: Component = () => {
   };
 
   const deleteWANInterface = async (wan: WanProfile) => {
-    if (!canCurrent('delete') || featureAction() || !wan.canDeleteObject) return;
+    if (!can('cpe', 'write') || featureAction() || !wan.canDeleteObject) return;
     if (!await confirm({
       title: `Delete WAN interface ${wan.name}?`,
       description: 'This sends a CWMP DeleteObject request and removes this WAN profile and its settings from the ONT. It may interrupt service or disconnect ACS management if this profile carries the management connection.',
@@ -1011,6 +1011,7 @@ const DeviceDetail: Component = () => {
   };
 
   const handleDelete = async () => {
+    if (!can('cpe', 'delete')) return;
     if (!await confirm({ title: `Delete CPE ${serial()}?`, description: 'This permanently removes the CPE record and its local operational history. A future Inform may register the device again.', confirmLabel: 'Delete CPE record', tone: 'danger' })) return;
     setActionLoading('delete');
     try {
@@ -1384,7 +1385,7 @@ const DeviceDetail: Component = () => {
   };
 
   const handleDeleteWifiSSID = async (index: number, ssid: string) => {
-    if (!canCurrent('delete') || actionLoading() || !await confirm({ title: `Delete SSID${index}?`, description: `This permanently removes the Wi-Fi object "${ssid}" and its settings from the device. Connected clients will lose access.`, confirmLabel: 'Delete SSID', tone: 'danger' })) return;
+    if (!can('cpe', 'write') || actionLoading() || !await confirm({ title: `Delete SSID${index}?`, description: `This permanently removes the Wi-Fi object "${ssid}" and its settings from the device. Connected clients will lose access.`, confirmLabel: 'Delete SSID', tone: 'danger' })) return;
     setActionLoading(`wifi-delete-${index}`);
     try {
       const task = await api.deleteWifiSSID(serial(), index);
@@ -2002,7 +2003,7 @@ const DeviceDetail: Component = () => {
                 const path = `${control.parameter}${instance}.${column}`;
                 const value = () => (parameters() || []).find(item => item.name === path)?.value || '—';
                 return <td data-column-order-id={`field:${column}`} class="max-w-64 truncate">{value()}</td>;
-              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!canCurrent('delete') || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!can('cpe', 'write') || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
             </Show>
           </div>
         </>
@@ -2035,9 +2036,9 @@ const DeviceDetail: Component = () => {
       <div class="device-detail-header flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
         <div class="flex-1">
           <div class="flex items-center gap-3 mb-1">
-            <A href="/devices" class="icon-button" aria-label="Back to CPE inventory">
+            <Show when={can('inventory', 'read')}><A href="/devices" class="icon-button" aria-label="Back to CPE inventory">
               <ArrowLeft size={18} />
-            </A>
+            </A></Show>
             <Show when={device()}>
               <DeviceStatusBadge device={device()!} />
               <span
@@ -2083,6 +2084,8 @@ const DeviceDetail: Component = () => {
                   <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-primary hover:bg-base disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); openFactoryResetModal(); }}>
                     Factory reset
                   </button>
+                  </Show>
+                  <Show when={can('cpe', 'delete')}>
                   <div class="my-1 border-t border-subtle" role="separator"></div>
                   <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); void handleDelete(); }}>
                     Delete CPE
@@ -2442,7 +2445,7 @@ const DeviceDetail: Component = () => {
                                 <div class="text-sm text-primary truncate">{snapshot.name}</div>
                                 <div class="text-xs text-muted mt-1">{formatDate(snapshot.created_at)} · {snapshot.parameter_count} parameters</div>
                               </button>
-                              <Show when={canCurrent('delete')}>
+                              <Show when={can('cpe', 'full')}>
                                 <button type="button" class="icon-button text-muted hover:text-rose-400" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button></Show>
                             </div>
                           </div>
@@ -3342,7 +3345,7 @@ const DeviceDetail: Component = () => {
                   CWMP Faults ({deviceFaults()?.total || 0})
                 </h2>
                 <div class="flex items-center gap-3">
-                  <Show when={isFullAccess() && selectedDeviceFaults().size > 0}>
+                  <Show when={can('faults', 'delete') && selectedDeviceFaults().size > 0}>
                     <button onClick={handleBulkDeleteFaults} class="btn btn-danger" disabled={bulkDeletingFaults()}>
                       <Trash2 size={14} />
                       Delete selected ({selectedDeviceFaults().size})
@@ -3366,7 +3369,7 @@ const DeviceDetail: Component = () => {
                       <thead class="bg-base sticky top-0 z-10">
                         <tr class="bg-base">
                           <th class="px-3 py-2 w-8" aria-label="Fault details" />
-                          <Show when={isFullAccess()}>
+                          <Show when={can('faults', 'delete')}>
                             <th class="px-3 py-2 w-8">
                               <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
                             </th>
@@ -3410,7 +3413,7 @@ const DeviceDetail: Component = () => {
                                   <Show when={expanded()} fallback={<ChevronRight size={14} />}><ChevronDown size={14} /></Show>
                                 </button>
                               </td>
-                              <Show when={isFullAccess()}>
+                              <Show when={can('faults', 'delete')}>
                                 <td class="px-3 py-2">
                                   <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
                                 </td>
@@ -3434,7 +3437,7 @@ const DeviceDetail: Component = () => {
                               </td>
                               <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-2 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                  <Show when={!fault.resolved && isFullAccess()}>
+                                  <Show when={!fault.resolved && can('faults', 'write')}>
                                     <button
                                       onClick={() => handleResolveFault(fault.id)}
                                       class="icon-button hover:text-emerald-400"
@@ -3444,7 +3447,7 @@ const DeviceDetail: Component = () => {
                                       <Check size={14} />
                                     </button>
                                   </Show>
-                                  <Show when={canCurrent('delete')}>
+                                  <Show when={can('faults', 'delete')}>
                                     <button
                                       onClick={() => handleDeleteFault(fault.id)}
                                       class="icon-button hover:text-rose-400"
@@ -3458,7 +3461,7 @@ const DeviceDetail: Component = () => {
                             <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
                             <Show when={expanded()}>
                               <tr id={`fault-details-${fault.id}`} class="border-t border-subtle/50 bg-elevated/30">
-                                <td colSpan={(isFullAccess() ? 8 : 7) + 1} class="px-4 py-4">
+                                <td colSpan={(can('faults', 'delete') ? 8 : 7) + 1} class="px-4 py-4">
                                   <dl class="grid grid-cols-1 gap-3 text-sm">
                                     <For each={[
                                       ['ID', String(fault.id)],

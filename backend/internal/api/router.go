@@ -191,6 +191,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /users/export", r.handleExportAccounts("users"))
 	apiMux.HandleFunc("POST /users/import", r.handleImportAccounts("users"))
 	apiMux.HandleFunc("PUT /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateUser))
+	apiMux.HandleFunc("DELETE /users/{id}", r.handleDeleteUser)
 	apiMux.HandleFunc("PATCH /users/{id}/active", auth.RequirePermission(models.PermUsersWrite)(r.handleSetUserActive))
 	apiMux.HandleFunc("GET /users/{id}/dashboard-panels", auth.RequirePermission(models.PermUsersDashboards)(r.handleGetUserDashboardPanels))
 	apiMux.HandleFunc("PUT /users/{id}/dashboard-panels", auth.RequirePermission(models.PermUsersDashboards)(r.handleSaveUserDashboardPanels))
@@ -830,9 +831,15 @@ func (r *Router) handleGetSystemTask(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to load system task")
 		return
 	}
-	if auth.OperationAuthorized(req.Context()) && !requestCan(req, "settings.system_tasks."+string(task.Type), "read") {
-		respondError(w, http.StatusForbidden, "System task type read permission required")
-		return
+	if auth.OperationAuthorized(req.Context()) && !requestCan(req, "settings.system_tasks", "read") {
+		claims := auth.GetUserFromContext(req.Context())
+		own := claims != nil && claims.Username == task.CreatedBy
+		allowed := task.Type == models.SystemTaskTypeSummonFromCPE && requestCan(req, "cpe", "write")
+		allowed = allowed || (task.Type != models.SystemTaskTypeSummonFromCPE && requestCan(req, "inventory", "write"))
+		if !own || !allowed {
+			respondError(w, http.StatusForbidden, "System task read permission required")
+			return
+		}
 	}
 	respondJSON(w, http.StatusOK, task)
 }
@@ -1524,7 +1531,7 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 		result[key] = value
 	}
 	for _, s := range settings {
-		if s.Key == radiusConfigKey {
+		if s.Key == radiusConfigKey || s.Key == database.OperatorPermissionCatalogVersionKey {
 			continue
 		}
 		if isSecretSetting(s.Key) && s.Value != "" {

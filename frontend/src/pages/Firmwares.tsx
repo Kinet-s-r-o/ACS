@@ -19,7 +19,7 @@ import { formatDateTime } from '../lib/dateTime';
 
 const Firmwares: Component = () => {
   const { can } = useAuth();
-  const canManageLibrary = () => can('firmwares', 'import');
+  const canManageLibrary = () => can('firmwares', 'write');
   const { confirm, notify } = useFeedback();
   const [firmwares, { refetch }] = createResource(() => api.getFirmwares());
   const [uploading, setUploading] = createSignal(false);

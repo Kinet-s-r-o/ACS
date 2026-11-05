@@ -22,7 +22,7 @@ const RolesTab: Component = () => {
   const { hasPermission, can } = useAuth();
   const [catalog] = createResource(api.getPermissionCatalog);
   const sections = () => catalog()?.sections ?? [];
-  const permissionCount = () => sections().length * PERMISSION_ACTIONS.length;
+  const permissionCount = () => sections().reduce((total, section) => total + section.actions.length, 0);
   const { confirm, notify } = useFeedback();
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
 
@@ -109,7 +109,7 @@ const RolesTab: Component = () => {
     setRoleForm(form => {
       const selected = form.permissions.includes(key);
       let permissions = form.permissions.filter(value => value !== key);
-      if (action === 'full' || (action === 'read' && selected)) permissions = permissions.filter(value => !value.startsWith(prefix) || value.slice(prefix.length).includes('.'));
+      if (action === 'full' || (action === 'read' && selected)) permissions = permissions.filter(value => !value.startsWith(prefix));
       if (!selected) {
         permissions.push(key);
         if (action !== 'full' && action !== 'read') permissions = [...new Set([...permissions, `${prefix}read`])];
@@ -266,9 +266,9 @@ const RolesTab: Component = () => {
                 <span class="text-xs text-muted">Choose a section, then select its access</span>
               </div>
               <Show when={catalog.error}><ResourceError title="Permission catalog unavailable" description="Retry loading the role editor." /></Show>
-              <p class="text-xs text-muted mb-3">Full grants every action on this row only. Subsections and tabs have their own rows. Edit includes creating and updating; Delete, Import and Export are independent.</p>
+              <p class="text-xs text-muted mb-3">Permissions apply to the entire named section and its subtabs. CPE overview is independent of CPE inventory. Full grants every operation in its section; other actions require Read.</p>
               <div class="overflow-x-auto max-h-[55vh]">
-                <table class="data-table w-full text-sm">
+                <table data-column-order-key="role-permissions" data-column-order-legacy-schema="table::delete|edit|export|full|import|read|section / tab" class="data-table w-full text-sm">
                   <thead class="sticky top-0 opaque-table-header"><tr>
                     <th data-column-order-id="section#0" class="text-left p-3">Section / tab</th>
                     <For each={PERMISSION_ACTIONS}>{action => <th data-column-order-id={`${action}#0`} class="text-center p-3">{action[0].toUpperCase() + action.slice(1)}</th>}</For>
@@ -276,7 +276,7 @@ const RolesTab: Component = () => {
                   <tbody><For each={sections()}>{section => <tr class="border-b border-subtle">
                     <td data-column-order-id="section#0" class="p-3"><span class={section.parent ? 'text-secondary' : 'font-semibold text-primary'}>{section.label}</span><Show when={section.parent}><span class="block text-xs text-muted">{section.parent?.split('.').map((_, index, parts) => sections().find(item => item.id === parts.slice(0, index + 1).join('.'))?.label).filter(Boolean).join(' / ')}</span></Show></td>
                     <For each={PERMISSION_ACTIONS}>{action => <td data-column-order-id={`${action}#0`} class="p-3 text-center">
-                      <input type="checkbox" class="checkbox" aria-label={`${section.label} (${section.id}): ${action}`} checked={canSection(roleForm().permissions, section.id, action)} disabled={pendingAction() !== null || catalog.loading || !can(section.id, action) || (action !== 'full' && roleForm().permissions.includes(`access.${section.id}.full`))} onChange={() => togglePermission(section.id, action)} />
+                      <Show when={section.actions.includes(action)} fallback={<span class="text-muted" aria-label="Not applicable">—</span>}><input type="checkbox" class="checkbox" aria-label={`${section.label} (${section.id}): ${action}`} checked={canSection(roleForm().permissions, section.id, action)} disabled={pendingAction() !== null || catalog.loading || !can(section.id, action) || (action !== 'full' && roleForm().permissions.includes(`access.${section.id}.full`))} onChange={() => togglePermission(section.id, action)} /></Show>
                     </td>}</For>
                   </tr>}</For></tbody>
                 </table>

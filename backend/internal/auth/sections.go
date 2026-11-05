@@ -29,7 +29,11 @@ func CanReadSensitive(ctx context.Context) bool {
 		return true
 	}
 	if op, ok := GetOperation(ctx); ok {
-		return models.HasSectionPermission(GetPermissionsFromContext(ctx), op.Section, "full")
+		section, _ := models.CanonicalPermission(op.Section, "read")
+		if section == "inventory" {
+			section = "cpe"
+		}
+		return models.HasSectionPermission(GetPermissionsFromContext(ctx), section, "full")
 	}
 	claims := GetUserFromContext(ctx)
 	return claims != nil && claims.Role == models.RoleFull

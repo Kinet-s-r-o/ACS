@@ -29,15 +29,43 @@ func TestScopedRouteAuthorization(t *testing.T) {
 		name, pattern, section, action string
 		status                         int
 	}{
-		{"parent-full-does-not-grant-index-read", "GET /settings/database/indexes", "settings.database", "full", 403},
-		{"same-row-full", "GET /settings/database/indexes", "settings.database.indexes", "full", 204},
-		{"read-not-edit", "POST /roles", "settings.users.roles", "read", 403},
-		{"edit-not-delete", "DELETE /roles/1", "settings.users.roles", "edit", 403},
-		{"delete-not-edit", "POST /roles", "settings.users.roles", "delete", 403},
+		{"database-full-includes-index-read", "GET /settings/database/indexes", "settings.database", "full", 204},
+		{"retired-leaf-full-denied", "GET /settings/database/indexes", "settings.database.indexes", "full", 403},
+		{"read-not-edit", "POST /roles", "settings.users", "read", 403},
+		{"edit-not-delete", "DELETE /roles/1", "settings.users", "write", 403},
+		{"delete-not-edit", "POST /roles", "settings.users", "delete", 403},
 		{"read-does-not-export", "GET /provisioning/export", "settings.provisioning.templates", "read", 403},
-		{"edit-custom-role", "POST /roles", "settings.users.roles", "edit", 204},
-		{"radius-independent-of-authentication-parent", "PUT /settings/authentication/radius", "settings.authentication", "full", 403},
-		{"radius-edit", "PUT /settings/authentication/radius", "settings.authentication.radius", "edit", 204},
+		{"edit-custom-role", "POST /roles", "settings.users", "write", 204},
+		{"authentication-full-includes-radius", "PUT /settings/authentication/radius", "settings.authentication", "full", 204},
+		{"radius-write", "PUT /settings/authentication/radius", "settings.authentication", "write", 204},
+		{"inventory-add", "POST /devices", "inventory", "add", 204},
+		{"inventory-write-cannot-add", "POST /devices", "inventory", "write", 403},
+		{"inventory-read-wans", "GET /wan-interfaces", "inventory", "read", 204},
+		{"cpe-read-cannot-list-inventory", "GET /devices", "cpe", "read", 403},
+		{"inventory-full-cannot-open-detail", "GET /device/{serial}", "inventory", "full", 403},
+		{"inventory-read-cannot-open-integration-detail", "GET /v1/devices/{serial}", "inventory", "read", 403},
+		{"cpe-write-factory-reset", "POST /device/{serial}/factory-reset", "cpe", "write", 204},
+		{"cpe-delete-cannot-reset", "POST /device/{serial}/factory-reset", "cpe", "delete", 403},
+		{"cpe-write-delete-ssid", "DELETE /device/{serial}/wifi/ssids/{instance}", "cpe", "write", 204},
+		{"cpe-delete-is-only-device-deletion", "DELETE /device/{serial}/wifi/ssids/{instance}", "cpe", "delete", 403},
+		{"cpe-write-not-delete-record", "DELETE /device/{serial}", "cpe", "write", 403},
+		{"cpe-delete-record", "DELETE /device/{serial}", "cpe", "delete", 204},
+		{"inventory-write-bulk-summon", "POST /system-tasks/bulk-summon", "inventory", "write", 204},
+		{"cpe-write-not-bulk-restart", "POST /system-tasks/bulk-restart", "cpe", "write", 403},
+		{"inventory-write-not-tags", "PUT /device/{serial}/tags", "inventory", "write", 403},
+		{"inventory-write-not-diagnostics", "POST /device/{serial}/diagnostics/ping", "inventory", "write", 403},
+		{"cpe-write-diagnostics", "POST /device/{serial}/diagnostics/ping", "cpe", "write", 204},
+		{"cpe-write-tags", "PUT /device/{serial}/tags", "cpe", "write", 204},
+		{"blocklist-add", "POST /blocked-devices", "security.blocklist", "add", 204},
+		{"blocklist-remove", "DELETE /blocked-devices/{serial}", "security.blocklist", "remove", 204},
+		{"blocklist-add-not-remove", "DELETE /blocked-devices/{serial}", "security.blocklist", "add", 403},
+		{"firmware-upload-write", "POST /firmwares", "firmwares", "write", 204},
+		{"firmware-upload-read-denied", "POST /firmwares", "firmwares", "read", 403},
+		{"metric-definitions-belong-to-provisioning", "GET /metrics/definitions", "settings.provisioning", "read", 204},
+		{"users-write-not-import", "POST /users/import", "settings.users", "write", 403},
+		{"roles-import", "POST /roles/import", "settings.users", "import", 204},
+		{"provisioning-write-not-backup", "GET /provisioning/export", "settings.provisioning", "write", 403},
+		{"provisioning-full-backup", "GET /provisioning/export", "settings.provisioning", "full", 204},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mux := newPermissionMux()
@@ -57,7 +85,7 @@ func TestSettingsPayloadCannotCrossTabPermissions(t *testing.T) {
 	r := &Router{}
 	mux := newPermissionMux()
 	mux.HandleFunc("PUT /settings", r.handleUpdateSettings)
-	req := scopedRequest("PUT", "/settings", []string{models.PermissionKey("settings.general.ui", "read"), models.PermissionKey("settings.general.ui", "edit")}, `{"retention_enabled":"false"}`)
+	req := scopedRequest("PUT", "/settings", []string{models.PermissionKey("settings.general", "read"), models.PermissionKey("settings.general", "write")}, `{"retention_enabled":"false"}`)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != 403 {
@@ -118,7 +146,7 @@ func TestBuiltInAdministratorAlwaysHasWholeCatalogPostgres(t *testing.T) {
 		t.Fatal("built-in administrator lost catalog access")
 	}
 	for _, section := range models.PermissionSections {
-		for _, action := range models.PermissionActions {
+		for _, action := range section.Actions {
 			if !models.HasSectionPermission(permissions, section.ID, action) {
 				t.Fatalf("administrator missing %s / %s", section.ID, action)
 			}
@@ -150,8 +178,8 @@ func TestDynamicPermissionCatalogPostgres(t *testing.T) {
 				t.Fatalf("admin missing dynamic %s / %s", section, action)
 			}
 		}
-		if models.HasSectionPermission([]string{models.PermissionKey("settings.provisioning.features", "full")}, section, "read") {
-			t.Fatal("parent granted dynamic child")
+		if !models.HasSectionPermission([]string{models.PermissionKey("settings.provisioning", "read")}, section, "read") && strings.HasPrefix(section, "settings.") {
+			t.Fatal("Provisioning Read omitted a feature tab")
 		}
 	}
 }
@@ -177,25 +205,25 @@ func TestFeatureTabsIsolationPostgres(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		permissions := []string{models.PermissionKey("settings.provisioning.features.wifi", "read"), models.PermissionKey("settings.provisioning.features.wifi", action)}
+		permissions := []string{models.PermissionKey("settings.provisioning", "read"), models.PermissionKey("settings.provisioning", action)}
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, scopedRequest("PUT", "/provisioning/templates/"+strconv.FormatInt(template.ID, 10)+"/features", permissions, string(payload)))
 		return w.Code
 	}
 	changed := features[0]
 	changed.Name = "Updated WiFi"
-	if status := call("edit", []models.ProvisioningFeature{changed}, nil); status != 200 {
+	if status := call("write", []models.ProvisioningFeature{changed}, nil); status != 200 {
 		t.Fatalf("own edit: %d", status)
 	}
 	stored, err := r.provisioningRepo.GetTemplate(t.Context(), template.ID)
 	if err != nil || len(stored.Features) != 2 || stored.Features[1].Name != "Hidden" {
 		t.Fatal("unsubmitted sibling was changed")
 	}
-	if status := call("edit", []models.ProvisioningFeature{changed}, []string{"hidden"}); status != 403 {
+	if status := call("write", []models.ProvisioningFeature{changed}, []string{"hidden"}); status != 403 {
 		t.Fatalf("sibling deletion allowed: %d", status)
 	}
 	changed.Controls = changed.Controls[:1]
-	if status := call("edit", []models.ProvisioningFeature{changed}, nil); status != 403 {
+	if status := call("write", []models.ProvisioningFeature{changed}, nil); status != 403 {
 		t.Fatalf("edit granted control deletion: %d", status)
 	}
 	if status := call("delete", []models.ProvisioningFeature{changed}, nil); status != 200 {
@@ -214,28 +242,29 @@ func TestFeatureTabsIsolationPostgres(t *testing.T) {
 	}
 }
 
-func TestMetricAndHealthFieldIsolation(t *testing.T) {
-	before := models.MetricDefinition{Name: "Stored", ParameterName: "Device.Stored", Source: "passive", Health: true, HealthOrder: 2}
-	body := models.MetricDefinition{Name: "Injected", ParameterName: "Device.Injected", Health: false, HealthOrder: 3}
-	req := scopedRequest("PUT", "/", []string{models.PermissionKey("settings.provisioning.metrics.general.health", "read"), models.PermissionKey("settings.provisioning.metrics.general.health", "edit")}, "")
-	req = req.WithContext(auth.WithOperation(req.Context(), "settings.provisioning.metrics.general.health", "edit"))
-	mergeMetricPermissions(req, &body, &before, "settings.provisioning.metrics.general")
-	if body.Name != before.Name || body.ParameterName != before.ParameterName || body.Source != before.Source || body.Health || body.HealthOrder != 3 {
-		t.Fatal("Health edit crossed into Metric fields")
-	}
-	redactMetricTabs(req, &body, "settings.provisioning.metrics.general")
-	if body.ParameterName != "" || body.Source != "" || body.HealthOrder != 3 {
-		t.Fatal("Metric data disclosed without Metric read")
+func TestMetricAndHealthShareProvisioningPermissions(t *testing.T) {
+	before := models.MetricDefinition{Name: "Stored", ParameterName: "Device.Stored", Health: true}
+	for _, action := range []string{"read", "write"} {
+		body := models.MetricDefinition{Name: "Changed", ParameterName: "Device.Changed", Health: false}
+		req := scopedRequest("PUT", "/", []string{models.PermissionKey("settings.provisioning", "read"), models.PermissionKey("settings.provisioning", action)}, "")
+		req = req.WithContext(auth.WithOperation(req.Context(), "settings.provisioning", action))
+		mergeMetricPermissions(req, &body, &before, "settings.provisioning.metrics.general")
+		if action == "read" && (body.Name != before.Name || body.ParameterName != before.ParameterName || body.Health != before.Health) {
+			t.Fatal("Read changed a metric")
+		}
+		if action == "write" && (body.Name != "Changed" || body.ParameterName != "Device.Changed" || body.Health) {
+			t.Fatal("Write did not cover Metric and Health")
+		}
 	}
 }
 
 func TestGrantCannotElevatePrivileges(t *testing.T) {
-	req := scopedRequest("POST", "/roles", []string{models.PermissionKey("settings.users.roles", "read"), models.PermissionKey("settings.users.roles", "edit")}, "")
-	req = req.WithContext(auth.WithOperation(req.Context(), "settings.users.roles", "edit"))
-	if canGrantPermissions(req, []string{models.PermissionKey("settings.authentication.radius", "full")}) {
+	req := scopedRequest("POST", "/roles", []string{models.PermissionKey("settings.users", "read"), models.PermissionKey("settings.users", "write")}, "")
+	req = req.WithContext(auth.WithOperation(req.Context(), "settings.users", "write"))
+	if canGrantPermissions(req, []string{models.PermissionKey("settings.authentication", "full")}) {
 		t.Fatal("role editor escalated outside owned rights")
 	}
-	if !canGrantPermissions(req, []string{models.PermissionKey("settings.users.roles", "read")}) {
+	if !canGrantPermissions(req, []string{models.PermissionKey("settings.users", "read")}) {
 		t.Fatal("owned grant rejected")
 	}
 }
@@ -244,36 +273,27 @@ func TestTemplateCreateCannotWriteVariables(t *testing.T) {
 	mux := newPermissionMux()
 	mux.HandleFunc("POST /provisioning/templates", (&Router{}).handleCreateProvisioningTemplate)
 	w := httptest.NewRecorder()
-	permissions := []string{models.PermissionKey("settings.provisioning.templates", "full")}
+	permissions := []string{models.PermissionKey("settings.provisioning", "read")}
 	mux.ServeHTTP(w, scopedRequest("POST", "/provisioning/templates", permissions, `{"name":"Test","variables":[{"name":"injected"}]}`))
 	if w.Code != 403 {
 		t.Fatalf("template edit wrote variables: %d", w.Code)
 	}
 }
 
-func TestNetworkTabsCannotEditSiblingFields(t *testing.T) {
-	const section = "inventory.cpes.overview.wifi.general"
-	req := scopedRequest("POST", "/device/test/set-parameters", []string{models.PermissionKey(section, "full")}, "")
-	req = req.WithContext(auth.WithOperation(req.Context(), section, "edit"))
-	for _, test := range []struct {
-		name    string
-		allowed bool
-	}{
-		{"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", true},
-		{"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", false},
-		{"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BeaconPeriod", false},
-		{"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Enable", false},
-		{"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.NATEnabled", false},
-	} {
-		w := httptest.NewRecorder()
-		if requireParameterEdits(w, req, map[string]string{test.name: "value"}) != test.allowed {
-			t.Fatalf("cross-tab field access: %s", test.name)
+func TestCPEWriteCoversNetworkTabs(t *testing.T) {
+	for _, action := range []string{"read", "write"} {
+		req := scopedRequest("POST", "/device/test/set-parameters", []string{models.PermissionKey("cpe", "read"), models.PermissionKey("cpe", action)}, "")
+		req = req.WithContext(auth.WithOperation(req.Context(), "cpe", action))
+		for _, name := range []string{"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Enable", "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.NATEnabled"} {
+			if requireParameterEdits(httptest.NewRecorder(), req, map[string]string{name: "value"}) != (action == "write") {
+				t.Fatal("incorrect network permission", action, name)
+			}
 		}
 	}
 }
 
 func TestOverviewFullDoesNotRevealWiFiSecuritySecrets(t *testing.T) {
-	req := scopedRequest("GET", "/device/test/detail-parameters", []string{models.PermissionKey("inventory.cpes.overview", "full"), models.PermissionKey("inventory.cpes.overview.wifi.security", "read")}, "")
+	req := scopedRequest("GET", "/device/test/detail-parameters", []string{models.PermissionKey("cpe", "read")}, "")
 	req = req.WithContext(auth.WithOperation(req.Context(), "inventory.cpes.overview", "read"))
 	parameters := []models.DeviceParameter{{Name: "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", Value: "test-only"}}
 	redactSensitiveParameters(req, parameters)
@@ -283,10 +303,10 @@ func TestOverviewFullDoesNotRevealWiFiSecuritySecrets(t *testing.T) {
 }
 
 func TestBulkRuleActionsRequireTheirOwnPermission(t *testing.T) {
-	for _, pair := range [][2]string{{"edit", "delete"}, {"delete", "enable"}} {
+	for _, pair := range [][2]string{{"write", "delete"}, {"delete", "enable"}} {
 		mux := newPermissionMux()
 		mux.HandleFunc("POST /provisioning/bulk", (&Router{}).handleBulkProvisioningRules)
-		grants := []string{models.PermissionKey("settings.provisioning.rules", "read"), models.PermissionKey("settings.provisioning.rules", pair[0])}
+		grants := []string{models.PermissionKey("settings.provisioning", "read"), models.PermissionKey("settings.provisioning", pair[0])}
 		req := scopedRequest("POST", "/provisioning/bulk", grants, `{"template_id":1,"ids":[1],"action":"`+pair[1]+`"}`)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)

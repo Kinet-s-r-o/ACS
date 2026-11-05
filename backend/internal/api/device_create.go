@@ -63,7 +63,7 @@ func (r *Router) handleCreateDevice(w http.ResponseWriter, req *http.Request) {
 
 func hasRequestPermission(req *http.Request, required ...string) bool {
 	if auth.OperationAuthorized(req.Context()) {
-		return requestCan(req, "inventory.cpes.maintenance.diagnostic", "full")
+		return requestCan(req, "cpe", "write")
 	}
 	claims := auth.GetUserFromContext(req.Context())
 	if claims == nil {

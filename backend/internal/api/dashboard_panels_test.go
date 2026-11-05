@@ -23,3 +23,46 @@ func TestDashboardOnlyAllowsGrowthAndCustomPanels(t *testing.T) {
 		t.Fatal("retired recency kind is still allowed")
 	}
 }
+
+func TestFleetActionsAreIndependent(t *testing.T) {
+	old := dashboardPanelConfig{ID: "custom-old", Title: "Original"}
+	changed := old
+	changed.Title = "Changed"
+	added := dashboardPanelConfig{ID: "custom-new", Title: "New"}
+	for _, action := range []string{"add", "edit", "delete"} {
+		can := func(requested string) bool { return requested == action }
+		for _, tc := range []struct {
+			next     []dashboardPanelConfig
+			required string
+		}{
+			{[]dashboardPanelConfig{old, added}, "add"}, {[]dashboardPanelConfig{changed}, "edit"}, {[]dashboardPanelConfig{}, "delete"},
+		} {
+			err := authorizeDashboardChanges([]dashboardPanelConfig{old}, tc.next, can)
+			if (err == nil) != (action == tc.required) {
+				t.Fatalf("%s applied %s", action, tc.required)
+			}
+		}
+	}
+	// Combining an allowed addition with a forbidden edit must fail as one request.
+	if authorizeDashboardChanges([]dashboardPanelConfig{old}, []dashboardPanelConfig{changed, added}, func(action string) bool { return action == "add" }) == nil {
+		t.Fatal("Add smuggled an edit")
+	}
+}
+
+func TestFleetAddCannotMoveExistingPanelsAndEditCannotHideThem(t *testing.T) {
+	first := dashboardPanelConfig{ID: "custom-first", Title: "First"}
+	second := dashboardPanelConfig{ID: "custom-second", Title: "Second"}
+	canAdd := func(action string) bool { return action == "add" }
+	if authorizeDashboardChanges([]dashboardPanelConfig{first, second}, []dashboardPanelConfig{second, first}, canAdd) == nil {
+		t.Fatal("Add reordered existing panels")
+	}
+	added := dashboardPanelConfig{ID: "custom-new", Title: "New"}
+	if authorizeDashboardChanges([]dashboardPanelConfig{first}, []dashboardPanelConfig{added, first}, canAdd) == nil {
+		t.Fatal("Add moved an existing panel by insertion")
+	}
+	hidden := first
+	hidden.Hidden = true
+	if authorizeDashboardChanges([]dashboardPanelConfig{first}, []dashboardPanelConfig{hidden}, func(action string) bool { return action == "edit" }) == nil {
+		t.Fatal("Edit removed a panel by hiding it")
+	}
+}

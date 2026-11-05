@@ -13,7 +13,7 @@ The ACS is an operational TR-069/CWMP control plane, not a general-purpose SaaS 
 - **Highest-risk tasks:** factory reset, firmware delivery, credential changes, bulk summons, device deletion, and security-policy changes.
 - **Required data:** serial number, manufacturer, product class, IP address, model, software version, Inform time, CWMP state, parameters, faults, and task state.
 - **Sensitive data:** operator credentials, CPE credentials, PPPoE secrets, Wi-Fi keys, connection-request secrets, firmware tokens, and audit source addresses.
-- **Permissions:** each menu section, submenu and nested tab has independent Full, Read, Edit, Delete, Import and Export grants; Full applies only to its own row. Controls follow the relevant action and backend authorization remains authoritative.
+- **Permissions:** each operator section has the action set defined in the permission catalog; its existing and future subtabs inherit that section. CPE overview remains independent of CPE inventory. Controls follow the relevant action and backend authorization remains authoritative.
 - **Primary failure modes:** API outage, expired session, offline CPE, connection-request rejection, partial telemetry, task failure, upload rejection, permission denial, and stale data.
 - **Device priorities:** information-dense desktop and laptop use first; complete task and recovery support on mobile; no hover-only behavior.
 - **Accessibility:** WCAG 2.2 AA contrast target, semantic controls, visible focus, keyboard-complete flows, labelled inputs, named icon controls, focus-contained dialogs, reduced motion, and 44 px mobile targets where practical.

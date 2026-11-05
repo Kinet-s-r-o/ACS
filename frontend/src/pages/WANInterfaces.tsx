@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { useAuth } from '../lib/auth';
 import { createMemo, createResource, createSignal, For, onCleanup, Show } from 'solid-js';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, ExternalLink, Network, Search } from 'lucide-solid';
 import { A } from '@solidjs/router';
@@ -30,6 +31,7 @@ interface WANInterfacesProps {
 }
 
 export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
+  const { can } = useAuth();
   const [page, setPage] = createSignal(0);
   const { pageSize, changePageSize } = usePageSize('wan-interfaces', 20);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.wan-interfaces');
@@ -69,6 +71,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
   const totalPages = createMemo(() => Math.ceil((interfaces()?.total || 0) / pageSize()));
 
   const exportInterfacesCSV = async () => {
+    if (!can('inventory', 'export')) return;
     const firstPage = await api.getWANInterfaces(500, 0, { search: searchQuery(), sort: sortBy(), filters: columnFilters() });
     const rowsToExport = [...firstPage.items];
     for (let offset = rowsToExport.length; offset < firstPage.total; offset += 500) {
@@ -123,7 +126,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
               type="button"
               class="icon-button"
               onClick={exportInterfacesCSV}
-              disabled={interfaces.loading || sortedInterfaces().length === 0}
+              disabled={!can('inventory', 'export') || interfaces.loading || sortedInterfaces().length === 0}
               title="Export filtered WAN interfaces as CSV"
               aria-label={`Export ${sortedInterfaces().length} filtered WAN interfaces as CSV`}
             >
@@ -180,9 +183,9 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                         return (
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                             <Show when={isVisible('serial_number')}><td data-column-order-id="serial number#0" class="px-4 py-3">
-                              <A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(row.serial_number)}`} aria-label={`Open CPE ${row.serial_number}`}>
+                              <Show when={can('cpe', 'read')} fallback={<span class="font-mono text-sm">{row.serial_number}</span>}><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(row.serial_number)}`} aria-label={`Open CPE ${row.serial_number}`}>
                                 {row.serial_number}
-                              </A>
+                              </A></Show>
                             </td></Show>
                             <Show when={isVisible('name')}><td data-column-order-id="name#0" class="px-4 py-3 text-primary">{row.name}</td></Show>
                             <Show when={isVisible('type')}><td data-column-order-id="type#0" class="px-4 py-3 text-secondary">{row.type || '-'}</td></Show>

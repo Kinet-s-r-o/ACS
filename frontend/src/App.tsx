@@ -55,7 +55,7 @@ const App: Component = () => {
             <Route path="/devices" component={() => <SectionPage section="inventory"><Devices /></SectionPage>} />
             <Route path="/devices/wan-interfaces" component={() => <Navigate href="/devices?tab=wans" />} />
             <Route path="/tasks" component={() => <SectionPage section="tasks"><Tasks /></SectionPage>} />
-            <Route path="/device/:serial" component={() => <SectionPage section="inventory.cpes"><DeviceDetail /></SectionPage>} />
+            <Route path="/device/:serial" component={() => <SectionPage section="cpe"><DeviceDetail /></SectionPage>} />
             <Route path="/faults" component={() => <SectionPage section="faults"><Faults /></SectionPage>} />
             <Route path="/firmwares" component={() => <SectionPage section="firmwares"><Firmwares /></SectionPage>} />
             <Route path="/security" component={() => <SectionPage section="security"><Security /></SectionPage>} />
