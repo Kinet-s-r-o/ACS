@@ -38,6 +38,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
   health: false,
   health_order: 0,
   health_size: 'small',
+  health_show_updated_at: false,
   warn_threshold: null,
   critical_threshold: null,
   threshold_direction: 'higher_is_worse',
@@ -98,6 +99,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
       health: m.health,
       health_order: m.health_order ?? 0,
       health_size: m.health_size || 'small',
+      health_show_updated_at: m.health_show_updated_at ?? false,
       warn_threshold: m.warn_threshold,
       critical_threshold: m.critical_threshold,
       threshold_direction: m.threshold_direction,
@@ -303,6 +305,13 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                   <option value="medium">Medium (1/2 width)</option>
                   <option value="large">Large (full width)</option>
                 </select>
+              </div>
+              <div class="col-span-2">
+                <label for="metric-health-show-updated-at" class="flex items-center gap-2 text-xs text-secondary">
+                  <input id="metric-health-show-updated-at" type="checkbox" checked={metricForm().health_show_updated_at} onChange={(e) => setMetricForm(f => ({ ...f, health_show_updated_at: e.currentTarget.checked }))} class="checkbox shrink-0" aria-describedby="metric-health-updated-at-help" />
+                  <span>Show last parameter update</span>
+                </label>
+                <p id="metric-health-updated-at-help" class="text-xs text-muted mt-1">Show when the parameter was last updated in the database, even if its value stayed the same.</p>
               </div>
               <div>
                 <label for="metric-warn" class="block text-xs text-muted mb-1.5">Warn threshold</label>

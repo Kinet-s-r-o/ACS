@@ -14,6 +14,8 @@ export interface HealthTile {
   pointer?: boolean;
   gaugeStyle?: GaugeStyle;
   size?: 'small' | 'medium' | 'large';
+  showUpdatedAt?: boolean;
+  updatedAt?: string | null;
 }
 
 export interface HealthTileGroup {

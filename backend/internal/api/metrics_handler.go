@@ -122,7 +122,7 @@ func (r *Router) handleSaveTemplateMetric(w http.ResponseWriter, req *http.Reque
 		return
 	}
 	body.ID = id
-	result := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("id = ? AND template_id = ? AND parameter_pattern = ''", id, templateID).Select("name", "description", "device_type_match", "template_id", "parameter_name", "unit", "source", "active", "min_sample_interval_seconds", "gpv_poll_interval_seconds", "store_history", "group", "color", "axis", "transform", "multiplier", "unit_scale", "health", "health_order", "health_size", "warn_threshold", "critical_threshold", "threshold_direction", "display_format", "gauge_animated", "gauge_min", "gauge_max", "gauge_arc", "gauge_pointer", "gauge_style", "thresholds", "chart_type").Updates(&body)
+	result := r.db.WithContext(req.Context()).Model(&models.MetricDefinition{}).Where("id = ? AND template_id = ? AND parameter_pattern = ''", id, templateID).Select("name", "description", "device_type_match", "template_id", "parameter_name", "unit", "source", "active", "min_sample_interval_seconds", "gpv_poll_interval_seconds", "store_history", "group", "color", "axis", "transform", "multiplier", "unit_scale", "health", "health_order", "health_size", "health_show_updated_at", "warn_threshold", "critical_threshold", "threshold_direction", "display_format", "gauge_animated", "gauge_min", "gauge_max", "gauge_arc", "gauge_pointer", "gauge_style", "thresholds", "chart_type").Updates(&body)
 	if result.Error != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update template metric")
 		return

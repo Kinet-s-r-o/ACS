@@ -243,16 +243,16 @@ func TestFeatureTabsIsolationPostgres(t *testing.T) {
 }
 
 func TestMetricAndHealthShareProvisioningPermissions(t *testing.T) {
-	before := models.MetricDefinition{Name: "Stored", ParameterName: "Device.Stored", Health: true}
+	before := models.MetricDefinition{Name: "Stored", ParameterName: "Device.Stored", Health: true, HealthShowUpdatedAt: true}
 	for _, action := range []string{"read", "write"} {
 		body := models.MetricDefinition{Name: "Changed", ParameterName: "Device.Changed", Health: false}
 		req := scopedRequest("PUT", "/", []string{models.PermissionKey("settings.provisioning", "read"), models.PermissionKey("settings.provisioning", action)}, "")
 		req = req.WithContext(auth.WithOperation(req.Context(), "settings.provisioning", action))
 		mergeMetricPermissions(req, &body, &before, "settings.provisioning.metrics.general")
-		if action == "read" && (body.Name != before.Name || body.ParameterName != before.ParameterName || body.Health != before.Health) {
+		if action == "read" && (body.Name != before.Name || body.ParameterName != before.ParameterName || body.Health != before.Health || body.HealthShowUpdatedAt != before.HealthShowUpdatedAt) {
 			t.Fatal("Read changed a metric")
 		}
-		if action == "write" && (body.Name != "Changed" || body.ParameterName != "Device.Changed" || body.Health) {
+		if action == "write" && (body.Name != "Changed" || body.ParameterName != "Device.Changed" || body.Health || body.HealthShowUpdatedAt) {
 			t.Fatal("Write did not cover Metric and Health")
 		}
 	}

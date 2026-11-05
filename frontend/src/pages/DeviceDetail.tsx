@@ -1638,6 +1638,8 @@ const DeviceDetail: Component = () => {
           pointer: def.gauge_pointer,
           gaugeStyle: def.gauge_style || 'basic',
           size: def.health_size || 'small',
+          showUpdatedAt: def.health_show_updated_at,
+          updatedAt: latestParameterTimestamp((parameters() || []).find(parameter => parameter.name === def.parameter_name)?.updated_at),
         };
       });
       const groups: HealthTileGroup[] = [];
@@ -2223,6 +2225,9 @@ const DeviceDetail: Component = () => {
                                     style={tile.color.startsWith('#') ? { color: tile.color } : {}}
                                   >{tile.value}</strong>
                                 </Show>
+                                <Show when={tile.showUpdatedAt}>
+                                  <p class="health-last-updated" title="Last stored update of this parameter, including unchanged values.">Last updated: <time dateTime={tile.updatedAt || undefined}>{formatDateTime(tile.updatedAt)}</time></p>
+                                </Show>
                               </div>
                             )}
                           </For>
@@ -2241,6 +2246,9 @@ const DeviceDetail: Component = () => {
                             gaugeStyle={group.tiles[0].gaugeStyle}
                             values={group.tiles.map(tile => ({ value: tile.raw ?? null, label: tile.label, centerText: tile.value }))}
                           /></Suspense>
+                          <For each={group.tiles.filter(tile => tile.showUpdatedAt)}>
+                            {tile => <p class="health-last-updated" title="Last stored update of this parameter, including unchanged values.">{tile.label} · Last updated: <time dateTime={tile.updatedAt || undefined}>{formatDateTime(tile.updatedAt)}</time></p>}
+                          </For>
                         </Show>
                       </div>
                     )}

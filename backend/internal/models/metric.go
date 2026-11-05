@@ -42,6 +42,7 @@ type MetricDefinition struct {
 	Health                   bool        `json:"health" gorm:"default:false"`
 	HealthOrder              int         `json:"health_order" gorm:"default:0"`
 	HealthSize               string      `json:"health_size" gorm:"not null;default:'small'"`
+	HealthShowUpdatedAt      bool        `json:"health_show_updated_at" gorm:"not null;default:false"`
 	WarnThreshold            *float64    `json:"warn_threshold"`
 	CriticalThreshold        *float64    `json:"critical_threshold"`
 	ThresholdDirection       string      `json:"threshold_direction" gorm:"not null;default:'higher_is_worse'"`
