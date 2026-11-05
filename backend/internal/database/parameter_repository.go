@@ -201,6 +201,9 @@ func upsertMany(db *gorm.DB, deviceID int64, params []models.DeviceParameter, re
 				return err
 			}
 		}
+		if err := db.Model(&models.Device{}).Where("id = ?", deviceID).UpdateColumn("device_log_updated_at", now).Error; err != nil {
+			return fmt.Errorf("update DeviceLog timestamp: %w", err)
+		}
 	}
 	if wanSummaryChanged {
 		return refreshWANInterfacesForDevice(db, deviceID)

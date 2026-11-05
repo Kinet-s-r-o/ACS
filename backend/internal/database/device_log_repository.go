@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/matrix8412/acs/internal/models"
 	"gorm.io/gorm"
@@ -31,10 +32,11 @@ type DeviceLogColumnFilter struct {
 }
 
 type DeviceLogPage struct {
-	Items  []models.DeviceLogEntry `json:"items"`
-	Total  int64                   `json:"total"`
-	Limit  int                     `json:"limit"`
-	Offset int                     `json:"offset"`
+	Items              []models.DeviceLogEntry `json:"items"`
+	Total              int64                   `json:"total"`
+	Limit              int                     `json:"limit"`
+	Offset             int                     `json:"offset"`
+	ParameterUpdatedAt *time.Time              `json:"parameter_updated_at"`
 }
 
 func storeDeviceLog(db *gorm.DB, deviceID int64, value string) error {

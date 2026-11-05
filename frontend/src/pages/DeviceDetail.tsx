@@ -3503,6 +3503,12 @@ const DeviceDetail: Component = () => {
                 <div>
                   <h2 id="device-log-title" class="flex items-center gap-2 text-sm font-medium text-secondary"><ScrollText size={16} class="text-sky-400" />Device log</h2>
                   <p class="mt-1 text-xs text-muted">From InternetGatewayDevice.DeviceInfo.DeviceLog · {deviceLogPageData()?.total ?? 0} entries</p>
+                  <div class="mt-1 flex items-center gap-1.5 text-xs text-muted" title="Time when the ACS last received InternetGatewayDevice.DeviceInfo.DeviceLog from this CPE">
+                    <span class={`inline-block size-1.5 shrink-0 ${deviceLogPageData()?.parameter_updated_at ? 'bg-emerald-500' : 'bg-zinc-400'}`} aria-hidden="true" />
+                    <Show when={deviceLogPageData()?.parameter_updated_at} fallback={<span>Update time unavailable</span>}>
+                      {updatedAt => <span>Updated <time dateTime={updatedAt()}>{formatDateTime(updatedAt())}</time></span>}
+                    </Show>
+                  </div>
                 </div>
                 <div class="flex w-full sm:w-auto items-center gap-2">
                   <label class="sr-only" for="device-log-filter">Search device log</label>

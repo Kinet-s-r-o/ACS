@@ -67,7 +67,7 @@ const tableQuery = (limit: number, offset: number, options?: TableQueryOptions) 
 };
 export interface DeviceParameter { id: number; device_id: number; name: string; value: string; value_type?: string; writable?: boolean; updated_at: string }
 export interface DeviceLogEntry { id: number; device_id: number; timestamp: string; severity: string; message: string; received_at: string }
-export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number }
+export interface DeviceLogPage { items: DeviceLogEntry[]; total: number; limit: number; offset: number; parameter_updated_at: string | null }
 export interface WANInterface { serial_number: string; name: string; type: string; status: string; ip_address: string; mac_address: string; tags: string[] }
 export interface Task { id: number; device_id: number; type: string; automatic_factory_reset?: boolean; trigger_events?: string[]; payload?: unknown; status: string; result?: unknown; error_message?: string; created_at: string; sent_at?: string; completed_at?: string; created_by?: string; deleted_by?: string }
 export interface GlobalTask extends Task { serial_number: string }

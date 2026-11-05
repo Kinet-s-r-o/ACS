@@ -25,6 +25,7 @@ type Device struct {
 	LastBoot                  *time.Time        `json:"last_boot"`
 	LastOverviewRefresh       *time.Time        `json:"last_overview_refresh"`
 	LastFullRefresh           *time.Time        `json:"last_full_refresh"`
+	DeviceLogUpdatedAt        *time.Time        `json:"-" gorm:"column:device_log_updated_at"`
 	InformStaggered           bool              `json:"-" gorm:"default:false;index"`
 	InformStaggerInterval     int64             `json:"-"`
 	InformStaggeredAt         *time.Time        `json:"-"`

@@ -2432,6 +2432,7 @@ func (r *Router) handleGetDeviceLogsBySerial(w http.ResponseWriter, req *http.Re
 		respondError(w, http.StatusInternalServerError, "Failed to get device logs")
 		return
 	}
+	page.ParameterUpdatedAt = device.DeviceLogUpdatedAt
 	respondJSON(w, http.StatusOK, page)
 }
 
