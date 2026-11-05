@@ -494,6 +494,11 @@ func (r *DeviceRepository) ListWANInterfacesPage(ctx context.Context, limit, off
 	}
 	sortColumns := map[string]string{"serial_number": "d.serial_number", "name": "w.name", "type": "w.type", "status": "w.status", "ip_address": "w.ip_address", "mac_address": "w.mac_address", "tags": tagsExpression}
 	order := sortColumns[sortColumn]
+	nullOrdering := ""
+	if sortColumn == "ip_address" {
+		order = ipAddressSortExpression("w.ip_address")
+		nullOrdering = " NULLS LAST"
+	}
 	if order == "" {
 		order, direction = "d.serial_number", "asc"
 	}
@@ -502,7 +507,7 @@ func (r *DeviceRepository) ListWANInterfacesPage(ctx context.Context, limit, off
 	}
 	var interfaces []models.WANInterface
 	err = query.Select("d.serial_number, w.name, w.type, w.status, w.ip_address, w.mac_address, (SELECT COALESCE(jsonb_agg(COALESCE(td.name, device_tags.tag_id) ORDER BY device_tags.ordinal), '[]'::jsonb) FROM jsonb_array_elements_text(COALESCE(d.tags, '[]'::jsonb)) WITH ORDINALITY AS device_tags(tag_id, ordinal) LEFT JOIN tag_definitions td ON td.id = device_tags.tag_id) AS tags").
-		Order(order + " " + strings.ToUpper(direction)).Order("w.device_id, w.path").Limit(limit).Offset(offset).Scan(&interfaces).Error
+		Order(order + " " + strings.ToUpper(direction) + nullOrdering).Order("w.device_id, w.path").Limit(limit).Offset(offset).Scan(&interfaces).Error
 	return interfaces, int(total), err
 }
 

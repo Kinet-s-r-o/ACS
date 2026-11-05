@@ -34,6 +34,9 @@ func (r *AuditRepository) ListPage(ctx context.Context, limit, offset int, searc
 		"resource": "resource", "ip_address": "ip_address", "status": "status",
 	}
 	order := sortColumns[sort]
+	if sort == "ip_address" {
+		order = ipAddressSortExpression("ip_address")
+	}
 	if order == "" {
 		order, direction = "created_at", "desc"
 	}

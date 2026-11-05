@@ -134,7 +134,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
 
         <Show when={!interfaces.error} fallback={<div class="p-4"><ResourceError title="WAN interfaces are unavailable" description="The aggregated WAN interface list could not be loaded." onRetry={() => void refetch()} /></div>}>
           <Show when={!interfaces.loading} fallback={<div class="p-6"><div class="skeleton h-6 w-48 mb-4" /><div class="skeleton h-10 w-full" /></div>}>
-            <Show when={!interfaces()?.preparing && filteredInterfaces().length > 0} fallback={<div class="p-6"><Show when={interfaces()?.preparing} fallback={<EmptyState icon={<Network size={22} />} title="No WAN interfaces found" description={searchQuery() ? 'Try a different search term.' : 'No stored WAN interface data is available for the CPE inventory.'} />}><div class="text-sm text-secondary" role="status">Existing WAN interfaces are being prepared. This page will update automatically.</div></Show></div>}>
+            <Show when={!interfaces()?.preparing} fallback={<div class="p-6 text-sm text-secondary" role="status">Existing WAN interfaces are being prepared. This page will update automatically.</div>}>
               <div class="overflow-x-auto table-scroll">
                 <table class="data-table w-full min-w-[760px] text-sm">
                   <thead class="opaque-table-header">
@@ -174,7 +174,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={pagedInterfaces()}>
+                    <For each={pagedInterfaces()} fallback={<tr><td colspan={columns().filter(column => column.visible).length + 1} class="px-4 py-6"><EmptyState icon={<Network size={22} />} title="No WAN interfaces found" description={searchQuery() || Object.keys(columnFilters()).length > 0 ? 'Adjust or clear the active filters or search term.' : 'No stored WAN interface data is available for the CPE inventory.'} /></td></tr>}>
                       {(row) => {
                         const webUrl = () => cpeWebUiUrl(row.ip_address);
                         return (

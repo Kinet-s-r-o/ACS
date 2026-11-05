@@ -14,6 +14,7 @@ ACS is a beta TR-069/CWMP control plane: Go backend, SolidJS/TypeScript console,
 - Preserve security boundaries: TLS at the proxy, explicit CORS and proxy CIDRs, protected CWMP, encrypted sensitive parameters, and signed firmware URLs.
 - For every new console section or feature, define its required permissions before implementation; enforce them in backend routes and reflect them in UI visibility and role configuration.
 - Do not expose API/CWMP/PostgreSQL ports directly in production.
+- Do not create new PostgreSQL indexes, including through migrations or ORM auto-migration. If a feature needs an index, only recommend it to the user with its purpose and full parameters: index name, target table, method, columns/expressions and order, uniqueness, optional INCLUDE columns and WHERE predicate, and proposed CREATE INDEX statement.
 - Preserve existing working-tree changes. Commit and push only when the user explicitly asks for that action in the current request; never infer authorization from an earlier request. Do not deploy or change application behavior unless requested.
 - Never mention changes to `.md` files in commit messages, including the subject and body.
 - UI changes must follow [docs/ui-ux-standard.md](docs/ui-ux-standard.md) and pass the UI check.

@@ -10,6 +10,24 @@ import (
 	"gorm.io/gorm"
 )
 
+// Guard inet casts so missing or malformed device values cannot break a page.
+// Patterns use syntax supported by PostgreSQL 14–18.
+const ipSortOctet = `(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]{0,1}[0-9])`
+const ipSortIPv4 = `(` + ipSortOctet + `[.]){3}` + ipSortOctet
+const ipSortHex = `[0-9A-Fa-f]{1,4}`
+const ipSortIPv6 = `((` + ipSortHex + `:){7}` + ipSortHex +
+	`|(` + ipSortHex + `:){1,7}:|(` + ipSortHex + `:){1,6}:` + ipSortHex +
+	`|(` + ipSortHex + `:){1,5}(:` + ipSortHex + `){1,2}|(` + ipSortHex + `:){1,4}(:` + ipSortHex + `){1,3}` +
+	`|(` + ipSortHex + `:){1,3}(:` + ipSortHex + `){1,4}|(` + ipSortHex + `:){1,2}(:` + ipSortHex + `){1,5}` +
+	`|` + ipSortHex + `:((:` + ipSortHex + `){1,6})|:((:` + ipSortHex + `){1,7}|:))`
+
+func ipAddressSortExpression(column string) string {
+	raw := `BTRIM(` + column + `)`
+	// An embedded IPv4 suffix occupies two IPv6 groups.
+	normalized := `regexp_replace(` + raw + `, ':` + ipSortIPv4 + `$', ':0:0')`
+	return `CASE WHEN ` + raw + ` ~ '^` + ipSortIPv4 + `$' OR ` + normalized + ` ~ '^` + ipSortIPv6 + `$' THEN (` + raw + `)::inet END`
+}
+
 func applySearchTerms(query *gorm.DB, search string, expressions []string) *gorm.DB {
 	search = strings.TrimSpace(search)
 	if search == "" {

@@ -227,7 +227,7 @@ func inventorySortExpression(column string, includeSensitive bool) (string, bool
 	case "product_class":
 		return "COALESCE(devices.product_class, '')", true
 	case "ip_address":
-		return "COALESCE(devices.ip_address, '')", true
+		return ipAddressSortExpression("devices.ip_address"), true
 	case "ppp_username":
 		return inventoryPPPExpression(includeSensitive, false), true
 	case "rx_power":
@@ -265,6 +265,9 @@ func inventoryFilterExpression(column string, includeSensitive bool, rxPowerValu
 	}
 	if column == "ppp_username" {
 		return inventoryPPPExpression(includeSensitive, true), nil
+	}
+	if column == "ip_address" {
+		return "COALESCE(devices.ip_address, '')", nil
 	}
 	if column == "status" {
 		return inventoryStatusExpression, nil
