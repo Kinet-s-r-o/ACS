@@ -93,7 +93,7 @@ const Devices: Component = () => {
   const [restartError, setRestartError] = createSignal('');
   let inventoryActionsMenu: HTMLDivElement | undefined;
   const [exportingDevices, setExportingDevices] = createSignal(false);
-  const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', null);
+  const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', { column: 'created_at', direction: 'desc' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
   const { isFullAccess, hasAnyPermission, user } = useAuth();
   const { notify } = useFeedback();

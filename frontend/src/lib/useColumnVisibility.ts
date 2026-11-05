@@ -33,9 +33,12 @@ const readStored = (key: string, defaults: ColumnDef[]): ColumnDef[] => {
  */
 export const useColumnVisibility = (storageKey: string, defaults: ColumnDef[]) => {
   const key = `acs_columns_${storageKey}`;
-  const [columns, setColumns] = createSignal<ColumnDef[]>(readStored(key, defaults));
+  const [columns, setColumns] = createSignal<ColumnDef[]>(readStored(key, defaults).map(
+    column => column.id === 'actions' ? { ...column, visible: true } : column,
+  ));
 
   const toggle = (id: string) => {
+    if (id === 'actions') return;
     setColumns((cols) => {
       const next = cols.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c));
       try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Storage can be unavailable in private browsing. */ }

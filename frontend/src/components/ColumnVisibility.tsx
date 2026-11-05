@@ -105,7 +105,7 @@ const ColumnVisibility: Component<ColumnVisibilityProps> = (props) => {
             </button>
           </div>
           <div class="column-dropdown-body">
-            <For each={props.columns()}>
+            <For each={props.columns().filter(column => column.id !== 'actions')}>
               {(col) => (
                 <label class="column-toggle-row">
                   <input
