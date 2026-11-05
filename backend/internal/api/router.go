@@ -3574,11 +3574,11 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 	}
 
 	body.Username = strings.TrimSpace(body.Username)
-	if !validUsername(body.Username) {
-		respondError(w, http.StatusBadRequest, "Username must be 3-64 characters and use only letters, numbers, dot, dash, or underscore")
+	body.AuthProvider = authn.Normalize(body.AuthProvider)
+	if !validUsername(body.Username, body.AuthProvider) {
+		respondError(w, http.StatusBadRequest, usernameValidationMessage(body.AuthProvider))
 		return
 	}
-	body.AuthProvider = authn.Normalize(body.AuthProvider)
 	if !r.authenticationModules().Supports(body.AuthProvider) {
 		respondError(w, http.StatusBadRequest, "Unknown authentication module")
 		return
@@ -3693,12 +3693,11 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if body.Username != "" {
-		body.Username = strings.TrimSpace(body.Username)
-		if !validUsername(body.Username) {
-			respondError(w, http.StatusBadRequest, "Invalid username format")
-			return
-		}
-		user.Username = body.Username
+		user.Username = strings.TrimSpace(body.Username)
+	}
+	if !validUsername(user.Username, provider) {
+		respondError(w, http.StatusBadRequest, usernameValidationMessage(provider))
+		return
 	}
 	if body.FirstName != nil {
 		user.FirstName = strings.TrimSpace(*body.FirstName)

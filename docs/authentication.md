@@ -7,6 +7,11 @@ Accounts must be created in ACS before users can sign in. The ACS username is se
 unchanged as RADIUS User-Name. Automatic provisioning and role-attribute mapping
 are not supported.
 
+Usernames are 3–64 characters. RADIUS accounts also allow `@` and backslash, for
+example `first.last@example.net` or `DOMAIN\operator`, alongside letters, numbers,
+dot, dash and underscore. Local accounts retain the original character rules;
+switching a domain-style RADIUS account to local requires a compatible username.
+
 ## Configure RADIUS
 
 Open **System settings → Authentication** and select the **RADIUS** tile to open

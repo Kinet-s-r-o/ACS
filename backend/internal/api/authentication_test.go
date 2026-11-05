@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -247,5 +248,71 @@ func TestRadiusSettingsProtectionPostgres(t *testing.T) {
 	loaded, err := r.loadRadiusConfig(t.Context())
 	if err != nil || loaded.Servers[0].Secret != secret {
 		t.Fatal("stored secret was not preserved")
+	}
+}
+
+func TestRadiusUsernamesPostgres(t *testing.T) {
+	db := integrationTestDatabase(t)
+	role := &models.Role{Name: "viewer", IsSystem: true, Permissions: []string{models.PermDevicesRead}}
+	if err := db.Create(role).Error; err != nil {
+		t.Fatal(err)
+	}
+	r := &Router{userRepo: database.NewUserRepository(db), roleRepo: database.NewRoleRepository(db)}
+	call := func(handler http.HandlerFunc, method, id string, body any) *httptest.ResponseRecorder {
+		t.Helper()
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(method, "/users/"+id, strings.NewReader(string(encoded)))
+		req.SetPathValue("id", id)
+		ctx := context.WithValue(req.Context(), auth.UserContextKey, &auth.Claims{Role: models.RoleFull})
+		w := httptest.NewRecorder()
+		handler(w, req.WithContext(ctx))
+		return w
+	}
+	var target models.User
+	for _, username := range []string{"first.last@example.net", `DOMAIN\operator`} {
+		w := call(r.handleCreateUser, http.MethodPost, "", models.CreateUserRequest{Username: username, AuthProvider: "radius", RoleID: &role.ID})
+		if w.Code != http.StatusCreated {
+			t.Fatalf("create RADIUS username %q returned %d", username, w.Code)
+		}
+		if target.ID == 0 && json.Unmarshal(w.Body.Bytes(), &target) != nil {
+			t.Fatal("invalid created account response")
+		}
+	}
+	for _, provider := range []string{"", "local"} {
+		for _, username := range []string{"local@example.net", `DOMAIN\local`} {
+			w := call(r.handleCreateUser, http.MethodPost, "", models.CreateUserRequest{Username: username, AuthProvider: provider, Password: "Local-password-123", RoleID: &role.ID})
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("local username %q returned %d", username, w.Code)
+			}
+		}
+	}
+	id := strconv.FormatInt(target.ID, 10)
+	for _, tc := range []struct {
+		name   string
+		body   map[string]any
+		status int
+	}{
+		{"edit-radius-profile", map[string]any{"first_name": "Operator"}, http.StatusOK},
+		{"rename-radius-account", map[string]any{"username": `DOMAIN\first.last`}, http.StatusOK},
+		{"reject-incompatible-local-conversion", map[string]any{"auth_provider": "local", "password": "Local-password-123"}, http.StatusBadRequest},
+		{"convert-with-local-username", map[string]any{"auth_provider": "local", "username": "local-return", "password": "Local-password-123"}, http.StatusOK},
+		{"convert-with-radius-username", map[string]any{"auth_provider": "radius", "username": "first.last@example.net"}, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if w := call(r.handleUpdateUser, http.MethodPut, id, tc.body); w.Code != tc.status {
+				t.Fatalf("update returned %d; want %d", w.Code, tc.status)
+			}
+		})
+	}
+	stored, err := r.userRepo.GetByID(t.Context(), target.ID)
+	if err != nil || stored.AuthProvider != "radius" || stored.Username != "first.last@example.net" || stored.PasswordHash != "" {
+		t.Fatal("RADIUS conversion did not preserve the exact external username or clear the local password")
+	}
+	w := call(r.handleCreateUser, http.MethodPost, "", models.CreateUserRequest{Username: stored.Username, AuthProvider: "radius", RoleID: &role.ID})
+	if w.Code != http.StatusConflict {
+		t.Fatal("duplicate RADIUS username accepted")
 	}
 }

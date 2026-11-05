@@ -63,14 +63,37 @@ func TestSameOrigin(t *testing.T) {
 
 func TestValidUsername(t *testing.T) {
 	for _, username := range []string{"net.admin", "operator-1", "noc_user"} {
-		if !validUsername(username) {
+		if !validUsername(username, "local") {
 			t.Fatalf("valid username %q rejected", username)
 		}
 	}
 	for _, username := range []string{"x", "bad user", "operator/../../admin"} {
-		if validUsername(username) {
+		if validUsername(username, "local") {
 			t.Fatalf("invalid username %q accepted", username)
 		}
+	}
+}
+
+func TestRadiusUsernameCharacters(t *testing.T) {
+	for _, username := range []string{"net.admin", "operator-1", "noc_user", "first.last@example.net", `DOMAIN\operator`, `DOMAIN\first.last@example.net`} {
+		if !validUsername(username, "radius") {
+			t.Errorf("valid RADIUS username %q rejected", username)
+		}
+	}
+	for _, username := range []string{"x", strings.Repeat("a", 65), "bad user", "operator/admin", "user\nname", "user\x00name", "user:name", "user%name", "užívateľ"} {
+		if validUsername(username, "radius") {
+			t.Errorf("invalid RADIUS username %q accepted", username)
+		}
+	}
+	for _, provider := range []string{"", "local", "future-module"} {
+		for _, username := range []string{"user@example.net", `DOMAIN\user`} {
+			if validUsername(username, provider) {
+				t.Errorf("RADIUS-only username %q accepted for module %q", username, provider)
+			}
+		}
+	}
+	if !validUsername(strings.Repeat("a", 64), "radius") {
+		t.Fatal("64-character RADIUS username rejected")
 	}
 }
 

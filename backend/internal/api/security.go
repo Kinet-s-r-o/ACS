@@ -389,18 +389,26 @@ func truncate(value string, max int) string {
 	return value[:max]
 }
 
-func validUsername(username string) bool {
+func validUsername(username, provider string) bool {
 	if len(username) < 3 || len(username) > 64 {
 		return false
 	}
 	for _, char := range username {
 		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') || char == '_' || char == '-' || char == '.' {
+			(char >= '0' && char <= '9') || char == '_' || char == '-' || char == '.' ||
+			(provider == "radius" && (char == '@' || char == '\\')) {
 			continue
 		}
 		return false
 	}
 	return true
+}
+
+func usernameValidationMessage(provider string) string {
+	if provider == "radius" {
+		return "Username must be 3-64 characters and use only letters, numbers, dot, dash, underscore, @, or backslash"
+	}
+	return "Username must be 3-64 characters and use only letters, numbers, dot, dash, or underscore"
 }
 
 func parsePagination(req *http.Request, defaultLimit, maxLimit int) (int, int) {
