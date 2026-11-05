@@ -4,6 +4,7 @@ import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-solid';
 import { api, type Role } from '../lib/api';
 import Dialog from '../components/Dialog';
+import AccountTransferActions from '../components/AccountTransferActions';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
@@ -170,12 +171,12 @@ const RolesTab: Component = () => {
 
   return (
     <div>
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <p class="text-sm"><strong>{pagedRoles().length}</strong> visible on this page · <strong>{roles()?.length ?? 0}</strong> total roles</p>
           <p class="text-sm text-muted mt-1">Define permission sets that can be assigned to users.</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <div class="relative block w-full sm:w-72">
             <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input type="text" value={searchQuery()} onInput={(event) => { setRolePage(0); setSearchQuery(event.currentTarget.value); }} placeholder="Search roles…" aria-label="Search roles" class="input w-full pl-9! text-sm" />
@@ -183,6 +184,7 @@ const RolesTab: Component = () => {
               <button type="button" onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear role search"><X size={12} /></button>
             </Show>
           </div>
+          <AccountTransferActions kind="roles" ids={sortedRoles().map(role => role.id)} loading={roles.loading || !!roles.error} onImported={() => refetchRoles()} />
           <Show when={canWrite()}>
             <button type="button" class="btn btn-primary" onClick={openCreateRole}>
               <Plus size={14} /> New Role

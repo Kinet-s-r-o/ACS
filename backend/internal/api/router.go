@@ -188,6 +188,8 @@ func (r *Router) Handler() http.Handler {
 	// User management
 	apiMux.HandleFunc("GET /users", auth.RequirePermission(models.PermUsersRead)(r.handleListUsers))
 	apiMux.HandleFunc("POST /users", auth.RequirePermission(models.PermUsersWrite)(r.handleCreateUser))
+	apiMux.HandleFunc("POST /users/export", r.handleExportAccounts("users"))
+	apiMux.HandleFunc("POST /users/import", r.handleImportAccounts("users"))
 	apiMux.HandleFunc("PUT /users/{id}", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateUser))
 	apiMux.HandleFunc("PATCH /users/{id}/active", auth.RequirePermission(models.PermUsersWrite)(r.handleSetUserActive))
 	apiMux.HandleFunc("GET /users/{id}/dashboard-panels", auth.RequirePermission(models.PermUsersDashboards)(r.handleGetUserDashboardPanels))
@@ -205,6 +207,8 @@ func (r *Router) Handler() http.Handler {
 	// Role management
 	apiMux.HandleFunc("GET /roles", auth.RequirePermission(models.PermRolesRead)(r.handleListRoles))
 	apiMux.HandleFunc("POST /roles", auth.RequirePermission(models.PermRolesWrite)(r.handleCreateRole))
+	apiMux.HandleFunc("POST /roles/export", r.handleExportAccounts("roles"))
+	apiMux.HandleFunc("POST /roles/import", r.handleImportAccounts("roles"))
 	apiMux.HandleFunc("PUT /roles/{id}", auth.RequirePermission(models.PermRolesWrite)(r.handleUpdateRole))
 	apiMux.HandleFunc("DELETE /roles/{id}", auth.RequirePermission(models.PermRolesWrite)(r.handleDeleteRole))
 

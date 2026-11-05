@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js';
-import { Edit, Plus, Save, Search, Tags, Trash2, X } from 'lucide-solid';
+import { Download, Edit, Plus, Save, Search, Tags, Trash2, X } from 'lucide-solid';
 import { api, type TagDefinition } from '../lib/api';
 import { useAuth, usePermissionSection } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
@@ -63,6 +63,27 @@ const Dictionaries: Component = () => {
     return next;
   });
 
+  const exportTagsCSV = () => {
+    if (!can('settings.dictionaries.tags', 'export') || tags.loading || tags.error || !filteredTags().length) return;
+    const exportColumns = columns().filter(column => column.visible);
+    if (!exportColumns.length) return;
+    try {
+      const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const rows = filteredTags().map(tag => exportColumns.map(column => tag[column.id as 'name' | 'description' | 'color'] ?? ''));
+      const csv = '\uFEFF' + [exportColumns.map(column => column.label), ...rows]
+        .map(row => row.map(escapeCsvValue).join(','))
+        .join('\r\n') + '\r\n';
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'dictionary-tags.csv';
+      document.body.appendChild(link);
+      try { link.click(); } finally { link.remove(); URL.revokeObjectURL(url); }
+    } catch (error) {
+      notify({ tone: 'error', title: 'Could not export tags', message: 'Retry downloading the tag dictionary.', detail: (error as Error).message, persistent: true });
+    }
+  };
+
   const openCreate = () => {
     setEditing(null);
     setName('');
@@ -116,14 +137,15 @@ const Dictionaries: Component = () => {
         <button type="button" role="tab" aria-selected="true" class="px-3 py-2 text-xs font-medium border-b-2 border-sky-400 text-primary flex items-center gap-1.5"><Tags size={13} />Tags</button>
       </div>
       <div class="card p-5">
-        <div class="flex items-center justify-between gap-3 mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <span><strong>{pagedTags().length}</strong> visible on this page · <strong>{tags()?.length ?? 0}</strong> total tags</span>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <div class="relative block w-full sm:w-72">
               <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               <input type="text" value={searchQuery()} onInput={event => { setSearchQuery(event.currentTarget.value); setTagsPage(0); }} placeholder="Search tags..." aria-label="Search tags" class="input w-full pl-9! text-sm" />
               <Show when={searchQuery()}><button type="button" onClick={() => { setSearchQuery(''); setTagsPage(0); }} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show>
             </div>
+            <button type="button" onClick={exportTagsCSV} class="icon-button" disabled={!can('settings.dictionaries.tags', 'export') || tags.loading || !!tags.error || !filteredTags().length || !columns().some(column => column.visible)} title="Export filtered tags as CSV" aria-label="Export filtered tags as CSV"><Download size={15} aria-hidden="true" /></button>
             <Show when={canManageTags()}><button type="button" onClick={openCreate} class="btn btn-primary text-xs"><Plus size={13} />New tag</button></Show>
           </div>
         </div>

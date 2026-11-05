@@ -3,6 +3,7 @@ import { createEffect, createResource, createSignal, createMemo, Show, For } fro
 import { useNavigate } from '@solidjs/router';
 import { Users, ShieldCheck, Ban, Check, Edit2, Plus, Search, X, KeyRound, LayoutDashboard } from 'lucide-solid';
 import UserAPITokens from '../components/UserAPITokens';
+import AccountTransferActions from '../components/AccountTransferActions';
 import { api, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
@@ -191,6 +192,7 @@ const UsersPage: Component = () => {
                 <button onClick={() => setSearchQuery('')} class="input-clear" aria-label="Clear search"><X size={12} /></button>
               </Show>
             </div>
+            <AccountTransferActions kind="users" ids={sortedUsers().map(user => user.id)} loading={users.loading || !!users.error} onImported={() => refetchUsers()} />
             <button onClick={openCreateUser} class="btn btn-primary text-xs py-1.5">
               <Plus size={12} />
               Add operator
