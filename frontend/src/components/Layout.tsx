@@ -51,6 +51,7 @@ const pageNames: Record<string, string> = {
   '/settings/dictionaries': 'Dictionaries',
   '/settings/users': 'Users and Roles',
   '/settings/authentication': 'Authentication',
+  '/settings/authentication/radius': 'RADIUS',
   '/settings/api-docs': 'API documentation',
   '/settings/delivery': 'Delivery & Connection Request',
   '/settings/provisioning': 'Provisioning',

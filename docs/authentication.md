@@ -9,7 +9,8 @@ are not supported.
 
 ## Configure RADIUS
 
-Open **System settings → Authentication**. Reading requires `auth.settings.read`.
+Open **System settings → Authentication** and select the **RADIUS** tile to open
+its detailed settings. Reading requires `auth.settings.read`.
 Saving and testing require both `auth.settings.read` and `auth.settings.write`,
 plus full access. The built-in admin role receives the new grants at startup.
 The generic settings API cannot change or disclose authentication configuration.
