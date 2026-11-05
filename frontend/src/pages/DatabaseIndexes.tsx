@@ -37,6 +37,7 @@ const DatabaseIndexes: Component = () => {
   const catalogRows = () => catalog().slice(page() * catalogPageSize(), (page() + 1) * catalogPageSize());
   const isManaged = (name: string) => data.latest?.managed.some(index => index.active_name === name && index.owned);
   const recipeLabel = (recipe: string) => data.latest?.recipes.find(item => item.id === recipe)?.label ?? recipe;
+  const selectedRecipe = () => data.latest?.recipes.find(item => item.id === form().recipe);
   onMount(() => {
     const timer = window.setInterval(() => { if (!document.hidden && !data.loading) void refetch(); }, 5000);
     onCleanup(() => window.clearInterval(timer));
@@ -47,7 +48,7 @@ const DatabaseIndexes: Component = () => {
     setPreview(undefined); setFormError(''); setDialog(index ? { id: index.id } : {});
   };
   const change = <K extends keyof DatabaseIndexSpec>(key: K, value: DatabaseIndexSpec[K]) => {
-    setForm(current => ({ ...current, [key]: value })); setPreview(undefined); setFormError('');
+    setForm(current => ({ ...current, [key]: value, ...(key === 'recipe' ? { parameter_path: '' } : {}) })); setPreview(undefined); setFormError('');
   };
   const inspect = async (event: SubmitEvent) => {
     event.preventDefault(); setBusy(true); setFormError('');
@@ -80,7 +81,7 @@ const DatabaseIndexes: Component = () => {
 
   return <section class="space-y-5" aria-label="DB indexes" aria-busy={data.loading}>
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 class="text-sm font-medium text-primary">DB indexes</h2><p class="text-xs text-muted mt-1">Create small indexes for specific parameter queries and inspect PostgreSQL storage. Status refreshes every five seconds.</p></div>
+      <div><h2 class="text-sm font-medium text-primary">DB indexes</h2><p class="text-xs text-muted mt-1">Create B-tree indexes for parameter queries and Fleet samples, and inspect PostgreSQL storage. Status refreshes every five seconds.</p></div>
       <div class="flex items-center gap-2">
         <button type="button" class="icon-button" aria-label="Refresh DB indexes" disabled={data.loading} onClick={() => void refetch()}><RefreshCw size={16} /></button>
         <Show when={canWrite()}><button type="button" class="btn btn-primary" disabled={!data.latest?.budget.can_create || !!data.error} onClick={() => openEditor()}><Plus size={15} aria-hidden="true" />Create index</button></Show>
@@ -95,7 +96,7 @@ const DatabaseIndexes: Component = () => {
           <div><dt class="text-muted">PostgreSQL disk available</dt><dd class="font-mono text-primary mt-1">{current().budget.probe_fresh ? formatBytes(current().budget.free_bytes) : 'Measurement unavailable'}</dd></div>
           <div><dt class="text-muted">Protected disk reserve</dt><dd class="font-mono text-primary mt-1">{formatBytes(current().budget.reserve_bytes)} minimum</dd></div>
         </dl>
-        <p class="text-xs text-muted">Only approved B-tree indexes for one exact, non-sensitive parameter path are allowed. GIN, wildcards, raw SQL and included values are prohibited. Existing database indexes are protected.</p>
+        <p class="text-xs text-muted">Choose an approved B-tree definition for an exact parameter path, recent CPEs by Inform, or latest parameters per CPE. Only the recent-CPE definition includes id; parameter values are never indexed. Existing database indexes are protected.</p>
         <p class="text-xs text-muted">UI indexes exceeding a size limit or the disk reserve are automatically removed. PostgreSQL checks run every two seconds; limits are monitored budgets, not filesystem quotas. Index use depends on matching query predicates and the query planner.</p>
         <Show when={current().budget.reserved_bytes > 0}><p class="text-xs text-secondary">Queued construction reserve: {formatBytes(current().budget.reserved_bytes)}.</p></Show>
         <Show when={!current().budget.can_create}><p class="text-xs text-warning" role="status">{current().budget.reason}</p></Show>
@@ -106,10 +107,10 @@ const DatabaseIndexes: Component = () => {
         <h3 class="text-sm font-medium text-secondary">UI-managed indexes</h3>
         <Show when={current().managed.length > 0} fallback={<EmptyState title="No UI-managed indexes" description="Create an index for a specific query after reviewing its estimate. Existing PostgreSQL indexes remain protected." />}>
           <div class="overflow-x-auto"><table class="data-table w-full text-xs" data-column-order-key="database-managed-indexes">
-            <thead><tr><th data-column-order-id="label">Name and purpose</th><th data-column-order-id="path">Parameter and recipe</th><th data-column-order-id="status">Status</th><th data-column-order-id="size">Size / scans</th><th data-column-fixed="actions" data-column-order-id="actions">Actions</th><th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead>
+            <thead><tr><th data-column-order-id="label">Name and purpose</th><th data-column-order-id="path">Target and definition</th><th data-column-order-id="status">Status</th><th data-column-order-id="size">Size / scans</th><th data-column-fixed="actions" data-column-order-id="actions">Actions</th><th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead>
             <tbody><Index each={current().managed}>{index => <tr class="align-top border-t border-subtle">
               <td data-column-order-id="label"><span class="font-medium text-primary">{index().label}</span><p class="text-muted mt-1 max-w-xs break-words">{index().purpose}</p></td>
-              <td data-column-order-id="path"><span class="font-mono break-all">{index().parameter_path}</span><p class="text-muted mt-1">{recipeLabel(index().recipe)}</p></td>
+              <td data-column-order-id="path"><span class="font-mono break-all">{index().parameter_path || current().recipes.find(recipe => recipe.id === index().recipe)?.table_name}</span><p class="text-muted mt-1">{recipeLabel(index().recipe)}</p></td>
               <td data-column-order-id="status"><span class={index().status === 'ready' && index().valid && index().owned ? 'text-success' : 'text-secondary'}>{index().cancel_requested ? 'Cancellation requested' : index().status === 'ready' && (!index().valid || !index().owned) ? 'Needs attention' : index().status}</span><p class="text-muted mt-1 max-w-sm break-words">{index().message}</p>
                 <Show when={index().phase}><p class="text-muted mt-1">{index().phase}{index().blocks_total > 0 ? ` · ${index().blocks_done.toLocaleString()} / ${index().blocks_total.toLocaleString()} blocks` : ''}</p></Show>
                 <Show when={index().active_name && ['queued', 'building', 'failed'].includes(index().status)}><p class="text-muted mt-1">Previous index retained; its current definition is in the catalog.</p></Show>
@@ -153,12 +154,21 @@ const DatabaseIndexes: Component = () => {
       <Show when={preview()} fallback={<button type="submit" form="db-index-form" class="btn btn-primary" disabled={busy()}>{busy() ? 'Checking…' : 'Review estimate'}</button>}><button type="button" class="btn btn-primary" disabled={busy()} onClick={() => void save()}>{busy() ? 'Queuing…' : editing().id ? 'Queue replacement' : 'Queue creation'}</button></Show>
     </>}>
       <form id="db-index-form" class="space-y-4" onSubmit={inspect}>
-        <div><label for="db-index-label" class="block text-xs text-muted mb-1">Name</label><input id="db-index-label" class="input w-full" required minlength={3} maxlength={80} autofocus value={form().label} disabled={busy()} onInput={event => change('label', event.currentTarget.value)} /></div>
+        <div><label for="db-index-label" class="block text-xs text-muted mb-1">Name</label><input id="db-index-label" class="input w-full" required minlength={3} maxlength={80} autofocus value={form().label} disabled={busy()} aria-describedby="db-index-label-help" onInput={event => change('label', event.currentTarget.value)} /><p id="db-index-label-help" class="text-xs text-muted mt-1">Display name. ACS generates the physical PostgreSQL index name.</p></div>
         <div><label for="db-index-purpose" class="block text-xs text-muted mb-1">Query or purpose</label><textarea id="db-index-purpose" class="input w-full" required minlength={8} maxlength={256} rows={2} value={form().purpose} disabled={busy()} onInput={event => change('purpose', event.currentTarget.value)} /></div>
-        <div><label for="db-index-recipe" class="block text-xs text-muted mb-1">Approved recipe</label><select id="db-index-recipe" class="input w-full" value={form().recipe} disabled={busy()} onChange={event => change('recipe', event.currentTarget.value as DatabaseIndexSpec['recipe'])}><Index each={data.latest?.recipes}>{recipe => <option value={recipe().id}>{recipe().label}</option>}</Index></select><p class="text-xs text-muted mt-1">{data.latest?.recipes.find(recipe => recipe.id === form().recipe)?.description}</p></div>
-        <div><label for="db-index-path" class="block text-xs text-muted mb-1">Exact parameter path</label><input id="db-index-path" class="input w-full font-mono" required maxlength={256} value={form().parameter_path} disabled={busy()} aria-describedby="db-index-path-help" placeholder="InternetGatewayDevice.DeviceInfo.UpTime" onInput={event => change('parameter_path', event.currentTarget.value)} /><p id="db-index-path-help" class="text-xs text-muted mt-1">Use a complete leaf path beginning with InternetGatewayDevice. or Device. Instance numbers must be explicit. Passwords, credentials, wildcards and object branches are rejected.</p></div>
+        <div><label for="db-index-recipe" class="block text-xs text-muted mb-1">Index definition</label><select id="db-index-recipe" class="input w-full" value={form().recipe} disabled={busy()} aria-describedby="db-index-recipe-help" onChange={event => change('recipe', event.currentTarget.value as DatabaseIndexSpec['recipe'])}><Index each={data.latest?.recipes}>{recipe => <option value={recipe().id}>{recipe().label}</option>}</Index></select><p id="db-index-recipe-help" class="text-xs text-muted mt-1">{selectedRecipe()?.description}</p></div>
+        <Show when={selectedRecipe()?.requires_parameter_path}>
+          <div><label for="db-index-path" class="block text-xs text-muted mb-1">Exact parameter path</label><input id="db-index-path" class="input w-full font-mono" required maxlength={256} value={form().parameter_path} disabled={busy()} aria-describedby="db-index-path-help" placeholder="InternetGatewayDevice.DeviceInfo.UpTime" onInput={event => change('parameter_path', event.currentTarget.value)} /><p id="db-index-path-help" class="text-xs text-muted mt-1">Use a complete leaf path beginning with InternetGatewayDevice. or Device. Instance numbers must be explicit. Passwords, credentials, wildcards and object branches are rejected.</p></div>
+        </Show>
+        <Show when={selectedRecipe()}>{recipe => <dl class="border border-subtle p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs" aria-label="Index parameters">
+          <div><dt class="text-muted">Table</dt><dd class="font-mono text-primary break-all mt-1">{recipe().table_name}</dd></div>
+          <div><dt class="text-muted">Method / unique</dt><dd class="text-primary mt-1">B-tree / No</dd></div>
+          <div class="sm:col-span-2"><dt class="text-muted">Columns in order (ASC unless specified)</dt><dd class="font-mono text-primary break-words mt-1">{recipe().columns.join(', ')}</dd></div>
+          <div><dt class="text-muted">INCLUDE</dt><dd class="font-mono text-primary mt-1">{recipe().include_columns.join(', ') || 'None'}</dd></div>
+          <div><dt class="text-muted">WHERE</dt><dd class="font-mono text-primary break-all mt-1">{recipe().requires_parameter_path ? `name = '${form().parameter_path || '<exact parameter path>'}'` : 'None (all rows)'}</dd></div>
+        </dl>}</Show>
         <Show when={editing().id}><p class="text-xs text-muted">Editing builds a replacement first and removes the previous UI index only after the replacement is verified. Extra construction space is required.</p></Show>
-        <Show when={preview()}>{estimate => <div class="border border-subtle p-3 text-xs space-y-2" role="status"><p class="text-primary">Conservative estimate: {formatBytes(estimate().estimated_bytes)} for {estimate().estimated_rows.toLocaleString()} rows.</p><p class="text-muted">Current query plan: {estimate().plan}. This estimate does not guarantee index usage or final size. Construction and future growth are monitored.</p></div>}</Show>
+        <Show when={preview()}>{estimate => <div class="border border-subtle p-3 text-xs space-y-2" role="status"><p class="text-primary">Conservative estimate: {formatBytes(estimate().estimated_bytes)} for {estimate().estimated_rows.toLocaleString()} rows.</p><p class="text-muted">Current query plan: {estimate().plan}. This estimate does not guarantee index usage or final size. Construction and future growth are monitored.</p><details><summary class="cursor-pointer text-secondary">Generated SQL</summary><pre class="font-mono text-xs whitespace-pre-wrap break-all mt-2">{estimate().sql}</pre><p class="text-muted mt-2">The generated name is assigned when creation is queued.</p></details></div>}</Show>
         <Show when={formError()}><p class="text-xs text-error" role="alert">{formError()}</p></Show>
       </form>
     </Dialog>}</Show>

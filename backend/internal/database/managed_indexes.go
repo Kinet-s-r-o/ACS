@@ -45,14 +45,45 @@ type IndexSpec struct {
 }
 
 type IndexRecipe struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
+	ID                    string   `json:"id"`
+	Label                 string   `json:"label"`
+	Description           string   `json:"description"`
+	TableName             string   `json:"table_name"`
+	Columns               []string `json:"columns"`
+	IncludeColumns        []string `json:"include_columns"`
+	RequiresParameterPath bool     `json:"requires_parameter_path"`
 }
 
 var indexRecipes = []IndexRecipe{
-	{"parameter_presence", "Parameter presence by CPE", "B-tree on device_id for one exact parameter path. Supports lookups and joins for that parameter across CPEs."},
-	{"parameter_freshness", "Parameter freshness", "B-tree on updated_at DESC and device_id for one exact parameter path. Supports newest readings and age filters."},
+	{
+		ID: "parameter_presence", Label: "Parameter presence by CPE",
+		Description: "B-tree on device_id for one exact parameter path. Supports lookups and joins for that parameter across CPEs.",
+		TableName:   "device_parameters", Columns: []string{"device_id"}, IncludeColumns: []string{}, RequiresParameterPath: true,
+	},
+	{
+		ID: "parameter_freshness", Label: "Parameter freshness",
+		Description: "B-tree on updated_at DESC and device_id for one exact parameter path. Supports newest readings and age filters.",
+		TableName:   "device_parameters", Columns: []string{"updated_at DESC", "device_id"}, IncludeColumns: []string{}, RequiresParameterPath: true,
+	},
+	{
+		ID: "devices_last_inform", Label: "Recent CPEs by Inform",
+		Description: "B-tree on last_inform DESC NULLS LAST, including id. Supports the recent-CPE sample used by Fleet distributions. Covers all CPEs.",
+		TableName:   "devices", Columns: []string{"last_inform DESC NULLS LAST"}, IncludeColumns: []string{"id"},
+	},
+	{
+		ID: "parameters_device_latest", Label: "Latest parameter per CPE",
+		Description: "B-tree on device_id, updated_at DESC and name. Supports latest-parameter ordering and joins. Covers all parameter rows; large installations may exceed the size limit. Wildcard name filters still require filtering.",
+		TableName:   "device_parameters", Columns: []string{"device_id", "updated_at DESC", "name"}, IncludeColumns: []string{},
+	},
+}
+
+func findIndexRecipe(id string) (IndexRecipe, bool) {
+	for _, recipe := range indexRecipes {
+		if recipe.ID == id {
+			return recipe, true
+		}
+	}
+	return IndexRecipe{}, false
 }
 
 type IndexCatalogEntry struct {
@@ -110,6 +141,7 @@ type IndexPreview struct {
 	EstimatedRows  int64       `json:"estimated_rows"`
 	EstimatedBytes int64       `json:"estimated_bytes"`
 	Plan           string      `json:"plan"`
+	SQL            string      `json:"sql"`
 	Budget         IndexBudget `json:"budget"`
 }
 
@@ -122,8 +154,15 @@ func ValidateIndexSpec(spec IndexSpec) error {
 			return fmt.Errorf("%w: label must have 3–80 characters and purpose 8–256 characters, without control characters", ErrIndexPolicy)
 		}
 	}
-	if spec.Recipe != "parameter_presence" && spec.Recipe != "parameter_freshness" {
-		return fmt.Errorf("%w: choose an approved B-tree recipe; GIN, custom SQL, methods, expressions and INCLUDE columns are forbidden", ErrIndexPolicy)
+	recipe, ok := findIndexRecipe(spec.Recipe)
+	if !ok {
+		return fmt.Errorf("%w: choose an approved B-tree recipe; GIN, custom SQL and caller-selected tables, columns or expressions are forbidden", ErrIndexPolicy)
+	}
+	if !recipe.RequiresParameterPath {
+		if spec.ParameterPath != "" {
+			return fmt.Errorf("%w: this recipe covers the entire table; parameter_path must be empty", ErrIndexPolicy)
+		}
+		return nil
 	}
 	if len(spec.ParameterPath) > 256 || !indexPathPattern.MatchString(spec.ParameterPath) || IsSensitiveParameterName(spec.ParameterPath) || spec.ParameterPath == DeviceLogParameterName {
 		return fmt.Errorf("%w: provide one exact non-sensitive parameter path, without wildcards or a trailing dot", ErrIndexPolicy)
@@ -132,10 +171,15 @@ func ValidateIndexSpec(spec IndexSpec) error {
 }
 
 func indexKey(spec IndexSpec) string {
-	if spec.Recipe == "parameter_freshness" {
-		return "updated_at DESC, device_id"
+	recipe, _ := findIndexRecipe(spec.Recipe)
+	return strings.Join(recipe.Columns, ", ")
+}
+
+func indexInclude(recipe IndexRecipe) string {
+	if len(recipe.IncludeColumns) == 0 {
+		return ""
 	}
-	return "device_id"
+	return " INCLUDE (" + strings.Join(recipe.IncludeColumns, ", ") + ")"
 }
 
 func quoteIdentifier(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
@@ -148,7 +192,12 @@ func indexDDL(schema, name string, spec IndexSpec) (string, error) {
 	if !managedIndexName.MatchString(name) {
 		return "", ErrIndexProtected
 	}
-	return "CREATE INDEX CONCURRENTLY " + quoteIdentifier(name) + " ON " + quoteIdentifier(schema) + `."device_parameters" USING btree (` + indexKey(spec) + ") WITH (fillfactor=90) TABLESPACE pg_default WHERE name = " + quoteLiteral(spec.ParameterPath), nil
+	recipe, _ := findIndexRecipe(spec.Recipe)
+	ddl := "CREATE INDEX CONCURRENTLY " + quoteIdentifier(name) + " ON " + quoteIdentifier(schema) + "." + quoteIdentifier(recipe.TableName) + " USING btree (" + indexKey(spec) + ")" + indexInclude(recipe) + " WITH (fillfactor=90) TABLESPACE pg_default"
+	if recipe.RequiresParameterPath {
+		ddl += " WHERE name = " + quoteLiteral(spec.ParameterPath)
+	}
+	return ddl, nil
 }
 
 func getIndexSchema(ctx context.Context, db *gorm.DB) (string, error) {
@@ -158,6 +207,64 @@ func getIndexSchema(ctx context.Context, db *gorm.DB) (string, error) {
 		err = fmt.Errorf("%w: parameter table is unavailable", ErrIndexPolicy)
 	}
 	return schema, err
+}
+
+func getIndexTargetSchema(ctx context.Context, db *gorm.DB, spec IndexSpec) (string, error) {
+	schema, err := getIndexSchema(ctx, db)
+	if err != nil {
+		return "", err
+	}
+	recipe, ok := findIndexRecipe(spec.Recipe)
+	if !ok {
+		return "", ErrIndexPolicy
+	}
+	var available bool
+	if err := db.WithContext(ctx).Raw(`SELECT EXISTS (
+		SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+		WHERE n.nspname=? AND c.relname=? AND c.relkind='r'
+	)`, schema, recipe.TableName).Scan(&available).Error; err != nil {
+		return "", err
+	}
+	if !available {
+		return "", fmt.Errorf("%w: approved index table is unavailable in the application schema", ErrIndexPolicy)
+	}
+	return schema, nil
+}
+
+// EXPLAIN estimates every indexed row, without LIMIT or parameter values. The
+// full-table recipes must not reuse the one-row-per-CPE partial-index estimate.
+func indexPlanQuery(schema string, spec IndexSpec) string {
+	recipe, _ := findIndexRecipe(spec.Recipe)
+	table := quoteIdentifier(schema) + "." + quoteIdentifier(recipe.TableName)
+	if spec.Recipe == "devices_last_inform" {
+		return "EXPLAIN (FORMAT JSON) SELECT id FROM " + table + " ORDER BY last_inform DESC NULLS LAST"
+	}
+	query := "EXPLAIN (FORMAT JSON) SELECT device_id FROM " + table
+	if recipe.RequiresParameterPath {
+		query += " WHERE name=" + quoteLiteral(spec.ParameterPath)
+	}
+	if spec.Recipe == "parameter_freshness" || spec.Recipe == "parameters_device_latest" {
+		query += " ORDER BY " + indexKey(spec)
+	}
+	return query
+}
+
+func estimateIndexStorage(spec IndexSpec, planRows float64, devices int64, nameWidth int64) (int64, int64, error) {
+	rows := math.Ceil(math.Max(planRows*2, float64(devices)*1.25))
+	bytesPerRow := float64(96)
+	if spec.Recipe == "parameters_device_latest" {
+		// name is a variable-width key. Use its collected average width, with
+		// a conservative fallback when ANALYZE statistics are unavailable.
+		if nameWidth <= 0 {
+			nameWidth = 256
+		}
+		bytesPerRow = math.Max(bytesPerRow, float64(nameWidth)+64)
+	}
+	bytes := math.Max(1<<20, rows*bytesPerRow)
+	if math.IsNaN(bytes) || math.IsInf(bytes, 0) || bytes >= math.MaxInt64 {
+		return 0, 0, fmt.Errorf("%w: index size estimate is unavailable or exceeds the storage limit", ErrIndexPolicy)
+	}
+	return int64(rows), int64(math.Ceil(bytes)), nil
 }
 
 func readIndexCatalog(ctx context.Context, db *gorm.DB) ([]IndexCatalogEntry, error) {
@@ -179,7 +286,7 @@ func readIndexCatalog(ctx context.Context, db *gorm.DB) ([]IndexCatalogEntry, er
 }
 
 func indexOwned(c IndexCatalogEntry, name string, oid int64, definition, token string) bool {
-	return managedIndexName.MatchString(name) && c.Name == name && oid != 0 && c.OID == oid && c.TableName == "device_parameters" && c.Method == "btree" && !c.Primary && !c.Unique && !c.Constraint && c.DefaultStorage && c.Definition == definition && token != "" && c.Comment == "acs-ui-index:"+token
+	return managedIndexName.MatchString(name) && c.Name == name && oid != 0 && c.OID == oid && (c.TableName == "device_parameters" || c.TableName == "devices") && c.Method == "btree" && !c.Primary && !c.Unique && !c.Constraint && c.DefaultStorage && c.Definition == definition && token != "" && c.Comment == "acs-ui-index:"+token
 }
 
 func candidateMatches(c IndexCatalogEntry, m models.ManagedDatabaseIndex) bool {
@@ -189,8 +296,12 @@ func candidateMatches(c IndexCatalogEntry, m models.ManagedDatabaseIndex) bool {
 	}
 	// A pending object can be recovered only under its cryptographically random,
 	// pre-registered name and an exact approved definition. No prefix-based adoption.
-	suffix := " USING btree (" + indexKey(spec) + ") WITH (fillfactor='90') WHERE (name = " + quoteLiteral(spec.ParameterPath) + "::text)"
-	return managedIndexName.MatchString(m.CandidateName) && c.Name == m.CandidateName && c.TableName == "device_parameters" && c.Method == "btree" && !c.Primary && !c.Unique && !c.Constraint && c.DefaultStorage && strings.HasSuffix(c.Definition, suffix) && (m.CandidateOID == 0 || m.CandidateOID == c.OID) && (c.Comment == "" || c.Comment == "acs-ui-index:"+m.CandidateToken)
+	recipe, _ := findIndexRecipe(spec.Recipe)
+	suffix := " USING btree (" + indexKey(spec) + ")" + indexInclude(recipe) + " WITH (fillfactor='90')"
+	if recipe.RequiresParameterPath {
+		suffix += " WHERE (name = " + quoteLiteral(spec.ParameterPath) + "::text)"
+	}
+	return managedIndexName.MatchString(m.CandidateName) && c.Name == m.CandidateName && c.TableName == recipe.TableName && c.Method == "btree" && !c.Primary && !c.Unique && !c.Constraint && c.DefaultStorage && strings.HasSuffix(c.Definition, suffix) && (m.CandidateOID == 0 || m.CandidateOID == c.OID) && (c.Comment == "" || c.Comment == "acs-ui-index:"+m.CandidateToken)
 }
 
 func GetIndexOverview(ctx context.Context, db *gorm.DB) (IndexOverview, error) {
@@ -310,16 +421,12 @@ func PreviewManagedIndex(ctx context.Context, db *gorm.DB, spec IndexSpec, repla
 			return result, fmt.Errorf("%w: this index definition already exists", ErrIndexPolicy)
 		}
 	}
-	schema, err := getIndexSchema(ctx, db)
+	schema, err := getIndexTargetSchema(ctx, db, spec)
 	if err != nil {
 		return result, err
 	}
 	var raw string
-	query := "EXPLAIN (FORMAT JSON) SELECT device_id FROM " + quoteIdentifier(schema) + `."device_parameters" WHERE name=` + quoteLiteral(spec.ParameterPath)
-	if spec.Recipe == "parameter_freshness" {
-		query += " ORDER BY updated_at DESC, device_id"
-	}
-	if err := db.WithContext(ctx).Raw(query).Row().Scan(&raw); err != nil {
+	if err := db.WithContext(ctx).Raw(indexPlanQuery(schema, spec)).Row().Scan(&raw); err != nil {
 		return result, err
 	}
 	var plan []struct {
@@ -335,13 +442,29 @@ func PreviewManagedIndex(ctx context.Context, db *gorm.DB, spec IndexSpec, repla
 	if err := db.WithContext(ctx).Model(&models.Device{}).Count(&devices).Error; err != nil {
 		return result, err
 	}
-	result.EstimatedRows = int64(math.Ceil(math.Max(plan[0].Plan.Rows*2, float64(devices)*1.25)))
-	// Fixed-width keys only, conservative overhead and at most one row per CPE/path.
-	result.EstimatedBytes = max(1<<20, result.EstimatedRows*96)
+	var nameWidth int64
+	if spec.Recipe == "parameters_device_latest" {
+		if err := db.WithContext(ctx).Raw(`SELECT COALESCE(MAX(avg_width), 256) FROM pg_stats
+			WHERE schemaname=? AND tablename='device_parameters' AND attname='name'`, schema).Scan(&nameWidth).Error; err != nil {
+			return result, err
+		}
+	}
+	result.EstimatedRows, result.EstimatedBytes, err = estimateIndexStorage(spec, plan[0].Plan.Rows, devices, nameWidth)
+	if err != nil {
+		return result, err
+	}
 	result.Plan = plan[0].Plan.Type
 	if result.EstimatedBytes > ManagedIndexMaxBytes {
-		return result, fmt.Errorf("%w: conservative size estimate exceeds 256 MiB per index", ErrIndexPolicy)
+		return result, fmt.Errorf("%w: conservative size estimate %.1f MiB for %d rows exceeds 256 MiB per index; choose a narrower recipe", ErrIndexPolicy, float64(result.EstimatedBytes)/(1<<20), result.EstimatedRows)
 	}
+	// This is a display-only statement. Queueing assigns a fresh random identity;
+	// no preview performs DDL or reserves a PostgreSQL object name.
+	const previewName = "acs_ui_idx_00000000000000000000000000000000"
+	result.SQL, err = indexDDL(schema, previewName, spec)
+	if err != nil {
+		return result, err
+	}
+	result.SQL = strings.Replace(result.SQL, quoteIdentifier(previewName), quoteIdentifier("acs_ui_idx_<generated>"), 1) + ";"
 	return result, nil
 }
 

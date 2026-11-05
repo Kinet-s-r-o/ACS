@@ -18,6 +18,9 @@ func TestDatabaseIndexStrictPayload(t *testing.T) {
 		`{"label":"Test","purpose":"Test parameter query","recipe":"gin","parameter_path":"Device.Test.Name"}`,
 		`{"label":"Test","purpose":"Test parameter query","recipe":"parameter_presence","parameter_path":"Device.Test.Name","method":"gin"}`,
 		`{"label":"Test","purpose":"Test parameter query","recipe":"parameter_presence","parameter_path":"Device.Test.Name","sql":"DROP TABLE devices"}`,
+		`{"label":"Test","purpose":"Test parameter query","recipe":"devices_last_inform","parameter_path":"","include_columns":["value"]}`,
+		`{"label":"Test","purpose":"Test parameter query","recipe":"parameters_device_latest","parameter_path":"","table_name":"users"}`,
+		`{"label":"Test","purpose":"Test parameter query","recipe":"parameters_device_latest","parameter_path":"Device.Test.Name"}`,
 		`{"label":"Test","purpose":"Test parameter query","recipe":"parameter_presence","parameter_path":"Device.Test.Name"} {}`,
 		strings.Repeat("x", 5000),
 	} {
@@ -25,6 +28,17 @@ func TestDatabaseIndexStrictPayload(t *testing.T) {
 		w := httptest.NewRecorder()
 		if _, ok := decodeIndexSpec(w, r); ok || w.Code != http.StatusBadRequest {
 			t.Fatal("unsafe index payload accepted")
+		}
+	}
+}
+
+func TestDatabaseIndexFleetPayload(t *testing.T) {
+	for _, recipe := range []string{"devices_last_inform", "parameters_device_latest"} {
+		payload := fmt.Sprintf(`{"label":"Fleet index","purpose":"Accelerate Fleet distributions","recipe":%q,"parameter_path":""}`, recipe)
+		r := httptest.NewRequest("POST", "/settings/database/indexes", strings.NewReader(payload))
+		w := httptest.NewRecorder()
+		if spec, ok := decodeIndexSpec(w, r); !ok || spec.Recipe != recipe || spec.ParameterPath != "" {
+			t.Fatalf("approved Fleet payload rejected: %d %s", w.Code, w.Body.String())
 		}
 	}
 }

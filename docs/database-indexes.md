@@ -9,37 +9,61 @@ database object has been removed. Parameter data is preserved.
 
 | Permission | Capability |
 | --- | --- |
-| `database.indexes.read` | View the managed register, index catalog, sizes, scans, jobs and disk budget |
-| `database.indexes.write` plus `database.indexes.read` | Preview, create, replace, cancel and delete UI indexes |
+| DB tools Read | View the managed register, index catalog, sizes, scans, jobs and disk budget |
+| DB tools Write (includes Read) | Preview, create, replace and cancel UI indexes |
+| DB tools Delete (includes Read) | Remove UI indexes |
 
-The built-in admin receives both grants. Neither the read-only system role nor
-legacy `settings.write` gains index mutation access. Custom roles can assign the
-two grants in Users and Roles. Mutations use session authentication, existing
+DB tools Full includes these actions. Existing internal `database.indexes.*`
+adapters resolve to the DB tools section in the operator permission catalog;
+no new grants are introduced. Mutations use session authentication, existing
 CSRF protection and the existing audit log.
 
 ## Approved definitions
 
-Users supply a label, a query/purpose, one exact non-sensitive parameter leaf
-path, and an approved recipe. The server generates the PostgreSQL name.
+Users supply a display name, a query/purpose and an approved definition. Exact
+parameter recipes additionally require a non-sensitive parameter leaf path.
+The server generates the physical PostgreSQL name; labels are not SQL names.
+The form shows the target table, ordered keys, B-tree method, uniqueness,
+INCLUDE columns and WHERE predicate. Preview also shows the generated SQL, with
+a placeholder for the name that is assigned when creation is queued.
 
-| Recipe | Fixed B-tree keys | Partial predicate |
-| --- | --- | --- |
-| Parameter presence by CPE | `device_id` | `name = '<exact path>'` |
-| Parameter freshness | `updated_at DESC, device_id` | `name = '<exact path>'` |
+| Recipe | Table | Fixed B-tree keys | INCLUDE | Partial predicate |
+| --- | --- | --- | --- | --- |
+| Parameter presence by CPE | `device_parameters` | `device_id` | None | `name = '<exact path>'` |
+| Parameter freshness | `device_parameters` | `updated_at DESC, device_id` | None | `name = '<exact path>'` |
+| Recent CPEs by Inform | `devices` | `last_inform DESC NULLS LAST` | `id` | None |
+| Latest parameter per CPE | `device_parameters` | `device_id, updated_at DESC, name` | None | None |
 
-These definitions index at most one current row per CPE/path, using the existing
-unique `(device_id, name)` constraint. Parameter values are never indexed or
-included, so a long value received in Inform/GPV cannot violate a B-tree key-size
-limit. GIN and every other method, free SQL, arbitrary tables/columns/expressions,
-INCLUDE, uniqueness, wildcard paths, branches, sensitive paths and device logs
-are rejected by the backend, including forged API requests.
+All definitions are non-unique. The two exact-path recipes index at most one
+current row per CPE/path, using the existing unique `(device_id, name)` constraint.
+The two Fleet recipes cover all rows of their target table. The latest-parameter
+index can therefore be much larger than an exact-path index. Parameter values
+are never indexed or included, so a long value received in Inform/GPV cannot
+violate a B-tree key-size limit. Only the fixed recent-CPE recipe includes `id`.
+GIN and every other method, free SQL, caller-selected tables/columns/expressions,
+INCLUDE lists, uniqueness, wildcard paths, branches, sensitive paths and device
+logs are rejected by the backend, including forged API requests. Full-table
+recipes require an empty `parameter_path`.
 
 The planner must be able to prove the exact path predicate to use a partial
 index. A generic wildcard query does not automatically benefit from an exact
 path index. UI definitions do not rewrite existing application SQL, and creating
 an index does not guarantee PostgreSQL will choose it. The preview uses
 `EXPLAIN (FORMAT JSON)` without executing the parameter query and a conservative
-row/size estimate. It never returns parameter values.
+row/size estimate. Full-table estimates cover every target row, without a sample
+LIMIT; the latest-parameter estimate also accounts for the average name width
+from `pg_stats` (256 bytes when statistics are absent). Over-limit estimates
+report their size and row count and block creation. Statistics can be stale;
+construction and future growth remain subject to the same monitored budgets.
+The preview never returns parameter values or executes DDL.
+
+The recent-CPE recipe matches `ORDER BY last_inform DESC NULLS LAST LIMIT ...`
+in Fleet distribution queries. The latest-parameter recipe supports their
+`device_id, updated_at DESC, name` order, but does not make leading-wildcard
+`LIKE`/`ILIKE` name filters directly searchable. Inspect actual query plans before
+deciding whether its storage and write overhead are worthwhile. Definitions are
+optional and run only after an authorized operator queues them through the UI;
+startup and migrations do not create these indexes.
 
 ## Resource policy
 

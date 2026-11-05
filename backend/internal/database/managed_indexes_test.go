@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strings"
@@ -57,6 +58,89 @@ func TestManagedIndexPolicy(t *testing.T) {
 		mutate(&other)
 		if indexOwned(other, name, 42, "approved", token) {
 			t.Fatal("accepted altered/protected index")
+		}
+	}
+}
+
+// These tests exercise policy and restart recovery using catalog fixtures only;
+// they do not execute PostgreSQL DDL.
+func TestManagedIndexFleetRecipes(t *testing.T) {
+	name := "acs_ui_idx_0123456789abcdef0123456789abcdef"
+	for _, tc := range []struct {
+		recipe, table, keys, include string
+	}{
+		{"devices_last_inform", "devices", "last_inform DESC NULLS LAST", " INCLUDE (id)"},
+		{"parameters_device_latest", "device_parameters", "device_id, updated_at DESC, name", ""},
+	} {
+		t.Run(tc.recipe, func(t *testing.T) {
+			spec := IndexSpec{Label: "Fleet index", Purpose: "Accelerate Fleet distributions", Recipe: tc.recipe}
+			ddl, err := indexDDL("app", name, spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := `CREATE INDEX CONCURRENTLY "` + name + `" ON "app"."` + tc.table + `" USING btree (` + tc.keys + `)` + tc.include + ` WITH (fillfactor=90) TABLESPACE pg_default`
+			if ddl != want {
+				t.Fatalf("unexpected DDL:\n%s\nwant:\n%s", ddl, want)
+			}
+			query := indexPlanQuery("app", spec)
+			if strings.Contains(query, " LIMIT ") || strings.Contains(query, " WHERE ") || strings.Contains(query, "ANALYZE") || !strings.Contains(query, "ORDER BY "+tc.keys) {
+				t.Fatalf("estimate must cover the full table without executing it: %s", query)
+			}
+			m := models.ManagedDatabaseIndex{Label: spec.Label, Purpose: spec.Purpose, Recipe: spec.Recipe, CandidateName: name, CandidateToken: "token"}
+			c := IndexCatalogEntry{OID: 42, Name: name, TableName: tc.table, Method: "btree", DefaultStorage: true,
+				Definition: "CREATE INDEX " + name + " ON app." + tc.table + " USING btree (" + tc.keys + ")" + tc.include + " WITH (fillfactor='90')"}
+			if !candidateMatches(c, m) {
+				t.Fatal("approved interrupted candidate cannot be recovered")
+			}
+			c.Comment = "acs-ui-index:token"
+			if !indexOwned(c, name, c.OID, c.Definition, "token") {
+				t.Fatal("approved active object not owned")
+			}
+			for _, alter := range []func(*IndexCatalogEntry){
+				func(c *IndexCatalogEntry) { c.TableName = "users" },
+				func(c *IndexCatalogEntry) { c.Definition += " WHERE device_id > 0" },
+				func(c *IndexCatalogEntry) {
+					c.Definition = strings.Replace(c.Definition, " USING btree (", " USING btree (id, ", 1)
+				},
+				func(c *IndexCatalogEntry) {
+					c.Definition = strings.Replace(c.Definition, " WITH ", " INCLUDE (value) WITH ", 1)
+				},
+				func(c *IndexCatalogEntry) { c.Comment = "acs-ui-index:other" },
+				func(c *IndexCatalogEntry) { c.Method = "gin" },
+				func(c *IndexCatalogEntry) { c.Unique = true },
+				func(c *IndexCatalogEntry) { c.DefaultStorage = false },
+			} {
+				other := c
+				alter(&other)
+				if candidateMatches(other, m) {
+					t.Fatalf("adopted altered candidate: %+v", other)
+				}
+			}
+			spec.ParameterPath = "Device.Test.Status"
+			if !errors.Is(ValidateIndexSpec(spec), ErrIndexPolicy) {
+				t.Fatal("full-table definition accepted a misleading path predicate")
+			}
+		})
+	}
+}
+
+func TestManagedIndexFullTableEstimate(t *testing.T) {
+	spec := IndexSpec{Recipe: "parameters_device_latest"}
+	rows, size, err := estimateIndexStorage(spec, 2_000_000, 10_000, 150)
+	if err != nil || rows != 4_000_000 || size <= ManagedIndexMaxBytes {
+		t.Fatalf("parameter estimate used CPE count instead of all parameters: %d rows, %d bytes, %v", rows, size, err)
+	}
+	_, fallback, err := estimateIndexStorage(spec, 2_000_000, 10_000, 0)
+	if err != nil || fallback <= size {
+		t.Fatal("missing name statistics did not use conservative width")
+	}
+	_, recent, err := estimateIndexStorage(IndexSpec{Recipe: "devices_last_inform"}, 10_000, 10_000, 0)
+	if err != nil || recent >= ManagedIndexMaxBytes || recent >= size {
+		t.Fatal("recent-CPE recipe was estimated as a full parameter index")
+	}
+	for _, rows := range []float64{math.Inf(1), math.NaN(), math.MaxFloat64} {
+		if _, _, err := estimateIndexStorage(spec, rows, 1, 256); !errors.Is(err, ErrIndexPolicy) {
+			t.Fatal("invalid/overflowing estimate was accepted")
 		}
 	}
 }

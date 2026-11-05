@@ -128,7 +128,7 @@ export interface AuditLog { id: number; user_id?: number; username: string; acti
 export interface DatabaseIndexSpec {
   label: string;
   purpose: string;
-  recipe: 'parameter_presence' | 'parameter_freshness';
+  recipe: 'parameter_presence' | 'parameter_freshness' | 'devices_last_inform' | 'parameters_device_latest';
   parameter_path: string;
 }
 export interface ManagedDatabaseIndex extends DatabaseIndexSpec {
@@ -148,13 +148,17 @@ export interface DatabaseIndexBudget {
   managed_bytes: number; reserved_bytes: number; free_bytes: number; total_bytes: number;
   reserve_bytes: number; probe_fresh: boolean; measured_at: string; can_create: boolean; reason: string;
 }
+export interface DatabaseIndexRecipe {
+  id: DatabaseIndexSpec['recipe']; label: string; description: string;
+  table_name: string; columns: string[]; include_columns: string[]; requires_parameter_path: boolean;
+}
 export interface DatabaseIndexOverview {
   managed: ManagedDatabaseIndex[]; catalog: DatabaseIndexCatalogEntry[];
-  recipes: { id: DatabaseIndexSpec['recipe']; label: string; description: string }[];
+  recipes: DatabaseIndexRecipe[];
   budget: DatabaseIndexBudget;
 }
 export interface DatabaseIndexPreview {
-  estimated_rows: number; estimated_bytes: number; plan: string; budget: DatabaseIndexBudget;
+  estimated_rows: number; estimated_bytes: number; plan: string; sql: string; budget: DatabaseIndexBudget;
 }
 export interface BlockedDevice { id: number; serial_number: string; reason: string; created_by: string; created_at: string }
 export interface Threshold {

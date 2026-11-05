@@ -230,7 +230,7 @@ func buildManagedIndex(ctx context.Context, db *gorm.DB, conn *indexSession, m m
 			buildErr = buildBudgetError(overview.Budget)
 		}
 	}
-	schema, err := getIndexSchema(ctx, db)
+	schema, err := getIndexTargetSchema(ctx, db, spec)
 	if buildErr == nil {
 		buildErr = err
 	}
