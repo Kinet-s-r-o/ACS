@@ -15,9 +15,10 @@ switching a domain-style RADIUS account to local requires a compatible username.
 ## Configure RADIUS
 
 Open **System settings → Authentication** and select the **RADIUS** tile to open
-its detailed settings. Reading requires `auth.settings.read`.
-Saving and testing require both `auth.settings.read` and `auth.settings.write`,
-plus full access. The built-in admin role receives the new grants at startup.
+its detailed settings. Reading requires `access.settings.authentication.radius.read`.
+Saving and testing additionally require `access.settings.authentication.radius.edit`;
+Full on the RADIUS row grants both. Full on the Authentication parent does not
+grant RADIUS access. The built-in admin always receives all permissions.
 The generic settings API cannot change or disclose authentication configuration.
 
 1. Add servers in priority order and set the NAS identifier expected by policy.

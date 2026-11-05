@@ -535,20 +535,46 @@ func runAutoMigrate(db *gorm.DB) error {
 			} else {
 				return fmt.Errorf("check role %s: %w", role.Name, err)
 			}
-		} else if role.Name == "admin" && (!slices.Equal(existing.Permissions, models.AllPermissions) || existing.Description != role.Description || !existing.IsSystem) {
+		} else if !slices.Equal(existing.Permissions, role.Permissions) || existing.Description != role.Description || !existing.IsSystem {
 			// Keep the built-in administrator role in sync with the complete permission catalog.
 			// New permissions added to AllPermissions are granted automatically at startup.
-			existing.Permissions = append([]string(nil), models.AllPermissions...)
+			existing.Permissions = append([]string(nil), role.Permissions...)
 			existing.Description = role.Description
 			existing.IsSystem = true
 			if err := db.Save(&existing).Error; err != nil {
 				return fmt.Errorf("update built-in admin role: %w", err)
 			}
-			log.Printf("Updated built-in admin role to %d permissions", len(models.AllPermissions))
+			log.Printf("Updated built-in %s role to %d permissions", role.Name, len(role.Permissions))
 		}
 	}
 
 	// Migrate existing users to use RoleID.
+	var customRoles []models.Role
+	sections, err := database.NewRoleRepository(db).PermissionCatalog(context.Background())
+	if err != nil {
+		return err
+	}
+	validPermissions := map[string]bool{}
+	for _, key := range database.CatalogPermissionKeys(sections) {
+		validPermissions[key] = true
+	}
+	if err := db.Where("is_system = ?", false).Find(&customRoles).Error; err != nil {
+		return err
+	}
+	for _, role := range customRoles {
+		permissions := []string{}
+		for _, permission := range role.Permissions {
+			if validPermissions[permission] {
+				permissions = append(permissions, permission)
+			}
+		}
+		if !slices.Equal(role.Permissions, permissions) {
+			role.Permissions = permissions
+			if err := db.Save(&role).Error; err != nil {
+				return err
+			}
+		}
+	}
 	if err := migrateUsersToRoles(db); err != nil {
 		return fmt.Errorf("migrate users to roles: %w", err)
 	}

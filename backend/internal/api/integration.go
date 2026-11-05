@@ -21,7 +21,7 @@ import (
 var integrationOpenAPI []byte
 
 func (r *Router) integrationHandler() http.Handler {
-	mux := http.NewServeMux()
+	mux := newPermissionMux()
 	mux.HandleFunc("GET /v1/me", func(w http.ResponseWriter, req *http.Request) {
 		user := auth.GetUserFromContext(req.Context())
 		token := auth.GetAPITokenFromContext(req.Context())
@@ -158,7 +158,7 @@ func (r *Router) integrationParameters(w http.ResponseWriter, req *http.Request)
 	if device == nil {
 		return
 	}
-	items, err := r.parameterRepo.IntegrationList(req.Context(), device.ID, cursor, prefix, names, limit+1, auth.GetUserFromContext(req.Context()).Role == models.RoleFull)
+	items, err := r.parameterRepo.IntegrationList(req.Context(), device.ID, cursor, prefix, names, limit+1, auth.CanReadSensitive(req.Context()))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to read parameters")
 		return
@@ -221,6 +221,9 @@ func (r *Router) integrationWrite(w http.ResponseWriter, req *http.Request) {
 	}
 	if err := validateSetParameters(parameters); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !requireParameterEdits(w, req, parameters) {
 		return
 	}
 	for name := range body.Parameters {
@@ -330,5 +333,6 @@ func (r *Router) integrationTask(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get task")
 		return
 	}
+	redactTaskTabs(req, &task.Task, "inventory.cpes.tasks")
 	respondJSON(w, http.StatusOK, task)
 }

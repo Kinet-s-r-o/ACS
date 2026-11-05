@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -161,7 +162,15 @@ func (r *Router) Handler() http.Handler {
 	mux.HandleFunc("GET /files/{id}/{filename}", r.handleFirmwareFile)
 
 	// Protected API mux
-	apiMux := http.NewServeMux()
+	apiMux := newPermissionMux()
+	apiMux.HandleFunc("GET /permissions", func(w http.ResponseWriter, req *http.Request) {
+		sections, err := r.roleRepo.PermissionCatalog(req.Context())
+		if err != nil {
+			respondError(w, http.StatusServiceUnavailable, "Permission catalog unavailable")
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"actions": models.PermissionActions, "sections": sections})
+	})
 	apiMux.HandleFunc("GET /users/{id}/api-tokens", auth.RequireFullAccess(auth.RequirePermission(models.PermUsersRead)(r.handleListAPITokens)))
 	apiMux.HandleFunc("POST /users/{id}/api-tokens", auth.RequireFullAccess(auth.RequireAnyPermission(models.PermUsersTokens, models.PermUsersWrite)(r.handleCreateAPIToken)))
 	apiMux.HandleFunc("DELETE /users/{id}/api-tokens/{tokenID}", auth.RequireFullAccess(auth.RequireAnyPermission(models.PermUsersTokens, models.PermUsersWrite)(r.handleRevokeAPIToken)))
@@ -502,7 +511,7 @@ func (r *Router) handleListDevices(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	claims := auth.GetUserFromContext(req.Context())
-	includeSensitive := claims != nil && claims.Role == models.RoleFull
+	includeSensitive := claims != nil && auth.CanReadSensitive(req.Context())
 
 	devices, total, err := r.deviceRepo.ListInventory(req.Context(), database.DeviceInventoryQuery{
 		Limit: limit, Offset: offset, Search: search, Sort: sortColumn, Direction: direction,
@@ -703,6 +712,7 @@ func (r *Router) handleGetTask(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get task")
 		return
 	}
+	redactTaskTabs(req, &task.Task, "tasks")
 	respondJSON(w, http.StatusOK, task)
 }
 
@@ -768,6 +778,13 @@ func (r *Router) handleSystemTaskSummary(w http.ResponseWriter, req *http.Reques
 		respondError(w, http.StatusInternalServerError, "Failed to count system tasks")
 		return
 	}
+	if auth.OperationAuthorized(req.Context()) {
+		for kind := range counts {
+			if !requestCan(req, "settings.system_tasks."+string(kind), "read") {
+				delete(counts, kind)
+			}
+		}
+	}
 	respondJSON(w, http.StatusOK, counts)
 }
 
@@ -775,6 +792,10 @@ func (r *Router) handleListSystemTasks(w http.ResponseWriter, req *http.Request)
 	taskType := models.SystemTaskType(req.URL.Query().Get("type"))
 	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon && taskType != models.SystemTaskTypeBulkRestart {
 		respondError(w, http.StatusBadRequest, "Invalid system task type")
+		return
+	}
+	if auth.OperationAuthorized(req.Context()) && !requestCan(req, "settings.system_tasks."+string(taskType), "read") {
+		respondError(w, http.StatusForbidden, "System task type read permission required")
 		return
 	}
 	options, err := parseTableQuery(req, "serial_number", "status", "attempts", "created_at", "created_by", "error")
@@ -803,6 +824,10 @@ func (r *Router) handleGetSystemTask(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to load system task")
+		return
+	}
+	if auth.OperationAuthorized(req.Context()) && !requestCan(req, "settings.system_tasks."+string(task.Type), "read") {
+		respondError(w, http.StatusForbidden, "System task type read permission required")
 		return
 	}
 	respondJSON(w, http.StatusOK, task)
@@ -910,6 +935,17 @@ func (r *Router) handleRetrySystemTask(w http.ResponseWriter, req *http.Request)
 		respondError(w, http.StatusBadRequest, "Invalid system task ID")
 		return
 	}
+	if auth.OperationAuthorized(req.Context()) {
+		var task models.SystemTask
+		if err := r.db.WithContext(req.Context()).First(&task, id).Error; err != nil {
+			respondError(w, http.StatusNotFound, "System task not found")
+			return
+		}
+		if !requestCan(req, "settings.system_tasks."+string(task.Type), "edit") {
+			respondError(w, http.StatusForbidden, "System task type edit permission required")
+			return
+		}
+	}
 	updated, err := r.systemTaskRepo.RetryFailed(req.Context(), id)
 	if err != nil {
 		if strings.Contains(err.Error(), "linked CWMP task is still active") {
@@ -930,6 +966,10 @@ func (r *Router) handleClearFinishedSystemTasks(w http.ResponseWriter, req *http
 	taskType := models.SystemTaskType(req.PathValue("type"))
 	if taskType != models.SystemTaskTypeSummonFromCPE && taskType != models.SystemTaskTypeBulkSummon && taskType != models.SystemTaskTypeBulkRestart {
 		respondError(w, http.StatusBadRequest, "Invalid system task type")
+		return
+	}
+	if auth.OperationAuthorized(req.Context()) && !requestCan(req, "settings.system_tasks."+string(taskType), "delete") {
+		respondError(w, http.StatusForbidden, "System task type delete permission required")
 		return
 	}
 	deleted, err := r.systemTaskRepo.ClearFinished(req.Context(), taskType)
@@ -1166,6 +1206,9 @@ func (r *Router) handleGetDeviceTasks(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	for _, task := range tasks {
+		redactTaskTabs(req, task, "inventory.cpes.tasks")
+	}
 	respondJSON(w, http.StatusOK, tasks)
 }
 
@@ -1229,6 +1272,9 @@ func (r *Router) handleSetParameterValues(w http.ResponseWriter, req *http.Reque
 
 	if len(payload.Parameters) == 0 {
 		respondError(w, http.StatusBadRequest, "No parameters specified")
+		return
+	}
+	if !requireParameterEdits(w, req, payload.Parameters) {
 		return
 	}
 	if err := validateSetParameters(payload.Parameters); err != nil {
@@ -1483,6 +1529,13 @@ func (r *Router) handleGetSettings(w http.ResponseWriter, req *http.Request) {
 			result[s.Key] = s.Value
 		}
 	}
+	if auth.OperationAuthorized(req.Context()) {
+		for key := range result {
+			if !requestCan(req, settingSection(key), "read") {
+				delete(result, key)
+			}
+		}
+	}
 
 	respondJSON(w, http.StatusOK, result)
 }
@@ -1558,6 +1611,12 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	if err := decoder.Decode(&settings); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid JSON")
 		return
+	}
+	for key := range settings {
+		if auth.OperationAuthorized(req.Context()) && !requestCan(req, settingSection(key), "edit") {
+			respondError(w, http.StatusForbidden, "Edit permission required for "+settingSection(key))
+			return
+		}
 	}
 
 	allowed := map[string]bool{
@@ -2177,6 +2236,22 @@ func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, 
 	}
 	prefixes := []string{"DeviceInfo.", "Device.DeviceInfo.", "InternetGatewayDevice.DeviceInfo.", "InternetGatewayDevice.LANDevice.", "InternetGatewayDevice.WANDevice."}
 	names := []string{"InternetGatewayDevice.ManagementServer.PeriodicInformInterval", "Device.ManagementServer.PeriodicInformInterval"}
+	overviewReadable := !auth.OperationAuthorized(req.Context()) || requestCan(req, "inventory.cpes.overview", "read")
+	hostsReadable := requestCan(req, "inventory.cpes.hosts", "read")
+	networkReadable := false
+	for _, section := range networkSections() {
+		networkReadable = networkReadable || requestCan(req, section, "read")
+	}
+	if !overviewReadable {
+		prefixes, names = []string{}, []string{}
+		if hostsReadable {
+			prefixes = append(prefixes, "Device.Hosts.", "InternetGatewayDevice.LANDevice.")
+		}
+		if networkReadable {
+			prefixes = append(prefixes, "InternetGatewayDevice.LANDevice.", "InternetGatewayDevice.WANDevice.")
+		}
+	}
+	featurePrefixes, featureNames := []string{}, []string{}
 	manufacturer, productClass := "", ""
 	if device.Manufacturer != nil {
 		manufacturer = *device.Manufacturer
@@ -2195,18 +2270,23 @@ func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, 
 			respondError(w, http.StatusInternalServerError, "Failed to load metric parameters")
 			return
 		}
-		for _, def := range defs {
-			if def.ParameterName != "" {
-				names = append(names, def.ParameterName)
+		if overviewReadable {
+			for _, def := range defs {
+				if def.ParameterName != "" {
+					names = append(names, def.ParameterName)
+				}
 			}
+			interfaceNames, err := r.metricRepo.InterfaceMetricParamNamesForTemplate(req.Context(), device.ID, template.ID)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError, "Failed to load interface metric parameters")
+				return
+			}
+			names = append(names, interfaceNames...)
 		}
-		interfaceNames, err := r.metricRepo.InterfaceMetricParamNamesForTemplate(req.Context(), device.ID, template.ID)
-		if err != nil {
-			respondError(w, http.StatusInternalServerError, "Failed to load interface metric parameters")
-			return
-		}
-		names = append(names, interfaceNames...)
 		for _, feature := range template.Features {
+			if auth.OperationAuthorized(req.Context()) && !requestCan(req, "inventory.cpes.features."+feature.ID, "read") {
+				continue
+			}
 			for _, control := range feature.Controls {
 				if control.Parameter == "" {
 					continue
@@ -2217,18 +2297,24 @@ func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, 
 						prefix += "."
 					}
 					prefixes = append(prefixes, prefix)
+					featurePrefixes = append(featurePrefixes, prefix)
 				} else {
 					names = append(names, control.Parameter)
+					featureNames = append(featureNames, control.Parameter)
 				}
 			}
 		}
+	}
+	if len(prefixes) == 0 && len(names) == 0 {
+		respondJSON(w, http.StatusOK, []models.DeviceParameter{})
+		return
 	}
 	params, err := r.parameterRepo.GetByDeviceIDMatching(req.Context(), device.ID, prefixes, names)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to get detail parameters")
 		return
 	}
-	if err == nil && template != nil && len(template.DynamicParameterBranches) > 0 {
+	if overviewReadable && err == nil && template != nil && len(template.DynamicParameterBranches) > 0 {
 		dynamicParams, dynamicErr := r.parameterRepo.GetByDeviceIDDynamicBranches(req.Context(), device.ID, template.DynamicParameterBranches)
 		if dynamicErr != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to get dynamic detail parameters")
@@ -2245,6 +2331,26 @@ func (r *Router) handleGetDeviceDetailParametersBySerial(w http.ResponseWriter, 
 		}
 		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
 	}
+	if !overviewReadable {
+		visible := []models.DeviceParameter{}
+		for _, parameter := range params {
+			allowed := slices.Contains(featureNames, parameter.Name) || (networkParameterSection(parameter.Name) != "" && readableNetworkParameter(req, parameter.Name)) || (hostsReadable && (strings.Contains(parameter.Name, ".Hosts.") || strings.HasPrefix(parameter.Name, "Device.Hosts.")))
+			for _, prefix := range featurePrefixes {
+				allowed = allowed || strings.HasPrefix(parameter.Name, prefix)
+			}
+			if allowed {
+				visible = append(visible, parameter)
+			}
+		}
+		params = visible
+	}
+	visible := params[:0]
+	for _, parameter := range params {
+		if readableNetworkParameter(req, parameter.Name) || slices.Contains(featureNames, parameter.Name) {
+			visible = append(visible, parameter)
+		}
+	}
+	params = visible
 	redactSensitiveParameters(req, params)
 	respondJSON(w, http.StatusOK, params)
 }
@@ -2324,7 +2430,12 @@ func redactSensitiveParameters(req *http.Request, params []models.DeviceParamete
 		return
 	}
 	for index := range params {
-		if database.IsSensitiveParameterName(params[index].Name) {
+		section := networkParameterSection(params[index].Name)
+		canRead := auth.CanReadSensitive(req.Context())
+		if section != "" && auth.OperationAuthorized(req.Context()) {
+			canRead = requestCan(req, section, "full") || requestCan(req, "inventory.cpes.maintenance.diagnostic", "full")
+		}
+		if database.IsSensitiveParameterName(params[index].Name) && !canRead {
 			params[index].Value = "[REDACTED]"
 		}
 	}
@@ -2340,6 +2451,9 @@ func (r *Router) handleGetDeviceTasksBySerial(w http.ResponseWriter, req *http.R
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to get tasks")
 		return
+	}
+	for _, task := range tasks {
+		redactTaskTabs(req, task, "inventory.cpes.tasks")
 	}
 	respondJSON(w, http.StatusOK, tasks)
 }
@@ -2359,6 +2473,9 @@ func (r *Router) handleGetDeviceTasksPageBySerial(w http.ResponseWriter, req *ht
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to get device tasks")
 		return
+	}
+	for _, task := range tasks {
+		redactTaskTabs(req, task, "inventory.cpes.tasks")
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{"items": tasks, "total": total, "limit": options.Limit, "offset": options.Offset})
 }
@@ -2600,7 +2717,7 @@ func (r *Router) decodeSnapshotParameters(snapshot *models.DeviceSnapshot, req *
 		return err
 	}
 	claims := auth.GetUserFromContext(req.Context())
-	fullAccess := claims != nil && claims.Role == models.RoleFull
+	fullAccess := claims != nil && auth.CanReadSensitive(req.Context())
 	for index := range parameters {
 		if database.IsSensitiveParameterName(parameters[index].Name) {
 			if !fullAccess {
@@ -2823,6 +2940,9 @@ func (r *Router) handleSetParameterValuesBySerial(w http.ResponseWriter, req *ht
 	}
 	if len(payload.Parameters) == 0 {
 		respondError(w, http.StatusBadRequest, "No parameters specified")
+		return
+	}
+	if !requireParameterEdits(w, req, payload.Parameters) {
 		return
 	}
 	if err := validateSetParameters(payload.Parameters); err != nil {
@@ -3543,7 +3663,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 
 func (r *Router) handleListUsers(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -3562,7 +3682,7 @@ func (r *Router) handleListUsers(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -3640,7 +3760,7 @@ func (r *Router) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -3661,6 +3781,10 @@ func (r *Router) handleUpdateUser(w http.ResponseWriter, req *http.Request) {
 	user, err := r.userRepo.GetByID(req.Context(), id)
 	if err != nil || user == nil {
 		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+	if !r.canManageUser(req, user) {
+		respondError(w, http.StatusForbidden, "Cannot modify a user with broader permissions")
 		return
 	}
 	var passwordHash string
@@ -3777,6 +3901,18 @@ func (r *Router) resolveAssignedRole(ctx context.Context, roleID *int64, fallbac
 	if err != nil || role == nil {
 		return nil, "", errors.New("role not found")
 	}
+	if auth.OperationAuthorized(ctx) {
+		permissions := role.Permissions
+		if role.IsSystem && role.Name == "admin" {
+			permissions = models.AllPermissions
+		}
+		for _, permission := range permissions {
+			section, action, valid := splitPermission(permission)
+			if !valid || !models.HasSectionPermission(auth.GetPermissionsFromContext(ctx), section, action) {
+				return nil, "", errors.New("cannot assign permissions outside your own access")
+			}
+		}
+	}
 	legacyRole := models.RoleRead
 	if role.IsSystem && role.Name == "admin" {
 		legacyRole = models.RoleFull
@@ -3786,7 +3922,7 @@ func (r *Router) resolveAssignedRole(ctx context.Context, roleID *int64, fallbac
 
 func (r *Router) handleSetUserActive(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -3812,6 +3948,13 @@ func (r *Router) handleSetUserActive(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if auth.OperationAuthorized(req.Context()) {
+		target, err := r.userRepo.GetByID(req.Context(), id)
+		if err != nil || target == nil || !r.canManageUser(req, target) {
+			respondError(w, http.StatusForbidden, "Cannot modify a user with broader permissions")
+			return
+		}
+	}
 	if err := r.userRepo.SetActive(req.Context(), id, *body.Active); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			respondError(w, http.StatusNotFound, "User not found")
@@ -3834,6 +3977,29 @@ func (r *Router) handleListRoles(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to list roles")
 		return
 	}
+	sections, err := r.roleRepo.PermissionCatalog(req.Context())
+	if err != nil {
+		respondError(w, http.StatusServiceUnavailable, "Permission catalog unavailable")
+		return
+	}
+	all := database.CatalogPermissionKeys(sections)
+	valid := map[string]bool{}
+	for _, key := range all {
+		valid[key] = true
+	}
+	for index := range roles {
+		if roles[index].IsSystem && roles[index].Name == "admin" {
+			roles[index].Permissions = append([]string{}, all...)
+			continue
+		}
+		permissions := []string{}
+		for _, key := range roles[index].Permissions {
+			if valid[key] {
+				permissions = append(permissions, key)
+			}
+		}
+		roles[index].Permissions = permissions
+	}
 	respondJSON(w, http.StatusOK, roles)
 }
 
@@ -3850,11 +4016,20 @@ func (r *Router) handleCreateRole(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusBadRequest, "Role name is required (max 64 chars)")
 		return
 	}
+	validPermissions, err := r.validPermissionKeys(req.Context())
+	if err != nil {
+		respondError(w, http.StatusServiceUnavailable, "Permission catalog unavailable")
+		return
+	}
 	for _, p := range body.Permissions {
-		if !isValidPermission(p) {
+		if !validPermissions[p] {
 			respondError(w, http.StatusBadRequest, "Invalid permission: "+p)
 			return
 		}
+	}
+	if !canGrantPermissions(req, body.Permissions) {
+		respondError(w, http.StatusForbidden, "Cannot grant permissions outside your own access")
+		return
 	}
 
 	role := &models.Role{
@@ -3914,8 +4089,17 @@ func (r *Router) handleUpdateRole(w http.ResponseWriter, req *http.Request) {
 		role.Description = *body.Description
 	}
 	if body.Permissions != nil {
+		if !canGrantPermissions(req, body.Permissions) {
+			respondError(w, http.StatusForbidden, "Cannot grant permissions outside your own access")
+			return
+		}
+		validPermissions, err := r.validPermissionKeys(req.Context())
+		if err != nil {
+			respondError(w, http.StatusServiceUnavailable, "Permission catalog unavailable")
+			return
+		}
 		for _, p := range body.Permissions {
-			if !isValidPermission(p) {
+			if !validPermissions[p] {
 				respondError(w, http.StatusBadRequest, "Invalid permission: "+p)
 				return
 			}
@@ -3985,7 +4169,7 @@ func (r *Router) handleListProvisioningRules(w http.ResponseWriter, req *http.Re
 		return
 	}
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		for _, rule := range rules {
 			if database.IsSensitiveParameterName(rule.ParameterName) {
 				rule.ParameterValue = "[REDACTED]"
@@ -4049,7 +4233,7 @@ func (r *Router) validatePrevReference(ctx context.Context, templateID, ruleID i
 
 func (r *Router) handleCreateProvisioningRule(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4130,7 +4314,7 @@ func (r *Router) handleCreateProvisioningRule(w http.ResponseWriter, req *http.R
 
 func (r *Router) handleUpdateProvisioningRule(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4242,7 +4426,7 @@ func (r *Router) handleDeleteProvisioningRule(w http.ResponseWriter, req *http.R
 		return
 	}
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4264,7 +4448,7 @@ func (r *Router) handleDeleteProvisioningRule(w http.ResponseWriter, req *http.R
 
 func (r *Router) handleToggleProvisioningRule(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4294,7 +4478,7 @@ func (r *Router) handleToggleProvisioningRule(w http.ResponseWriter, req *http.R
 
 func (r *Router) handleBulkProvisioningRules(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4319,6 +4503,14 @@ func (r *Router) handleBulkProvisioningRules(w http.ResponseWriter, req *http.Re
 		respondError(w, http.StatusBadRequest, "action must be enable, disable, or delete")
 		return
 	}
+	action := "edit"
+	if body.Action == "delete" {
+		action = "delete"
+	}
+	if !requestCan(req, "settings.provisioning.rules", action) {
+		respondError(w, http.StatusForbidden, "Provisioning rules "+action+" permission required")
+		return
+	}
 	if body.Action == "delete" && !r.verifyCurrentPassword(w, req, body.CurrentPassword) {
 		return
 	}
@@ -4341,7 +4533,7 @@ func (r *Router) handleBulkProvisioningRules(w http.ResponseWriter, req *http.Re
 
 func (r *Router) handleReorderProvisioningRules(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4385,13 +4577,32 @@ func (r *Router) handleListProvisioningTemplates(w http.ResponseWriter, req *htt
 		r.templateImageURL(template)
 		r.templateLANVisualizationURL(template)
 		redactProvisioningVariableSecrets(template.Variables)
+		if auth.OperationAuthorized(req.Context()) {
+			if !requestCan(req, "settings.provisioning.variables", "read") {
+				template.Variables = nil
+			}
+			features := []models.ProvisioningFeature{}
+			for _, feature := range template.Features {
+				if requestCan(req, "settings.provisioning.features."+feature.ID, "read") || requestCan(req, "inventory.cpes.features."+feature.ID, "read") {
+					features = append(features, feature)
+				}
+			}
+			template.Features = features
+			if !requestCan(req, "settings.provisioning.cpe_detail.lan", "read") && !requestCan(req, "inventory.cpes.overview", "read") {
+				template.LANPortMappings = nil
+				template.LANPortCount = 0
+			}
+			if !requestCan(req, "settings.provisioning.cpe_detail.info", "read") && !requestCan(req, "inventory.cpes.overview", "read") {
+				template.CPEInfoFields = nil
+			}
+		}
 	}
 	respondJSON(w, http.StatusOK, templates)
 }
 
 func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4401,6 +4612,10 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(body.Variables) > 0 && !requestCan(req, "settings.provisioning.variables", "edit") {
+		respondError(w, http.StatusForbidden, "Variables edit permission required")
 		return
 	}
 	if strings.TrimSpace(body.Name) == "" {
@@ -4449,6 +4664,7 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		FullTreePollInterval:     fullTreeInterval,
 		Variables:                body.Variables,
 	}
+
 	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -4469,7 +4685,7 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 
 func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -4544,6 +4760,20 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		FullTreePollInterval:     fullTreeInterval,
 		Variables:                body.Variables,
 	}
+	if body.Variables == nil {
+		template.Variables = previous.Variables
+	}
+	if auth.OperationAuthorized(req.Context()) {
+		if body.Variables != nil && !requestCan(req, "settings.provisioning.variables", "edit") {
+			respondError(w, http.StatusForbidden, "Variables edit permission required")
+			return
+		}
+		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval
+		if metadataChanged && !requestCan(req, "settings.provisioning.templates", "edit") {
+			respondError(w, http.StatusForbidden, "Templates edit permission required")
+			return
+		}
+	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, previous.Variables); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -4573,7 +4803,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 
 func (r *Router) handleDeleteProvisioningTemplate(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}

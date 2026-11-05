@@ -3,7 +3,7 @@ import { createResource, createSignal, Show, For, createMemo, createEffect, onMo
 import { A, useSearchParams } from '@solidjs/router';
 import { Download, Router as RouterIcon, X, Search, Send, RotateCw, RefreshCw, MoreVertical, ArrowUp, ArrowDown, ArrowUpDown, Plus } from 'lucide-solid';
 import { api, type Device, type ReauthenticationCredentials } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
 import { EmptyState, ResourceError } from '../components/ResourceState';
@@ -78,7 +78,8 @@ const TagChips: Component<{ tags: string[] }> = (props) => {
 
 const Devices: Component = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = () => searchParams.tab === 'wans' ? 'wans' : 'cpes';
+  const activeTab = () => { const requested = searchParams.tab === 'wans' ? 'wans' : 'cpes'; return canVisit(`inventory.${requested}`) ? requested : canVisit('inventory.cpes') ? 'cpes' : 'wans'; };
+  usePermissionSection(() => `inventory.${activeTab()}`);
   const [page, setPage] = createSignal(0);
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.devices');
   const [debouncedSearch, setDebouncedSearch] = createSignal(searchQuery());
@@ -95,7 +96,7 @@ const Devices: Component = () => {
   const [exportingDevices, setExportingDevices] = createSignal(false);
   const [sortBy, setSortBy] = createPersistedJsonSignal<{ column: string; direction: 'asc' | 'desc' } | null>('acs.sort.devices', { column: 'created_at', direction: 'desc' });
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.devices', {});
-  const { isFullAccess, hasAnyPermission, user } = useAuth();
+  const { isFullAccess, hasAnyPermission, user, can, canVisit } = useAuth();
   const { notify } = useFeedback();
   const { pageSize, changePageSize } = usePageSize('devices', 20);
   const handlePageSizeChange = (size: number) => { changePageSize(size); setPage(0); };
@@ -462,16 +463,16 @@ const Devices: Component = () => {
     <div class="space-y-5">
       <div class="flex items-center justify-between gap-3 border-b border-subtle">
         <nav role="tablist" class="tab-bar min-w-0 flex-1 border-b-0" aria-label="CPE inventory sections">
-          <button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button>
-          <button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button>
+          <Show when={canVisit('inventory.cpes')}><button type="button" role="tab" class={`tab-btn ${activeTab() === 'cpes' ? 'is-active' : ''}`} aria-selected={activeTab() === 'cpes'} onClick={() => setSearchParams({ tab: null })}>CPEs</button></Show>
+          <Show when={canVisit('inventory.wans')}><button type="button" role="tab" class={`tab-btn ${activeTab() === 'wans' ? 'is-active' : ''}`} aria-selected={activeTab() === 'wans'} onClick={() => setSearchParams({ tab: 'wans' })}>WANs</button></Show>
         </nav>
       </div>
 
-      <Show when={activeTab() === 'wans'}>
+      <Show when={canVisit('inventory.wans') && activeTab() === 'wans'}>
         <WANInterfaces embedded />
       </Show>
 
-      <Show when={activeTab() === 'cpes'}>
+      <Show when={canVisit('inventory.cpes') && activeTab() === 'cpes'}>
       <Show when={deviceStats.loading && !deviceStats()}>
         <div class="ops-register fleet-register" aria-label="Loading CPE status">
           <For each={[1, 2, 3, 4]}>{() => <div class="ops-register-cell"><div class="skeleton h-3 w-24" /><div class="skeleton h-7 w-16 mt-3" /><div class="skeleton h-2 w-32 mt-3" /></div>}</For>
@@ -532,7 +533,7 @@ const Devices: Component = () => {
             <button type="button" class="icon-button" onClick={refreshInventory} disabled={deviceList.loading || deviceStats.loading} title="Refresh CPE inventory" aria-label="Refresh CPE inventory">
               <RefreshCw size={15} class={deviceList.loading ? 'animate-spin' : ''} aria-hidden="true" />
             </button>
-            <button type="button" class="icon-button" onClick={() => void exportDevicesCSV()} disabled={deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} title="Export filtered CPEs as CSV" aria-label={`Export ${deviceList()?.total ?? 0} filtered CPEs as CSV`}>
+            <button type="button" class="icon-button" onClick={() => void exportDevicesCSV()} disabled={!can('inventory.cpes', 'export') || deviceList.loading || exportingDevices() || (deviceList()?.total ?? 0) === 0} title="Export filtered CPEs as CSV" aria-label={`Export ${deviceList()?.total ?? 0} filtered CPEs as CSV`}>
               <Download size={15} aria-hidden="true" />
             </button>
             <Show when={hasAnyPermission('devices.create', 'devices.write')}>

@@ -129,7 +129,7 @@ func (r *Router) handleGetDeviceInterfaceMetric(w http.ResponseWriter, req *http
 
 func (r *Router) handleSaveInterfaceMetric(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -228,7 +228,7 @@ func validateInterfaceMetricDefinition(def *models.MetricDefinition) error {
 
 func (r *Router) handleDeleteInterfaceMetric(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}

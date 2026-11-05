@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import { Plus, X } from 'lucide-solid';
 import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import Dialog from './Dialog';
 import ColorSwatch from './ColorSwatch';
 import { useFeedback } from './Feedback';
@@ -62,8 +63,11 @@ interface MetricModalProps {
 
 const MetricModal: Component<MetricModalProps> = (props) => {
   const { notify, confirm } = useFeedback();
+  const { can } = useAuth();
   const [metricForm, setMetricForm] = createSignal<Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'>>(EMPTY_METRIC);
   const [metricTab, setMetricTab] = createSignal<'metric' | 'health'>('metric');
+  const section = () => `settings.provisioning.metrics.general.${metricTab()}`;
+  createEffect(() => { if (!can(section(), 'read')) setMetricTab(can('settings.provisioning.metrics.general.metric', 'read') ? 'metric' : 'health'); });
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
   const [initialSnapshot, setInitialSnapshot] = createSignal('');
   const isDirty = () => initialSnapshot() !== '' && JSON.stringify(metricForm()) !== initialSnapshot();
@@ -129,7 +133,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
 
   const handleSave = async () => {
     const form = metricForm();
-    if (!form.name.trim() || !form.parameter_name.trim()) {
+    if (can('settings.provisioning.metrics.general.metric', 'edit') && (!form.name.trim() || !form.parameter_name.trim())) {
       notify({ tone: 'error', title: 'Missing fields', message: 'Name and parameter name are required.' });
       return;
     }
@@ -167,10 +171,10 @@ const MetricModal: Component<MetricModalProps> = (props) => {
       >
         <div class="space-y-4">
           <div class="flex gap-1 border-b border-zinc-800 pb-2">
-            <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Metric</button>
-            <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Health</button>
+            <Show when={can('settings.provisioning.metrics.general.metric', 'read')}><button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Metric</button></Show>
+            <Show when={can('settings.provisioning.metrics.general.health', 'read')}><button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Health</button></Show>
           </div>
-          <Show when={metricTab() === 'metric'}>
+          <Show when={can('settings.provisioning.metrics.general.metric', 'read') && metricTab() === 'metric'}><fieldset disabled={!can('settings.provisioning.metrics.general.metric', 'edit') || pendingAction() !== null} class="space-y-4">
           <div>
             <label for="metric-name" class="block text-xs text-muted mb-1.5">Name (max 20 characters)</label>
             <input id="metric-name" type="text" maxlength={20} value={metricForm().name} onInput={(e) => setMetricForm(f => ({ ...f, name: e.currentTarget.value }))} placeholder="e.g. Uptime, CPU Load" class="input w-full" />
@@ -260,8 +264,8 @@ const MetricModal: Component<MetricModalProps> = (props) => {
               </select>
             </div>
           </div>
-          </Show>
-          <Show when={metricTab() === 'health'}>
+          </fieldset></Show>
+          <Show when={can('settings.provisioning.metrics.general.health', 'read') && metricTab() === 'health'}><fieldset disabled={!can('settings.provisioning.metrics.general.health', 'edit') || pendingAction() !== null} class="space-y-4">
           <div>
             <div class="block text-xs font-medium text-secondary mb-2">Health indicator</div>
             <div class="grid grid-cols-2 gap-3">
@@ -408,7 +412,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
               </label>
             </div>
           </div>
-          </Show>
+          </fieldset></Show>
         </div>
         <div class="flex gap-2 pt-4">
           <button type="button" onClick={props.onClose} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>

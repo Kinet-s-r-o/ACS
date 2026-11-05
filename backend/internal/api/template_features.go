@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ var featureIDPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
 func (r *Router) handleSaveTemplateFeatures(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -29,7 +30,8 @@ func (r *Router) handleSaveTemplateFeatures(w http.ResponseWriter, req *http.Req
 		return
 	}
 	var body struct {
-		Features []models.ProvisioningFeature `json:"features"`
+		Features   []models.ProvisioningFeature `json:"features"`
+		DeletedIDs []string                     `json:"deleted_ids,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -41,13 +43,127 @@ func (r *Router) handleSaveTemplateFeatures(w http.ResponseWriter, req *http.Req
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, err := r.provisioningRepo.GetTemplate(req.Context(), templateID); err != nil {
+	previous, err := r.provisioningRepo.GetTemplate(req.Context(), templateID)
+	if err != nil {
 		respondError(w, http.StatusNotFound, "Template not found")
+		return
+	}
+	if auth.OperationAuthorized(req.Context()) {
+		merged := append([]models.ProvisioningFeature{}, previous.Features...)
+		positions := map[string]int{}
+		for index, feature := range merged {
+			positions[feature.ID] = index
+		}
+		deleted := map[string]bool{}
+		for _, id := range body.DeletedIDs {
+			if _, exists := positions[id]; !exists || !requestCan(req, "settings.provisioning.features."+id, "delete") {
+				respondError(w, http.StatusForbidden, "Delete permission required for the removed tab")
+				return
+			}
+			deleted[id] = true
+		}
+		submitted := map[string]bool{}
+		for _, feature := range body.Features {
+			if deleted[feature.ID] {
+				respondError(w, http.StatusBadRequest, "A tab cannot be saved and deleted together")
+				return
+			}
+			submitted[feature.ID] = true
+			index, exists := positions[feature.ID]
+			if !exists {
+				if !requestCan(req, "settings.provisioning.features", "edit") {
+					respondError(w, http.StatusForbidden, "Advanced settings edit permission required to add a tab")
+					return
+				}
+				merged = append(merged, feature)
+				continue
+			}
+			before := merged[index]
+			scope := "settings.provisioning.features." + feature.ID
+			oldControls, newControls := map[string]models.ProvisioningFeatureControl{}, map[string]models.ProvisioningFeatureControl{}
+			for _, control := range before.Controls {
+				oldControls[control.Key] = control
+			}
+			for _, control := range feature.Controls {
+				newControls[control.Key] = control
+			}
+			edited := before.Name != feature.Name || before.Description != feature.Description
+			for key, control := range newControls {
+				old, exists := oldControls[key]
+				edited = edited || !exists || !reflect.DeepEqual(old, control)
+			}
+			oldOrder, newOrder := []string{}, []string{}
+			for _, control := range before.Controls {
+				if _, exists := newControls[control.Key]; exists {
+					oldOrder = append(oldOrder, control.Key)
+				}
+			}
+			for _, control := range feature.Controls {
+				if _, exists := oldControls[control.Key]; exists {
+					newOrder = append(newOrder, control.Key)
+				}
+			}
+			edited = edited || !reflect.DeepEqual(oldOrder, newOrder)
+			if edited && !requestCan(req, scope, "edit") {
+				respondError(w, http.StatusForbidden, "Edit permission required for tab "+before.Name)
+				return
+			}
+			for key := range oldControls {
+				if _, exists := newControls[key]; !exists && !requestCan(req, scope, "delete") {
+					respondError(w, http.StatusForbidden, "Delete permission required for tab "+before.Name)
+					return
+				}
+			}
+			merged[index] = feature
+		}
+		// Reorder submitted slots while preserving invisible tabs and their positions.
+		ordered := make([]models.ProvisioningFeature, 0, len(merged))
+		next := 0
+		for _, feature := range merged {
+			if deleted[feature.ID] {
+				continue
+			}
+			if submitted[feature.ID] {
+				replacement := body.Features[next]
+				next++
+				if replacement.ID != feature.ID && (!requestCan(req, "settings.provisioning.features."+feature.ID, "edit") || !requestCan(req, "settings.provisioning.features."+replacement.ID, "edit")) {
+					respondError(w, http.StatusForbidden, "Edit permission required for reordered tabs")
+					return
+				}
+				feature = replacement
+			}
+			ordered = append(ordered, feature)
+		}
+		body.Features = ordered
+	} else if len(body.DeletedIDs) > 0 {
+		deleted := map[string]bool{}
+		for _, id := range body.DeletedIDs {
+			deleted[id] = true
+		}
+		kept := body.Features[:0]
+		for _, feature := range body.Features {
+			if !deleted[feature.ID] {
+				kept = append(kept, feature)
+			}
+		}
+		body.Features = kept
+	}
+	if len(body.Features) > 50 {
+		respondError(w, http.StatusBadRequest, "A template may contain at most 50 tabs")
 		return
 	}
 	if err := r.provisioningRepo.UpdateTemplateFeatures(req.Context(), templateID, body.Features); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to save feature definitions")
 		return
+	}
+	if auth.OperationAuthorized(req.Context()) {
+		visible := []models.ProvisioningFeature{}
+		for _, feature := range body.Features {
+			if requestCan(req, "settings.provisioning.features."+feature.ID, "read") {
+				visible = append(visible, feature)
+			}
+		}
+		body.Features = visible
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{"features": body.Features})
 }
@@ -241,7 +357,7 @@ func validateProvisioningObjectFields(control *models.ProvisioningFeatureControl
 
 func (r *Router) handleImportTemplateFeature(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -296,7 +412,7 @@ func (r *Router) handleImportTemplateFeature(w http.ResponseWriter, req *http.Re
 
 func (r *Router) handleDeleteTemplateFeature(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}

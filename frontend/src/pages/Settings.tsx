@@ -51,7 +51,7 @@ const EMPTY_METRIC: Omit<MetricDefinition, 'id' | 'created_at' | 'updated_at'> =
 };
 
 const Settings: Component = () => {
-  const { user, isFullAccess, logout } = useAuth();
+  const { user, isFullAccess, logout, canVisit } = useAuth();
   const { notify, confirm } = useFeedback();
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
 
@@ -60,7 +60,7 @@ const Settings: Component = () => {
   const [passwordForm, setPasswordForm] = createSignal({ current: '', newPass: '', confirm: '' });
 
   // Metrics CRUD
-  const [metrics, { refetch: refetchMetrics }] = createResource(api.getMetricDefinitions);
+  const [metrics, { refetch: refetchMetrics }] = createResource(() => canVisit('settings.metrics'), api.getMetricDefinitions);
   const metricActive = useMetricActiveToggle(() => refetchMetrics());
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
@@ -215,7 +215,7 @@ const Settings: Component = () => {
           <div>
             <div class="block text-xs text-muted mb-1.5">Role</div>
             <span class={`badge ${isFullAccess() ? 'badge-success' : 'badge-warning'}`}>
-              {isFullAccess() ? 'Full Access' : 'Read Only'}
+              {user()?.role === 'full' ? 'Administrator' : 'Custom access'}
             </span>
           </div>
           <div class="flex items-center gap-3 pt-2">
@@ -240,7 +240,7 @@ const Settings: Component = () => {
       </div>
 
       {/* Metrics Section */}
-      <div class="card p-5">
+      <Show when={canVisit('settings.metrics')}><div class="card p-5">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-sm font-medium text-secondary flex items-center gap-2">
             <Activity size={14} />
@@ -369,6 +369,8 @@ const Settings: Component = () => {
           </div>
         </Show>
       </div>
+
+      </Show>
 
       {/* Metric Modal */}
       <Show when={showMetricModal()}>

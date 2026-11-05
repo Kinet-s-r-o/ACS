@@ -1,58 +1,32 @@
-# Role permission expansion plan
+# Section and tab permissions
 
-## Current state
+## Model
 
-Custom roles store permission keys as JSON. The catalog in `backend/internal/models/role.go` has domain `read` and `write` keys plus focused grants. API routes enforce these keys; the role editor in `frontend/src/pages/RolesTab.tsx` exposes one checkbox per key. Unknown keys are rejected by the role API.
+Saved roles use `access.<section>.<action>` keys. The only actions are **Full, Read, Edit, Delete, Import, Export**. Each menu entry, submenu and nested tab has its own row. This includes Requested/Result task tabs, Metric/Health, Wi-Fi/LAN/WAN dialogs and user-defined Advanced settings tabs.
 
-The main limitation is that `write` groups actions with different risk levels. For example, `devices.write` currently covers routine changes, device commands, credential changes, factory reset, snapshot restore, and deletion. A role cannot allow ordinary operation while withholding those higher-risk actions.
+Full grants all actions on its own row only. It never grants a child or sibling row. Other actions require Read on the same row; the role editor selects Read automatically. A parent can be traversed when a descendant is readable, without granting operations on the parent. Shared reference endpoints explicitly name their consumers.
 
-## Goal
+Edit covers create/update and operational commands; Delete covers removals; Import/Export cover transfers where supported. Factory reset requires Full on `inventory.cpes.maintenance.diagnostic` and the existing fresh verification. Full provisioning backup/clone requires the relevant action on every included section and dynamic tab. Replacing configuration during import also requires Delete on replaced sections.
 
-Let administrators grant the smallest useful set of capabilities, with server-side enforcement as the source of truth. Keep existing role behavior during rollout and make each permission understandable in the editor.
+## Catalog and enforcement
 
-## Proposed permission model
+- Static catalog: `backend/internal/models/permissions.go`.
+- Dynamic catalog: `backend/internal/database/permission_catalog.go`; Advanced settings feature IDs create separate rows under `settings.provisioning.features` and `inventory.cpes.features`.
+- Console discovery: authenticated `GET /permissions` returns actions and ordered section rows; `RolesTab.tsx` renders the six-column matrix.
+- API policies: `backend/internal/api/permission_policy.go`; every authenticated console/integration route must have an explicit policy. Shared payload handlers additionally validate fields against their own tab. Metric/Health updates preserve inaccessible fields; filtered Advanced settings saves preserve unsubmitted tabs and use explicit `deleted_ids` for tab deletion.
+- Network parameter policies: `permission_network_fields.go` mirrors editable suffixes in `frontend/src/lib/{wifi,lan,wan}Fields.ts`. New fields require a matching tab policy. Diagnostic access remains a separate explicit raw-parameter workflow.
+- Console visibility: `frontend/src/lib/permissions.ts`, `SectionPage.tsx`, menu filtering and page/tab checks. UI visibility is not an authorization boundary.
 
-1. Keep the current domain `read`/`write` permissions as compatibility bundles.
-2. Add focused permissions for high-risk or independently assignable actions first:
-   - Devices: routine configuration/commands, sensitive credential management, destructive actions (factory reset and deletion), and snapshot restore.
-   - Firmwares: upload/manage library and deliver firmware to devices as separate capabilities.
-   - Users and roles: user administration/API token management and role definition management as separate capabilities.
-   - Provisioning: rules and templates as independently assignable capabilities.
-3. Map each existing route to the narrowest applicable permission. Existing `*.write` grants continue to satisfy the new checks during transition; new focused grants allow restricted roles to omit the broad grant.
-4. Keep read access independent. Do not make write imply read unless the existing product behavior explicitly requires it.
+Legacy constants and component adapters remain internal implementation details. Legacy keys are neither accepted in saved role updates nor advertised as permission types. The authoritative section middleware runs before internal legacy wrappers.
 
-Finalize exact permission keys and route mapping before implementation. Avoid creating a separate key for every endpoint; split only where tasks have meaningfully different risk or operator ownership.
+## System accounts and rollout
 
-## Implemented focused grants
+The built-in system `admin` always resolves the entire current catalog, including dynamic rows, regardless of its persisted permission snapshot. Only this role maps to the administrative account role. Sessions and API tokens resolve current permissions on each request and fail closed on lookup errors.
 
-`POST /devices` accepts `devices.create` or the legacy `devices.write` bundle. The Add CPE dialog uses the same grants. Creation reserves a unique, case-sensitive serial number and assigns existing catalog tags; changing tags later still requires `devices.configure` or `devices.write`.
+At startup, built-in admin/viewer defaults are synchronized. Obsolete keys are removed from custom roles without migration into broader grants. **Existing custom roles must be configured again after upgrading.** No new database columns or indexes are required. Viewer defaults exclude credential access, SQL statistics and index administration; dynamic tabs require explicit grants.
 
-Arming a factory reset for a pre-registered CPE also requires `devices.reset` (or `devices.write`) and fresh password/TOTP verification. The reset task is created atomically on the first Inform only while the device was Waiting; if the first CWMP session ends before dispatch, the task is failed and never retried on a later Inform.
+## Verification and future changes
 
-The implementation adds these independently assignable grants: `devices.configure`, `devices.command`, `devices.reset`, `devices.delete`, `devices.credentials`, `devices.snapshots.write`, `devices.firmware`, `firmwares.manage`, `users.tokens`, `users.dashboards`, `provisioning.rules.write`, `provisioning.templates.write`, and `database.stats.read`. Existing domain `*.write` keys remain valid compatibility bundles and continue to authorize their former operations. The database statistics grant is excluded from the read-only system role because it exposes normalized SQL text; the built-in admin receives it with the other `AllPermissions`. `users.dashboards` lets an operator view and remove/reset saved Fleet panel configurations belonging to any user. The role editor lists the grants with descriptions.
+Tests cover own-row Full, navigation without inheritance, action independence, field isolation, explicit dynamic-tab deletion, privilege delegation limits, default admin access and current permissions for API tokens. PostgreSQL tests use `TEST_DATABASE_URL` and isolated schemas. Run the backend race/vet checks and frontend UI/test/build commands from the area routers.
 
-## Implementation sequence
-
-DB tools → DB indexes additionally defines `database.indexes.read` for catalog,
-storage and job inspection, and `database.indexes.write` for mutations. Every
-mutation requires both grants; `settings.write` is not a compatibility grant for
-database DDL. Both are excluded from the read-only system role and granted to
-the built-in admin. See [DB indexes](database-indexes.md) for the ownership policy.
-
-1. **Inventory and map:** enumerate authenticated routes, UI actions, and existing permission gates; identify unguarded paths and routes with overly broad grants. Record the mapping in a permission catalog next to the backend model definitions.
-2. **Backend catalog:** define stable keys and descriptions centrally; update `AllPermissions`, validation, and any system-role defaults. Add route middleware that accepts the focused key and its legacy bundle during transition.
-3. **Compatibility:** preserve current effective permissions for saved roles. Add a migration or deterministic runtime expansion for legacy role grants, and document how roles behave after the transition. Do not silently downgrade access.
-4. **Role editor:** render grouped permissions with concise descriptions and risk grouping. Support select/clear by group, show selected/available counts from the shared catalog, and explain broad compatibility permissions when present. Replace the hard-coded `18` count.
-5. **Feature gates:** keep UI controls consistent with backend enforcement, but treat UI hiding as usability only; the API remains authoritative. Check token and session authentication paths use the same current role permissions.
-6. **Audit and rollout:** review existing role assignments and identify roles whose broad grants can be narrowed. Release with compatibility enabled, then consider removing legacy bundle fallback only after explicit migration and operational review.
-
-## Verification
-
-- Unit tests cover permission catalog validity, legacy-to-focused compatibility, and denial when neither focused nor legacy permissions are present.
-- API tests cover representative allowed and denied requests for each new permission, including API tokens and session authentication.
-- Frontend checks confirm every permission is configurable, labels/descriptions are accessible, counts are catalog-driven, and controls follow the effective permission.
-- Review all route registrations whenever a permission key is added or changed; run backend tests/vet and frontend UI check/build per the area routers.
-
-## Ongoing requirement
-
-Every new console section or feature must define its read and mutation permissions before implementation, enforce them on backend routes, and expose the relevant grants in role configuration. Update the permission catalog and this plan or its implementation documentation when the model changes.
+For each new section/tab, add its catalog row, backend route/payload policy and frontend visibility in the same change. Never introduce another action type or authorize a child through its parent.

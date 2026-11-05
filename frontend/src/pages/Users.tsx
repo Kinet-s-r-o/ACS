@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
+import { createEffect, createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { Users, ShieldCheck, Ban, Check, Edit2, Plus, Search, X, KeyRound, LayoutDashboard } from 'lucide-solid';
 import UserAPITokens from '../components/UserAPITokens';
@@ -8,7 +8,7 @@ import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import ColumnFilter from '../components/ColumnFilter';
 import ColumnVisibility from '../components/ColumnVisibility';
 import Pagination from '../components/Pagination';
@@ -24,17 +24,20 @@ import { sortRows, type SortDirection } from '../lib/sorting';
 
 const UsersPage: Component = () => {
   const navigate = useNavigate();
-  const { hasPermission, isFullAccess, user: currentUser } = useAuth();
+  const { hasPermission, isFullAccess, user: currentUser, can, canVisit } = useAuth();
   const { confirm, notify } = useFeedback();
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<'users' | 'roles'>('users');
+  const tabSections = { 'users': 'settings.users.users', 'roles': 'settings.users.roles' };
+  createEffect(() => { if (!canVisit(tabSections[activeTab()])) { const first = (Object.keys(tabSections) as (keyof typeof tabSections)[]).find(tab => canVisit(tabSections[tab])); if (first) setActiveTab(first); } });
+  usePermissionSection(() => tabSections[activeTab()]);
 
   const [users, { refetch: refetchUsers }] = createResource(async () => {
-    if (!hasPermission('users.read')) return [];
+    if (!canVisit('settings.users.users')) return [];
     return api.getUsers();
   });
   const [roles, { refetch: refetchRoles }] = createResource(async () => {
-    if (!hasPermission('roles.read')) return [];
+    if (!can('settings.users.roles', 'read') && !can('settings.users.users', 'read')) return [];
     return api.getRoles();
   });
   const [authProviders] = createResource(() => api.getAuthProviders());
@@ -172,11 +175,11 @@ const UsersPage: Component = () => {
       <PageHeader title="Users and Roles" description="Manage operator accounts and their access levels." />
 
       <div class="border-b border-subtle flex gap-1" role="tablist" aria-label="Users and roles">
-        <button type="button" role="tab" aria-selected={activeTab() === 'users'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'users' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => { setActiveTab('users'); void refetchRoles(); void refetchUsers(); }}><Users size={13} />Users</button>
-        <button type="button" role="tab" aria-selected={activeTab() === 'roles'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'roles' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setActiveTab('roles')}><ShieldCheck size={13} />Roles</button>
+        <Show when={canVisit('settings.users.users')}><button type="button" role="tab" aria-selected={activeTab() === 'users'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'users' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => { setActiveTab('users'); void refetchRoles(); void refetchUsers(); }}><Users size={13} />Users</button></Show>
+        <Show when={canVisit('settings.users.roles')}><button type="button" role="tab" aria-selected={activeTab() === 'roles'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'roles' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setActiveTab('roles')}><ShieldCheck size={13} />Roles</button></Show>
       </div>
 
-      <Show when={activeTab() === 'users'}>
+      <Show when={canVisit('settings.users.users') && activeTab() === 'users'}>
       <div class="card overflow-hidden">
         <div class="table-panel-toolbar">
           <span><strong>{pagedUsers().length}</strong> visible on this page · <strong>{users()?.length ?? 0}</strong> total users</span>
@@ -253,8 +256,8 @@ const UsersPage: Component = () => {
                     </Show>
                     <td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right">
                       <div class="flex items-center justify-end gap-1">
-                        <Show when={isFullAccess() && hasPermission('users.read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
-                        <Show when={hasPermission('users.dashboards')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
+                        <Show when={can('settings.users.users.tokens', 'read')}><button type="button" class="icon-button" title="API tokens" aria-label={`API tokens for ${u.username}`} onClick={() => setTokenUser(u)}><KeyRound size={14} /></button></Show>
+                        <Show when={can('settings.users.users.dashboards', 'read')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
                         <Show when={isFullAccess() && hasPermission('users.write')}>
                           <button type="button" onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}><Edit2 size={14} /></button>
                           <button type="button" onClick={() => void handleSetUserActive(u)} class={`icon-button ${u.active ? 'text-amber-400' : 'text-emerald-400'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
@@ -277,7 +280,7 @@ const UsersPage: Component = () => {
       <Pagination page={userPage()} totalPages={userTotalPages()} totalItems={filteredUsers().length} pageSize={pageSize()} onPageChange={setUserPage} storageKey="users" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setUserPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setUserPage(0); }} />
       </Show>
 
-      <Show when={activeTab() === 'roles'}>
+      <Show when={canVisit('settings.users.roles') && activeTab() === 'roles'}>
         <div class="card p-5"><RolesTab /></div>
       </Show>
 

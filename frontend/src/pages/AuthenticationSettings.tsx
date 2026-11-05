@@ -12,23 +12,23 @@ const AUTHENTICATION_MODULES = [
     description: 'Verify operator credentials through external RADIUS servers with redundancy.',
     protocols: 'UDP · TLS (RadSec)',
     href: '/settings/authentication/radius',
-    permission: 'auth.settings.read',
+    section: 'settings.authentication.radius',
     icon: Network,
   },
 ];
 
 const AuthenticationSettings: Component = () => {
-  const { hasPermission } = useAuth();
+  const { canVisit } = useAuth();
 
   return (
     <div class="space-y-5">
       <PageHeader title="Authentication" description="Choose how ACS verifies operator credentials. Roles and account access remain managed in ACS." />
-      <Show when={hasPermission('auth.settings.read')} fallback={<p class="text-muted">You need authentication settings read permission to view this page.</p>}>
+      <Show when={canVisit('settings.authentication')} fallback={<p class="text-muted">You need authentication settings read permission to view this page.</p>}>
         <div class="card p-5">
           <h2 class="text-sm font-medium text-secondary">Authentication methods</h2>
           <p class="text-muted text-xs mt-1 mb-4">Select a method to view and manage its configuration.</p>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            <For each={AUTHENTICATION_MODULES.filter(module => hasPermission(module.permission))}>{module => (
+            <For each={AUTHENTICATION_MODULES.filter(module => canVisit(module.section))}>{module => (
               <A href={module.href} class="rounded border border-subtle p-4 hover:border-primary/30 transition-colors flex flex-col gap-3" aria-labelledby={`authentication-${module.id}`}>
                 <div class="flex items-center gap-2">
                   <module.icon size={16} class="text-secondary shrink-0" aria-hidden="true" />

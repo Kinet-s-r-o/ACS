@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { PERMISSION_ACTIONS, canSection, type PermissionAction } from '../lib/permissions';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-solid';
 import { api, type Role } from '../lib/api';
@@ -16,69 +17,11 @@ import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { usePageSize } from '../lib/usePageSize';
 
-const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; description: string }[] }[] = [
-  { label: 'Authentication', permissions: [
-    { key: 'auth.settings.read', label: 'Read', description: 'View authentication module configuration without secrets.' },
-    { key: 'auth.settings.write', label: 'Write', description: 'Configure and test authentication modules; also requires full access and authentication read permission.' },
-  ] },
-  { label: 'Users', permissions: [
-    { key: 'users.read', label: 'Read', description: 'View user accounts.' },
-    { key: 'users.write', label: 'Write', description: 'Create, edit, activate, and deactivate users.' },
-    { key: 'users.tokens', label: 'Manage API tokens', description: 'Create and revoke user API tokens.' },
-    { key: 'users.dashboards', label: 'Manage Fleet dashboards', description: 'View and remove saved Fleet panels for any user.' },
-  ] },
-  { label: 'Roles', permissions: [
-    { key: 'roles.read', label: 'Read', description: 'View role definitions.' },
-    { key: 'roles.write', label: 'Write', description: 'Create, edit, and delete roles.' },
-  ] },
-  { label: 'Devices', permissions: [
-    { key: 'devices.read', label: 'Read', description: 'View devices and their operational data.' },
-    { key: 'devices.write', label: 'Write (legacy bundle)', description: 'All device changes, including every focused permission below.' },
-    { key: 'devices.create', label: 'Add CPEs', description: 'Pre-register CPEs by serial number and assign initial tags.' },
-    { key: 'devices.configure', label: 'Configure', description: 'Change parameters, tags, and device advanced settings.' },
-    { key: 'devices.command', label: 'Run commands', description: 'Read parameters remotely, reboot, and request a CWMP session.' },
-    { key: 'devices.reset', label: 'Factory reset', description: 'Queue a factory reset or arm one for a pre-registered CPE’s first CWMP Inform.' },
-    { key: 'devices.delete', label: 'Delete devices and tasks', description: 'Delete devices or pending tasks.' },
-    { key: 'devices.credentials', label: 'Manage credentials', description: 'Change connection-request credentials.' },
-    { key: 'devices.snapshots.write', label: 'Manage snapshots', description: 'Create, restore, and delete device snapshots.' },
-    { key: 'devices.firmware', label: 'Deliver firmware', description: 'Queue firmware delivery to a device.' },
-  ] },
-  { label: 'Firmwares', permissions: [
-    { key: 'firmwares.read', label: 'Read', description: 'View the firmware library.' },
-    { key: 'firmwares.write', label: 'Write (legacy bundle)', description: 'Manage the firmware library.' },
-    { key: 'firmwares.manage', label: 'Manage library', description: 'Upload and delete firmware images.' },
-  ] },
-  { label: 'Faults', permissions: [
-    { key: 'faults.read', label: 'Read', description: 'View faults and statistics.' },
-    { key: 'faults.write', label: 'Write', description: 'Resolve or delete faults.' },
-  ] },
-  { label: 'Provisioning', permissions: [
-    { key: 'provisioning.read', label: 'Read', description: 'View provisioning rules and templates.' },
-    { key: 'provisioning.write', label: 'Write (legacy bundle)', description: 'Manage both rules and templates.' },
-    { key: 'provisioning.rules.write', label: 'Manage rules', description: 'Create, edit, import, reorder, and enable rules.' },
-    { key: 'provisioning.templates.write', label: 'Manage templates', description: 'Create and edit templates, advanced settings, and metrics.' },
-    { key: 'cwmp.control', label: 'CWMP on / off', description: 'Globally pause or resume CWMP traffic and CPE connection requests.' },
-  ] },
-  { label: 'Settings', permissions: [
-    { key: 'settings.read', label: 'Read', description: 'View system settings.' },
-    { key: 'settings.write', label: 'Write', description: 'Change system settings.' },
-    { key: 'database.stats.read', label: 'Database statistics', description: 'View database query performance statistics and SQL text.' },
-    { key: 'database.indexes.read', label: 'View DB indexes', description: 'Inspect PostgreSQL indexes, UI index jobs and storage budgets.' },
-    { key: 'database.indexes.write', label: 'Manage DB indexes', description: 'Create, replace, cancel and delete only UI-owned B-tree indexes. Also requires View DB indexes.' },
-  ] },
-  { label: 'Metrics', permissions: [
-    { key: 'metrics.read', label: 'Read', description: 'View device metrics.' },
-    { key: 'metrics.write', label: 'Write', description: 'Manage metric definitions.' },
-  ] },
-  { label: 'Security', permissions: [
-    { key: 'security.read', label: 'Read', description: 'View security events and blocked devices.' },
-    { key: 'security.write', label: 'Write', description: 'Manage blocked devices.' },
-  ] },
-];
-const PERMISSION_COUNT = PERMISSION_GROUPS.reduce((count, group) => count + group.permissions.length, 0);
-
 const RolesTab: Component = () => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, can } = useAuth();
+  const [catalog] = createResource(api.getPermissionCatalog);
+  const sections = () => catalog()?.sections ?? [];
+  const permissionCount = () => sections().length * PERMISSION_ACTIONS.length;
   const { confirm, notify } = useFeedback();
   const [pendingAction, setPendingAction] = createSignal<string | null>(null);
 
@@ -105,7 +48,7 @@ const RolesTab: Component = () => {
     switch (column) {
       case 'name': return role.name;
       case 'description': return role.description || '';
-      case 'permissions': return `${role.permissions.length} / ${PERMISSION_COUNT}`;
+      case 'permissions': return `${role.permissions.length} / ${permissionCount()}`;
       case 'type': return role.is_system ? 'System' : 'Custom';
       default: return '';
     }
@@ -144,24 +87,11 @@ const RolesTab: Component = () => {
   const [showRoleModal, setShowRoleModal] = createSignal(false);
   const [editingRole, setEditingRole] = createSignal<Role | null>(null);
   const [roleForm, setRoleForm] = createSignal({ name: '', description: '', permissions: [] as string[] });
-  const [activePermissionGroup, setActivePermissionGroup] = createSignal('Devices');
-  const selectedInGroup = (group: typeof PERMISSION_GROUPS[number]) => group.permissions.filter(permission => roleForm().permissions.includes(permission.key)).length;
-  const selectGroupPermissions = (group: typeof PERMISSION_GROUPS[number], selected: boolean) => {
-    const keys = group.permissions.map(permission => permission.key);
-    setRoleForm(form => ({
-      ...form,
-      permissions: selected
-        ? [...new Set([...form.permissions, ...keys])]
-        : form.permissions.filter(permission => !keys.includes(permission)),
-    }));
-  };
-
   const canWrite = () => hasPermission('roles.write');
 
   const openCreateRole = () => {
     setEditingRole(null);
     setRoleForm({ name: '', description: '', permissions: [] });
-    setActivePermissionGroup('Devices');
     setShowRoleModal(true);
   };
 
@@ -169,17 +99,22 @@ const RolesTab: Component = () => {
     if (role.is_system) return;
     setEditingRole(role);
     setRoleForm({ name: role.name, description: role.description, permissions: [...role.permissions] });
-    setActivePermissionGroup('Devices');
     setShowRoleModal(true);
   };
 
-  const togglePermission = (perm: string) => {
-    setRoleForm(f => ({
-      ...f,
-      permissions: f.permissions.includes(perm)
-        ? f.permissions.filter(p => p !== perm)
-        : [...f.permissions, perm],
-    }));
+  const togglePermission = (section: string, action: PermissionAction) => {
+    const prefix = `access.${section}.`;
+    const key = `${prefix}${action}`;
+    setRoleForm(form => {
+      const selected = form.permissions.includes(key);
+      let permissions = form.permissions.filter(value => value !== key);
+      if (action === 'full' || (action === 'read' && selected)) permissions = permissions.filter(value => !value.startsWith(prefix) || value.slice(prefix.length).includes('.'));
+      if (!selected) {
+        permissions.push(key);
+        if (action !== 'full' && action !== 'read') permissions = [...new Set([...permissions, `${prefix}read`])];
+      }
+      return { ...form, permissions };
+    });
   };
 
   const handleCreateRole = async () => {
@@ -281,16 +216,16 @@ const RolesTab: Component = () => {
                     <tr class="border-b border-border/50 hover:bg-muted/20">
                       <Show when={isVisible('name')}><td data-column-order-id="name#0" class="px-3 py-2 font-medium">{role.name}</td></Show>
                       <Show when={isVisible('description')}><td data-column-order-id="description#0" class="px-3 py-2 text-muted">{role.description || '—'}</td></Show>
-                      <Show when={isVisible('permissions')}><td data-column-order-id="permissions#0" class="px-3 py-2"><span class="badge">{role.permissions.length} / {PERMISSION_COUNT}</span></td></Show>
+                      <Show when={isVisible('permissions')}><td data-column-order-id="permissions#0" class="px-3 py-2"><span class="badge">{role.permissions.length} / {permissionCount()}</span></td></Show>
                       <Show when={isVisible('type')}><td data-column-order-id="type#0" class="px-3 py-2">
                         <Show when={role.is_system}><span class="badge badge-info">System</span></Show>
                         <Show when={!role.is_system}><span class="badge">Custom</span></Show>
                       </td></Show>
                       <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-3 py-2">
                         <div class="flex gap-1 justify-end">
-                          <Show when={canWrite() && !role.is_system}>
-                            <button type="button" class="btn btn-ghost btn-sm" onClick={() => openEditRole(role)} title="Edit role"><Pencil size={14} /></button>
-                            <button type="button" class="btn btn-ghost btn-sm text-destructive" onClick={() => handleDeleteRole(role)} title="Delete role"><Trash2 size={14} /></button>
+                          <Show when={!role.is_system}>
+                            <Show when={canWrite()}><button type="button" class="btn btn-ghost btn-sm" onClick={() => openEditRole(role)} title="Edit role"><Pencil size={14} /></button></Show>
+                            <Show when={can('settings.users.roles', 'delete')}><button type="button" class="btn btn-ghost btn-sm text-destructive" onClick={() => handleDeleteRole(role)} title="Delete role"><Trash2 size={14} /></button></Show>
                           </Show>
                         </div>
                       </td>
@@ -324,43 +259,30 @@ const RolesTab: Component = () => {
               <div class="flex items-center justify-between gap-3 mb-2">
                 <div>
                   <div class="text-sm font-medium text-primary">Permissions</div>
-                  <p class="text-xs text-muted mt-0.5">{roleForm().permissions.length} of {PERMISSION_COUNT} selected</p>
+                  <p class="text-xs text-muted mt-0.5">{roleForm().permissions.length} of {permissionCount()} selected</p>
                 </div>
                 <span class="text-xs text-muted">Choose a section, then select its access</span>
               </div>
-              <div class="flex flex-wrap gap-2 border-b border-subtle pb-3 mb-3" role="tablist" aria-label="Permission sections">
-                <For each={PERMISSION_GROUPS}>{group => (
-                  <button type="button" role="tab" aria-selected={activePermissionGroup() === group.label} onClick={() => setActivePermissionGroup(group.label)} class={`px-3 py-2 text-xs border rounded transition-colors ${activePermissionGroup() === group.label ? 'border-sky-500 bg-sky-500/10 text-primary' : 'border-subtle text-muted hover:text-primary hover:bg-base'}`}>
-                    {group.label}<span class="ml-2 tabular-nums">{selectedInGroup(group)}/{group.permissions.length}</span>
-                  </button>
-                )}</For>
-              </div>
-              <For each={PERMISSION_GROUPS.filter(group => group.label === activePermissionGroup())}>{group => (
-                <section role="tabpanel" aria-label={`${group.label} permissions`} class="rounded border border-subtle bg-base p-3 sm:p-4">
-                  <div class="flex items-center justify-between gap-3 mb-3">
-                    <div><h3 class="text-sm font-medium text-primary">{group.label}</h3><p class="text-xs text-muted mt-0.5">{selectedInGroup(group)} of {group.permissions.length} selected</p></div>
-                    <div class="flex gap-2">
-                      <button type="button" class="btn btn-ghost btn-sm" onClick={() => selectGroupPermissions(group, true)}>Select all</button>
-                      <button type="button" class="btn btn-ghost btn-sm" onClick={() => selectGroupPermissions(group, false)}>Clear</button>
-                    </div>
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <For each={group.permissions}>{permission => (
-                      <label class="flex items-start gap-3 rounded border border-subtle bg-elevated/40 p-3 text-sm cursor-pointer hover:bg-elevated">
-                        <input type="checkbox" checked={roleForm().permissions.includes(permission.key)} onChange={() => togglePermission(permission.key)} class="checkbox mt-0.5 shrink-0" />
-                        <span class="min-w-0"><span class="block font-medium text-primary">{permission.label}</span><span class="block text-xs text-muted mt-0.5 leading-relaxed">{permission.description}</span></span>
-                      </label>
-                    )}</For>
-                  </div>
-                </section>
-              )}</For>
-              <div class="mt-3 rounded border border-subtle px-3 py-2 text-xs text-muted">
-                Legacy <span class="font-medium text-secondary">Write</span> bundles preserve broad access. Use focused permissions when a role should have only selected actions.
+              <Show when={catalog.error}><ResourceError title="Permission catalog unavailable" description="Retry loading the role editor." /></Show>
+              <p class="text-xs text-muted mb-3">Full grants every action on this row only. Subsections and tabs have their own rows. Edit includes creating and updating; Delete, Import and Export are independent.</p>
+              <div class="overflow-x-auto max-h-[55vh]">
+                <table class="data-table w-full text-sm">
+                  <thead class="sticky top-0 opaque-table-header"><tr>
+                    <th data-column-order-id="section#0" class="text-left p-3">Section / tab</th>
+                    <For each={PERMISSION_ACTIONS}>{action => <th data-column-order-id={`${action}#0`} class="text-center p-3">{action[0].toUpperCase() + action.slice(1)}</th>}</For>
+                  </tr></thead>
+                  <tbody><For each={sections()}>{section => <tr class="border-b border-subtle">
+                    <td data-column-order-id="section#0" class="p-3"><span class={section.parent ? 'text-secondary' : 'font-semibold text-primary'}>{section.label}</span><Show when={section.parent}><span class="block text-xs text-muted">{section.parent?.split('.').map((_, index, parts) => sections().find(item => item.id === parts.slice(0, index + 1).join('.'))?.label).filter(Boolean).join(' / ')}</span></Show></td>
+                    <For each={PERMISSION_ACTIONS}>{action => <td data-column-order-id={`${action}#0`} class="p-3 text-center">
+                      <input type="checkbox" class="checkbox" aria-label={`${section.label} (${section.id}): ${action}`} checked={canSection(roleForm().permissions, section.id, action)} disabled={pendingAction() !== null || catalog.loading || !can(section.id, action) || (action !== 'full' && roleForm().permissions.includes(`access.${section.id}.full`))} onChange={() => togglePermission(section.id, action)} />
+                    </td>}</For>
+                  </tr>}</For></tbody>
+                </table>
               </div>
             </div>
             <div class="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowRoleModal(false)} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}><X size={14} /> Cancel</button>
-              <button type="submit" class="btn btn-primary flex-1" disabled={pendingAction() !== null}>{pendingAction() ? 'Saving…' : editingRole() ? 'Update role' : 'Create role'}</button>
+              <button type="submit" class="btn btn-primary flex-1" disabled={pendingAction() !== null || catalog.loading || !!catalog.error}>{pendingAction() ? 'Saving…' : editingRole() ? 'Update role' : 'Create role'}</button>
             </div>
           </form>
         </Dialog>

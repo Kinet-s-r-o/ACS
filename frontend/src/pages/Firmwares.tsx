@@ -18,8 +18,8 @@ import { createPersistedJsonSignal, createPersistedSignal } from '../lib/storage
 import { formatDateTime } from '../lib/dateTime';
 
 const Firmwares: Component = () => {
-  const { hasAnyPermission } = useAuth();
-  const canManageLibrary = () => hasAnyPermission('firmwares.manage', 'firmwares.write');
+  const { can } = useAuth();
+  const canManageLibrary = () => can('firmwares', 'import');
   const { confirm, notify } = useFeedback();
   const [firmwares, { refetch }] = createResource(() => api.getFirmwares());
   const [uploading, setUploading] = createSignal(false);
@@ -278,7 +278,7 @@ const Firmwares: Component = () => {
                     <Show when={isVisible('file_size')}><td data-column-order-id="size#0" class="px-4 py-3 text-secondary text-sm">{formatSize(fw.file_size)}</td></Show>
                     <Show when={isVisible('created_at')}><td data-column-order-id="uploaded#0" class="px-4 py-3 text-muted text-xs">{formatDate(fw.created_at)}</td></Show>
                     <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-3">
-                      <Show when={canManageLibrary()}><button
+                      <Show when={can('firmwares', 'delete')}><button
                         onClick={() => handleDelete(fw.id, fw.filename)}
                         class="text-rose-400 hover:text-rose-300 text-sm flex items-center gap-1 transition-fast"
                       >

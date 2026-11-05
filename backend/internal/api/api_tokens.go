@@ -28,6 +28,10 @@ func (r *Router) tokenUser(w http.ResponseWriter, req *http.Request) int64 {
 		respondError(w, http.StatusNotFound, "User not found")
 		return 0
 	}
+	if !r.canManageUser(req, user) {
+		respondError(w, http.StatusForbidden, "Cannot manage tokens for a user with broader permissions")
+		return 0
+	}
 	return id
 }
 

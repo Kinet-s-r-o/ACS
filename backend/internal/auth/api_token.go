@@ -85,6 +85,16 @@ func APITokenMiddleware(tokens APITokenLookup, users UserLookup, roles APIRoleLo
 				return
 			}
 			permissions = append(permissions, role.Permissions...)
+			if role.IsSystem && role.Name == "admin" {
+				permissions = append([]string{}, models.AllPermissions...)
+				if lookup, ok := roles.(PermissionLookup); ok {
+					permissions, err = lookup.GetPermissions(req.Context(), roleID)
+					if err != nil {
+						writeAuthError(w, `{"error":"User role unavailable"}`, http.StatusServiceUnavailable)
+						return
+					}
+				}
+			}
 		} else if user.Role == models.RoleFull {
 			permissions = append(permissions, models.AllPermissions...)
 		}

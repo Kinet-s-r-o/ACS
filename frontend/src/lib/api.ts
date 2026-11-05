@@ -1,4 +1,5 @@
 import type { ColumnFilterState } from './filters';
+import type { PermissionCatalog } from './permissions';
 import { metricActiveRequest } from './metricActiveRequest';
 
 export const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:7548`;
@@ -219,6 +220,7 @@ export async function requestBlob(endpoint: string, options: RequestInit = {}): 
 }
 
 export const api = {
+  getPermissionCatalog: () => request<PermissionCatalog>('/permissions'),
   health: () => request<{ status: string }>('/health'),
   createDevice: (body: { serial_number: string; tags: string[]; factory_reset_on_first_inform: boolean; current_password?: string; totp_code?: string }) => request<Device>('/devices', { method: 'POST', body: JSON.stringify(body) }),
   getDevices: (limit = 50, offset = 0, columns?: string[], options?: DeviceListOptions) => {
@@ -402,7 +404,7 @@ export const api = {
   updateProvisioningTemplateLANPorts: (id: number, lanPortCount: number, lanPortMappings: ProvisioningLANPortMapping[]) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/lan-ports`, { method: 'PUT', body: JSON.stringify({ lan_port_count: lanPortCount, lan_port_mappings: lanPortMappings }) }),
   updateProvisioningTemplateCPEInfo: (id: number, cpeInfoFields: ProvisioningCPEInfoField[]) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/cpe-info`, { method: 'PUT', body: JSON.stringify({ cpe_info_fields: cpeInfoFields }) }),
   importTemplateFeature: (templateId: number, name: string, csv: string) => request<ProvisioningFeature>(`/provisioning/templates/${templateId}/features/import`, { method: 'POST', body: JSON.stringify({ name, csv }) }),
-  saveTemplateFeatures: (templateId: number, features: ProvisioningFeature[]) => request<{ features: ProvisioningFeature[] }>(`/provisioning/templates/${templateId}/features`, { method: 'PUT', body: JSON.stringify({ features }) }),
+  saveTemplateFeatures: (templateId: number, features: ProvisioningFeature[], deletedIDs: string[] = []) => request<{ features: ProvisioningFeature[] }>(`/provisioning/templates/${templateId}/features`, { method: 'PUT', body: JSON.stringify({ features, deleted_ids: deletedIDs }) }),
   deleteTemplateFeature: (templateId: number, featureId: string) => request<{ status: string }>(`/provisioning/templates/${templateId}/features/${encodeURIComponent(featureId)}`, { method: 'DELETE' }),
   setTemplateFeatureControl: (serial: string, featureId: string, key: string, enabled: boolean) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ enabled }) }),
   setTemplateFeatureStringControl: (serial: string, featureId: string, key: string, value: string) => request<{ task: Task; refresh_task: Task }>(`/device/${encodeURIComponent(serial)}/features/${encodeURIComponent(featureId)}/controls/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ value }) }),

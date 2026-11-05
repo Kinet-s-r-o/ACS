@@ -15,24 +15,24 @@ import { playUITransition, transitionSettingsFromAPI, updateUITransitionSettings
 
 const navigation = [
   { section: 'Monitor', items: [
-    { href: '/', label: 'Fleet status', icon: LayoutDashboard },
-    { href: '/devices', label: 'CPE inventory', icon: Router },
-    { href: '/tasks', label: 'CWMP tasks', icon: Activity },
-    { href: '/faults', label: 'CWMP faults', icon: AlertTriangle },
+    { href: '/', label: 'Fleet status', icon: LayoutDashboard, section: 'fleet' },
+    { href: '/devices', label: 'CPE inventory', icon: Router, section: 'inventory' },
+    { href: '/tasks', label: 'CWMP tasks', icon: Activity, section: 'tasks' },
+    { href: '/faults', label: 'CWMP faults', icon: AlertTriangle, section: 'faults' },
   ] },
   { section: 'Control', items: [
-    { href: '/firmwares', label: 'Firmware library', icon: HardDrive },
-    { href: '/security', label: 'Access controls', icon: ShieldCheck, fullOnly: true },
-    { href: '/settings', label: 'System settings', icon: Settings, children: [
-      { href: '/settings/general', label: 'General' },
-      { href: '/settings/system-tasks', label: 'System tasks', permission: 'devices.read' },
-      { href: '/settings/retention', label: 'DB tools' },
-      { href: '/settings/dictionaries', label: 'Dictionaries' },
-      { href: '/settings/users', label: 'Users and Roles' },
-      { href: '/settings/authentication', label: 'Authentication', permission: 'auth.settings.read' },
-      { href: '/settings/api-docs', label: 'API documentation' },
-      { href: '/settings/delivery', label: 'Delivery & Connection' },
-      { href: '/settings/provisioning', label: 'Provisioning' },
+    { href: '/firmwares', label: 'Firmware library', icon: HardDrive, section: 'firmwares' },
+    { href: '/security', label: 'Access controls', icon: ShieldCheck, section: 'security' },
+    { href: '/settings', label: 'System settings', icon: Settings, section: 'settings', children: [
+      { href: '/settings/general', label: 'General', section: 'settings.general' },
+      { href: '/settings/system-tasks', label: 'System tasks', section: 'settings.system_tasks' },
+      { href: '/settings/retention', label: 'DB tools', section: 'settings.database' },
+      { href: '/settings/dictionaries', label: 'Dictionaries', section: 'settings.dictionaries' },
+      { href: '/settings/users', label: 'Users and Roles', section: 'settings.users' },
+      { href: '/settings/authentication', label: 'Authentication', section: 'settings.authentication' },
+      { href: '/settings/api-docs', label: 'API documentation', section: 'settings.api_docs' },
+      { href: '/settings/delivery', label: 'Delivery & Connection', section: 'settings.delivery' },
+      { href: '/settings/provisioning', label: 'Provisioning', section: 'settings.provisioning' },
     ] },
   ] },
 ];
@@ -77,7 +77,7 @@ const Layout: ParentComponent = (props) => {
   const [apiOnline, setAPIOnline] = createSignal<boolean | null>(null);
   const [settingsExpanded, setSettingsExpanded] = createSignal(location.pathname.startsWith('/settings'));
   const [inventoryExpanded, setInventoryExpanded] = createSignal(false);
-  const { user, logout, isFullAccess, hasPermission } = useAuth();
+  const { user, logout, canVisit } = useAuth();
   let menuButton: HTMLButtonElement | undefined;
   let previousContentLocation = `${location.pathname}${location.search}`;
 
@@ -149,7 +149,7 @@ const Layout: ParentComponent = (props) => {
             {(group) => (
               <div class="nav-group">
                 <p class="nav-section">{group.section}</p>
-                <For each={group.items.filter((item) => !item.fullOnly || isFullAccess())}>
+                <For each={group.items.filter(item => canVisit(item.section))}>
                   {(item) => (
                     <div>
                       <Show when={item.children}>
@@ -166,7 +166,7 @@ const Layout: ParentComponent = (props) => {
                         </Show>
                         <Show when={item.href === '/devices' ? inventoryExpanded() : settingsExpanded()}>
                           <div class="nav-submenu">
-                            <For each={(item.children ?? []).filter(child => !('permission' in child) || !child.permission || hasPermission(child.permission))}>
+                            <For each={(item.children ?? []).filter(child => canVisit(child.section))}>
                               {(child) => (
                                 <A href={child.href} onClick={() => setSidebarOpen(false)} class={`nav-link nav-link-sub ${isActive(child.href) ? 'is-active' : ''}`} aria-current={isActive(child.href) ? 'page' : undefined}>
                                   <span>{child.label}</span>
@@ -196,7 +196,7 @@ const Layout: ParentComponent = (props) => {
             <div class="operator-avatar">{operatorInitials()}</div>
             <div class="operator-copy">
               <strong>{operatorName()}</strong>
-              <span>{isFullAccess() ? 'Full access' : 'Read only'}</span>
+              <span>{user()?.role === 'full' ? 'Administrator' : 'Custom access'}</span>
             </div>
             <button class="icon-button" onClick={logout} aria-label="Sign out" title="Sign out"><LogOut size={16} /></button>
           </div>

@@ -1,5 +1,7 @@
 # Frontend area router
 
+Section/tab authorization: [permission model](../docs/permission-expansion-plan.md), `lib/permissions.ts`, `components/SectionPage.tsx`, `pages/RolesTab.tsx` and route/menu/tab guards. Use `can(section, action)` for actions and `canVisit(section)` for navigation. Full applies only to its row. Older permission names below identify internal component adapters.
+
 | Folder or file | What lives there | Read before changing |
 | --- | --- | --- |
 | `src/App.tsx` | SolidJS router, auth boundary, lazy page registration | Target page and `lib/auth.tsx` |

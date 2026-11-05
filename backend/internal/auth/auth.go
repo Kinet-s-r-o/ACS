@@ -153,9 +153,13 @@ func AuthMiddleware(users UserLookup, perms PermissionLookup, next http.Handler)
 		// Resolve permissions from the role.
 		if perms != nil && claims.RoleID != 0 {
 			permissionList, permErr := perms.GetPermissions(r.Context(), claims.RoleID)
-			if permErr == nil && permissionList != nil {
-				ctx = context.WithValue(ctx, PermissionsContextKey, permissionList)
+			if permErr != nil || permissionList == nil {
+				writeAuthError(w, `{"error":"User role unavailable"}`, http.StatusServiceUnavailable)
+				return
 			}
+			ctx = context.WithValue(ctx, PermissionsContextKey, permissionList)
+		} else if claims.RoleID == 0 && user.Role == models.RoleFull {
+			ctx = context.WithValue(ctx, PermissionsContextKey, append([]string{}, models.AllPermissions...))
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -191,6 +195,10 @@ func GetPermissionsFromContext(ctx context.Context) []string {
 func RequirePermission(perm string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if OperationAuthorized(r.Context()) {
+				next(w, r)
+				return
+			}
 			claims := GetUserFromContext(r.Context())
 			if claims == nil {
 				writeAuthError(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -224,6 +232,10 @@ func RequirePermission(perm string) func(http.HandlerFunc) http.HandlerFunc {
 func RequireAnyPermission(perms ...string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if OperationAuthorized(r.Context()) {
+				next(w, r)
+				return
+			}
 			claims := GetUserFromContext(r.Context())
 			if claims == nil {
 				writeAuthError(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -253,6 +265,10 @@ func RequireAnyPermission(perms ...string) func(http.HandlerFunc) http.HandlerFu
 
 func RequireFullAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if OperationAuthorized(r.Context()) {
+			next(w, r)
+			return
+		}
 		claims := GetUserFromContext(r.Context())
 		if claims == nil {
 			writeAuthError(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)

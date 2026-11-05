@@ -17,7 +17,7 @@ import (
 
 func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -57,6 +57,9 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		} else {
 			respondError(w, http.StatusInternalServerError, "Failed to load source template")
 		}
+		return
+	}
+	if !requireProvisioningSections(w, req, "edit", source.Features) {
 		return
 	}
 	inventory := source.Inventory

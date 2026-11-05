@@ -4,6 +4,7 @@ import { Ban, RefreshCw, Trash2, Search, X } from 'lucide-solid';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
+import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import ColumnFilter from '../components/ColumnFilter';
 import Pagination from '../components/Pagination';
@@ -17,11 +18,12 @@ import { formatDateTime } from '../lib/dateTime';
 import { usePageSize } from '../lib/usePageSize';
 
 const Security: Component = () => {
+  const { can } = useAuth();
   const { confirm, notify } = useFeedback();
-  const [overview, { refetch: refetchOverview }] = createResource(() => api.getSecurityOverview());
+  const [overview, { refetch: refetchOverview }] = createResource(() => can('security', 'read'), () => api.getSecurityOverview());
   const [auditPage, setAuditPage] = createSignal(0);
   const { pageSize: auditPageSize, changePageSize: changeAuditPageSize } = usePageSize('security_audit', 20);
-  const [blocked, { refetch: refetchBlocked }] = createResource(() => api.getBlockedDevices());
+  const [blocked, { refetch: refetchBlocked }] = createResource(() => can('security.blocklist', 'read'), () => api.getBlockedDevices());
   const [serial, setSerial] = createSignal('');
   const [reason, setReason] = createSignal('');
   const [saving, setSaving] = createSignal(false);
@@ -31,7 +33,7 @@ const Security: Component = () => {
   const [auditSearch, setAuditSearch] = createPersistedSignal('acs.search.security.audit');
   const [auditSort, setAuditSort] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.security-audit', { column: 'created_at', direction: 'desc' });
   const [audit, { refetch: refetchAudit }] = createResource(
-    () => ({ page: auditPage(), size: auditPageSize(), search: auditSearch(), sort: auditSort(), filters: columnFilters() }),
+    () => can('security.audit', 'read') ? ({ page: auditPage(), size: auditPageSize(), search: auditSearch(), sort: auditSort(), filters: columnFilters() }) : false,
     (query) => api.getAuditLogs(query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters })
   );
   const handleAuditSort = (column: string) => { setAuditPage(0); setAuditSort(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
@@ -96,28 +98,28 @@ const Security: Component = () => {
         <div class="card"><ResourceError title="Security data is incomplete" description="One or more security registers could not be loaded. Retry before making an admission or operator decision." onRetry={refreshAll} /></div>
       </Show>
 
-      <dl class="ops-register security-register" aria-label="Security posture register">
+      <Show when={can('security', 'read')}><dl class="ops-register security-register" aria-label="Security posture register">
         <div class="ops-register-cell"><dt>Operators</dt><dd>{overview()?.total_users ?? '—'}</dd><small>{overview()?.full_access_admins ?? 0} full-access admins</small></div>
         <div class="ops-register-cell"><dt>Failed events</dt><dd>{overview()?.recorded_failures ?? '—'}</dd><small>Recorded in audit trail</small></div>
         <div class={`ops-register-cell is-text ${overview() && !overview()?.jwt_configured ? 'is-warning' : ''}`}><dt>JWT signing</dt><dd>{overview() ? overview()?.jwt_configured ? 'Configured' : 'Review required' : '—'}</dd><small>{overview()?.jwt_configured ? 'Signing secret is active' : 'Verify the signing-secret configuration'}</small></div>
         <div class={`ops-register-cell is-text ${overview() && (!overview()?.cors_restricted || !overview()?.login_rate_limit_enabled) ? 'is-warning' : ''}`}><dt>API controls</dt><dd>{overview() ? overview()?.cors_restricted && overview()?.login_rate_limit_enabled ? 'Restricted' : 'Review required' : '—'}</dd><small>{overview()?.cors_restricted && overview()?.login_rate_limit_enabled ? 'CORS and login throttling active' : 'Verify CORS and login throttling'}</small></div>
-      </dl>
+      </dl></Show>
 
       <div class="grid xl:grid-cols-[.8fr_1.2fr] gap-4">
-        <section class="data-panel overflow-hidden">
+        <Show when={can('security.blocklist', 'read')}><section class="data-panel overflow-hidden">
           <div class="p-4 border-b border-subtle"><h3 class="text-sm font-semibold">Device admission blocklist</h3><p class="text-[11px] text-muted mt-1">Blocked serials are rejected before registration or parameter processing.</p></div>
-          <form onSubmit={blockDevice} class="p-4 grid sm:grid-cols-2 gap-3 border-b border-subtle bg-elevated/20">
+          <Show when={can('security.blocklist', 'edit')}><form onSubmit={blockDevice} class="p-4 grid sm:grid-cols-2 gap-3 border-b border-subtle bg-elevated/20">
             <div><label for="block-serial" class="block text-[11px] text-muted mb-1.5">CPE serial number</label><input id="block-serial" class="input" value={serial()} onInput={(event) => setSerial(event.currentTarget.value)} required maxlength={128} placeholder="48575443…" /></div>
             <div><label for="block-reason" class="block text-[11px] text-muted mb-1.5">Admission reason</label><input id="block-reason" class="input" value={reason()} onInput={(event) => setReason(event.currentTarget.value)} maxlength={512} placeholder="Unrecognized deployment inventory" /></div>
             <button class="btn btn-danger sm:col-span-2" disabled={saving()}><Ban size={14} />{saving() ? 'Blocking…' : 'Block device'}</button>
-          </form>
+          </form></Show>
           <Show when={blocked.loading}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
           <Show when={!blocked.loading && !blocked.error && (blocked()?.length ?? 0) > 0} fallback={!blocked.loading && !blocked.error ? <EmptyState compact title="Admission blocklist is empty" description="No CPE serial numbers are currently denied by an operator rule." /> : undefined}>
-            <div class="max-h-80 overflow-auto"><For each={blocked()}>{(device) => <div class="flex items-center gap-3 px-4 py-3 border-b border-subtle last:border-0"><Ban size={14} class="text-red-400 shrink-0" /><div class="min-w-0 flex-1"><strong class="block font-mono text-xs truncate">{device.serial_number}</strong><span class="block text-[10px] text-muted truncate">{device.reason || 'No reason recorded'} · {device.created_by}</span></div><button class="icon-button" aria-label={`Unblock CPE ${device.serial_number}`} onClick={() => unblock(device.serial_number)} disabled={pendingUnblock() !== null}><Trash2 size={14} /></button></div>}</For></div>
+            <div class="max-h-80 overflow-auto"><For each={blocked()}>{(device) => <div class="flex items-center gap-3 px-4 py-3 border-b border-subtle last:border-0"><Ban size={14} class="text-red-400 shrink-0" /><div class="min-w-0 flex-1"><strong class="block font-mono text-xs truncate">{device.serial_number}</strong><span class="block text-[10px] text-muted truncate">{device.reason || 'No reason recorded'} · {device.created_by}</span></div><button class="icon-button" aria-label={`Unblock CPE ${device.serial_number}`} onClick={() => unblock(device.serial_number)} disabled={!can('security.blocklist', 'delete') || pendingUnblock() !== null}><Trash2 size={14} /></button></div>}</For></div>
           </Show>
-        </section>
+        </section></Show>
 
-        <section class="data-panel overflow-hidden">
+        <Show when={can('security.audit', 'read')}><section class="data-panel overflow-hidden">
           <div class="table-panel-toolbar"><div><h3>Operator audit trail</h3><p>Append-only record of login and mutation activity.</p></div><div class="flex items-center gap-2"><div class="relative"><Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" /><input type="text" value={auditSearch()} onInput={(e) => { setAuditPage(0); setAuditSearch(e.currentTarget.value); }} placeholder="Search events…" class="input pl-9! w-48 text-sm" /><Show when={auditSearch()}><button onClick={() => { setAuditPage(0); setAuditSearch(''); }} class="input-clear" aria-label="Clear search"><X size={12} /></button></Show></div><span class="badge badge-success">{audit()?.total ?? 0} events</span></div></div>
           <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
             <table class="data-table min-w-[720px]"><thead class="sticky top-0 opaque-table-header"><tr>
@@ -134,7 +136,7 @@ const Security: Component = () => {
             <Show when={audit.loading}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
             <Show when={!audit.loading && !audit.error && (audit()?.total ?? 0) === 0}><EmptyState compact title="No operator security events are recorded" description="Authentication and mutation events will appear after operators begin using this deployment." /></Show>
           </div>
-        </section>
+        </section></Show>
         <div class="xl:col-span-2"><Pagination page={auditPage()} totalPages={auditTotalPages()} totalItems={filteredAudit().length} pageSize={auditPageSize()} onPageChange={setAuditPage} storageKey="security_audit" onPageSizeChange={(size) => { changeAuditPageSize(size); setAuditPage(0); }} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setAuditPage(0); }} onRemoveFilter={(columnId) => { updateAuditFilter(columnId, null); }} /></div>
       </div>
     </div>

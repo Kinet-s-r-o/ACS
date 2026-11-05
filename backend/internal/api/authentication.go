@@ -123,6 +123,10 @@ func authenticationError(err error) (int, string) {
 // These grants also bypass the legacy full-role fallback when permission lookup fails.
 func requireAuthSettingsPermission(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		if auth.OperationAuthorized(req.Context()) {
+			next(w, req)
+			return
+		}
 		for _, grant := range auth.GetPermissionsFromContext(req.Context()) {
 			if grant == permission {
 				next(w, req)

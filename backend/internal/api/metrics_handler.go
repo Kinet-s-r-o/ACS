@@ -22,6 +22,9 @@ func (r *Router) handleListMetricDefinitions(w http.ResponseWriter, req *http.Re
 		respondError(w, http.StatusInternalServerError, "Failed to list metric definitions")
 		return
 	}
+	for index := range defs {
+		redactMetricTabs(req, &defs[index], "settings.metrics")
+	}
 	respondJSON(w, http.StatusOK, defs)
 }
 
@@ -36,12 +39,15 @@ func (r *Router) handleTemplateMetricDefinitions(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusInternalServerError, "Failed to list template metrics")
 		return
 	}
+	for index := range defs {
+		redactMetricTabs(req, &defs[index], "settings.provisioning.metrics.general")
+	}
 	respondJSON(w, http.StatusOK, defs)
 }
 
 func (r *Router) handleSaveTemplateMetric(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -61,6 +67,22 @@ func (r *Router) handleSaveTemplateMetric(w http.ResponseWriter, req *http.Reque
 	if err := decoder.Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+	if auth.OperationAuthorized(req.Context()) {
+		if req.Method == http.MethodPost && !requestCan(req, "settings.provisioning.metrics.general.metric", "edit") {
+			respondError(w, http.StatusForbidden, "Metric edit permission required to create a metric")
+			return
+		}
+		var previous *models.MetricDefinition
+		if req.Method == http.MethodPut {
+			var stored models.MetricDefinition
+			if err := r.db.WithContext(req.Context()).Where("id = ? AND template_id = ?", req.PathValue("metricID"), templateID).First(&stored).Error; err != nil {
+				respondError(w, http.StatusNotFound, "Template metric not found")
+				return
+			}
+			previous = &stored
+		}
+		mergeMetricPermissions(req, &body, previous, "settings.provisioning.metrics.general")
 	}
 	defaultMetricHistory(&body)
 	if body.Source == "" {
@@ -114,7 +136,7 @@ func (r *Router) handleSaveTemplateMetric(w http.ResponseWriter, req *http.Reque
 
 func (r *Router) handleDeleteTemplateMetric(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -163,7 +185,7 @@ func (r *Router) handleDeviceMetricDefinitions(w http.ResponseWriter, req *http.
 
 func (r *Router) handleCreateMetricDefinition(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -172,7 +194,7 @@ func (r *Router) handleCreateMetricDefinition(w http.ResponseWriter, req *http.R
 
 func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}
@@ -181,7 +203,7 @@ func (r *Router) handleUpdateMetricDefinition(w http.ResponseWriter, req *http.R
 
 func (r *Router) handleDeleteMetricDefinition(w http.ResponseWriter, req *http.Request) {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return
 	}

@@ -20,7 +20,8 @@ import { formatDateTime } from '../lib/dateTime';
 
 const Faults: Component = () => {
   type FaultView = 'active' | 'resolved' | 'all' | 'active-watchdog' | 'resolved-watchdog' | 'all-watchdog';
-  const { isFullAccess } = useAuth();
+  const { can } = useAuth();
+  const isFullAccess = () => can('faults', 'edit') || can('faults', 'delete');
   const { confirm, notify } = useFeedback();
   const [filter, setFilter] = createSignal<'all' | 'active' | 'resolved'>('active');
   const [faultGroup, setFaultGroup] = createSignal<'cwmp' | 'watchdog'>('cwmp');
@@ -216,7 +217,7 @@ const Faults: Component = () => {
         </button>
       </div>
 
-      <Show when={isFullAccess() && selectedFaults().size > 0}>
+      <Show when={can('faults', 'delete') && selectedFaults().size > 0}>
         <div class="flex justify-end">
           <button onClick={handleBulkDelete} class="btn btn-danger" disabled={bulkDeleting()}>
             <Trash2 size={14} />
@@ -251,7 +252,7 @@ const Faults: Component = () => {
               type="button"
               class="icon-button"
               onClick={exportFaultsCSV}
-              disabled={faults.loading || filteredFaults().length === 0}
+              disabled={!can('faults', 'export') || faults.loading || filteredFaults().length === 0}
               title="Export filtered faults as CSV"
               aria-label={`Export ${filteredFaults().length} filtered CWMP faults as CSV`}
             >
@@ -412,7 +413,7 @@ const Faults: Component = () => {
                         </Show>
                         <td data-column-order-id="actions#0" class="px-4 py-3 text-right">
                           <div class="flex items-center justify-end gap-2">
-                            <Show when={!fault.resolved && isFullAccess()}>
+                            <Show when={!fault.resolved && can('faults', 'edit')}>
                               <button 
                                 onClick={() => handleResolve(fault.id)}
                                 class="icon-button hover:text-emerald-400"
@@ -422,7 +423,7 @@ const Faults: Component = () => {
                                 <CheckCircle size={14} />
                               </button>
                             </Show>
-                            <Show when={isFullAccess()}><button
+                            <Show when={can('faults', 'delete')}><button
                               onClick={() => handleDelete(fault.id)}
                               class="icon-button hover:text-rose-400"
                               aria-label={`Delete fault ${fault.fault_code}`}

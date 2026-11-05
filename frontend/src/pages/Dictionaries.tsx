@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js';
 import { Edit, Plus, Save, Search, Tags, Trash2, X } from 'lucide-solid';
 import { api, type TagDefinition } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
@@ -19,8 +19,10 @@ import Pagination from '../components/Pagination';
 import { usePageSize } from '../lib/usePageSize';
 
 const Dictionaries: Component = () => {
-  const { hasPermission } = useAuth();
-  const canManageTags = () => hasPermission('settings.write');
+  const { can } = useAuth();
+  usePermissionSection(() => 'settings.dictionaries.tags');
+  const canManageTags = () => can('settings.dictionaries.tags', 'edit');
+  const canShowActions = () => canManageTags() || can('settings.dictionaries.tags', 'delete');
   const { notify, confirm } = useFeedback();
   const [tags, { refetch }] = createResource(api.getTags);
   const [editing, setEditing] = createSignal<TagDefinition | null>(null);
@@ -137,13 +139,13 @@ const Dictionaries: Component = () => {
               <Show when={isVisible('name')}><th data-column-order-id="tag#0" class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="name" label="Tag" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="name" label="Tag" active={columnFilters().name || null} onApply={state => applyFilter('name', state)} /></SortableHeader></th></Show>
               <Show when={isVisible('description')}><th data-column-order-id="description#0" class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="description" label="Description" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="description" label="Description" active={columnFilters().description || null} onApply={state => applyFilter('description', state)} /></SortableHeader></th></Show>
               <Show when={isVisible('color')}><th data-column-order-id="color#0" class="text-left px-3 py-2.5 font-semibold text-primary"><SortableHeader column="color" label="Color" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="color" label="Color" active={columnFilters().color || null} onApply={state => applyFilter('color', state)} /></SortableHeader></th></Show>
-              <Show when={canManageTags()}><th data-column-order-id="actions#0" data-column-fixed="actions" class="px-3 py-2 text-left font-semibold text-primary">Actions</th></Show><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
+              <Show when={canShowActions()}><th data-column-order-id="actions#0" data-column-fixed="actions" class="px-3 py-2 text-left font-semibold text-primary">Actions</th></Show><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="px-2 py-2"><ColumnVisibility columns={columns} onToggle={toggle} /></th>
             </tr></thead>
             <tbody><For each={pagedTags()}>{tag => <tr class="border-t border-subtle hover:bg-elevated/30">
               <Show when={isVisible('name')}><td data-column-order-id="tag#0" class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td></Show>
               <Show when={isVisible('description')}><td data-column-order-id="description#0" class="px-3 py-2.5 text-secondary">{tag.description || <span class="text-muted">—</span>}</td></Show>
               <Show when={isVisible('color')}><td data-column-order-id="color#0" class="px-3 py-2.5 font-mono text-xs text-secondary">{tag.color}</td></Show>
-              <Show when={canManageTags()}><td data-column-fixed="actions" data-column-order-id="actions#0" class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show><td data-column-fixed="visibility" data-column-order-id="__visibility#0" />
+              <Show when={canShowActions()}><td data-column-fixed="actions" data-column-order-id="actions#0" class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" disabled={!canManageTags()} onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={!can('settings.dictionaries.tags', 'delete') || deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show><td data-column-fixed="visibility" data-column-order-id="__visibility#0" />
             </tr>}</For></tbody>
           </table></div>
           </Show>

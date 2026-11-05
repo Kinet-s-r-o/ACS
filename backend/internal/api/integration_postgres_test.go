@@ -139,7 +139,7 @@ func TestIntegrationAPIPostgres(t *testing.T) {
 	if err := database.ConfigureParameterEncryption(strings.Repeat("test-only-key-", 3)); err != nil {
 		t.Fatal(err)
 	}
-	role := &models.Role{Name: "integration", Permissions: []string{models.PermDevicesRead, models.PermDevicesWrite}}
+	role := &models.Role{Name: "integration", Permissions: []string{models.PermissionKey("inventory.cpes", "read"), models.PermissionKey("inventory.cpes.maintenance.diagnostic", "read"), models.PermissionKey("inventory.cpes.maintenance.diagnostic", "edit"), models.PermissionKey("inventory.cpes.tasks", "read"), models.PermissionKey("inventory.cpes.tasks.requested", "read"), models.PermissionKey("inventory.cpes.tasks.result", "read")}}
 	if err := db.Create(role).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestIntegrationAPIPostgres(t *testing.T) {
 	}
 	assertCode(call("GET", basePath+"/parameters", "", credential.Token, "", false), 403)
 	assertCode(call("POST", basePath+"/write", writeBody, credential.Token, "another-request", false), 403)
-	if err := db.Model(role).Update("permissions", models.JSON(`["devices.read"]`)).Error; err != nil {
+	if err := db.Model(role).Update("permissions", models.JSON(`["access.inventory.cpes.maintenance.diagnostic.read"]`)).Error; err != nil {
 		t.Fatal(err)
 	}
 	assertCode(call("GET", basePath+"/parameters", "", credential.Token, "", false), 200)

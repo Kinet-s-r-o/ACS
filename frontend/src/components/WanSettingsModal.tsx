@@ -1,5 +1,6 @@
-import { createSignal, createMemo, Show, For, type Component } from 'solid-js';
+import { createSignal, createMemo, createEffect, Show, For, type Component } from 'solid-js';
 import { api, type DeviceParameter } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useFeedback } from './Feedback';
 import Dialog from './Dialog';
 import { Save, Send, Check } from 'lucide-solid';
@@ -27,6 +28,15 @@ const TABS: { id: TabId; label: string }[] = [
 const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
   const { notify } = useFeedback();
   const [activeTab, setActiveTab] = createSignal<TabId>('general');
+  const { can } = useAuth();
+  const section = (tab: TabId) => `inventory.cpes.overview.wan.${tab}`;
+  const canEditTab = () => can(section(activeTab()), 'edit');
+  createEffect(() => {
+    if (!can(section(activeTab()), 'read')) {
+      const first = TABS.find(tab => can(section(tab.id), 'read'));
+      if (first) setActiveTab(first.id);
+    }
+  });
   const [saving, setSaving] = createSignal(false);
   const [saved, setSaved] = createSignal(false);
   const [summoning, setSummoning] = createSignal(false);
@@ -180,7 +190,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
           <button
             id={`wan-${key}`}
             type="button"
-            disabled={!writable || !props.isFullAccess}
+            disabled={!writable || !canEditTab()}
             onClick={() => setValue(field, value === '1' || value === 'true' ? '0' : '1')}
             class={`badge cursor-pointer ${value === '1' || value === 'true' ? 'badge-success' : 'badge-error'}`}
             aria-pressed={value === '1' || value === 'true'}
@@ -192,7 +202,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
           <select
             id={`wan-${key}`}
             value={value}
-            disabled={!writable || !props.isFullAccess}
+            disabled={!writable || !canEditTab()}
             onChange={(e) => setValue(field, e.currentTarget.value)}
             class="input py-1.5 px-2 text-sm"
           >
@@ -205,14 +215,14 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
             id={`wan-${key}`}
             type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
             value={value}
-            disabled={!writable || !props.isFullAccess}
+            disabled={!writable || !canEditTab()}
             onInput={(e) => setValue(field, e.currentTarget.value)}
             placeholder={field.placeholder}
             class={`input py-1.5 px-2 text-sm ${error ? 'border-red-500' : ''}`}
           />
         </Show>
         <Show when={error}><span class="text-xs text-red-400">{error}</span></Show>
-        <Show when={!writable && props.isFullAccess}><span class="text-[10px] text-muted">Read-only on this device</span></Show>
+        <Show when={!writable && canEditTab()}><span class="text-[10px] text-muted">Read-only on this device</span></Show>
       </div>
     );
   };
@@ -236,7 +246,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
         <Show when={saved()} fallback={
           <div class="flex items-center gap-2">
             <button onClick={props.onClose} class="btn btn-secondary">Cancel</button>
-            <button type="button" onClick={handleSave} disabled={!hasChanges() && !hasGenericChanges() || saving()} class="btn btn-primary">
+            <button type="button" onClick={handleSave} disabled={!canEditTab() || (!hasChanges() && !hasGenericChanges()) || saving()} class="btn btn-primary">
               <Save size={14} />
               {saving() ? 'Saving…' : 'Save changes'}
             </button>
@@ -244,7 +254,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
         }>
           <div class="flex items-center gap-2">
             <span class="flex items-center gap-1 text-xs text-emerald-400"><Check size={14} /> Task created</span>
-            <button onClick={handleSummon} disabled={summoning()} class="btn btn-primary">
+            <button onClick={handleSummon} disabled={!can('inventory.cpes.overview', 'edit') || summoning()} class="btn btn-primary">
               <Send size={14} />
               {summoning() ? 'Summoning…' : 'Summon device'}
             </button>
@@ -254,7 +264,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
       }
     >
       <div class="flex gap-1 mb-4 border-b border-subtle pb-2">
-        <For each={TABS}>{(tab) => (
+        <For each={TABS.filter(tab => can(section(tab.id), 'read'))}>{(tab) => (
           <button
             type="button"
             onClick={() => setActiveTab(tab.id)}
@@ -268,7 +278,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
       <Show when={validationMessage()}>{message => <div class="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">{message().label}: {message().message}</div>}</Show>
 
       <div class="space-y-4 max-h-80 overflow-y-auto pr-1">
-        <Show when={activeTab() === 'general'}>
+        <Show when={can(section('general'), 'read') && activeTab() === 'general'}>
           <div class="grid grid-cols-2 gap-4">
             <For each={fieldsForTab('general')}>{(field) => renderField(field)}</For>
           </div>
@@ -281,7 +291,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
             </div>
           </Show>
         </Show>
-        <Show when={activeTab() === 'ipv4'}>
+        <Show when={can(section('ipv4'), 'read') && activeTab() === 'ipv4'}>
           <Show when={isRoutedMode()} fallback={
             <p class="text-muted text-sm">Switch WAN Mode to IP_Routed to configure IPv4 settings.</p>
           }>
@@ -290,7 +300,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
             </div>
           </Show>
         </Show>
-        <Show when={activeTab() === 'ipv6'}>
+        <Show when={can(section('ipv6'), 'read') && activeTab() === 'ipv6'}>
           <Show when={isRoutedMode()} fallback={
             <p class="text-muted text-sm">Switch WAN Mode to IP_Routed to configure IPv6 settings.</p>
           }>
@@ -299,7 +309,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
             </div>
           </Show>
         </Show>
-        <Show when={activeTab() === 'advanced'}>
+        <Show when={can(section('advanced'), 'read') && activeTab() === 'advanced'}>
           <div class="grid grid-cols-2 gap-4">
             <For each={fieldsForTab('advanced')}>{(field) => renderField(field)}</For>
           </div>
@@ -317,7 +327,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
                         id={`wan-generic-${p.name}`}
                         type="text"
                         value={genericEdits()[p.name] ?? p.value}
-                        disabled={!props.isFullAccess}
+                        disabled={!canEditTab()}
                         onInput={(e) => setGenericEdits({ ...genericEdits(), [p.name]: e.currentTarget.value })}
                         class="input py-1.5 px-2 text-sm font-mono"
                       />

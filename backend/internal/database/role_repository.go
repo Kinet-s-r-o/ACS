@@ -110,6 +110,13 @@ func (r *RoleRepository) GetPermissions(ctx context.Context, roleID int64) ([]st
 		}
 		return nil, err
 	}
+	if role.IsSystem && role.Name == "admin" {
+		sections, err := r.PermissionCatalog(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return CatalogPermissionKeys(sections), nil
+	}
 	return role.Permissions, nil
 }
 

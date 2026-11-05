@@ -31,11 +31,11 @@ const statusClass = (status: SystemTaskStatus) => {
 };
 
 const SystemTasks: Component = () => {
-  const { hasPermission, hasAnyPermission } = useAuth();
+  const { can } = useAuth();
   const { confirm, notify } = useFeedback();
-  const canConfigure = () => hasPermission('settings.read') && hasPermission('settings.write');
-  const canManageTasks = () => hasAnyPermission('devices.command', 'devices.write');
-  const canClearTasks = () => hasAnyPermission('devices.delete', 'devices.write');
+  const canConfigure = () => can(`settings.system_tasks.${settingsType()}`, 'edit');
+  const canManageTasks = () => expandedType() !== null && can(`settings.system_tasks.${expandedType()}`, 'edit');
+  const canClearTasks = (type: SystemTaskType) => can(`settings.system_tasks.${type}`, 'delete');
   const [expandedType, setExpandedType] = createSignal<SystemTaskType | null>(null);
   const [taskSearch, setTaskSearch] = createSignal('');
   const [taskPage, setTaskPage] = createSignal(0);
@@ -166,7 +166,7 @@ const SystemTasks: Component = () => {
 
       <div class="card p-0 overflow-hidden">
         <div class="px-4 py-2.5 bg-elevated text-xs font-semibold text-secondary">Queue</div>
-        <For each={taskGroups}>{(group) => {
+        <For each={taskGroups.filter(group => can(`settings.system_tasks.${group.type}`, 'read'))}>{(group) => {
           const counts = () => summaryCounts(group.type);
           const expanded = () => expandedType() === group.type;
           return (
@@ -186,12 +186,12 @@ const SystemTasks: Component = () => {
                   <button type="button" class="icon-button" onClick={() => void refreshGroup()} title={`Refresh ${group.label} queue`} aria-label={`Refresh ${group.label} queue`}>
                     <RefreshCw size={14} aria-hidden="true" />
                   </button>
-                  <Show when={(group.type === 'bulk_summon' || group.type === 'bulk_restart') && canConfigure()}>
+                  <Show when={(group.type === 'bulk_summon' || group.type === 'bulk_restart') && can(`settings.system_tasks.${group.type}`, 'edit')}>
                     <button type="button" class="icon-button" onClick={() => void openSettings(group.type as 'bulk_summon' | 'bulk_restart')} title={`${group.label} settings`} aria-label={`${group.label} settings`}>
                       <Settings size={14} aria-hidden="true" />
                     </button>
                   </Show>
-                  <Show when={canClearTasks()}>
+                  <Show when={canClearTasks(group.type)}>
                     <button type="button" class="icon-button text-error" onClick={() => void clearFinished(group.type)} disabled={busyAction() === `clear-${group.type}`} title={`Clear finished ${group.label} tasks`} aria-label={`Clear finished ${group.label} tasks`}>
                       <Trash2 size={14} aria-hidden="true" />
                     </button>

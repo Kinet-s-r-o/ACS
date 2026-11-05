@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './lib/auth';
 import { useTheme } from './lib/theme';
 import { appName } from './lib/appName';
 import Layout from './components/Layout';
+import SectionPage from './components/SectionPage';
 import { FeedbackProvider } from './components/Feedback';
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -50,25 +51,25 @@ const App: Component = () => {
         <Router root={(props) => <div>{props.children}</div>}>
           <Route path="/login" component={Login} />
           <Route path="/" component={ProtectedLayout}>
-            <Route path="/" component={Dashboard} />
-            <Route path="/devices" component={Devices} />
+            <Route path="/" component={() => <SectionPage section="fleet"><Dashboard /></SectionPage>} />
+            <Route path="/devices" component={() => <SectionPage section="inventory"><Devices /></SectionPage>} />
             <Route path="/devices/wan-interfaces" component={() => <Navigate href="/devices?tab=wans" />} />
-            <Route path="/tasks" component={Tasks} />
-            <Route path="/device/:serial" component={DeviceDetail} />
-            <Route path="/faults" component={Faults} />
-            <Route path="/firmwares" component={Firmwares} />
-            <Route path="/security" component={Security} />
-            <Route path="/settings" component={Settings} />
-            <Route path="/settings/users" component={Users} />
-            <Route path="/settings/authentication" component={AuthenticationSettings} />
-            <Route path="/settings/authentication/radius" component={RadiusAuthenticationSettings} />
-            <Route path="/settings/api-docs" component={APIDocs} />
-            <Route path="/settings/delivery" component={Delivery} />
-            <Route path="/settings/provisioning" component={Provisioning} />
-            <Route path="/settings/general" component={GeneralSettings} />
-            <Route path="/settings/system-tasks" component={SystemTasks} />
-            <Route path="/settings/retention" component={RetentionSettings} />
-            <Route path="/settings/dictionaries" component={Dictionaries} />
+            <Route path="/tasks" component={() => <SectionPage section="tasks"><Tasks /></SectionPage>} />
+            <Route path="/device/:serial" component={() => <SectionPage section="inventory.cpes"><DeviceDetail /></SectionPage>} />
+            <Route path="/faults" component={() => <SectionPage section="faults"><Faults /></SectionPage>} />
+            <Route path="/firmwares" component={() => <SectionPage section="firmwares"><Firmwares /></SectionPage>} />
+            <Route path="/security" component={() => <SectionPage section="security"><Security /></SectionPage>} />
+            <Route path="/settings" component={() => <SectionPage section="settings"><Settings /></SectionPage>} />
+            <Route path="/settings/users" component={() => <SectionPage section="settings.users"><Users /></SectionPage>} />
+            <Route path="/settings/authentication" component={() => <SectionPage section="settings.authentication"><AuthenticationSettings /></SectionPage>} />
+            <Route path="/settings/authentication/radius" component={() => <SectionPage section="settings.authentication.radius"><RadiusAuthenticationSettings /></SectionPage>} />
+            <Route path="/settings/api-docs" component={() => <SectionPage section="settings.api_docs"><APIDocs /></SectionPage>} />
+            <Route path="/settings/delivery" component={() => <SectionPage section="settings.delivery"><Delivery /></SectionPage>} />
+            <Route path="/settings/provisioning" component={() => <SectionPage section="settings.provisioning"><Provisioning /></SectionPage>} />
+            <Route path="/settings/general" component={() => <SectionPage section="settings.general"><GeneralSettings /></SectionPage>} />
+            <Route path="/settings/system-tasks" component={() => <SectionPage section="settings.system_tasks"><SystemTasks /></SectionPage>} />
+            <Route path="/settings/retention" component={() => <SectionPage section="settings.database"><RetentionSettings /></SectionPage>} />
+            <Route path="/settings/dictionaries" component={() => <SectionPage section="settings.dictionaries"><Dictionaries /></SectionPage>} />
           </Route>
         </Router>
       </FeedbackProvider>

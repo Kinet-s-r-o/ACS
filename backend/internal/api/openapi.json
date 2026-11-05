@@ -150,7 +150,7 @@
           "CPE integration"
         ],
         "summary": "List registered CPEs",
-        "description": "Requires devices.read. Ordered by numeric device ID ascending; keyset pagination avoids loading the whole fleet.",
+        "description": "Requires access.inventory.cpes.read (or Full on that row). Ordered by numeric device ID ascending; keyset pagination avoids loading the whole fleet.",
         "responses": {
           "200": {
             "description": "Successful response.",
@@ -302,7 +302,7 @@
           "CPE integration"
         ],
         "summary": "Read CPE identity and availability",
-        "description": "Requires devices.read. Returns latest stored identity, without connection-request credentials. Does not contact the CPE.",
+        "description": "Requires Read on inventory.cpes or a CPE detail tab. Returns latest stored identity, without connection-request credentials. Does not contact the CPE.",
         "responses": {
           "200": {
             "description": "Successful response.",
@@ -431,7 +431,7 @@
           "CPE integration"
         ],
         "summary": "Read stored parameter values",
-        "description": "Requires devices.read. Does not contact the CPE. Ordered by parameter name ascending. Missing paths are omitted (possibly an empty items array); a missing device is 404. name filters use OR; prefix and name filters combine with AND. Sensitive names are redacted unless the owner is a full-access user.",
+        "description": "Requires access.inventory.cpes.maintenance.diagnostic.read. Does not contact the CPE. Ordered by parameter name ascending. Missing paths are omitted (possibly an empty items array); a missing device is 404. name filters use OR; prefix and name filters combine with AND. Sensitive names are redacted unless the owner has Full on the Diagnostic row.",
         "responses": {
           "200": {
             "description": "Successful response.",
@@ -606,7 +606,7 @@
           "CPE integration"
         ],
         "summary": "Request fresh values from the CPE",
-        "description": "Requires devices.write (also devices.read to poll the result). Queues GetParameterValues. Object paths ending in a dot can retrieve a subtree. Execution waits for a CWMP session; this call does not send a connection request. Offline devices can remain pending. Poll task detail until completed, failed or deleted; then inspect result/error_message. Keep the same idempotency key when retrying a timeout.",
+        "description": "Requires Read and Edit on inventory.cpes.maintenance.diagnostic or inventory.cpes.overview. Network writes through Overview additionally require Edit on the corresponding Wi-Fi/LAN/WAN tab. Polling results requires Read on inventory.cpes.tasks.result. Queues GetParameterValues. Object paths ending in a dot can retrieve a subtree. Execution waits for a CWMP session; this call does not send a connection request. Offline devices can remain pending. Poll task detail until completed, failed or deleted; then inspect result/error_message. Keep the same idempotency key when retrying a timeout.",
         "responses": {
           "200": {
             "description": "Existing task returned for an identical idempotent retry.",
@@ -794,7 +794,7 @@
           "CPE integration"
         ],
         "summary": "Write CPE parameter values",
-        "description": "Requires devices.write (also devices.read to poll the result). Queues SetParameterValues. Known read-only parameters are rejected; unknown vendor paths are validated by the CPE. Execution waits for a CWMP session; this call does not send a connection request. Offline devices can remain pending. Poll task detail until completed, failed or deleted; then inspect result/error_message. Keep the same idempotency key when retrying a timeout.",
+        "description": "Requires Read and Edit on inventory.cpes.maintenance.diagnostic or inventory.cpes.overview. Network writes through Overview additionally require Edit on the corresponding Wi-Fi/LAN/WAN tab. Polling results requires Read on inventory.cpes.tasks.result. Queues SetParameterValues. Known read-only parameters are rejected; unknown vendor paths are validated by the CPE. Execution waits for a CWMP session; this call does not send a connection request. Offline devices can remain pending. Poll task detail until completed, failed or deleted; then inspect result/error_message. Keep the same idempotency key when retrying a timeout.",
         "responses": {
           "200": {
             "description": "Existing task returned for an identical idempotent retry.",
@@ -982,7 +982,7 @@
           "CPE integration"
         ],
         "summary": "List a CPE's CWMP tasks",
-        "description": "Requires devices.read. Includes tasks created by console operators and other integrations. Ordered by ID descending; cursor is the last ID. Payload and result are null in this list; fetch detail to inspect them.",
+        "description": "Requires Read on inventory.cpes.tasks or its Requested/Result tab. Includes tasks created by console operators and other integrations. Ordered by ID descending; cursor is the last ID. Payload and result are null in this list; fetch detail to inspect them.",
         "responses": {
           "200": {
             "description": "Successful response.",
@@ -1145,7 +1145,7 @@
           "CPE integration"
         ],
         "summary": "Read task state and result",
-        "description": "Requires devices.read. Returns 404 if the task belongs to another serial. Sensitive values in read results and write payloads are always redacted, even for administrators. A completed SetParameterValues task reports the device response; result.status=1 can mean changes apply after reboot. GET parameters retrieves the latest stored values after a fresh read.",
+        "description": "Requires Read on inventory.cpes.tasks or its Requested/Result tab. Payload and result each require Read on inventory.cpes.tasks.requested and inventory.cpes.tasks.result respectively. Returns 404 if the task belongs to another serial. Sensitive values in read results and write payloads are always redacted, even for administrators. A completed SetParameterValues task reports the device response; result.status=1 can mean changes apply after reboot. GET parameters retrieves the latest stored values after a fresh read.",
         "responses": {
           "200": {
             "description": "Successful response.",
@@ -1521,7 +1521,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Current user permissions, resolved on each request. Only the documented /v1 surface is available to tokens."
+            "description": "Current access.<section>.<action> permissions, resolved on each request. Actions: full, read, edit, delete, import, export. Full applies only to its row. Only the documented /v1 surface is available to tokens."
           }
         },
         "required": [

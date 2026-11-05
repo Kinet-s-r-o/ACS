@@ -45,7 +45,7 @@ type provisioningTransferTemplate struct {
 
 func requireFullProvisioningAccess(w http.ResponseWriter, req *http.Request) bool {
 	claims := auth.GetUserFromContext(req.Context())
-	if claims == nil || claims.Role != models.RoleFull {
+	if claims == nil || !auth.HasOperationAccess(req.Context()) {
 		respondError(w, http.StatusForbidden, "Full access required")
 		return false
 	}
@@ -67,6 +67,9 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 		CreatedAt: time.Now().UTC(), Templates: make([]provisioningTransferTemplate, 0, len(templates)),
 	}
 	for _, template := range templates {
+		if !requireProvisioningSections(w, req, "export", template.Features) {
+			return
+		}
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
 			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
@@ -163,6 +166,21 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
+	if body.Mode == "replace" {
+		var previous []models.ProvisioningTemplate
+		if err := r.db.WithContext(req.Context()).Select("features").Find(&previous).Error; err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to check replaced templates")
+			return
+		}
+		if !requireProvisioningSections(w, req, "delete", nil) {
+			return
+		}
+		for _, template := range previous {
+			if !requireProvisioningSections(w, req, "delete", template.Features) {
+				return
+			}
+		}
+	}
 	created := 0
 	err := r.db.WithContext(req.Context()).Transaction(func(tx *gorm.DB) error {
 		if body.Mode == "replace" {

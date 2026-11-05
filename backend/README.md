@@ -1,5 +1,7 @@
 # Backend area router
 
+Section/tab authorization: [permission model](../docs/permission-expansion-plan.md), `internal/models/permissions.go`, `internal/database/permission_catalog.go`, `internal/api/permission_policy.go` and `permission_network_fields.go`. Saved roles use only six canonical actions; older permission names below identify internal adapters. New routes and fields require explicit policies. Built-in admin resolves the entire current catalog.
+
 | Folder or file | What lives there | Read before changing |
 | --- | --- | --- |
 | `cmd/server/main.go` | Configuration, database connection, migrations, two HTTP servers, maintenance loops | [Root README](../README.md) deployment and security sections |

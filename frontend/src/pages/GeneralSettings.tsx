@@ -5,18 +5,22 @@ import { api, type DashboardAggregationOption, type DashboardAggregationSource }
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
 import { ResourceError } from '../components/ResourceState';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import { initAppName } from '../lib/appName';
 import { updateUITransitionSettings, type UITransitionStyle } from '../lib/uiTransitions';
 import { DATE_TIME_FORMATS, formatDateTime, setDateTimeFormat, type DateTimeFormat } from '../lib/dateTime';
 
 const GeneralSettings: Component = () => {
-  const { isFullAccess } = useAuth();
+  const { can, canVisit } = useAuth();
   const { notify } = useFeedback();
   const [settings, { refetch }] = createResource(() => api.getSettings());
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
   const [activeSection, setActiveSection] = createSignal<'general' | 'ui' | 'aggregations'>('general');
+  const tabSections = { 'general': 'settings.general.general', 'ui': 'settings.general.ui', 'aggregations': 'settings.general.aggregations' };
+  createEffect(() => { if (!canVisit(tabSections[activeSection()])) { const first = (Object.keys(tabSections) as (keyof typeof tabSections)[]).find(tab => canVisit(tabSections[tab])); if (first) setActiveSection(first); } });
+  usePermissionSection(() => tabSections[activeSection()]);
+  const isFullAccess = () => can(tabSections[activeSection()], 'edit');
   const [aggregationOptions, setAggregationOptions] = createSignal<DashboardAggregationOption[]>([]);
 
   createEffect(() => {
@@ -153,11 +157,11 @@ const GeneralSettings: Component = () => {
 
       <div class="card p-5">
         <div class="mb-5 flex gap-1 border-b border-subtle" role="tablist" aria-label="General settings sections">
-          <button type="button" role="tab" aria-selected={activeSection() === 'general'} onClick={() => setActiveSection('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General</button>
-          <button type="button" role="tab" aria-selected={activeSection() === 'ui'} onClick={() => setActiveSection('ui')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'ui' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>UI settings</button>
-          <button type="button" role="tab" aria-selected={activeSection() === 'aggregations'} onClick={() => setActiveSection('aggregations')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'aggregations' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Fleet aggregations</button>
+          <Show when={canVisit('settings.general.general')}><button type="button" role="tab" aria-selected={activeSection() === 'general'} onClick={() => setActiveSection('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General</button></Show>
+          <Show when={canVisit('settings.general.ui')}><button type="button" role="tab" aria-selected={activeSection() === 'ui'} onClick={() => setActiveSection('ui')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'ui' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>UI settings</button></Show>
+          <Show when={canVisit('settings.general.aggregations')}><button type="button" role="tab" aria-selected={activeSection() === 'aggregations'} onClick={() => setActiveSection('aggregations')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'aggregations' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Fleet aggregations</button></Show>
         </div>
-        <Show when={activeSection() === 'general'}>
+        <Show when={canVisit('settings.general.general') && activeSection() === 'general'}>
         <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
           <SettingsIcon size={14} />
           General
@@ -264,7 +268,7 @@ const GeneralSettings: Component = () => {
           </div>
         </Show>
         </Show>
-        <Show when={activeSection() === 'ui'}>
+        <Show when={canVisit('settings.general.ui') && activeSection() === 'ui'}>
           <h2 class="text-sm font-medium text-secondary mb-2 flex items-center gap-2"><SettingsIcon size={14} />UI settings</h2>
           <p class="text-muted text-xs mb-4">Configure date/time display and animated transitions throughout the application.</p>
           <Show when={settings.error}><ResourceError title="UI settings are unavailable" description="ACS could not read the current interface preferences. Retry before making changes." onRetry={() => refetch()} /></Show>
@@ -299,7 +303,7 @@ const GeneralSettings: Component = () => {
             </div>
           </Show>
         </Show>
-        <Show when={activeSection() === 'aggregations'}>
+        <Show when={canVisit('settings.general.aggregations') && activeSection() === 'aggregations'}>
           <h2 class="text-sm font-medium text-secondary mb-2 flex items-center gap-2"><SettingsIcon size={14} />Fleet aggregation options</h2>
           <p class="text-muted text-xs mb-4">Define exactly which aggregation dimensions operators can select. Parameter dimensions group the latest matching value per CPE; every option is counted in SQL. Panels using a removed option need to be assigned another configured option.</p>
           <Show when={settings.error}><ResourceError title="Aggregation settings are unavailable" description="ACS could not read the current Fleet aggregation options. Retry before making changes." onRetry={() => refetch()} /></Show>

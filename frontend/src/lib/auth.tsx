@@ -1,5 +1,11 @@
-import { createContext, createSignal, onMount, useContext, type Accessor, type ParentComponent } from 'solid-js';
+import { createContext, createEffect, createSignal, onMount, useContext, type Accessor, type ParentComponent } from 'solid-js';
 import { API_BASE, clearStoredSession, request, type User } from './api';
+import { canSection, canVisitSection, legacyPermission, type PermissionAction } from './permissions';
+
+const [activePermissionSection, setActivePermissionSection] = createSignal('fleet');
+export const usePermissionSection = (section: () => string) => {
+  createEffect(() => setActivePermissionSection(section()));
+};
 
 interface AuthContextType {
   user: Accessor<User | null>;
@@ -9,6 +15,9 @@ interface AuthContextType {
   permissions: Accessor<string[]>;
   hasPermission: (perm: string) => boolean;
   hasAnyPermission: (...perms: string[]) => boolean;
+  can: (section: string, action: PermissionAction) => boolean;
+  canVisit: (section: string) => boolean;
+  canCurrent: (action: PermissionAction) => boolean;
   login: (username: string, password: string) => Promise<{ stage: 'complete' | 'setup' | 'verify'; secret?: string; otpauthURL?: string }>;
   completeTwoFactor: (code: string, setup: boolean) => Promise<void>;
   cancelTwoFactor: () => Promise<void>;
@@ -23,9 +32,12 @@ export const AuthProvider: ParentComponent = (props) => {
   const [ready, setReady] = createSignal(false);
   const [permissions, setPermissions] = createSignal<string[]>([]);
 
-  const isFullAccess = () => user()?.role === 'full';
-  const hasPermission = (perm: string) => permissions().includes(perm);
-  const hasAnyPermission = (...perms: string[]) => perms.some(perm => permissions().includes(perm));
+  const can = (section: string, action: PermissionAction) => user()?.role === 'full' || canSection(permissions(), section, action);
+  const canVisit = (section: string) => user()?.role === 'full' || canVisitSection(permissions(), section);
+  const canCurrent = (action: PermissionAction) => can(activePermissionSection(), action);
+  const isFullAccess = () => permissions().some(key => key.startsWith(`access.${activePermissionSection()}.`) && (key.endsWith('.edit') || key.endsWith('.full')) && can(key.slice(7, key.lastIndexOf('.')), 'edit')) || can(activePermissionSection(), 'edit');
+  const hasPermission = (perm: string) => legacyPermission(permissions(), perm, activePermissionSection());
+  const hasAnyPermission = (...perms: string[]) => perms.some(hasPermission);
 
   onMount(async () => {
     // Remove legacy persistent tokens: authentication should not survive a closed browser session.
@@ -100,7 +112,7 @@ export const AuthProvider: ParentComponent = (props) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, ready, isAuthenticated, isFullAccess, permissions, hasPermission, hasAnyPermission, login, completeTwoFactor, cancelTwoFactor, logout }}>
+    <AuthContext.Provider value={{ user, ready, isAuthenticated, isFullAccess, permissions, hasPermission, hasAnyPermission, can, canVisit, canCurrent, login, completeTwoFactor, cancelTwoFactor, logout }}>
       {props.children}
     </AuthContext.Provider>
   );

@@ -15,9 +15,10 @@ const pending = (index: ManagedDatabaseIndex) => ['queued', 'building', 'deletin
 const emptySpec = (): DatabaseIndexSpec => ({ label: '', purpose: '', recipe: 'parameter_presence', parameter_path: '' });
 
 const DatabaseIndexes: Component = () => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, can } = useAuth();
   const { notify, confirm } = useFeedback();
   const canWrite = () => hasPermission('database.indexes.write');
+
   const [data, { refetch }] = createResource(api.getDatabaseIndexes);
   const [dialog, setDialog] = createSignal<{ id?: number } | null>(null);
   const [form, setForm] = createSignal<DatabaseIndexSpec>(emptySpec());
@@ -115,12 +116,12 @@ const DatabaseIndexes: Component = () => {
                 <Show when={!index().owned}><p class="text-warning mt-1">Ownership verification failed. Changes are blocked.</p></Show>
               </td>
               <td data-column-order-id="size" class="font-mono whitespace-nowrap">{formatBytes(index().size_bytes)}<p class="text-muted mt-1">{index().scans.toLocaleString()} scans</p></td>
-              <td data-column-order-id="actions"><Show when={canWrite()} fallback={<span class="text-muted">Read only</span>}><div class="flex gap-1">
+              <td data-column-order-id="actions"><Show when={canWrite() || can('settings.database.indexes', 'delete')} fallback={<span class="text-muted">Read only</span>}><div class="flex gap-1">
                 <Show when={!pending(index()) && index().owned}>
-                  <button type="button" class="icon-button" aria-label={`Edit ${index().label}`} disabled={actionID() !== null || !!data.error} onClick={() => openEditor(index())}><Pencil size={15} /></button>
-                  <button type="button" class="icon-button text-error" aria-label={`Delete ${index().label}`} disabled={actionID() !== null || !!data.error} onClick={() => void act(index(), 'delete')}><Trash2 size={15} /></button>
+                  <button type="button" class="icon-button" aria-label={`Edit ${index().label}`} disabled={!canWrite() || actionID() !== null || !!data.error} onClick={() => openEditor(index())}><Pencil size={15} /></button>
+                  <button type="button" class="icon-button text-error" aria-label={`Delete ${index().label}`} disabled={!can('settings.database.indexes', 'delete') || actionID() !== null || !!data.error} onClick={() => void act(index(), 'delete')}><Trash2 size={15} /></button>
                 </Show>
-                <Show when={['queued', 'building'].includes(index().status)}><button type="button" class="icon-button" aria-label={`Cancel build of ${index().label}`} disabled={index().cancel_requested || actionID() !== null || !!data.error} onClick={() => void act(index(), 'cancel')}><X size={15} /></button></Show>
+                <Show when={['queued', 'building'].includes(index().status)}><button type="button" class="icon-button" aria-label={`Cancel build of ${index().label}`} disabled={!canWrite() || index().cancel_requested || actionID() !== null || !!data.error} onClick={() => void act(index(), 'cancel')}><X size={15} /></button></Show>
               </div></Show></td>
             <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</Index></tbody>
           </table></div>

@@ -43,37 +43,11 @@ const (
 	PermCWMPControl           = "cwmp.control"
 )
 
-// AllPermissions lists every permission key.
-var AllPermissions = []string{
-	PermAuthSettingsRead, PermAuthSettingsWrite,
-	PermUsersRead, PermUsersWrite,
-	PermRolesRead, PermRolesWrite,
-	PermDevicesRead, PermDevicesWrite, PermDevicesCreate,
-	PermFirmwaresRead, PermFirmwaresWrite,
-	PermFaultsRead, PermFaultsWrite,
-	PermProvisioningRead, PermProvisioningWrite,
-	PermSettingsRead, PermSettingsWrite, PermDatabaseStatsRead,
-	PermDatabaseIndexesRead, PermDatabaseIndexesWrite,
-	PermMetricsRead, PermMetricsWrite,
-	PermSecurityRead, PermSecurityWrite,
-	PermDevicesConfigure, PermDevicesCommand, PermDevicesReset, PermDevicesDelete,
-	PermDevicesCredentials, PermDevicesSnapshots, PermDevicesFirmware,
-	PermFirmwaresManage, PermUsersTokens, PermUsersDashboards, PermProvisioningRules, PermProvisioningTemplates,
-	PermCWMPControl,
-}
+// AllPermissions contains only the six section-scoped action types.
+var AllPermissions = permissionKeys(false)
 
-// ReadPermissions lists all read-only permission keys.
-var ReadPermissions = []string{
-	PermUsersRead,
-	PermRolesRead,
-	PermDevicesRead,
-	PermFirmwaresRead,
-	PermFaultsRead,
-	PermProvisioningRead,
-	PermSettingsRead,
-	PermMetricsRead,
-	PermSecurityRead,
-}
+// ReadPermissions is the safe default for the built-in viewer.
+var ReadPermissions = permissionKeys(true)
 
 // Role represents a named role with a set of permissions.
 type Role struct {

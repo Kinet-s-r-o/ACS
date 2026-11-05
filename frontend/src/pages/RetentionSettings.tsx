@@ -1,9 +1,9 @@
 import type { Component } from 'solid-js';
-import { createResource, createSignal, For, Show } from 'solid-js';
+import { createEffect, createResource, createSignal, For, Show } from 'solid-js';
 import { Download, Save } from 'lucide-solid';
 import { formatDateTime } from '../lib/dateTime';
 import { api, type DatabaseQuerySort } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
 import { ResourceError } from '../components/ResourceState';
 import { useFeedback } from '../components/Feedback';
@@ -65,14 +65,17 @@ const retentionTableGroups = [
 ];
 
 const RetentionSettings: Component = () => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, can, canVisit } = useAuth();
   const { notify } = useFeedback();
   const [settings, { refetch }] = createResource(() => hasPermission('settings.read'), () => api.getSettings());
-  const [tableStats, { refetch: refetchTableStats }] = createResource(() => hasPermission('settings.read'), () => api.getRetentionStats());
+  const [tableStats, { refetch: refetchTableStats }] = createResource(() => can('settings.database.statistics', 'read'), () => api.getRetentionStats());
   const [compression, { refetch: refetchCompression }] = createResource(() => hasPermission('settings.read'), () => api.getCompressionStatus());
   const compressionState = () => compression.error ? undefined : compression();
-  const canWrite = () => hasPermission('settings.write');
+  const canWrite = () => can('settings.database.retention', 'edit');
   const [activeTab, setActiveTab] = createSignal<'retention' | 'statistics' | 'indexes'>(hasPermission('settings.read') ? 'retention' : hasPermission('database.indexes.read') ? 'indexes' : 'statistics');
+  const tabSections = { 'retention': 'settings.database.retention', 'statistics': 'settings.database.statistics', 'indexes': 'settings.database.indexes' };
+  createEffect(() => { if (!canVisit(tabSections[activeTab()])) { const first = (Object.keys(tabSections) as (keyof typeof tabSections)[]).find(tab => canVisit(tabSections[tab])); if (first) setActiveTab(first); } });
+  usePermissionSection(() => tabSections[activeTab()]);
   const [querySort, setQuerySort] = createSignal<{ column: DatabaseQuerySort; direction: SortDirection }>({ column: 'total_time', direction: 'desc' });
   const [queryFilters, setQueryFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.database-query-statements', {});
   const [queryStats, { refetch: refetchQueryStats }] = createResource(
@@ -104,6 +107,7 @@ const RetentionSettings: Component = () => {
     return next;
   });
   const exportQueryStatsCSV = () => {
+    if (!can('settings.database.statistics', 'export')) return;
     const headers = ['Statement', 'Calls', 'Total ms', 'Average ms', 'Rows', 'Shared reads', 'Shared hits', 'Temp blocks'];
     const escapeCsvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = (queryStats()?.queries ?? []).map(query => [
@@ -165,13 +169,13 @@ const RetentionSettings: Component = () => {
     <PageHeader title="DB tools" description="Manage database cleanup, query performance and controlled indexes." />
     <div class="flex flex-wrap gap-1 border-b border-subtle" aria-label="Database tools">
       <Show when={hasPermission('settings.read')}>
-      <button type="button" aria-pressed={activeTab() === 'retention'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'retention' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('retention')}>Retention</button>
+      <Show when={canVisit('settings.database.retention')}><button type="button" aria-pressed={activeTab() === 'retention'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'retention' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('retention')}>Retention</button></Show>
       </Show>
-      <Show when={hasPermission('settings.read') || hasPermission('database.stats.read')}><button type="button" aria-pressed={activeTab() === 'statistics'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'statistics' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('statistics')}>Statistics</button></Show>
-      <Show when={hasPermission('database.indexes.read')}><button type="button" aria-pressed={activeTab() === 'indexes'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'indexes' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('indexes')}>DB indexes</button></Show>
+      <Show when={hasPermission('settings.read') || hasPermission('database.stats.read')}><Show when={canVisit('settings.database.statistics')}><button type="button" aria-pressed={activeTab() === 'statistics'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'statistics' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('statistics')}>Statistics</button></Show></Show>
+      <Show when={hasPermission('database.indexes.read')}><Show when={canVisit('settings.database.indexes')}><button type="button" aria-pressed={activeTab() === 'indexes'} class={`px-3 py-2 text-sm border-b-2 ${activeTab() === 'indexes' ? 'border-action-primary text-primary' : 'border-transparent text-muted'}`} onClick={() => setActiveTab('indexes')}>DB indexes</button></Show></Show>
     </div>
-    <Show when={activeTab() === 'indexes' && hasPermission('database.indexes.read')}><DatabaseIndexes /></Show>
-    <Show when={activeTab() === 'retention' && hasPermission('settings.read')}>
+    <Show when={canVisit('settings.database.indexes') && activeTab() === 'indexes' && hasPermission('database.indexes.read')}><DatabaseIndexes /></Show>
+    <Show when={canVisit('settings.database.retention') && activeTab() === 'retention' && hasPermission('settings.read')}>
     <div class="space-y-5">
     <Show when={settings.error}><div class="card p-5"><ResourceError title="Retention settings are unavailable" description="Retry loading the configuration." onRetry={() => refetch()} /></div></Show>
     <Show when={!settings.loading && !settings.error} fallback={settings.loading ? <div class="skeleton h-24 w-full" /> : undefined}>
@@ -238,9 +242,9 @@ const RetentionSettings: Component = () => {
     </Show>
     </div>
     </Show>
-    <Show when={activeTab() === 'statistics'}>
+    <Show when={canVisit('settings.database.statistics') && activeTab() === 'statistics'}>
       <section class="space-y-5" aria-busy={queryStats.loading}>
-        <Show when={hasPermission('settings.read')}><section class="card p-5 space-y-4" aria-busy={tableStats.loading}>
+        <Show when={can('settings.database.statistics', 'read')}><section class="card p-5 space-y-4" aria-busy={tableStats.loading}>
           <div class="flex items-center justify-between gap-3">
             <div><h2 class="text-sm font-medium text-secondary">Database and table usage</h2><p class="text-xs text-muted mt-1">Estimated row counts and on-disk sizes, including indexes.</p></div>
             <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchTableStats()} disabled={tableStats.loading}>Refresh</button>
@@ -266,7 +270,7 @@ const RetentionSettings: Component = () => {
             <div><h2 class="text-sm font-medium text-secondary">Query execution</h2><p class="text-xs text-muted mt-1">Aggregated timings for up to 50 statements in the current database. Select a column heading to sort; select it again to reverse the order.</p></div>
             <div class="flex gap-2">
               <Show when={Object.keys(queryFilters()).length > 0}><button type="button" class="btn btn-secondary text-xs" onClick={() => setQueryFilters({})}>Clear filters</button></Show>
-              <button type="button" class="btn btn-secondary text-xs" onClick={exportQueryStatsCSV} disabled={queryStats.loading || (queryStats()?.queries.length ?? 0) === 0} title="Export query execution as CSV"><Download size={14} aria-hidden="true" />Export CSV</button>
+              <button type="button" class="btn btn-secondary text-xs" onClick={exportQueryStatsCSV} disabled={!can('settings.database.statistics', 'export') || queryStats.loading || (queryStats()?.queries.length ?? 0) === 0} title="Export query execution as CSV"><Download size={14} aria-hidden="true" />Export CSV</button>
               <button type="button" class="btn btn-secondary text-xs" onClick={() => void refetchQueryStats()} disabled={queryStats.loading}>Refresh</button>
             </div>
           </div>

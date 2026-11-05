@@ -66,7 +66,7 @@ func TestDatabaseIndexPostgresPermissions(t *testing.T) {
 	}
 	path := "/settings/database/indexes"
 	spec := `{"label":"Uptime","purpose":"Find recent uptime values","recipe":"parameter_freshness","parameter_path":"InternetGatewayDevice.DeviceInfo.UpTime"}`
-	for _, grants := range [][]string{{models.PermSettingsRead, models.PermSettingsWrite}, {models.PermDatabaseIndexesRead}, {models.PermDatabaseIndexesWrite}} {
+	for _, grants := range [][]string{{models.PermissionKey("settings.database", "full")}, {models.PermissionKey("settings.database.indexes", "read")}, {models.PermissionKey("settings.database.indexes", "edit")}} {
 		for _, op := range []struct{ method, path string }{{"POST", path}, {"POST", path + "/preview"}, {"PUT", path + "/1"}, {"DELETE", path + "/1"}, {"POST", path + "/1/cancel"}} {
 			w := call(grants, op.method, op.path, spec)
 			if w.Code != http.StatusForbidden {
@@ -74,11 +74,11 @@ func TestDatabaseIndexPostgresPermissions(t *testing.T) {
 			}
 		}
 	}
-	w := call([]string{models.PermDatabaseIndexesRead}, "GET", path, "")
+	w := call([]string{models.PermissionKey("settings.database.indexes", "read")}, "GET", path, "")
 	if w.Code != 200 {
 		t.Fatalf("read-only index inspection failed: %d %s", w.Code, w.Body.String())
 	}
-	grants := []string{models.PermDatabaseIndexesRead, models.PermDatabaseIndexesWrite}
+	grants := []string{models.PermissionKey("settings.database.indexes", "read"), models.PermissionKey("settings.database.indexes", "edit"), models.PermissionKey("settings.database.indexes", "delete")}
 	w = call(grants, "POST", path, spec)
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("missing disk probe bypassed: %d %s", w.Code, w.Body.String())

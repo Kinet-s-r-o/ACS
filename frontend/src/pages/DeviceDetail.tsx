@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { DEVICE_TAB_SECTIONS } from '../lib/permissions';
 import DeviceStatusBadge from '../components/DeviceStatusBadge';
 import OntLanVisualization from '../components/OntLanVisualization';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
@@ -7,7 +8,7 @@ import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit,
 import { api, type DeviceParameter, type DeviceReachability, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningLANPortMapping, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import Dialog from '../components/Dialog';
 const HealthGauge = lazy(() => import('../components/HealthGauge'));
 import { useFeedback } from '../components/Feedback';
@@ -116,7 +117,7 @@ const cpeWebUiUrl = (address: string): string | null => {
 const DeviceDetail: Component = () => {
   const params = useParams<{ serial: string }>();
   const navigate = useNavigate();
-  const { isFullAccess, user } = useAuth();
+  const { isFullAccess, user, can, canVisit, canCurrent } = useAuth();
   const { confirm, notify } = useFeedback();
   const serial = () => params.serial || '';
   const copyTextToClipboard = async (value: string, label: string) => {
@@ -129,7 +130,9 @@ const DeviceDetail: Component = () => {
     }
   };
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' || searchParams.tab === 'log' ? searchParams.tab : 'overview';
+  const requestedTab = () => searchParams.tab === 'metrics' || searchParams.tab === 'tasks' || searchParams.tab === 'snapshots' || searchParams.tab === 'credentials' || searchParams.tab === 'hosts' || searchParams.tab === 'faults' || searchParams.tab === 'diagnostic' || searchParams.tab === 'features' || searchParams.tab === 'log' ? searchParams.tab : 'overview';
+  const activeTab = () => canVisit(DEVICE_TAB_SECTIONS[requestedTab()]) ? requestedTab() : Object.keys(DEVICE_TAB_SECTIONS).find(tab => canVisit(DEVICE_TAB_SECTIONS[tab])) || 'overview';
+  usePermissionSection(() => activeTab() === 'features' && activeDeviceFeature() ? `inventory.cpes.features.${activeDeviceFeature()!.id}` : DEVICE_TAB_SECTIONS[activeTab()]);
 
   const [taskPage, setTaskPage] = createSignal(0);
   const { pageSize: taskPageSize, changePageSize: changeTaskPageSize } = usePageSize('device_tasks', 20);
@@ -149,20 +152,20 @@ const DeviceDetail: Component = () => {
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
   const [tasks, { refetch: refetchTaskRows }] = createResource(taskSource, query => api.getDeviceTasksPage(query.serial, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }));
-  const [deviceTaskCounts, { refetch: refetchDeviceTaskCounts }] = createResource(serial, api.getDeviceTaskCounts);
+  const [deviceTaskCounts, { refetch: refetchDeviceTaskCounts }] = createResource(() => canVisit('inventory.cpes.tasks') ? serial() : false, api.getDeviceTaskCounts);
   const refetchTasks = async () => {
     const [taskRows] = await Promise.all([refetchTaskRows(), refetchDeviceTaskCounts()]);
     return taskRows;
   };
   const [snapshots, { refetch: refetchSnapshots }] = createResource(() => activeTab() === 'snapshots' ? serial() : false, api.getDeviceSnapshots);
   const [deviceFaults, { refetch: refetchFaultRows }] = createResource(() => activeTab() === 'faults' ? ({ serial: serial(), page: faultPage(), size: faultPageSize(), search: faultSearch(), sort: faultSort(), filters: deviceFaultColumnFilters() }) : false, query => api.getDeviceFaultsPage(query.serial, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }));
-  const [deviceFaultCounts, { refetch: refetchFaultCounts }] = createResource(serial, api.getDeviceFaultCounts);
+  const [deviceFaultCounts, { refetch: refetchFaultCounts }] = createResource(() => canVisit('inventory.cpes.faults') ? serial() : false, api.getDeviceFaultCounts);
   const refetchDeviceFaults = async () => {
     const [faultRows] = await Promise.all([refetchFaultRows(), refetchFaultCounts()]);
     return faultRows;
   };
-  const [metricDefs] = createResource(serial, api.getDeviceMetricDefinitions);
-  const parameterSource = () => `${serial()}|${activeTab() === 'diagnostic' ? 'diagnostic' : 'detail'}`;
+  const [metricDefs] = createResource(() => canVisit('inventory.cpes.metrics') ? serial() : false, api.getDeviceMetricDefinitions);
+  const parameterSource = () => ['overview', 'hosts', 'features', 'diagnostic'].includes(activeTab()) && canVisit(DEVICE_TAB_SECTIONS[activeTab()]) ? `${serial()}|${activeTab() === 'diagnostic' ? 'diagnostic' : 'detail'}` : false;
   const [parameters, { refetch: refetchParams }] = createResource(parameterSource, async key => {
     const [deviceSerial, mode] = key.split('|');
     if (!deviceSerial) return [];
@@ -261,6 +264,7 @@ const DeviceDetail: Component = () => {
   const [interfaceMetricDefs] = createResource(() => statsInterface() ? serial() : false, api.getDeviceInterfaceMetricDefinitions);
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
+  createEffect(() => { if (!can('inventory.cpes.tasks.' + taskDetailTab(), 'read')) setTaskDetailTab(can('inventory.cpes.tasks.requested', 'read') ? 'requested' : 'result'); });
   const handleTaskPageSizeChange = (size: number) => { changeTaskPageSize(size); setTaskPage(0); };
   const { columns: deviceTaskColumns, isVisible: isDeviceTaskColumnVisible, toggle: toggleDeviceTaskColumn } = useColumnVisibility('device_tasks', [
     { id: 'type', label: 'Type', visible: true },
@@ -568,7 +572,7 @@ const DeviceDetail: Component = () => {
   };
 
   const deleteFeatureObject = async (featureID: string, key: string, label: string, instance: string) => {
-    if (!isFullAccess() || featureAction() || !await confirm({ title: `Delete ${label} ${instance}?`, description: 'This removes the object and all of its settings from the device.', confirmLabel: 'Delete object', tone: 'danger' })) return;
+    if (!canCurrent('delete') || featureAction() || !await confirm({ title: `Delete ${label} ${instance}?`, description: 'This removes the object and all of its settings from the device.', confirmLabel: 'Delete object', tone: 'danger' })) return;
     const actionKey = `${featureID}:${key}:${instance}`;
     setFeatureAction(actionKey);
     try {
@@ -582,7 +586,7 @@ const DeviceDetail: Component = () => {
   };
 
   const deleteWANInterface = async (wan: WanProfile) => {
-    if (!isFullAccess() || featureAction() || !wan.canDeleteObject) return;
+    if (!canCurrent('delete') || featureAction() || !wan.canDeleteObject) return;
     if (!await confirm({
       title: `Delete WAN interface ${wan.name}?`,
       description: 'This sends a CWMP DeleteObject request and removes this WAN profile and its settings from the ONT. It may interrupt service or disconnect ACS management if this profile carries the management connection.',
@@ -1019,7 +1023,7 @@ const DeviceDetail: Component = () => {
   };
 
   const deletePendingTask = async (task: Task) => {
-    if (task.status !== 'pending' || !isFullAccess()) return;
+    if (task.status !== 'pending' || !can('inventory.cpes.tasks', 'delete')) return;
     if (!await confirm({ title: `Delete pending task #${task.id}?`, description: `The ${task.type} task will be marked deleted and will not be sent to this CPE.`, confirmLabel: 'Delete task', tone: 'danger' })) return;
     setDeletingTask(task.id);
     try {
@@ -1380,7 +1384,7 @@ const DeviceDetail: Component = () => {
   };
 
   const handleDeleteWifiSSID = async (index: number, ssid: string) => {
-    if (!isFullAccess() || actionLoading() || !await confirm({ title: `Delete SSID${index}?`, description: `This permanently removes the Wi-Fi object "${ssid}" and its settings from the device. Connected clients will lose access.`, confirmLabel: 'Delete SSID', tone: 'danger' })) return;
+    if (!canCurrent('delete') || actionLoading() || !await confirm({ title: `Delete SSID${index}?`, description: `This permanently removes the Wi-Fi object "${ssid}" and its settings from the device. Connected clients will lose access.`, confirmLabel: 'Delete SSID', tone: 'danger' })) return;
     setActionLoading(`wifi-delete-${index}`);
     try {
       const task = await api.deleteWifiSSID(serial(), index);
@@ -1998,7 +2002,7 @@ const DeviceDetail: Component = () => {
                 const path = `${control.parameter}${instance}.${column}`;
                 const value = () => (parameters() || []).find(item => item.name === path)?.value || '—';
                 return <td data-column-order-id={`field:${column}`} class="max-w-64 truncate">{value()}</td>;
-              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!isFullAccess() || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!canCurrent('delete') || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
             </Show>
           </div>
         </>
@@ -2091,26 +2095,26 @@ const DeviceDetail: Component = () => {
       </div>
 
       <nav role="tablist" class="tab-bar device-detail-tabs" aria-label="Device detail sections">
-        <button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>Connected Hosts</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button>
-        <Show when={(matchingProvisioningTemplate()?.features?.length || 0) > 0}><button role="tab" class={`tab-btn ${activeTab() === 'features' ? 'is-active' : ''}`} aria-selected={activeTab() === 'features'} onClick={() => setSearchParams({ tab: 'features' })}>Advanced settings</button></Show>
-        <button role="tab" class={`tab-btn ${activeTab() === 'snapshots' ? 'is-active' : ''}`} aria-selected={activeTab() === 'snapshots'} onClick={() => setSearchParams({ tab: 'snapshots' })}>Snapshots</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'tasks' ? 'is-active' : ''}`} aria-selected={activeTab() === 'tasks'} onClick={() => setSearchParams({ tab: 'tasks' })}>
+        <Show when={canVisit('inventory.cpes.overview')}><button role="tab" class={`tab-btn ${activeTab() === 'overview' ? 'is-active' : ''}`} aria-selected={activeTab() === 'overview'} onClick={() => setSearchParams({ tab: null })}>Overview</button></Show>
+        <Show when={canVisit('inventory.cpes.hosts')}><button role="tab" class={`tab-btn ${activeTab() === 'hosts' ? 'is-active' : ''}`} aria-selected={activeTab() === 'hosts'} onClick={() => setSearchParams({ tab: 'hosts' })}>Connected Hosts</button></Show>
+        <Show when={canVisit('inventory.cpes.metrics')}><button role="tab" class={`tab-btn ${activeTab() === 'metrics' ? 'is-active' : ''}`} aria-selected={activeTab() === 'metrics'} onClick={() => setSearchParams({ tab: 'metrics' })}>Metrics</button></Show>
+        <Show when={(matchingProvisioningTemplate()?.features?.length || 0) > 0}><Show when={canVisit('inventory.cpes.features')}><button role="tab" class={`tab-btn ${activeTab() === 'features' ? 'is-active' : ''}`} aria-selected={activeTab() === 'features'} onClick={() => setSearchParams({ tab: 'features' })}>Advanced settings</button></Show></Show>
+        <Show when={canVisit('inventory.cpes.snapshots')}><button role="tab" class={`tab-btn ${activeTab() === 'snapshots' ? 'is-active' : ''}`} aria-selected={activeTab() === 'snapshots'} onClick={() => setSearchParams({ tab: 'snapshots' })}>Snapshots</button></Show>
+        <Show when={canVisit('inventory.cpes.tasks')}><button role="tab" class={`tab-btn ${activeTab() === 'tasks' ? 'is-active' : ''}`} aria-selected={activeTab() === 'tasks'} onClick={() => setSearchParams({ tab: 'tasks' })}>
           CWMP tasks
           <Show when={pendingTaskCount() > 0}>
             <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">{pendingTaskCount()}</span>
           </Show>
-        </button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'faults' ? 'is-active' : ''}`} aria-selected={activeTab() === 'faults'} onClick={() => setSearchParams({ tab: 'faults' })}>
+        </button></Show>
+        <Show when={canVisit('inventory.cpes.faults')}><button role="tab" class={`tab-btn ${activeTab() === 'faults' ? 'is-active' : ''}`} aria-selected={activeTab() === 'faults'} onClick={() => setSearchParams({ tab: 'faults' })}>
           CWMP Faults
           <Show when={unresolvedFaultCount() > 0}>
             <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">{unresolvedFaultCount()}</span>
           </Show>
-        </button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'credentials' ? 'is-active' : ''}`} aria-selected={activeTab() === 'credentials'} onClick={() => setSearchParams({ tab: 'credentials' })}>Credentials</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'diagnostic' })}>Maintenance</button>
-        <button role="tab" class={`tab-btn ${activeTab() === 'log' ? 'is-active' : ''}`} aria-selected={activeTab() === 'log'} onClick={() => setSearchParams({ tab: 'log' })}>Device log</button>
+        </button></Show>
+        <Show when={canVisit('inventory.cpes.credentials')}><button role="tab" class={`tab-btn ${activeTab() === 'credentials' ? 'is-active' : ''}`} aria-selected={activeTab() === 'credentials'} onClick={() => setSearchParams({ tab: 'credentials' })}>Credentials</button></Show>
+        <Show when={canVisit('inventory.cpes.maintenance.diagnostic')}><button role="tab" class={`tab-btn ${activeTab() === 'diagnostic' ? 'is-active' : ''}`} aria-selected={activeTab() === 'diagnostic'} onClick={() => setSearchParams({ tab: 'diagnostic', diagnosticTab: 'diagnostic' })}>Maintenance</button></Show>
+        <Show when={canVisit('inventory.cpes.log')}><button role="tab" class={`tab-btn ${activeTab() === 'log' ? 'is-active' : ''}`} aria-selected={activeTab() === 'log'} onClick={() => setSearchParams({ tab: 'log' })}>Device log</button></Show>
       </nav>
 
       <Show when={message()}>
@@ -2143,7 +2147,7 @@ const DeviceDetail: Component = () => {
       <Show when={!device.error && !initialOverviewLoading() && device()}>
         {(d) => (
           <>
-            <Show when={activeTab() === 'overview'}>
+            <Show when={canVisit('inventory.cpes.overview') && activeTab() === 'overview'}>
             {/* Row 1: ONT Info + Device Health + Actions */}
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* ONT Information Card */}
@@ -2244,7 +2248,7 @@ const DeviceDetail: Component = () => {
 
             </Show>
 
-            <Show when={activeTab() === 'diagnostic'}>
+            <Show when={canVisit('inventory.cpes.maintenance.diagnostic') && activeTab() === 'diagnostic'}>
               <div class="space-y-4">
                 <nav role="tablist" class="tab-bar" aria-label="Diagnostic sections">
                   <button role="tab" class="tab-btn is-active" aria-selected="true" onClick={() => setSearchParams({ diagnosticTab: 'diagnostic' })}>Diagnostic</button>
@@ -2410,7 +2414,7 @@ const DeviceDetail: Component = () => {
               </div>
             </Show>
 
-            <Show when={activeTab() === 'snapshots'}>
+            <Show when={canVisit('inventory.cpes.snapshots') && activeTab() === 'snapshots'}>
               <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
                 <div class="card p-4 xl:col-span-2">
                   <div class="flex items-center justify-between gap-3 mb-3">
@@ -2438,9 +2442,8 @@ const DeviceDetail: Component = () => {
                                 <div class="text-sm text-primary truncate">{snapshot.name}</div>
                                 <div class="text-xs text-muted mt-1">{formatDate(snapshot.created_at)} · {snapshot.parameter_count} parameters</div>
                               </button>
-                              <Show when={isFullAccess()}>
-                                <button type="button" class="icon-button text-muted hover:text-rose-400" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button>
-                              </Show>
+                              <Show when={canCurrent('delete')}>
+                                <button type="button" class="icon-button text-muted hover:text-rose-400" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button></Show>
                             </div>
                           </div>
                         )}
@@ -2506,7 +2509,7 @@ const DeviceDetail: Component = () => {
             </Show>
 
             {/* Row 1.2: Metrics */}
-            <Show when={activeTab() === 'metrics'}>
+            <Show when={canVisit('inventory.cpes.metrics') && activeTab() === 'metrics'}>
               <Show when={matchingMetrics().length > 0} fallback={<EmptyState title="No metrics available" description="Configure metrics in the matching provisioning template to enable monitoring." />}>
               <div class="card p-5">
                 <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
@@ -2524,7 +2527,7 @@ const DeviceDetail: Component = () => {
               </Show>
             </Show>
 
-            <Show when={activeTab() === 'features' && (matchingProvisioningTemplate()?.features?.length || 0) > 0}>
+            <Show when={canVisit('inventory.cpes.features') && activeTab() === 'features' && (matchingProvisioningTemplate()?.features?.length || 0) > 0}>
               <div class="space-y-4">
                 <div class="flex justify-end"><button type="button" class="btn btn-secondary text-xs" onClick={() => void loadDeviceParameters()} disabled={parameters.loading}><RefreshCw size={13} class={parameters.loading ? 'animate-spin' : ''} />Refresh device parameters</button></div>
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Device Advanced settings sections"><For each={matchingProvisioningTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeDeviceFeature()?.id === feature.id} onClick={() => setActiveDeviceFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeDeviceFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For></div>
@@ -2541,7 +2544,7 @@ const DeviceDetail: Component = () => {
               </div>
             </Show>
 
-            <Show when={activeTab() === 'credentials'}>
+            <Show when={canVisit('inventory.cpes.credentials') && activeTab() === 'credentials'}>
             <div class="flex justify-end"><button type="button" onClick={() => setShowSensitive(!showSensitive())} class="btn btn-secondary text-xs" aria-pressed={showSensitive()}>{showSensitive() ? <EyeOff size={13} /> : <Eye size={13} />}{showSensitive() ? 'Hide sensitive values' : 'Reveal sensitive values'}</button></div>
             {/* Connection Request Credentials */}
             <div class="card p-5">
@@ -2635,7 +2638,7 @@ const DeviceDetail: Component = () => {
             </div>
             </Show>
 
-            <Show when={activeTab() === 'overview'}>
+            <Show when={canVisit('inventory.cpes.overview') && activeTab() === 'overview'}>
             {/* Row 2: WAN Information */}
             <div class="card p-5">
               <div class="mb-4 flex items-center justify-between gap-3">
@@ -2800,7 +2803,7 @@ const DeviceDetail: Component = () => {
                               >
                                 <Activity size={14} />
                               </button>
-                              <Show when={isFullAccess()} fallback={<span class="text-muted text-xs">-</span>}>
+                              <Show when={canVisit('inventory.cpes.overview.wan')} fallback={<span class="text-muted text-xs">-</span>}>
                                 <button
                                   onClick={() => setWanModalPath(wan.path)}
                                   class="icon-button"
@@ -2930,7 +2933,7 @@ const DeviceDetail: Component = () => {
                               >
                                 <Activity size={14} />
                               </button>
-                              <Show when={isFullAccess()} fallback={<span class="text-muted text-xs">-</span>}>
+                              <Show when={canVisit('inventory.cpes.overview.lan')} fallback={<span class="text-muted text-xs">-</span>}>
                                 <button
                                   onClick={() => setLanModalIndex(lan.index)}
                                   class="icon-button"
@@ -3032,7 +3035,7 @@ const DeviceDetail: Component = () => {
                               <span class="text-muted font-mono text-xs">{showSensitive() ? wlan.password : '••••••••'}</span>
                             </td>
                             <td data-column-order-id="actions#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('actions') }}>
-                              <Show when={isFullAccess()}>
+                              <Show when={canVisit('inventory.cpes.overview.wifi')}>
                                 <button
                                   onClick={() => setWifiModalIndex(wlan.index)}
                                   class="icon-button"
@@ -3062,7 +3065,7 @@ const DeviceDetail: Component = () => {
             </div>
             </Show>
 
-            <Show when={activeTab() === 'hosts'}>
+            <Show when={canVisit('inventory.cpes.hosts') && activeTab() === 'hosts'}>
             {/* Row 4: Connected Hosts */}
             <div class="card p-5">
               <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -3167,7 +3170,7 @@ const DeviceDetail: Component = () => {
             </Show>
 
             {/* Row 5: Task History */}
-            <Show when={activeTab() === 'tasks'}>
+            <Show when={canVisit('inventory.cpes.tasks') && activeTab() === 'tasks'}>
             <dl class="ops-register task-register" aria-label="Device CWMP task status register" aria-busy={deviceTaskCounts.loading}>
               <div class="ops-register-cell is-warning"><dt>Pending</dt><dd>{deviceTaskCounts()?.pending ?? 0}</dd><small>Waiting to be sent</small></div>
               <div class="ops-register-cell is-sent"><dt>Sent</dt><dd>{deviceTaskCounts()?.sent ?? 0}</dd><small>Dispatched to CPE</small></div>
@@ -3254,7 +3257,7 @@ const DeviceDetail: Component = () => {
                                   <Eye size={13} />
                                   Details
                                 </button>
-                                <Show when={task.status === 'pending' && isFullAccess()}>
+                                <Show when={task.status === 'pending' && can('inventory.cpes.tasks', 'delete')}>
                                   <button type="button" class="btn btn-ghost btn-xs text-rose-400" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button>
                                 </Show>
                               </div>
@@ -3288,10 +3291,10 @@ const DeviceDetail: Component = () => {
                     <div class="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">{selectedTask()!.error_message}</div>
                   </Show>
                   <div class="border-b border-subtle flex gap-0">
-                    <button class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'requested' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('requested')}>Requested</button>
-                    <button class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'result' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('result')}>Result</button>
+                    <Show when={can('inventory.cpes.tasks.requested', 'read')}><button class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'requested' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('requested')}>Requested</button></Show>
+                    <Show when={can('inventory.cpes.tasks.result', 'read')}><button class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'result' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('result')}>Result</button></Show>
                   </div>
-                  <Show when={taskDetailTab() === 'requested'}>
+                  <Show when={can('inventory.cpes.tasks.requested', 'read') && taskDetailTab() === 'requested'}>
                     <Show when={selectedTask()!.payload != null} fallback={<p class="text-sm text-muted">No payload for this task type.</p>}>
                       <Show when={Array.isArray(selectedTask()!.payload)} fallback={
                         <div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th data-column-order-id="key#0" class="text-left px-3 py-2 text-xs font-medium text-muted">Key</th><th data-column-order-id="value#0" class="text-left px-3 py-2 text-xs font-medium text-muted">Value</th></tr></thead><tbody>
@@ -3308,7 +3311,7 @@ const DeviceDetail: Component = () => {
                       </Show>
                     </Show>
                   </Show>
-                  <Show when={taskDetailTab() === 'result'}>
+                  <Show when={can('inventory.cpes.tasks.result', 'read') && taskDetailTab() === 'result'}>
                     <Show when={selectedTask()!.result != null} fallback={<p class="text-sm text-muted">No result yet — task may still be pending.</p>}>
                       <Show when={typeof selectedTask()!.result === 'object' && !Array.isArray(selectedTask()!.result) && selectedTask()!.result !== null} fallback={
                         <pre class="text-xs font-mono bg-elevated/50 rounded p-3 overflow-x-auto">{JSON.stringify(selectedTask()!.result, null, 2)}</pre>
@@ -3325,7 +3328,7 @@ const DeviceDetail: Component = () => {
               </Dialog>
             </Show>
 
-            <Show when={activeTab() === 'faults'}>
+            <Show when={canVisit('inventory.cpes.faults') && activeTab() === 'faults'}>
             {/* Row 5.5: CWMP Faults */}
             <dl class="ops-register fault-register mb-4" aria-label="Fault status register" aria-busy={deviceFaultCounts.loading}>
               <div class="ops-register-cell is-offline"><dt>Active faults</dt><dd>{deviceFaultCounts()?.active ?? 0}</dd><small>Awaiting operator action</small></div>
@@ -3441,7 +3444,7 @@ const DeviceDetail: Component = () => {
                                       <Check size={14} />
                                     </button>
                                   </Show>
-                                  <Show when={isFullAccess()}>
+                                  <Show when={canCurrent('delete')}>
                                     <button
                                       onClick={() => handleDeleteFault(fault.id)}
                                       class="icon-button hover:text-rose-400"
@@ -3449,8 +3452,7 @@ const DeviceDetail: Component = () => {
                                       disabled={pendingFault() === fault.id}
                                     >
                                       <Trash2 size={14} />
-                                    </button>
-                                  </Show>
+                                    </button></Show>
                                 </div>
                               </td>
                             <td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>
@@ -3492,7 +3494,7 @@ const DeviceDetail: Component = () => {
             <Pagination page={faultPage()} totalPages={deviceFaultTotalPages()} totalItems={deviceFaults()?.total || 0} pageSize={faultPageSize()} onPageChange={setFaultPage} storageKey="device_faults" onPageSizeChange={handleFaultPageSizeChange} filters={deviceFaultColumnFilters()} onClearFilters={() => { setDeviceFaultColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { const next = { ...deviceFaultColumnFilters() }; delete next[columnId]; setDeviceFaultColumnFilters(next); setFaultPage(0); }} />
             </Show>
 
-            <Show when={activeTab() === 'log'}>
+            <Show when={canVisit('inventory.cpes.log') && activeTab() === 'log'}>
             <section class="card overflow-hidden" aria-labelledby="device-log-title">
               <div class="p-5 border-b border-subtle flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -3537,7 +3539,7 @@ const DeviceDetail: Component = () => {
               </Show>
             </section>
             </Show>
-            <Show when={activeTab() === 'overview'}>
+            <Show when={canVisit('inventory.cpes.overview') && activeTab() === 'overview'}>
             {/* Row 6: All Parameters */}
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between gap-4">
@@ -3565,7 +3567,7 @@ const DeviceDetail: Component = () => {
                     type="button"
                     class="icon-button"
                     onClick={exportParamsCSV}
-                    disabled={filteredAllParams().length === 0}
+                    disabled={!can('inventory.cpes.maintenance.diagnostic', 'export') || filteredAllParams().length === 0}
                     title="Export CSV"
                     aria-label="Export parameters as CSV"
                   >

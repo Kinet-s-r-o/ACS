@@ -1,7 +1,7 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
 import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, CircleHelp, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { useAuth, usePermissionSection } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
 import ProvisioningConditionHelp from '../components/ProvisioningConditionHelp';
@@ -114,7 +114,11 @@ const parseObjectFieldOptions = (text: string): { options: string[]; option_labe
 };
 
 const Provisioning: Component = () => {
-  const { isFullAccess, hasAnyPermission, hasPermission } = useAuth();
+  const { isFullAccess, hasAnyPermission, hasPermission, can, canVisit } = useAuth();
+  const canTransfer = (action: 'edit' | 'import' | 'export', features: ProvisioningFeature[] = []) => [
+    'templates', 'rules', 'variables', 'metrics.general.metric', 'metrics.general.health', 'metrics.interface', 'metrics.polling', 'features', 'cpe_detail.lan', 'cpe_detail.info',
+    ...features.map(feature => `features.${feature.id}`),
+  ].every(section => can(`settings.provisioning.${section}`, action));
   const { notify, confirm } = useFeedback();
   const metricColumns = useColumnVisibility('provisioning-metrics', metricTableColumns);
   const interfaceMetricColumns = useColumnVisibility('provisioning-interface-metrics', interfaceMetricTableColumns);
@@ -208,6 +212,16 @@ const Provisioning: Component = () => {
   const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features' | 'cpe_detail'>('rules');
   const [templateDetailTab, setTemplateDetailTab] = createSignal<'lan' | 'cpe_info'>('lan');
   const [metricSubTab, setMetricSubTab] = createSignal<'general' | 'interface' | 'polling'>('general');
+  const templateTabSections = { rules: 'settings.provisioning.rules', variables: 'settings.provisioning.variables', metrics: 'settings.provisioning.metrics', features: 'settings.provisioning.features', cpe_detail: 'settings.provisioning.cpe_detail' };
+  const metricTabSections = { general: 'settings.provisioning.metrics.general', interface: 'settings.provisioning.metrics.interface', polling: 'settings.provisioning.metrics.polling' };
+  const detailTabSections = { lan: 'settings.provisioning.cpe_detail.lan', cpe_info: 'settings.provisioning.cpe_detail.info' };
+  const currentSection = () => !selectedTemplate() ? 'settings.provisioning.templates' : templateTab() === 'features' && activeFeature() ? `settings.provisioning.features.${activeFeature()!.id}` : templateTab() === 'metrics' ? metricTabSections[metricSubTab()] : templateTab() === 'cpe_detail' ? detailTabSections[templateDetailTab()] : templateTabSections[templateTab()];
+  usePermissionSection(currentSection);
+  createEffect(() => {
+    if (!canVisit(templateTabSections[templateTab()])) { const first = (Object.keys(templateTabSections) as (keyof typeof templateTabSections)[]).find(tab => canVisit(templateTabSections[tab])); if (first) setTemplateTab(first); }
+    if (!canVisit(metricTabSections[metricSubTab()])) { const first = (Object.keys(metricTabSections) as (keyof typeof metricTabSections)[]).find(tab => canVisit(metricTabSections[tab])); if (first) setMetricSubTab(first); }
+    if (!canVisit(detailTabSections[templateDetailTab()])) { const first = (Object.keys(detailTabSections) as (keyof typeof detailTabSections)[]).find(tab => canVisit(detailTabSections[tab])); if (first) setTemplateDetailTab(first); }
+  });
   const [templateVariables, setTemplateVariables] = createSignal<ProvisioningVariable[]>([]);
   const [variablesSaving, setVariablesSaving] = createSignal(false);
   const [activeFeatureID, setActiveFeatureID] = createSignal('');
@@ -250,7 +264,7 @@ const Provisioning: Component = () => {
   const [editingMetric, setEditingMetric] = createSignal<MetricDefinition | null>(null);
   const [copyingMetric, setCopyingMetric] = createSignal<MetricDefinition | null>(null);
   const [showMetricModal, setShowMetricModal] = createSignal(false);
-  const [interfaceMetrics, { refetch: refetchInterfaceMetrics }] = createResource(() => selectedTemplate()?.id, (id) => api.getInterfaceMetrics(id!));
+  const [interfaceMetrics, { refetch: refetchInterfaceMetrics }] = createResource(() => canVisit('settings.provisioning.metrics.interface') ? selectedTemplate()?.id : false, (id) => api.getInterfaceMetrics(id!));
   const metricActive = useMetricActiveToggle(definition => definition.parameter_pattern ? refetchInterfaceMetrics() : refetchMetrics());
   const [editingInterfaceMetric, setEditingInterfaceMetric] = createSignal<InterfaceMetricDefinition | null>(null);
   const [showInterfaceMetricModal, setShowInterfaceMetricModal] = createSignal(false);
@@ -272,6 +286,7 @@ const Provisioning: Component = () => {
   };
 
   const exportProvisioningBackup = async () => {
+    if (!canTransfer('export', provTemplates()?.flatMap(template => template.features || []))) return;
     try {
       const blob = await api.exportProvisioning();
       const url = URL.createObjectURL(blob);
@@ -1059,12 +1074,12 @@ const Provisioning: Component = () => {
     } finally { setVariablesSaving(false); }
   };
 
-  const saveTemplateFeatures = async (features: ProvisioningFeature[]) => {
+  const saveTemplateFeatures = async (features: ProvisioningFeature[], deletedIDs: string[] = []) => {
     const template = selectedTemplate();
     if (!template || featuresSaving()) return false;
     setFeaturesSaving(true);
     try {
-      const result = await api.saveTemplateFeatures(template.id, features);
+      const result = await api.saveTemplateFeatures(template.id, features, deletedIDs);
       setSelectedTemplate(current => current?.id === template.id ? { ...current, features: result.features } : current);
       setProvTemplates(current => current?.map(item => item.id === template.id ? { ...item, features: result.features } : item) || null);
       return true;
@@ -1267,7 +1282,7 @@ const Provisioning: Component = () => {
     const feature = template?.features?.find(item => item.id === featureID);
     if (!template || !feature || !await confirm({ title: `Delete ${feature.name}?`, description: 'Devices matching this template will no longer show this feature.', confirmLabel: 'Delete feature', tone: 'danger' })) return;
     try {
-      if (await saveTemplateFeatures(template.features!.filter(item => item.id !== featureID))) {
+      if (await saveTemplateFeatures(template.features!.filter(item => item.id !== featureID), [featureID])) {
         setActiveFeatureID(template.features!.find(item => item.id !== featureID)?.id || '');
         notify({ tone: 'success', title: 'Advanced settings section deleted' });
       }
@@ -1455,7 +1470,7 @@ const Provisioning: Component = () => {
         <div class="border border-error bg-error/10 p-3 text-sm text-primary" role="status">CWMP communication is off for all CPEs. Administration remains available. <Show when={cwmpControl()?.updated_by}>Changed by {cwmpControl()?.updated_by}.</Show> <Show when={cwmpControl()?.updated_at}>{formatDateTime(cwmpControl()?.updated_at)}</Show></div>
       </Show>
 
-      <Show when={isFullAccess()}>
+      <Show when={canVisit('settings.provisioning')}>
         <Show when={!selectedTemplate()}>
           <div class="card p-5">
             <div class="flex items-center justify-between mb-4">
@@ -1468,13 +1483,13 @@ const Provisioning: Component = () => {
               </div>
               <div class="flex flex-wrap gap-2">
                 <input ref={(element) => { provisioningImportInput = element; }} type="file" accept="application/json,.json" class="sr-only" onChange={(event) => void importProvisioningBackup(event)} />
-                <button type="button" onClick={() => provisioningImportInput?.click()} class="icon-button" disabled={pendingAction() === 'import-provisioning'} title="Import JSON backup" aria-label="Import JSON backup">
+                <button type="button" disabled={!canTransfer('import') || pendingAction() === 'import-provisioning'} onClick={() => provisioningImportInput?.click()} class="icon-button" title="Import JSON backup" aria-label="Import JSON backup">
                   <Upload size={15} aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => void exportProvisioningBackup()} class="icon-button" title="Export JSON backup" aria-label="Export JSON backup">
+                <button type="button" disabled={!canTransfer('export', provTemplates()?.flatMap(template => template.features || []))} onClick={() => void exportProvisioningBackup()} class="icon-button" title="Export JSON backup" aria-label="Export JSON backup">
                   <Download size={15} aria-hidden="true" />
                 </button>
-                <button onClick={openCreateTemplate} class="btn btn-primary text-xs py-1.5">
+                <button disabled={!can('settings.provisioning.templates', 'edit')} onClick={openCreateTemplate} class="btn btn-primary text-xs py-1.5">
                   <Plus size={12} />Add template
                 </button>
               </div>
@@ -1500,13 +1515,13 @@ const Provisioning: Component = () => {
                           </Show>
                         </button>
                         <div class="flex items-center gap-1 shrink-0 ml-2">
-                          <button onClick={(e) => { e.stopPropagation(); openCloneTemplate(t); }} class="icon-button" aria-label={`Duplicate template ${t.name}`} title="Duplicate template">
+                          <button disabled={!canTransfer('edit', t.features)} onClick={(e) => { e.stopPropagation(); openCloneTemplate(t); }} class="icon-button" aria-label={`Duplicate template ${t.name}`} title="Duplicate template">
                             <Copy size={13} />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); openEditTemplate(t); }} class="icon-button" aria-label={`Edit template ${t.name}`}>
+                          <button disabled={!can('settings.provisioning.templates', 'edit')} onClick={(e) => { e.stopPropagation(); openEditTemplate(t); }} class="icon-button" aria-label={`Edit template ${t.name}`}>
                             <Edit2 size={13} />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(t.id); }} class="icon-button" aria-label={`Delete template ${t.name}`}>
+                          <button disabled={!can('settings.provisioning.templates', 'delete')} onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(t.id); }} class="icon-button" aria-label={`Delete template ${t.name}`}>
                             <Trash2 size={13} />
                           </button>
                         </div>
@@ -1548,21 +1563,21 @@ const Provisioning: Component = () => {
             </div>
 
             <div class="flex gap-1 border-b border-subtle mb-4">
-              <button type="button" onClick={() => setTemplateTab('rules')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'rules' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />Rules</span></button>
-              <button type="button" onClick={() => setTemplateTab('variables')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'variables' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Variable size={12} />Variables</span></button>
+              <Show when={canVisit('settings.provisioning.rules')}><button type="button" onClick={() => setTemplateTab('rules')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'rules' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />Rules</span></button></Show>
+              <Show when={canVisit('settings.provisioning.variables')}><button type="button" onClick={() => setTemplateTab('variables')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'variables' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Variable size={12} />Variables</span></button></Show>
               <button type="button" onClick={() => setTemplateTab('metrics')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'metrics' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>
                 <span class="flex items-center gap-1.5"><Activity size={12} />Metrics</span>
               </button>
-              <button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Advanced settings</span></button>
-              <button type="button" onClick={() => setTemplateTab('cpe_detail')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'cpe_detail' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SettingsIcon size={12} />CPE detail</span></button>
+              <Show when={canVisit('settings.provisioning.features')}><button type="button" onClick={() => setTemplateTab('features')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'features' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SlidersHorizontal size={12} />Advanced settings</span></button></Show>
+              <Show when={canVisit('settings.provisioning.cpe_detail')}><button type="button" onClick={() => setTemplateTab('cpe_detail')} class={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors ${templateTab() === 'cpe_detail' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><SettingsIcon size={12} />CPE detail</span></button></Show>
             </div>
 
-            <Show when={templateTab() === 'cpe_detail'}>
+            <Show when={canVisit('settings.provisioning.cpe_detail') && templateTab() === 'cpe_detail'}>
               <div class="mb-4 flex gap-1 border-b border-subtle" role="tablist" aria-label="CPE detail settings">
-                <button type="button" role="tab" aria-selected={templateDetailTab() === 'lan'} onClick={() => setTemplateDetailTab('lan')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'lan' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Network size={12} />LAN ports</span></button>
-                <button type="button" role="tab" aria-selected={templateDetailTab() === 'cpe_info'} onClick={() => setTemplateDetailTab('cpe_info')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'cpe_info' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />CPE info</span></button>
+                <Show when={canVisit('settings.provisioning.cpe_detail.lan')}><button type="button" role="tab" aria-selected={templateDetailTab() === 'lan'} onClick={() => setTemplateDetailTab('lan')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'lan' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Network size={12} />LAN ports</span></button></Show>
+                <Show when={canVisit('settings.provisioning.cpe_detail.info')}><button type="button" role="tab" aria-selected={templateDetailTab() === 'cpe_info'} onClick={() => setTemplateDetailTab('cpe_info')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'cpe_info' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />CPE info</span></button></Show>
               </div>
-              <Show when={templateDetailTab() === 'lan'}>
+              <Show when={canVisit('settings.provisioning.cpe_detail.lan') && templateDetailTab() === 'lan'}>
               <section class="space-y-4">
                 <div class="flex flex-wrap items-end justify-between gap-3">
                   <p class="max-w-3xl text-xs text-muted">Configure a model-specific vector panel and map each physical LAN port to its CWMP parameters. Unmapped or missing values appear as Unknown or N/A.</p>
@@ -1600,7 +1615,7 @@ const Provisioning: Component = () => {
                 </div>
               </section>
               </Show>
-              <Show when={templateDetailTab() === 'cpe_info'}>
+              <Show when={canVisit('settings.provisioning.cpe_detail.info') && templateDetailTab() === 'cpe_info'}>
                 <section class="space-y-4">
                   <div class="flex flex-wrap items-end justify-between gap-3">
                     <p class="max-w-3xl text-xs text-muted">Choose CWMP parameters or ACS timestamps shown in the ONT Information card. Drag rows to set their order, then save to apply the same order on CPE overview.</p>
@@ -1655,14 +1670,14 @@ const Provisioning: Component = () => {
               </Show>
             </Show>
 
-            <Show when={templateTab() === 'rules'}>
+            <Show when={canVisit('settings.provisioning.rules') && templateTab() === 'rules'}>
               <div class="mb-4 flex flex-wrap items-center justify-end gap-2">
-                <Show when={isFullAccess() && selectedProvRuleIDs().length > 0}>
+                <Show when={(can('settings.provisioning.rules', 'edit') || can('settings.provisioning.rules', 'delete')) && selectedProvRuleIDs().length > 0}>
                   <div class="mr-auto flex flex-wrap items-center gap-2" role="toolbar" aria-label="Selected provisioning rule actions">
                     <span class="text-xs text-muted" aria-live="polite">{selectedProvRuleIDs().length} selected</span>
-                    <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => void handleBulkProvAction('enable')} disabled={pendingAction() !== null}>Enable</button>
-                    <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => void handleBulkProvAction('disable')} disabled={pendingAction() !== null}>Disable</button>
-                    <button type="button" class="btn btn-secondary text-xs py-1.5 text-rose-400" onClick={() => void handleBulkProvAction('delete')} disabled={pendingAction() !== null}><Trash2 size={12} />Delete</button>
+                    <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => void handleBulkProvAction('enable')} disabled={!can('settings.provisioning.rules', 'edit') || pendingAction() !== null}>Enable</button>
+                    <button type="button" class="btn btn-secondary text-xs py-1.5" onClick={() => void handleBulkProvAction('disable')} disabled={!can('settings.provisioning.rules', 'edit') || pendingAction() !== null}>Disable</button>
+                    <button type="button" class="btn btn-secondary text-xs py-1.5 text-rose-400" onClick={() => void handleBulkProvAction('delete')} disabled={!can('settings.provisioning.rules', 'delete') || pendingAction() !== null}><Trash2 size={12} />Delete</button>
                   </div>
                 </Show>
                 <div class="relative block w-full sm:w-72">
@@ -1673,39 +1688,39 @@ const Provisioning: Component = () => {
                 <button onClick={openCreateProv} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add rule</button>
               </div>
             </Show>
-            <Show when={templateTab() === 'variables'}>
+            <Show when={canVisit('settings.provisioning.variables') && templateTab() === 'variables'}>
               <div class="mb-4 flex justify-end gap-2">
                 <button onClick={addTemplateVariable} class="btn btn-secondary text-xs py-1.5"><Plus size={12} />Add variable</button>
                 <button onClick={() => void saveTemplateVariables()} class="btn btn-primary text-xs py-1.5" disabled={variablesSaving()}><Save size={12} />{variablesSaving() ? 'Saving…' : 'Save variables'}</button>
               </div>
             </Show>
 
-          <Show when={templateTab() === 'features'}>
+          <Show when={canVisit('settings.provisioning.features') && templateTab() === 'features'}>
             <div class="space-y-4">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <p class="text-xs text-muted">Build device controls for {selectedTemplate()!.name}. Sections appear as tabs on matching device pages.</p>
                 <div class="flex items-center gap-2">
                   <Show when={(selectedTemplate()?.features?.length || 0) > 1}>
                     <div class="inline-flex items-center gap-1" role="group" aria-label="Reorder active Advanced settings section">
-                      <button type="button" class="icon-button" aria-label="Move active Advanced settings section left" title="Move section left" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[0]?.id} onClick={() => void moveActiveFeatureSection(-1)}><ChevronLeft size={14} /></button>
-                      <button type="button" class="icon-button" aria-label="Move active Advanced settings section right" title="Move section right" disabled={featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[(selectedTemplate()?.features?.length || 1) - 1]?.id} onClick={() => void moveActiveFeatureSection(1)}><ChevronRight size={14} /></button>
+                      <button type="button" class="icon-button" aria-label="Move active Advanced settings section left" title="Move section left" disabled={!can('settings.provisioning.features', 'edit') || featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[0]?.id} onClick={() => void moveActiveFeatureSection(-1)}><ChevronLeft size={14} /></button>
+                      <button type="button" class="icon-button" aria-label="Move active Advanced settings section right" title="Move section right" disabled={!can('settings.provisioning.features', 'edit') || featuresSaving() || activeFeature()?.id === selectedTemplate()?.features?.[(selectedTemplate()?.features?.length || 1) - 1]?.id} onClick={() => void moveActiveFeatureSection(1)}><ChevronRight size={14} /></button>
                     </div>
                   </Show>
-                  <button type="button" onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
+                  <button type="button" disabled={!can('settings.provisioning.features', 'edit')} onClick={() => openFeatureEditor()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add section</button>
                 </div>
               </div>
               <Show when={(selectedTemplate()?.features?.length || 0) > 0} fallback={<EmptyState compact title="No Advanced settings sections yet" description="Add a section, then add fields with their CWMP parameter paths and value types." />}>
                 <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Advanced settings sections">
-                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" draggable={!featuresSaving()} aria-label={`Advanced settings section ${feature.name}. Drag to reorder.`} aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} onDragStart={event => { setFeatureDraggedSection(feature.id); event.dataTransfer?.setData('text/plain', feature.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureSection(feature.id); }} onDragEnd={() => setFeatureDraggedSection(null)} class={`flex shrink-0 items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'} ${featureDraggedSection() === feature.id ? 'opacity-50' : ''}`}><GripVertical size={12} aria-hidden="true" />{feature.name}</button>}</For>
+                  <For each={selectedTemplate()?.features || []}>{feature => <button type="button" role="tab" draggable={can(`settings.provisioning.features.${feature.id}`, 'edit') && !featuresSaving()} aria-label={`Advanced settings section ${feature.name}. Drag to reorder.`} aria-selected={activeFeature()?.id === feature.id} onClick={() => setActiveFeatureID(feature.id)} onDragStart={event => { setFeatureDraggedSection(feature.id); event.dataTransfer?.setData('text/plain', feature.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureSection(feature.id); }} onDragEnd={() => setFeatureDraggedSection(null)} class={`flex shrink-0 items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium ${activeFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'} ${featureDraggedSection() === feature.id ? 'opacity-50' : ''}`}><GripVertical size={12} aria-hidden="true" />{feature.name}</button>}</For>
                 </div>
                 <Show when={activeFeature()}>{feature => <section class="card p-4 space-y-4">
                   <div class="flex flex-wrap items-start justify-between gap-3">
                     <div><h3 class="text-sm font-medium text-primary">{feature().name}</h3><p class="mt-1 text-xs text-muted">{feature().description || `${feature().controls.length} fields`}</p></div>
-                    <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-primary text-xs" onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><div class="relative" ref={featureMenu}><button type="button" class="icon-button" aria-label={`Actions for Advanced settings section ${feature().name}`} aria-haspopup="menu" aria-expanded={showFeatureMenu()} onClick={() => setShowFeatureMenu(value => !value)}><MoreVertical size={18} /></button><Show when={showFeatureMenu()}><div class="absolute right-0 top-full z-50 mt-2 min-w-40 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu"><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setShowFeatureMenu(false); openFeatureEditor(feature()); }}><Edit2 size={14} />Edit section</button><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-base" onClick={() => { setShowFeatureMenu(false); void deleteTemplateFeature(feature().id); }}><Trash2 size={14} />Delete</button></div></Show></div></div>
+                    <div class="flex flex-wrap gap-2"><Show when={selectedFeatureControlKeys().length > 0}><button type="button" class="btn btn-ghost text-xs text-rose-400" disabled={!can(`settings.provisioning.features.${feature().id}`, 'delete') || featuresSaving()} onClick={() => void deleteSelectedFeatureControls(feature())}><Trash2 size={13} />Delete selected ({selectedFeatureControlKeys().length})</button></Show><button type="button" class="btn btn-primary text-xs" disabled={!can(`settings.provisioning.features.${feature().id}`, 'edit')} onClick={() => openFeatureEditor(feature(), undefined, 'control')}><Plus size={13} />Add field</button><div class="relative" ref={featureMenu}><button type="button" class="icon-button" aria-label={`Actions for Advanced settings section ${feature().name}`} aria-haspopup="menu" aria-expanded={showFeatureMenu()} onClick={() => setShowFeatureMenu(value => !value)}><MoreVertical size={18} /></button><Show when={showFeatureMenu()}><div class="absolute right-0 top-full z-50 mt-2 min-w-40 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu"><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" disabled={!can(`settings.provisioning.features.${feature().id}`, 'edit')} onClick={() => { setShowFeatureMenu(false); openFeatureEditor(feature()); }}><Edit2 size={14} />Edit section</button><button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-base" disabled={!can(`settings.provisioning.features.${feature().id}`, 'delete')} onClick={() => { setShowFeatureMenu(false); void deleteTemplateFeature(feature().id); }}><Trash2 size={14} />Delete</button></div></Show></div></div>
                   </div>
                   <Show when={feature().controls.length > 0} fallback={<p class="rounded border border-dashed border-subtle p-5 text-center text-xs text-muted">No fields in this section yet.</p>}>
                     <div class="overflow-x-auto"><table class="data-table w-full min-w-[820px] text-xs"><thead><tr><th class="w-8 whitespace-nowrap"><input type="checkbox" aria-label="Select all fields" checked={feature().controls.length > 0 && feature().controls.every(control => selectedFeatureControlKeys().includes(control.key))} onChange={event => selectAllFeatureControls(feature(), event.currentTarget.checked)} /></th><th class="w-8 whitespace-nowrap"></th><For each={featureTableColumns}>{column => <Show when={featureColumns.isVisible(column.id)}><th class="text-left whitespace-nowrap">{column.label}</th></Show>}</For><th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right whitespace-nowrap">Actions</th><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="py-2 pr-2 whitespace-nowrap"><ColumnVisibility columns={featureColumns.columns} onToggle={featureColumns.toggle} /></th></tr></thead><tbody>
-                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={!featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 text-center whitespace-nowrap"><input type="checkbox" aria-label={`Select ${control.label}`} checked={selectedFeatureControlKeys().includes(control.key)} onChange={() => toggleFeatureControlSelection(control.key)} /></td><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted whitespace-nowrap" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><Show when={featureColumns.isVisible('label')}><td data-column-order-id="label#0" class="py-2 pr-3 whitespace-nowrap"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td></Show><Show when={featureColumns.isVisible('type')}><td data-column-order-id="type#0" class="py-2 pr-3 whitespace-nowrap">{control.type}</td></Show><Show when={featureColumns.isVisible('parameter')}><td data-column-order-id="cwmp parameter#0" class="py-2 pr-3 font-mono text-muted break-words [overflow-wrap:anywhere]">{control.parameter}</td></Show><Show when={featureColumns.isVisible('input')}><td data-column-order-id="input#0" class="py-2 pr-3 whitespace-nowrap">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td></Show><Show when={featureColumns.isVisible('group')}><td data-column-order-id="collapsible box#0" class="py-2 pr-3 whitespace-nowrap">{control.group || '—'}</td></Show><td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right whitespace-nowrap"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" disabled={featuresSaving()} onClick={() => void copyFeatureControl(feature(), control)}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2 whitespace-nowrap"></td></tr>}</For>
+                      <For each={feature().controls}>{control => <tr class={`border-t border-subtle/50 ${featureDraggedControl() === control.key ? 'opacity-50' : ''}`} draggable={can(`settings.provisioning.features.${feature().id}`, 'edit') && !featuresSaving()} onDragStart={event => { setFeatureDraggedControl(control.key); event.dataTransfer?.setData('text/plain', control.key); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); void reorderFeatureControl(feature(), control.key); }} onDragEnd={() => setFeatureDraggedControl(null)}><td class="py-2 pr-2 text-center whitespace-nowrap"><input type="checkbox" aria-label={`Select ${control.label}`} checked={selectedFeatureControlKeys().includes(control.key)} onChange={() => toggleFeatureControlSelection(control.key)} /></td><td class="py-2 pr-2 cursor-grab active:cursor-grabbing text-muted whitespace-nowrap" aria-label={`Reorder ${control.label}`} title="Drag to reorder"><GripVertical size={13} /></td><Show when={featureColumns.isVisible('label')}><td data-column-order-id="label#0" class="py-2 pr-3 whitespace-nowrap"><span class="font-medium text-primary">{control.label}</span><Show when={control.description}><span class="mt-0.5 block text-muted">{control.description}</span></Show></td></Show><Show when={featureColumns.isVisible('type')}><td data-column-order-id="type#0" class="py-2 pr-3 whitespace-nowrap">{control.type}</td></Show><Show when={featureColumns.isVisible('parameter')}><td data-column-order-id="cwmp parameter#0" class="py-2 pr-3 font-mono text-muted break-words [overflow-wrap:anywhere]">{control.parameter}</td></Show><Show when={featureColumns.isVisible('input')}><td data-column-order-id="input#0" class="py-2 pr-3 whitespace-nowrap">{control.type === 'boolean' ? 'Toggle' : control.type === 'object' ? 'Add object' : control.options?.length ? `Select · ${control.options.length} options` : 'Input'}</td></Show><Show when={featureColumns.isVisible('group')}><td data-column-order-id="collapsible box#0" class="py-2 pr-3 whitespace-nowrap">{control.group || '—'}</td></Show><td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right whitespace-nowrap"><div class="inline-flex gap-1"><button type="button" class="icon-button" aria-label={`Edit ${control.label}`} disabled={!can(`settings.provisioning.features.${feature().id}`, 'edit')} onClick={() => openFeatureEditor(feature(), control)}><Edit2 size={13} /></button><button type="button" class="icon-button" aria-label={`Copy ${control.label}`} title="Copy field" disabled={!can(`settings.provisioning.features.${feature().id}`, 'edit') || featuresSaving()} onClick={() => void copyFeatureControl(feature(), control)}><Copy size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label}`} disabled={!can(`settings.provisioning.features.${feature().id}`, 'delete')} onClick={() => void deleteFeatureControl(feature(), control.key)}><Trash2 size={13} /></button></div></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2 whitespace-nowrap"></td></tr>}</For>
                     </tbody></table></div>
                   </Show>
                 </section>}</Show>
@@ -1713,7 +1728,7 @@ const Provisioning: Component = () => {
             </div>
           </Show>
 
-          <Show when={templateTab() === 'rules'}>
+          <Show when={canVisit('settings.provisioning.rules') && templateTab() === 'rules'}>
           <Show when={provError()}>
             <ResourceError title="Provisioning rules are unavailable" description="The current provisioning policy could not be loaded. Retry before changing a device rollout." onRetry={loadProvRules} />
           </Show>
@@ -1723,7 +1738,7 @@ const Provisioning: Component = () => {
               <table class="data-table w-full text-left">
                 <thead>
                   <tr class="border-b border-subtle">
-                    <Show when={isFullAccess()}>
+                    <Show when={can('settings.provisioning.rules', 'edit') || can('settings.provisioning.rules', 'delete')}>
                       <th class="py-2 pr-2 w-8 text-xs font-medium text-muted uppercase tracking-wide">
                         <input type="checkbox" aria-label="Select all rules on this page" checked={allPagedProvRulesSelected()} onChange={(event) => selectPagedProvRules(event.currentTarget.checked)} disabled={pendingAction() !== null || pagedProvRules().length === 0} />
                       </th>
@@ -1752,7 +1767,7 @@ const Provisioning: Component = () => {
                         onDragOver={handleRowDragOver}
                         onDrop={(e) => handleRowDrop(e, p.id)}
                       >
-                        <Show when={isFullAccess()}>
+                        <Show when={can('settings.provisioning.rules', 'edit') || can('settings.provisioning.rules', 'delete')}>
                           <td class="py-2 pr-2 text-center whitespace-nowrap">
                             <input type="checkbox" aria-label={`Select provisioning rule ${p.parameter_name}`} checked={selectedProvRuleIDs().includes(p.id)} onChange={() => toggleProvRuleSelection(p.id)} disabled={pendingAction() !== null} />
                           </td>
@@ -1809,13 +1824,13 @@ const Provisioning: Component = () => {
                         </Show>
                         <td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right">
                           <div class="flex items-center justify-end gap-1">
-                            <button onClick={() => openEditProv(p)} class="icon-button" aria-label={`Edit provisioning rule ${p.parameter_name}`} disabled={pendingAction() !== null}>
+                            <button onClick={() => openEditProv(p)} class="icon-button" aria-label={`Edit provisioning rule ${p.parameter_name}`} disabled={!can('settings.provisioning.rules', 'edit') || pendingAction() !== null}>
                               <Edit2 size={14} />
                             </button>
-                            <button onClick={() => openCopyProv(p)} class="icon-button" aria-label={`Copy provisioning rule ${p.parameter_name}`} disabled={pendingAction() !== null}>
+                            <button onClick={() => openCopyProv(p)} class="icon-button" aria-label={`Copy provisioning rule ${p.parameter_name}`} disabled={!can('settings.provisioning.rules', 'edit') || pendingAction() !== null}>
                               <Copy size={14} />
                             </button>
-                            <button onClick={() => handleDeleteProv(p.id)} class="icon-button" aria-label={`Delete provisioning rule ${p.parameter_name}`} disabled={pendingAction() !== null}>
+                            <button onClick={() => handleDeleteProv(p.id)} class="icon-button" aria-label={`Delete provisioning rule ${p.parameter_name}`} disabled={!can('settings.provisioning.rules', 'delete') || pendingAction() !== null}>
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -1834,7 +1849,7 @@ const Provisioning: Component = () => {
           </Show>
           </Show>
 
-          <Show when={templateTab() === 'variables'}>
+          <Show when={canVisit('settings.provisioning.variables') && templateTab() === 'variables'}>
             <div class="space-y-4">
               <div class="rounded border border-subtle bg-base p-3 text-sm text-muted">
                 Define reusable values and reference them in provisioning rules as <code class="text-primary">{'{{variable_name}}'}</code>. Each variable starts from its source, then applies transformations in order.
@@ -1899,25 +1914,25 @@ const Provisioning: Component = () => {
             </div>
           </Show>
 
-          <Show when={templateTab() === 'metrics'}>
+          <Show when={canVisit('settings.provisioning.metrics') && templateTab() === 'metrics'}>
             <div class="mb-4 flex flex-wrap gap-1 border-b border-subtle" aria-label="Metric configuration sections">
-              <button type="button" data-ui-section aria-pressed={metricSubTab() === 'general'} onClick={() => setMetricSubTab('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General Metrics</button>
-              <button type="button" data-ui-section aria-pressed={metricSubTab() === 'interface'} onClick={() => setMetricSubTab('interface')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'interface' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Per-interface metrics</button>
-              <button type="button" data-ui-section aria-pressed={metricSubTab() === 'polling'} onClick={() => setMetricSubTab('polling')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'polling' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Additional polling</button>
+              <Show when={canVisit('settings.provisioning.metrics.general')}><button type="button" data-ui-section aria-pressed={metricSubTab() === 'general'} onClick={() => setMetricSubTab('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General Metrics</button></Show>
+              <Show when={canVisit('settings.provisioning.metrics.interface')}><button type="button" data-ui-section aria-pressed={metricSubTab() === 'interface'} onClick={() => setMetricSubTab('interface')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'interface' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Per-interface metrics</button></Show>
+              <Show when={canVisit('settings.provisioning.metrics.polling')}><button type="button" data-ui-section aria-pressed={metricSubTab() === 'polling'} onClick={() => setMetricSubTab('polling')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${metricSubTab() === 'polling' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Additional polling</button></Show>
             </div>
-            <Show when={metricSubTab() === 'polling'}><section class="mb-6">
+            <Show when={canVisit('settings.provisioning.metrics.polling') && metricSubTab() === 'polling'}><section class="mb-6">
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div><h3 class="text-sm font-semibold text-primary">Additional parameter polling</h3><p class="mt-1 text-xs text-muted">GPV requests run when the CPE opens a CWMP session. Wildcards match paths already known for the device.</p></div>
                 <Show when={isFullAccess()}><button type="button" class="btn btn-primary text-xs py-1.5" onClick={() => openParameterPollModal()}><Plus size={12} />Add parameter</button></Show>
               </div>
               <Show when={parameterPolls()?.length} fallback={<p class="py-3 text-xs text-muted">No additional parameter polling rules configured.</p>}>
-                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[52rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={parameterPollTableColumns}>{column => <Show when={parameterPollColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[60%]' : ''}`}><SortableHeader column={column.id} label={column.label} sortBy={parameterPollSort().column} direction={parameterPollSort().direction} onSort={toggleSort(setParameterPollSort)}><ColumnFilter columnId={column.id} label={column.label} active={parameterPollFilters()[column.id] || null} onApply={state => setMetricFilter(setParameterPollFilters, column.id, state)} /></SortableHeader></th></Show>}</For><th data-column-order-id="actions#0" data-column-fixed="actions" class="py-2 text-right">Actions</th><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="py-2 pr-2"><ColumnVisibility columns={parameterPollColumns.columns} onToggle={parameterPollColumns.toggle} /></th></tr></thead><tbody><For each={filteredParameterPolls()}>{definition => <tr class="border-t border-subtle/50 text-xs"><Show when={parameterPollColumns.isVisible('parameter')}><td data-column-order-id="parameter path#0" class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td></Show><Show when={parameterPollColumns.isVisible('interval')}><td data-column-order-id="interval#0" class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td></Show><Show when={parameterPollColumns.isVisible('now')}><td data-column-order-id="now#0" class="py-2 pr-3"><Show when={isFullAccess()} fallback={<span class={`badge ${definition.now ? 'badge-success' : 'badge-error'}`}>{definition.now ? 'Yes' : 'No'}</span>}><button type="button" class={`badge cursor-pointer ${definition.now ? 'badge-success' : 'badge-error'}`} aria-label={`${definition.now ? 'Disable' : 'Enable'} Now for ${definition.parameter_pattern}`} aria-pressed={definition.now} onClick={() => void toggleParameterPoll(definition, 'now')} disabled={pendingParameterPoll() !== null}>{definition.now ? 'Yes' : 'No'}</button></Show></td></Show><Show when={parameterPollColumns.isVisible('active')}><td data-column-order-id="active#0" class="py-2 pr-3"><BooleanIndicator value={definition.active} label={`Active for polling rule ${definition.parameter_pattern}`} editable={isFullAccess() && hasAnyPermission('provisioning.templates.write', 'provisioning.write')} disabled={pendingParameterPoll() !== null} onToggle={() => toggleParameterPoll(definition, 'active')} /></td></Show><td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right"><Show when={isFullAccess()}><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openParameterPollModal(definition)} title="Edit polling rule" aria-label={`Edit ${definition.parameter_pattern}`}><Edit size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label={`Delete ${definition.parameter_pattern}`}><Trash2 size={14} /></button></div></Show></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table class="data-table w-full min-w-[52rem] table-fixed text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={parameterPollTableColumns}>{column => <Show when={parameterPollColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[60%]' : ''}`}><SortableHeader column={column.id} label={column.label} sortBy={parameterPollSort().column} direction={parameterPollSort().direction} onSort={toggleSort(setParameterPollSort)}><ColumnFilter columnId={column.id} label={column.label} active={parameterPollFilters()[column.id] || null} onApply={state => setMetricFilter(setParameterPollFilters, column.id, state)} /></SortableHeader></th></Show>}</For><th data-column-order-id="actions#0" data-column-fixed="actions" class="py-2 text-right">Actions</th><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="py-2 pr-2"><ColumnVisibility columns={parameterPollColumns.columns} onToggle={parameterPollColumns.toggle} /></th></tr></thead><tbody><For each={filteredParameterPolls()}>{definition => <tr class="border-t border-subtle/50 text-xs"><Show when={parameterPollColumns.isVisible('parameter')}><td data-column-order-id="parameter path#0" class="py-2 pr-3 font-mono text-secondary break-all">{definition.parameter_pattern}</td></Show><Show when={parameterPollColumns.isVisible('interval')}><td data-column-order-id="interval#0" class="py-2 pr-3 text-secondary">{definition.interval_seconds}s</td></Show><Show when={parameterPollColumns.isVisible('now')}><td data-column-order-id="now#0" class="py-2 pr-3"><Show when={isFullAccess()} fallback={<span class={`badge ${definition.now ? 'badge-success' : 'badge-error'}`}>{definition.now ? 'Yes' : 'No'}</span>}><button type="button" class={`badge cursor-pointer ${definition.now ? 'badge-success' : 'badge-error'}`} aria-label={`${definition.now ? 'Disable' : 'Enable'} Now for ${definition.parameter_pattern}`} aria-pressed={definition.now} onClick={() => void toggleParameterPoll(definition, 'now')} disabled={pendingParameterPoll() !== null}>{definition.now ? 'Yes' : 'No'}</button></Show></td></Show><Show when={parameterPollColumns.isVisible('active')}><td data-column-order-id="active#0" class="py-2 pr-3"><BooleanIndicator value={definition.active} label={`Active for polling rule ${definition.parameter_pattern}`} editable={isFullAccess() && hasAnyPermission('provisioning.templates.write', 'provisioning.write')} disabled={pendingParameterPoll() !== null} onToggle={() => toggleParameterPoll(definition, 'active')} /></td></Show><td data-column-fixed="actions" data-column-order-id="actions#0" class="py-2 text-right"><Show when={can('settings.provisioning.metrics.polling', 'edit') || can('settings.provisioning.metrics.polling', 'delete')}><div class="flex justify-end gap-1"><button type="button" class="icon-button" disabled={!can('settings.provisioning.metrics.polling', 'edit')} onClick={() => openParameterPollModal(definition)} title="Edit polling rule" aria-label={`Edit ${definition.parameter_pattern}`}><Edit size={14} /></button><button type="button" class="icon-button text-red-400" disabled={!can('settings.provisioning.metrics.polling', 'delete')} onClick={() => void deleteParameterPoll(definition)} title="Delete polling rule" aria-label={`Delete ${definition.parameter_pattern}`}><Trash2 size={14} /></button></div></Show></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section></Show>
-            <Show when={metricSubTab() === 'general'}>
+            <Show when={canVisit('settings.provisioning.metrics.general') && metricSubTab() === 'general'}>
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 class="text-sm font-semibold text-primary">General Metrics</h3>
-                <Show when={isFullAccess()}><button type="button" class="btn btn-primary text-xs py-1.5" onClick={openCreateMetric}><Plus size={12} />Add metric</button></Show>
+                <Show when={can('settings.provisioning.metrics.general.metric', 'edit')}><button type="button" class="btn btn-primary text-xs py-1.5" onClick={openCreateMetric}><Plus size={12} />Add metric</button></Show>
               </div>
               <Show when={metrics() !== undefined}>
               <div class="overflow-x-auto table-scroll">
@@ -1964,7 +1979,7 @@ const Provisioning: Component = () => {
                               <button type="button" onClick={() => openCopyMetric(def)} class="icon-button" title="Copy metric" aria-label={`Copy ${def.name}`}>
                                 <Copy size={14} />
                               </button>
-                              <button type="button" onClick={() => handleDeleteMetric(def)} class="icon-button text-red-400" title="Delete metric" aria-label={`Delete ${def.name}`}>
+                              <button type="button" disabled={!can('settings.provisioning.metrics.general.metric', 'delete')} onClick={() => handleDeleteMetric(def)} class="icon-button text-red-400" title="Delete metric" aria-label={`Delete ${def.name}`}>
                                 <Trash2 size={14} />
                               </button>
                             </div>
@@ -1980,13 +1995,13 @@ const Provisioning: Component = () => {
               </Show>
               </Show>
             </Show>
-            <Show when={metricSubTab() === 'interface'}><section>
+            <Show when={canVisit('settings.provisioning.metrics.interface') && metricSubTab() === 'interface'}><section>
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 class="text-sm font-semibold text-primary">Per-interface WAN/LAN metrics</h3>
-                <button onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
+                <button disabled={!can('settings.provisioning.metrics.interface', 'edit')} onClick={() => openInterfaceMetric()} class="btn btn-primary text-xs py-1.5"><Plus size={12} />Add WAN/LAN metric</button>
               </div>
               <Show when={interfaceMetrics()?.length} fallback={<p class="text-xs text-muted">No per-interface metrics configured for this template.</p>}>
-                <div class="overflow-x-auto table-scroll"><table data-column-order-key="provisioning-metrics-interface" class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}><SortableHeader column={column.id} label={column.label} sortBy={interfaceMetricSort().column} direction={interfaceMetricSort().direction} onSort={toggleSort(setInterfaceMetricSort)}><ColumnFilter columnId={column.id} label={column.label} numeric={['min_interval', 'gpv_interval', 'multiplier'].includes(column.id)} active={interfaceMetricFilters()[column.id] || null} onApply={state => setMetricFilter(setInterfaceMetricFilters, column.id, state)} /></SortableHeader></th></Show>}</For><th data-column-order-id="actions#0" data-column-fixed="actions" class="py-2 text-right">Actions</th><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={filteredInterfaceMetrics()}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td data-column-order-id={metricColumnOrderId('actions')} class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+                <div class="overflow-x-auto table-scroll"><table data-column-order-key="provisioning-metrics-interface" class="data-table w-full table-auto text-left"><thead><tr class="border-b border-subtle text-xs text-muted uppercase"><For each={interfaceMetricTableColumns}>{column => <Show when={interfaceMetricColumns.isVisible(column.id)}><th class={`py-2 pr-3 ${column.id === 'parameter' ? 'w-[34%] max-w-[40vw]' : ''}`}><SortableHeader column={column.id} label={column.label} sortBy={interfaceMetricSort().column} direction={interfaceMetricSort().direction} onSort={toggleSort(setInterfaceMetricSort)}><ColumnFilter columnId={column.id} label={column.label} numeric={['min_interval', 'gpv_interval', 'multiplier'].includes(column.id)} active={interfaceMetricFilters()[column.id] || null} onApply={state => setMetricFilter(setInterfaceMetricFilters, column.id, state)} /></SortableHeader></th></Show>}</For><th data-column-order-id="actions#0" data-column-fixed="actions" class="py-2 text-right">Actions</th><th data-column-order-id="__visibility#0" data-column-fixed="visibility" class="py-2 pr-2"><ColumnVisibility columns={interfaceMetricColumns.columns} onToggle={interfaceMetricColumns.toggle} /></th></tr></thead><tbody><For each={filteredInterfaceMetrics()}>{def => <tr class="border-b border-subtle/50 text-xs"><For each={interfaceMetricColumns.columns().filter(column => column.visible)}>{column => interfaceMetricCell(def, column.id)}</For><td data-column-order-id={metricColumnOrderId('actions')} class="py-2 text-right"><div class="flex justify-end gap-1"><button type="button" class="icon-button" onClick={() => openInterfaceMetric(def)} title="Edit metric" aria-label={`Edit ${def.name}`}><Edit size={14} /></button><button type="button" class="icon-button" disabled={!can('settings.provisioning.metrics.interface', 'edit')} onClick={() => copyInterfaceMetric(def)} title="Copy metric" aria-label={`Copy ${def.name}`}><Copy size={14} /></button><button type="button" class="icon-button text-red-400" disabled={!can('settings.provisioning.metrics.interface', 'delete')} onClick={() => void deleteInterfaceMetric(def)} title="Delete metric" aria-label={`Delete ${def.name}`}><Trash2 size={14} /></button></div></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
               </Show>
             </section></Show>
           </Show>
@@ -2274,8 +2289,8 @@ const Provisioning: Component = () => {
 
       {/* Metric Modal */}
       <Show when={showParameterPollModal()}>
-        <Dialog title={editingParameterPoll() ? 'Edit parameter polling rule' : 'Add parameter polling rule'} description="Set which CWMP parameter to refresh and how often to request it." headerBadge={<Show when={parameterPollDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeParameterPollModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeParameterPollModal}>Cancel</button><button type="submit" form="parameter-poll-form" class="btn btn-primary">{editingParameterPoll() ? 'Save rule' : 'Add rule'}</button></>}>
-          <form id="parameter-poll-form" class="space-y-4" onSubmit={(event) => void saveParameterPoll(event)}>
+        <Dialog title={editingParameterPoll() ? 'Edit parameter polling rule' : 'Add parameter polling rule'} description="Set which CWMP parameter to refresh and how often to request it." headerBadge={<Show when={parameterPollDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeParameterPollModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeParameterPollModal}>Cancel</button><button type="submit" form="parameter-poll-form" disabled={!can('settings.provisioning.metrics.polling', 'edit')} class="btn btn-primary">{editingParameterPoll() ? 'Save rule' : 'Add rule'}</button></>}>
+          <form id="parameter-poll-form" class="space-y-4" onSubmit={(event) => void saveParameterPoll(event)}><fieldset disabled={!can('settings.provisioning.metrics.polling', 'edit')} class="space-y-3">
             <label class="block text-xs text-muted">CWMP parameter path
               <input class="input mt-1 w-full font-mono text-xs" required maxlength="512" placeholder="InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.RadioEnabled" value={parameterPollForm().parameter_pattern} onInput={event => setParameterPollForm(form => ({ ...form, parameter_pattern: event.currentTarget.value }))} />
             </label>
@@ -2289,12 +2304,12 @@ const Provisioning: Component = () => {
             </div>
             <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().active} onChange={event => setParameterPollForm(form => ({ ...form, active: event.currentTarget.checked }))} />Active</label>
             <p class="text-xs text-muted">The request is sent when the CPE opens a CWMP session after the interval expires.</p>
-          </form>
+          </fieldset></form>
         </Dialog>
       </Show>
       <Show when={showInterfaceMetricModal()}>
-        <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." headerBadge={<Show when={interfaceMetricDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" class="btn btn-primary">Save metric</button></>}>
-          <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}>
+        <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." headerBadge={<Show when={interfaceMetricDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" disabled={!can('settings.provisioning.metrics.interface', 'edit')} class="btn btn-primary">Save metric</button></>}>
+          <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}><fieldset disabled={!can('settings.provisioning.metrics.interface', 'edit')} class="space-y-3">
             <label class="block text-xs text-muted">Name (max 20 characters)<input required maxlength={20} class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
             <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
             <label for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></label>
@@ -2307,7 +2322,7 @@ const Provisioning: Component = () => {
             <p class="text-xs text-muted">Metrics with the same group name and chart type can be plotted together, such as received and sent bytes.</p>
             <label class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></label>
             <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={interfaceMetricForm().active} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} />Active</label>
-          </form>
+          </fieldset></form>
         </Dialog>
       </Show>
       <Show when={deleteReauthRequest()}>

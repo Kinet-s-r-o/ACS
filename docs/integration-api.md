@@ -22,7 +22,7 @@ These are service credentials: interactive 2FA applies when the administrator si
 
 Up to 100 unexpired, unrevoked tokens may exist per user. Rotate by generating a replacement, changing the billing secret, verifying `/v1/me`, then revoking the old token. Revocation does not cancel tasks already queued. Metadata lists include creation, expiry, last-used and revoked timestamps. Last-used is updated at most once per minute, not for every request.
 
-Token creation, listing and revocation are console-only operations. They require a full-access console session and normal CSRF protection for mutations; no integration API token can administer API tokens.
+Token creation, listing and revocation are console-only operations. They require Read and the relevant Edit/Delete action on `settings.users.users.tokens`, authority over the target user, and normal CSRF protection for mutations; no integration API token can administer API tokens.
 
 ## Transport and operational limits
 
@@ -39,13 +39,15 @@ All paths below are relative to the public API base (`/api` in a standard revers
 | Method | Path | Permission | Result |
 | --- | --- | --- | --- |
 | GET | `/v1/me` | Valid token | Current owner, system, token ID and permissions |
-| GET | `/v1/devices` | `devices.read` | Paginated CPE identities, ordered by ID ascending |
-| GET | `/v1/devices/{serial}` | `devices.read` | Latest stored identity and availability |
-| GET | `/v1/devices/{serial}/parameters` | `devices.read` | Paginated stored parameters and timestamps |
-| POST | `/v1/devices/{serial}/read` | `devices.write` | Queue GetParameterValues |
-| POST | `/v1/devices/{serial}/write` | `devices.write` | Queue SetParameterValues |
-| GET | `/v1/devices/{serial}/tasks` | `devices.read` | Paginated device task summaries, newest ID first |
-| GET | `/v1/devices/{serial}/tasks/{taskID}` | `devices.read` | Task state, result and errors |
+| GET | `/v1/devices` | `access.inventory.cpes.read` | Paginated CPE identities, ordered by ID ascending |
+| GET | `/v1/devices/{serial}` | Read on `inventory.cpes` or a CPE detail tab | Latest stored identity and availability |
+| GET | `/v1/devices/{serial}/parameters` | `access.inventory.cpes.maintenance.diagnostic.read` | Paginated stored parameters and timestamps |
+| POST | `/v1/devices/{serial}/read` | Read + Edit on `inventory.cpes.maintenance.diagnostic` or `inventory.cpes.overview` | Queue GetParameterValues |
+| POST | `/v1/devices/{serial}/write` | Read + Edit on `inventory.cpes.maintenance.diagnostic` or `inventory.cpes.overview` | Queue SetParameterValues |
+| GET | `/v1/devices/{serial}/tasks` | Read on `inventory.cpes.tasks` or its Requested/Result tab | Paginated device task summaries, newest ID first |
+| GET | `/v1/devices/{serial}/tasks/{taskID}` | Read on `inventory.cpes.tasks` or its Requested/Result tab | Task state, result and errors |
+
+Permission keys use the `access.<section>.<action>` format. Full grants only its own row. Task payload/result additionally require Read on `inventory.cpes.tasks.requested` / `.result`. Network writes through Overview require Edit on the matching Wi-Fi/LAN/WAN tab; Diagnostic Edit authorizes the separate raw-parameter workflow.
 
 Serial numbers are exact and case-sensitive. URL-encode them as individual path segments. Internal numeric device IDs are not required for CPE operations. Task IDs are checked against the supplied serial; a mismatch returns 404. Device identity responses omit connection-request credentials and full parameter trees.
 
@@ -55,7 +57,7 @@ List responses use `{ "items": [...], "next_cursor": "..." }`. Supply `limit` (1
 
 Stored parameters support repeatable `name` filters for exact paths and a literal `prefix` filter. Repeated names use OR; prefix and names combine with AND. An unknown parameter is omitted (an empty list is valid); an unknown CPE returns 404. A parameter's `updated_at` indicates freshness. `writable` is omitted if unknown. `value_type` may also be unavailable before the device reports it.
 
-Sensitive parameter values follow console visibility: full-access owners can read decrypted stored values; other users receive `[REDACTED]`. Sensitive values in task details are always redacted. Write acknowledgements omit payloads; task lists omit both payloads and results. Stored sensitive write values use the existing parameter encryption key. Use a dedicated role instead of an administrator token when the billing system does not need sensitive reads.
+Sensitive parameter values follow console visibility: owners with Full on the parameter workflow can read decrypted stored values; other users receive `[REDACTED]`. Sensitive values in task details are always redacted. Write acknowledgements omit payloads; task lists omit both payloads and results. Stored sensitive write values use the existing parameter encryption key. Use a dedicated role instead of an administrator token when the billing system does not need sensitive reads.
 
 ## Cached read example
 
