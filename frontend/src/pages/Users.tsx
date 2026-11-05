@@ -51,6 +51,7 @@ const UsersPage: Component = () => {
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.users');
   const { columns, isVisible, toggle } = useColumnVisibility('users', [
     { id: 'username', label: 'Username', visible: true },
+    { id: 'auth_provider', label: 'Account type', visible: true },
     { id: 'active', label: 'Active', visible: true },
     { id: 'first_name', label: 'First name', visible: true },
     { id: 'last_name', label: 'Last name', visible: true },
@@ -78,6 +79,7 @@ const UsersPage: Component = () => {
   const getFilterValue = (user: User, colId: string): string => {
     switch (colId) {
       case 'username': return user.username || '';
+      case 'auth_provider': return (user.auth_provider || 'local').toLowerCase() === 'radius' ? 'Radius' : 'Local';
       case 'active': return user.active ? 'Yes' : 'No';
       case 'first_name': return user.first_name || '';
       case 'last_name': return user.last_name || '';
@@ -96,6 +98,7 @@ const UsersPage: Component = () => {
     if (query) {
       all = all.filter(u =>
         u.username?.toLowerCase().includes(query) ||
+        (u.auth_provider || 'local').toLowerCase().includes(query) ||
         (u.active ? 'active yes' : 'inactive no').includes(query) ||
         u.first_name?.toLowerCase().includes(query) ||
         u.last_name?.toLowerCase().includes(query) ||
@@ -222,6 +225,13 @@ const UsersPage: Component = () => {
                     </SortableHeader>
                   </th>
                 </Show>
+                <Show when={isVisible('auth_provider')}>
+                  <th data-column-order-id="account type#0" class="text-left py-2 text-xs text-muted font-medium">
+                    <SortableHeader column="auth_provider" label="Account type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>
+                      <ColumnFilter columnId="auth_provider" label="Account type" active={columnFilters()['auth_provider'] || null} onApply={(state) => applyUserFilter('auth_provider', state)} />
+                    </SortableHeader>
+                  </th>
+                </Show>
                 <Show when={isVisible('active')}><th data-column-order-id="active#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="active" label="Active" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="active" label="Active" active={columnFilters()['active'] || null} onApply={(state) => applyUserFilter('active', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('first_name')}><th data-column-order-id="first name#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="first_name" label="First name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="first_name" label="First name" active={columnFilters()['first_name'] || null} onApply={(state) => applyUserFilter('first_name', state)} /></SortableHeader></th></Show>
                 <Show when={isVisible('last_name')}><th data-column-order-id="last name#0" class="text-left py-2 text-xs text-muted font-medium"><SortableHeader column="last_name" label="Last name" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}><ColumnFilter columnId="last_name" label="Last name" active={columnFilters()['last_name'] || null} onApply={(state) => applyUserFilter('last_name', state)} /></SortableHeader></th></Show>
@@ -246,7 +256,8 @@ const UsersPage: Component = () => {
               <For each={pagedUsers()}>
                 {(u) => (
                   <tr class="border-b border-subtle/50">
-                    <Show when={isVisible('username')}><td data-column-order-id="username#0" class="py-2 text-primary">{u.username}<span class="block text-xs text-muted">{u.auth_provider || 'local'}</span></td></Show>
+                    <Show when={isVisible('username')}><td data-column-order-id="username#0" class="py-2 text-primary">{u.username}</td></Show>
+                    <Show when={isVisible('auth_provider')}><td data-column-order-id="account type#0" class="py-2"><span class={`badge ${(u.auth_provider || 'local').toLowerCase() === 'radius' ? 'badge-warning' : 'badge-success'}`}>{(u.auth_provider || 'local').toLowerCase() === 'radius' ? 'Radius' : 'Local'}</span></td></Show>
                     <Show when={isVisible('active')}><td data-column-order-id="active#0" class="py-2"><BooleanIndicator value={u.active} label={`Active for operator ${u.username}`} editable={isFullAccess() && hasPermission('users.write')} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)} onToggle={() => handleSetUserActive(u)} /></td></Show>
                     <Show when={isVisible('first_name')}><td data-column-order-id="first name#0" class="py-2 text-primary">{u.first_name || '—'}</td></Show>
                     <Show when={isVisible('last_name')}><td data-column-order-id="last name#0" class="py-2 text-primary">{u.last_name || '—'}</td></Show>
