@@ -96,12 +96,13 @@ func (r *Router) handleTestRadius(w http.ResponseWriter, req *http.Request) {
 		respondError(w, http.StatusBadRequest, "Username and password are required")
 		return
 	}
-	config, err := r.loadRadiusConfig(req.Context())
-	if err == nil {
-		err = config.Authenticate(req.Context(), body.Username, body.Password)
-	}
+	err := r.authenticationModules().Authenticate(req.Context(), "radius", authn.Identity{Username: body.Username}, body.Password)
 	if err != nil {
 		status, message := authenticationError(err)
+		if errors.Is(err, authn.ErrDenied) {
+			// A rejected diagnostic credential is not an invalid ACS session.
+			status, message = http.StatusForbidden, "RADIUS rejected the test credentials"
+		}
 		respondError(w, status, message)
 		return
 	}

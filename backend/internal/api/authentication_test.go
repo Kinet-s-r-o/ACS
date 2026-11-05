@@ -28,6 +28,48 @@ func (p apiTestAuthModule) Authenticate(context.Context, authn.Identity, string)
 	return p.result
 }
 
+func TestRadiusDiagnosticPreservesACSSession(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		result error
+		status int
+	}{
+		{"accepted", nil, http.StatusOK},
+		{"rejected", authn.ErrDenied, http.StatusForbidden},
+		{"unavailable", authn.ErrUnavailable, http.StatusServiceUnavailable},
+		{"unsupported-challenge", authn.ErrChallengeUnsupported, http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			r := &Router{authModules: authn.NewRegistry(apiTestAuthModule{result: tc.result, calls: &calls}), loginLimiter: newLoginLimiter(5, time.Minute)}
+			req := httptest.NewRequest(http.MethodPost, "/settings/authentication/radius/test", strings.NewReader(`{"username":"radius-operator","password":"test-password"}`))
+			w := httptest.NewRecorder()
+			r.handleTestRadius(w, req)
+			if w.Code != tc.status || calls != 1 {
+				t.Fatalf("RADIUS diagnostic returned %d; want %d, module calls %d", w.Code, tc.status, calls)
+			}
+			if len(w.Result().Cookies()) != 0 || w.Header().Get("Location") != "" {
+				t.Fatal("RADIUS diagnostic changed the ACS session or redirected")
+			}
+			if tc.result == authn.ErrDenied && !strings.Contains(w.Body.String(), "RADIUS rejected the test credentials") {
+				t.Fatal("diagnostic rejection did not explain the RADIUS result")
+			}
+		})
+	}
+}
+
+func TestRadiusDiagnosticRequiresACSSession(t *testing.T) {
+	calls := 0
+	r := &Router{authModules: authn.NewRegistry(apiTestAuthModule{calls: &calls})}
+	handler := auth.AuthMiddleware(nil, nil, http.HandlerFunc(r.handleTestRadius))
+	req := httptest.NewRequest(http.MethodPost, "/settings/authentication/radius/test", strings.NewReader(`{"username":"radius-operator","password":"test-password"}`))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized || calls != 0 {
+		t.Fatal("RADIUS diagnostic must reject a missing ACS session before checking test credentials")
+	}
+}
+
 func TestAuthenticationSettingsRequiresExplicitPermission(t *testing.T) {
 	called := false
 	handler := requireAuthSettingsPermission(models.PermAuthSettingsRead, func(w http.ResponseWriter, _ *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) })
