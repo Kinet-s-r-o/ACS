@@ -63,6 +63,23 @@
   --scrollbar-thumb: 176 198 222;
 }
 
+/* Keep the root palette for charts; use black for light-mode content. */
+[data-theme="light"] body {
+  --text-primary: 0 0 0;
+  --text-secondary: 0 0 0;
+  --text-muted: 0 0 0;
+}
+
+[data-theme="light"] :is(button, [role="button"], .btn, .app-sidebar, .tab-bar, [role="tablist"], [role="tab"], .badge, .health-value, progress, meter, [role="progressbar"], .tag-color-swatch, .color-swatch) {
+  --text-primary: 22 43 67;
+  --text-secondary: 54 78 106;
+  --text-muted: 73 96 124;
+}
+
+:where([data-theme="light"] button, [data-theme="light"] [role="button"], [data-theme="light"] .app-sidebar) {
+  color: rgb(var(--text-primary));
+}
+
 /* Light mode: darken Tailwind 400-level text colors for readability on white */
 [data-theme="light"] .text-emerald-400 { color: rgb(4 120 87); }
 [data-theme="light"] .text-rose-400 { color: rgb(190 18 60); }
