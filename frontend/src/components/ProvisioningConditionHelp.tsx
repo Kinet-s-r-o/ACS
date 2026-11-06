@@ -14,7 +14,7 @@ const examples = [
   ['Group alternatives and exclude a tag', "(hasTag('branch-a') OR hasTag('branch-b')) AND notHasTag('blocked')"],
 ];
 
-const ConditionHelpContent: Component = () => (
+export const ConditionHelpContent: Component = () => (
     <div class="space-y-5 text-sm text-secondary">
       <section class="space-y-2">
         <h3 class="font-semibold text-primary">When conditions run</h3>

@@ -1,10 +1,11 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, CircleHelp, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
+import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth, usePermissionSection } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
-import ProvisioningConditionHelp from '../components/ProvisioningConditionHelp';
+import FieldHelpDialog, { HelpLabel } from '../components/FieldHelpDialog';
+import { ruleFieldHelp, interfaceFieldHelp, pollingFieldHelp } from '../lib/provisioningFieldHelp';
 import PageHeader from '../components/PageHeader';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
@@ -168,12 +169,6 @@ const Provisioning: Component = () => {
   let featureMenu: HTMLDivElement | undefined;
   let provisioningImportInput: HTMLInputElement | undefined;
   const [showProvModal, setShowProvModal] = createSignal(false);
-  const [showConditionHelp, setShowConditionHelp] = createSignal(false);
-  const [desktopConditionHelp, setDesktopConditionHelp] = createSignal(window.matchMedia('(min-width: 1024px)').matches);
-  const closeConditionHelp = () => {
-    setShowConditionHelp(false);
-    document.getElementById('provisioning-condition-help-trigger')?.focus();
-  };
   const [editingProv, setEditingProv] = createSignal<ProvisioningRule | null>(null);
   const emptyProvisioningRule = { template_id: 0, parameter_name: '', parameter_value: '', parameter_type: 'string', phase: 'bootstrap', tags: [] as string[], excluded_tags: [] as string[], enabled: true, description: '', add_object_path: '', order: 0, condition: '' };
   const [provForm, setProvForm] = createSignal({ ...emptyProvisioningRule });
@@ -419,10 +414,6 @@ const Provisioning: Component = () => {
     const cwmpStateTimer = window.setInterval(refreshCWMPState, 10000);
     window.addEventListener('focus', refreshCWMPState);
     onCleanup(() => { window.clearInterval(cwmpStateTimer); window.removeEventListener('focus', refreshCWMPState); });
-    const desktop = window.matchMedia('(min-width: 1024px)');
-    const updateConditionHelpLayout = () => setDesktopConditionHelp(desktop.matches);
-    desktop.addEventListener('change', updateConditionHelpLayout);
-    onCleanup(() => desktop.removeEventListener('change', updateConditionHelpLayout));
     loadProvTemplates();
     const closeMenu = (event: MouseEvent) => {
       if (!settingsMenu?.contains(event.target as Node)) setShowSettingsMenu(false);
@@ -2032,29 +2023,28 @@ const Provisioning: Component = () => {
         </Dialog>
       </Show>
       <Show when={showProvModal()}>
-        <Dialog
+        <FieldHelpDialog topics={ruleFieldHelp}
           title={editingProv() ? 'Edit provisioning rule' : copyingProv() ? 'Duplicate provisioning rule' : 'Add provisioning rule'}
           onClose={closeProvModal}
-          sidePanel={desktopConditionHelp() && showConditionHelp() ? <ProvisioningConditionHelp inline onClose={closeConditionHelp} /> : undefined}
         >
           <form onSubmit={(e) => { e.preventDefault(); editingProv() ? handleUpdateProv() : handleCreateProv(); }} class="space-y-4">
             <Show when={provFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
             <div>
-              <label for="provisioning-parameter" class="block text-xs text-muted mb-1.5">{isAddObjectRule() ? 'CWMP object path' : 'CWMP parameter name'}</label>
+              <HelpLabel for="provisioning-parameter" class="block text-xs text-muted mb-1.5">{isAddObjectRule() ? 'CWMP object path' : 'CWMP parameter name'}</HelpLabel>
               <input id="provisioning-parameter" type="text" value={provForm().parameter_name} onInput={(e) => setProvForm(f => ({ ...f, parameter_name: e.currentTarget.value }))} class="input w-full" placeholder={isAddObjectRule() ? 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection' : 'Path to a writable CWMP parameter'} />
             </div>
             <div>
-              <label for="provisioning-add-object" class="flex items-center gap-2 text-sm text-secondary">
+              <HelpLabel for="provisioning-add-object" class="flex items-center gap-2 text-sm text-secondary">
                 <input id="provisioning-add-object" type="checkbox" checked={isAddObjectRule()} onChange={(e) => setIsAddObjectRule(e.currentTarget.checked)} class="rounded" />
                 AddObject: create a new object instance
-              </label>
+              </HelpLabel>
               <Show when={isAddObjectRule()}>
                 <p class="text-xs text-muted mt-1">The path above identifies the object collection. No parameter value is sent. In later rules, use <code class="text-amber-400">{'{prev}'}</code> for the latest AddObject instance, or <code class="text-amber-400">{'{prev1}'}</code>, <code class="text-amber-400">{'{prev2}'}</code> for the first and second created instances.</p>
               </Show>
             </div>
             <Show when={!isAddObjectRule()}>
               <div>
-                <label for="provisioning-value" class="block text-xs text-muted mb-1.5">Parameter value</label>
+                <HelpLabel for="provisioning-value" class="block text-xs text-muted mb-1.5">Parameter value</HelpLabel>
                 <input id="provisioning-value" type="text" value={provForm().parameter_value} onInput={(e) => setProvForm(f => ({ ...f, parameter_value: e.currentTarget.value }))} class="input w-full" placeholder="Enter the parameter value" />
                 <Show when={selectedTemplate()?.variables?.length}>
                   <p class="text-xs text-muted mt-1">Use <code class="text-primary">{'{{variable_name}}'}</code> to substitute a template variable. Available: {selectedTemplate()!.variables!.map(variable => variable.name).join(', ')}</p>
@@ -2062,12 +2052,12 @@ const Provisioning: Component = () => {
               </div>
             </Show>
             <div>
-              <label for="provisioning-order" class="block text-xs text-muted mb-1.5">Order</label>
+              <HelpLabel for="provisioning-order" class="block text-xs text-muted mb-1.5">Order</HelpLabel>
               <input id="provisioning-order" type="number" min="0" value={provForm().order} onInput={(e) => setProvForm(f => ({ ...f, order: Number(e.currentTarget.value) || 0 }))} class="input w-full" />
               <p class="text-xs text-muted mt-1">Lower values execute first. Use drag-and-drop in the table or set explicit order here.</p>
             </div>
             <div>
-              <label for="provisioning-tags" class="block text-xs text-muted mb-1.5">Tags (optional)</label>
+              <HelpLabel for="provisioning-tags" class="block text-xs text-muted mb-1.5">Tags (optional)</HelpLabel>
               <div class="flex flex-wrap gap-1.5 mb-1.5">
                 <For each={['tags', 'excluded_tags'] as const}>{mode =>
                   <For each={provForm()[mode]}>{tag =>
@@ -2078,11 +2068,11 @@ const Provisioning: Component = () => {
                   }</For>
                 }</For>
               </div>
-              <div class="flex gap-2">
-                <select aria-label="Tag condition" class="input" value={tagMode()} onChange={e => setTagMode(e.currentTarget.value as 'tags' | 'excluded_tags')}>
+              <div class="flex items-end gap-2">
+                <div><HelpLabel for="provisioning-tag-mode" class="text-xs text-muted">Tag condition</HelpLabel><select id="provisioning-tag-mode" class="input" value={tagMode()} onChange={e => setTagMode(e.currentTarget.value as 'tags' | 'excluded_tags')}>
                   <option value="tags">contain</option>
                   <option value="excluded_tags">not-contain</option>
-                </select>
+                </select></div>
                 <input id="provisioning-tags" type="text" class="input w-full" placeholder="branch-a (press Enter to add)" value={tagInput()} onInput={e => setTagInput(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRuleTag(); } }} />
                 <button type="button" class="btn btn-secondary" onClick={addRuleTag} disabled={!tagInput().trim()}>Add</button>
               </div>
@@ -2090,7 +2080,7 @@ const Provisioning: Component = () => {
             </div>
             <Show when={!isAddObjectRule()}>
               <div>
-                <label for="provisioning-type" class="block text-xs text-muted mb-1.5">CWMP value type</label>
+                <HelpLabel for="provisioning-type" class="block text-xs text-muted mb-1.5">CWMP value type</HelpLabel>
                 <select id="provisioning-type" value={provForm().parameter_type} onChange={(e) => setProvForm(f => ({ ...f, parameter_type: e.currentTarget.value }))} class="input w-full">
                   <option value="string">string</option>
                   <option value="boolean">boolean</option>
@@ -2101,7 +2091,7 @@ const Provisioning: Component = () => {
               </div>
             </Show>
             <div>
-              <label for="provisioning-phase" class="block text-xs text-muted mb-1.5">Trigger phase</label>
+              <HelpLabel for="provisioning-phase" class="block text-xs text-muted mb-1.5">Trigger phase</HelpLabel>
               <select id="provisioning-phase" value={provForm().phase} onChange={(e) => setProvForm(f => ({ ...f, phase: e.currentTarget.value }))} class="input w-full">
                 <option value="bootstrap">Bootstrap — applied once on first CPE connection</option>
                 <option value="default">Default — re-applied on every inform when rule changes</option>
@@ -2109,20 +2099,17 @@ const Provisioning: Component = () => {
               <p class="text-xs text-muted mt-1">Bootstrap rules run once during BOOTSTRAP. Default rules enforce ongoing configuration and re-apply when the rule is updated.</p>
             </div>
             <div>
-              <label for="provisioning-description" class="block text-xs text-muted mb-1.5">Operational description (optional)</label>
+              <HelpLabel for="provisioning-description" class="block text-xs text-muted mb-1.5">Operational description (optional)</HelpLabel>
               <input id="provisioning-description" type="text" value={provForm().description} onInput={(e) => setProvForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="Migrate the ACS URL" />
             </div>
             <div>
-              <div class="flex items-center gap-1 mb-1.5">
-                <label for="provisioning-condition" class="text-xs text-muted">Condition (optional)</label>
-                <button id="provisioning-condition-help-trigger" type="button" class="icon-button" aria-label="Condition help" aria-haspopup={desktopConditionHelp() ? undefined : 'dialog'} aria-expanded={showConditionHelp()} aria-controls={desktopConditionHelp() && showConditionHelp() ? 'provisioning-condition-help' : undefined} onClick={() => setShowConditionHelp(open => !open)}><CircleHelp size={14} aria-hidden="true" /></button>
-              </div>
+              <HelpLabel for="provisioning-condition" class="text-xs text-muted">Condition (optional)</HelpLabel>
               <textarea id="provisioning-condition" rows={2} value={provForm().condition} onInput={(e) => setProvForm(f => ({ ...f, condition: e.currentTarget.value }))} class="input w-full font-mono text-xs" placeholder="InternetGatewayDevice.DeviceInfo.Manufacturer == 'SkyDash' AND Device.Model contains 'AC1000'" />
               <p class="text-xs text-muted mt-1">Rule applies only when the condition is true. Use <code>exists('path')</code> for an object or parameter, or <code>NOT exists('path')</code> for absence. Leave empty to always apply. Open the question mark for operators and examples.</p>
             </div>
             <div class="flex items-center gap-2">
               <input id="provisioning-enabled" type="checkbox" checked={provForm().enabled} onChange={(e) => setProvForm(f => ({ ...f, enabled: e.currentTarget.checked }))} class="rounded" />
-              <label for="provisioning-enabled" class="text-sm text-secondary">Enable this rule</label>
+              <HelpLabel for="provisioning-enabled" class="text-sm text-secondary">Enable this rule</HelpLabel>
             </div>
             <div class="flex gap-2 pt-2">
               <button type="button" onClick={closeProvModal} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
@@ -2131,10 +2118,7 @@ const Provisioning: Component = () => {
               </button>
             </div>
           </form>
-        </Dialog>
-      </Show>
-      <Show when={showProvModal() && showConditionHelp() && !desktopConditionHelp()}>
-        <ProvisioningConditionHelp onClose={closeConditionHelp} />
+        </FieldHelpDialog>
       </Show>
       <Show when={featureEditorOpen()}>
         <Dialog title={featureEditorPage() === 'control' ? (editingControlKey() ? 'Edit advanced settings field' : 'Add advanced settings field') : (editingFeatureID() ? 'Edit advanced settings section' : 'Add advanced settings section')} size="large" onClose={closeFeatureEditor}>
@@ -2289,41 +2273,41 @@ const Provisioning: Component = () => {
 
       {/* Metric Modal */}
       <Show when={showParameterPollModal()}>
-        <Dialog title={editingParameterPoll() ? 'Edit parameter polling rule' : 'Add parameter polling rule'} description="Set which CWMP parameter to refresh and how often to request it." headerBadge={<Show when={parameterPollDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeParameterPollModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeParameterPollModal}>Cancel</button><button type="submit" form="parameter-poll-form" disabled={!can('settings.provisioning.metrics.polling', 'edit')} class="btn btn-primary">{editingParameterPoll() ? 'Save rule' : 'Add rule'}</button></>}>
+        <FieldHelpDialog topics={pollingFieldHelp} title={editingParameterPoll() ? 'Edit parameter polling rule' : 'Add parameter polling rule'} description="Set which CWMP parameter to refresh and how often to request it." headerBadge={<Show when={parameterPollDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeParameterPollModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeParameterPollModal}>Cancel</button><button type="submit" form="parameter-poll-form" disabled={!can('settings.provisioning.metrics.polling', 'edit')} class="btn btn-primary">{editingParameterPoll() ? 'Save rule' : 'Add rule'}</button></>}>
           <form id="parameter-poll-form" class="space-y-4" onSubmit={(event) => void saveParameterPoll(event)}><fieldset disabled={!can('settings.provisioning.metrics.polling', 'edit')} class="space-y-3">
-            <label class="block text-xs text-muted">CWMP parameter path
+            <HelpLabel help="poll-path" class="block text-xs text-muted">CWMP parameter path
               <input class="input mt-1 w-full font-mono text-xs" required maxlength="512" placeholder="InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.RadioEnabled" value={parameterPollForm().parameter_pattern} onInput={event => setParameterPollForm(form => ({ ...form, parameter_pattern: event.currentTarget.value }))} />
-            </label>
+            </HelpLabel>
             <p class="-mt-2 text-xs text-muted">Use * for a dynamic path segment. Wildcards match paths already known for the device.</p>
-            <label class="block text-xs text-muted">GPV interval (seconds)
+            <HelpLabel help="poll-interval" class="block text-xs text-muted">GPV interval (seconds)
               <input class="input mt-1 w-full" type="number" min="1" max="31536000" step="1" required value={parameterPollForm().interval_seconds} onInput={event => setParameterPollForm(form => ({ ...form, interval_seconds: Number(event.currentTarget.value) }))} />
-            </label>
+            </HelpLabel>
             <div>
-              <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().now} onChange={event => setParameterPollForm(form => ({ ...form, now: event.currentTarget.checked }))} />Now</label>
+              <HelpLabel help="poll-now" class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().now} onChange={event => setParameterPollForm(form => ({ ...form, now: event.currentTarget.checked }))} />Now</HelpLabel>
               <p class="mt-1 text-xs text-muted">When enabled, request this parameter at every Inform; the interval is ignored.</p>
             </div>
-            <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().active} onChange={event => setParameterPollForm(form => ({ ...form, active: event.currentTarget.checked }))} />Active</label>
+            <HelpLabel help="poll-active" class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={parameterPollForm().active} onChange={event => setParameterPollForm(form => ({ ...form, active: event.currentTarget.checked }))} />Active</HelpLabel>
             <p class="text-xs text-muted">The request is sent when the CPE opens a CWMP session after the interval expires.</p>
           </fieldset></form>
-        </Dialog>
+        </FieldHelpDialog>
       </Show>
       <Show when={showInterfaceMetricModal()}>
-        <Dialog title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." headerBadge={<Show when={interfaceMetricDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" disabled={!can('settings.provisioning.metrics.interface', 'edit')} class="btn btn-primary">Save metric</button></>}>
+        <FieldHelpDialog topics={interfaceFieldHelp} title={editingInterfaceMetric() ? 'Edit WAN/LAN metric' : 'Add WAN/LAN metric'} description="Use * for each dynamic index in the CWMP parameter path." headerBadge={<Show when={interfaceMetricDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>} onClose={closeInterfaceMetricModal} actions={<><button type="button" class="btn btn-secondary" onClick={closeInterfaceMetricModal}>Cancel</button><button type="submit" form="interface-metric-form" disabled={!can('settings.provisioning.metrics.interface', 'edit')} class="btn btn-primary">Save metric</button></>}>
           <form id="interface-metric-form" class="space-y-3" onSubmit={(event) => void saveInterfaceMetric(event)}><fieldset disabled={!can('settings.provisioning.metrics.interface', 'edit')} class="space-y-3">
-            <label class="block text-xs text-muted">Name (max 20 characters)<input required maxlength={20} class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></label>
-            <label class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></label>
-            <label for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></label>
-            <label class="block text-xs text-muted">Minimum sample interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().min_sample_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per interface.</span></label>
-            <label class="block text-xs text-muted">GPV poll interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().gpv_poll_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, gpv_poll_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">Active and Universal only. 0 uses the server interval (15 minutes by default).</span></label>
-            <label class="block text-xs text-muted">Parameter path pattern<input required class="input mt-1 w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Stats.EthernetBytesReceived" value={interfaceMetricForm().parameter_pattern} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, parameter_pattern: e.currentTarget.value }))} /></label>
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4"><label class="block text-xs text-muted">Unit<input class="input mt-1 w-full" value={interfaceMetricForm().unit} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} /></label><label class="block text-xs text-muted">Transform<select class="input mt-1 w-full" value={interfaceMetricForm().transform} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, transform: e.currentTarget.value }))}><option value="">Raw value</option><option value="rate">Rate</option></select></label><label class="block text-xs text-muted">Multiplier<input type="number" min="0" step="any" class="input mt-1 w-full" value={interfaceMetricForm().multiplier} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, multiplier: Number(e.currentTarget.value) }))} /></label><label class="block text-xs text-muted">Unit Scale<select class="input mt-1 w-full" value={interfaceMetricForm().unit_scale} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, unit_scale: e.currentTarget.value }))}><option value="">None</option><option value="bytes">Bytes (KB/MB/GB/TB)</option><option value="bits">Bits (Kb/Mb/Gb/Tb)</option><option value="pps">Packets per second (pps/Kpps/Mpps/Gpps)</option></select></label></div>
-            <div class="block text-xs text-muted">Line color<ColorSwatch value={interfaceMetricForm().color} onChange={(color) => setInterfaceMetricForm(f => ({ ...f, color }))} /></div>
-            <div class="grid grid-cols-2 gap-3"><label class="block text-xs text-muted">ECharts visualization<select class="input mt-1 w-full" value={interfaceMetricForm().chart_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, chart_type: e.currentTarget.value }))}><For each={ECHARTS_TYPES.filter(type => type.timeSeries)}>{(type) => <option value={type.value}>{type.label}</option>}</For></select></label><label class="block text-xs text-muted">Graph group<input class="input mt-1 w-full" maxLength={64} value={interfaceMetricForm().group} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, group: e.currentTarget.value }))} placeholder="e.g. WAN traffic" /></label></div>
+            <HelpLabel help="metric-name" class="block text-xs text-muted">Name (max 20 characters)<input required maxlength={20} class="input mt-1 w-full" value={interfaceMetricForm().name} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, name: e.currentTarget.value }))} /></HelpLabel>
+            <HelpLabel help="interface-type" class="block text-xs text-muted">Interface<select class="input mt-1 w-full" value={interfaceMetricForm().interface_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, interface_type: e.currentTarget.value as 'wan' | 'lan' }))}><option value="wan">WAN</option><option value="lan">LAN</option></select></HelpLabel>
+            <HelpLabel help="metric-source" for="interface-metric-source" class="block text-xs text-muted">Source<select id="interface-metric-source" class="input mt-1 w-full" value={interfaceMetricForm().source} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))}><option value="passive">Passive (from Inform)</option><option value="active">Active (polled via GPV)</option><option value="universal">Universal (both)</option></select></HelpLabel>
+            <HelpLabel help="metric-min-sample-interval" class="block text-xs text-muted">Minimum sample interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().min_sample_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per interface.</span></HelpLabel>
+            <HelpLabel help="metric-gpv-poll-interval" class="block text-xs text-muted">GPV poll interval (seconds)<input type="number" min="0" max="31536000" step="1" class="input mt-1 w-full" value={interfaceMetricForm().gpv_poll_interval_seconds} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, gpv_poll_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} /><span class="block mt-1">Active and Universal only. 0 uses the server interval (15 minutes by default).</span></HelpLabel>
+            <HelpLabel help="interface-pattern" class="block text-xs text-muted">Parameter path pattern<input required class="input mt-1 w-full font-mono text-xs" placeholder="InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Stats.EthernetBytesReceived" value={interfaceMetricForm().parameter_pattern} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, parameter_pattern: e.currentTarget.value }))} /></HelpLabel>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4"><HelpLabel help="metric-unit" class="block text-xs text-muted">Unit<input class="input mt-1 w-full" value={interfaceMetricForm().unit} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} /></HelpLabel><HelpLabel help="metric-transform" class="block text-xs text-muted">Transform<select class="input mt-1 w-full" value={interfaceMetricForm().transform} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, transform: e.currentTarget.value }))}><option value="">Raw value</option><option value="rate">Rate</option></select></HelpLabel><HelpLabel help="metric-multiplier" class="block text-xs text-muted">Multiplier<input type="number" min="0" step="any" class="input mt-1 w-full" value={interfaceMetricForm().multiplier} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, multiplier: Number(e.currentTarget.value) }))} /></HelpLabel><HelpLabel help="metric-unit-scale" class="block text-xs text-muted">Unit Scale<select class="input mt-1 w-full" value={interfaceMetricForm().unit_scale} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, unit_scale: e.currentTarget.value }))}><option value="">None</option><option value="bytes">Bytes (KB/MB/GB/TB)</option><option value="bits">Bits (Kb/Mb/Gb/Tb)</option><option value="pps">Packets per second (pps/Kpps/Mpps/Gpps)</option></select></HelpLabel></div>
+            <div class="block text-xs text-muted"><HelpLabel as="span" help="metric-color" class="text-xs text-muted">Line color</HelpLabel><ColorSwatch value={interfaceMetricForm().color} onChange={(color) => setInterfaceMetricForm(f => ({ ...f, color }))} /></div>
+            <div class="grid grid-cols-2 gap-3"><HelpLabel help="metric-chart-type" class="block text-xs text-muted">ECharts visualization<select class="input mt-1 w-full" value={interfaceMetricForm().chart_type} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, chart_type: e.currentTarget.value }))}><For each={ECHARTS_TYPES.filter(type => type.timeSeries)}>{(type) => <option value={type.value}>{type.label}</option>}</For></select></HelpLabel><HelpLabel help="metric-group" class="block text-xs text-muted">Graph group<input class="input mt-1 w-full" maxLength={64} value={interfaceMetricForm().group} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, group: e.currentTarget.value }))} placeholder="e.g. WAN traffic" /></HelpLabel></div>
             <p class="text-xs text-muted">Metrics with the same group name and chart type can be plotted together, such as received and sent bytes.</p>
-            <label class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></label>
-            <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={interfaceMetricForm().active} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} />Active</label>
+            <HelpLabel help="metric-description" class="block text-xs text-muted">Description<input class="input mt-1 w-full" value={interfaceMetricForm().description} onInput={(e) => setInterfaceMetricForm(f => ({ ...f, description: e.currentTarget.value }))} /></HelpLabel>
+            <HelpLabel help="metric-active" class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={interfaceMetricForm().active} onChange={(e) => setInterfaceMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} />Active</HelpLabel>
           </fieldset></form>
-        </Dialog>
+        </FieldHelpDialog>
       </Show>
       <Show when={deleteReauthRequest()}>
         <Dialog

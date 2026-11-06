@@ -1,9 +1,10 @@
+import FieldHelpDialog, { HelpLabel } from './FieldHelpDialog';
+import { metricFieldHelp } from '../lib/provisioningFieldHelp';
 import type { Component } from 'solid-js';
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import { Plus, X } from 'lucide-solid';
 import { api, type GaugeStyle, type MetricDefinition } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import Dialog from './Dialog';
 import ColorSwatch from './ColorSwatch';
 import { useFeedback } from './Feedback';
 import { ECHARTS_TYPES } from '../lib/echartsTypes';
@@ -165,7 +166,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
 
   return (
     <Show when={props.open}>
-      <Dialog
+      <FieldHelpDialog topics={metricFieldHelp}
         title={props.editingMetric ? 'Edit metric' : 'Add metric'}
         description="Define a CWMP parameter to collect as a time-series metric."
         headerBadge={<Show when={isDirty()}><span class="dialog-header-badge" role="status">Unsaved</span></Show>}
@@ -178,24 +179,24 @@ const MetricModal: Component<MetricModalProps> = (props) => {
           </div>
           <Show when={can('settings.provisioning.metrics.general.metric', 'read') && metricTab() === 'metric'}><fieldset disabled={!can('settings.provisioning.metrics.general.metric', 'edit') || pendingAction() !== null} class="space-y-4">
           <div>
-            <label for="metric-name" class="block text-xs text-muted mb-1.5">Name (max 20 characters)</label>
+            <HelpLabel for="metric-name" class="block text-xs text-muted mb-1.5">Name (max 20 characters)</HelpLabel>
             <input id="metric-name" type="text" maxlength={20} value={metricForm().name} onInput={(e) => setMetricForm(f => ({ ...f, name: e.currentTarget.value }))} placeholder="e.g. Uptime, CPU Load" class="input w-full" />
           </div>
           <div>
-            <label for="metric-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
+            <HelpLabel for="metric-description" class="block text-xs text-muted mb-1.5">Description (optional)</HelpLabel>
             <input id="metric-description" type="text" value={metricForm().description} onInput={(e) => setMetricForm(f => ({ ...f, description: e.currentTarget.value }))} placeholder="Short description" class="input w-full" />
           </div>
           <div>
-            <label for="metric-parameter" class="block text-xs text-muted mb-1.5">CWMP Parameter Path</label>
+            <HelpLabel for="metric-parameter" class="block text-xs text-muted mb-1.5">CWMP Parameter Path</HelpLabel>
             <input id="metric-parameter" type="text" value={metricForm().parameter_name} onInput={(e) => setMetricForm(f => ({ ...f, parameter_name: e.currentTarget.value }))} placeholder="e.g. Device.DeviceInfo.UpTime" class="input w-full font-mono text-xs" />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="metric-unit" class="block text-xs text-muted mb-1.5">Unit</label>
+              <HelpLabel for="metric-unit" class="block text-xs text-muted mb-1.5">Unit</HelpLabel>
               <input id="metric-unit" type="text" value={metricForm().unit} onInput={(e) => setMetricForm(f => ({ ...f, unit: e.currentTarget.value }))} placeholder="s, %, MB/s" class="input w-full" />
             </div>
             <div>
-              <label for="metric-source" class="block text-xs text-muted mb-1.5">Source</label>
+              <HelpLabel for="metric-source" class="block text-xs text-muted mb-1.5">Source</HelpLabel>
               <select id="metric-source" value={metricForm().source} onChange={(e) => setMetricForm(f => ({ ...f, source: e.currentTarget.value as 'passive' | 'active' | 'universal' }))} class="input w-full">
                 <option value="passive">Passive (from Inform)</option>
                 <option value="active">Active (polled via GPV)</option>
@@ -204,22 +205,22 @@ const MetricModal: Component<MetricModalProps> = (props) => {
             </div>
           </div>
           <div>
-            <label for="metric-min-sample-interval" class="block text-xs text-muted mb-1.5">Minimum sample interval (seconds)</label>
+            <HelpLabel for="metric-min-sample-interval" class="block text-xs text-muted mb-1.5">Minimum sample interval (seconds)</HelpLabel>
             <input id="metric-min-sample-interval" type="number" min="0" max="31536000" step="1" value={metricForm().min_sample_interval_seconds} onInput={(e) => setMetricForm(f => ({ ...f, min_sample_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} class="input w-full" />
             <p class="text-xs text-muted mt-1">0 saves every reading; 300 saves at most one sample every 5 minutes per CPE.</p>
           </div>
           <div>
-            <label for="metric-gpv-poll-interval" class="block text-xs text-muted mb-1.5">GPV poll interval (seconds)</label>
+            <HelpLabel for="metric-gpv-poll-interval" class="block text-xs text-muted mb-1.5">GPV poll interval (seconds)</HelpLabel>
             <input id="metric-gpv-poll-interval" type="number" min="0" max="31536000" step="1" value={metricForm().gpv_poll_interval_seconds} onInput={(e) => setMetricForm(f => ({ ...f, gpv_poll_interval_seconds: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} class="input w-full" />
             <p class="text-xs text-muted mt-1">Active and Universal only. 0 uses the server interval (15 minutes by default); GPV waits for a CWMP session.</p>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-                <label for="metric-group" class="block text-xs text-muted mb-1.5">Chart / Health Group</label>
+                <HelpLabel for="metric-group" class="block text-xs text-muted mb-1.5">Chart / Health Group</HelpLabel>
                 <input id="metric-group" type="text" value={metricForm().group} onInput={(e) => setMetricForm(f => ({ ...f, group: e.currentTarget.value }))} placeholder="e.g. throughput (optional)" class="input w-full" />
             </div>
             <div>
-              <label for="metric-axis" class="block text-xs text-muted mb-1.5">Y-Axis</label>
+              <HelpLabel for="metric-axis" class="block text-xs text-muted mb-1.5">Y-Axis</HelpLabel>
               <select id="metric-axis" value={metricForm().axis} onChange={(e) => setMetricForm(f => ({ ...f, axis: e.currentTarget.value as 'left' | 'right' }))} class="input w-full">
                 <option value="left">Left (default)</option>
                 <option value="right">Right (secondary)</option>
@@ -227,23 +228,23 @@ const MetricModal: Component<MetricModalProps> = (props) => {
             </div>
           </div>
           <div>
-            <div class="block text-xs text-muted mb-1.5">Line Color</div>
+            <HelpLabel as="span" help="metric-color" class="block text-xs text-muted mb-1.5">Line Color</HelpLabel>
             <ColorSwatch value={metricForm().color} onChange={(c) => setMetricForm(f => ({ ...f, color: c }))} />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="metric-transform" class="block text-xs text-muted mb-1.5">Transform</label>
+              <HelpLabel for="metric-transform" class="block text-xs text-muted mb-1.5">Transform</HelpLabel>
               <select id="metric-transform" value={metricForm().transform} onChange={(e) => setMetricForm(f => ({ ...f, transform: e.currentTarget.value }))} class="input w-full">
                 <option value="">None (raw value)</option>
                 <option value="rate">Rate (delta / time)</option>
               </select>
             </div>
             <div>
-              <label for="metric-multiplier" class="block text-xs text-muted mb-1.5">Multiplier</label>
+              <HelpLabel for="metric-multiplier" class="block text-xs text-muted mb-1.5">Multiplier</HelpLabel>
               <input id="metric-multiplier" type="number" min="0" step="any" value={metricForm().multiplier} onInput={(e) => setMetricForm(f => ({ ...f, multiplier: parseFloat(e.currentTarget.value) || 0 }))} placeholder="1" class="input w-full" />
             </div>
             <div>
-              <label for="metric-unit-scale" class="block text-xs text-muted mb-1.5">Unit Scale</label>
+              <HelpLabel for="metric-unit-scale" class="block text-xs text-muted mb-1.5">Unit Scale</HelpLabel>
               <select id="metric-unit-scale" value={metricForm().unit_scale} onChange={(e) => setMetricForm(f => ({ ...f, unit_scale: e.currentTarget.value }))} class="input w-full">
                 <option value="">None</option>
                 <option value="bytes">Bytes (KB/MB/GB/TB)</option>
@@ -252,7 +253,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
               </select>
             </div>
             <div>
-              <label for="metric-chart-type" class="block text-xs text-muted mb-1.5">Chart Type</label>
+              <HelpLabel for="metric-chart-type" class="block text-xs text-muted mb-1.5">Chart Type</HelpLabel>
               <select id="metric-chart-type" value={metricForm().chart_type} onChange={(e) => setMetricForm(f => ({ ...f, chart_type: e.currentTarget.value }))} class="input w-full">
                 <For each={CHART_TYPE_GROUPS}>
                   {(g) => (
@@ -272,14 +273,14 @@ const MetricModal: Component<MetricModalProps> = (props) => {
             <div class="block text-xs font-medium text-secondary mb-2">Health indicator</div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label for="metric-health" class="block text-xs text-muted mb-1.5">Show in Device Health</label>
+                <HelpLabel for="metric-health" class="block text-xs text-muted mb-1.5">Show in Device Health</HelpLabel>
                 <select id="metric-health" value={metricForm().health ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, health: e.currentTarget.value === 'true' }))} class="input w-full">
                   <option value="false">No — Metrics tab only</option>
                   <option value="true">Yes — Metrics tab + Device Health</option>
                 </select>
               </div>
               <div>
-                <label for="metric-store-history" class="block text-xs text-muted mb-1.5">Store metric history</label>
+                <HelpLabel for="metric-store-history" class="block text-xs text-muted mb-1.5">Store metric history</HelpLabel>
                 <select id="metric-store-history" value={metricForm().store_history ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, store_history: e.currentTarget.value === 'true', transform: e.currentTarget.value === 'false' ? '' : f.transform }))} class="input w-full">
                   <option value="true">Yes — include in Metrics charts</option>
                   <option value="false">No — current value only</option>
@@ -287,7 +288,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 <p class="text-xs text-muted mt-1">Current-only metrics use the latest device parameter and are not saved as time-series samples.</p>
               </div>
               <div>
-                <label for="metric-display-format" class="block text-xs text-muted mb-1.5">Display format</label>
+                <HelpLabel for="metric-display-format" class="block text-xs text-muted mb-1.5">Display format</HelpLabel>
                 <select id="metric-display-format" value={metricForm().display_format} onChange={(e) => setMetricForm(f => ({ ...f, display_format: e.currentTarget.value as 'number' | 'uptime' | 'gauge' }))} class="input w-full">
                   <option value="number">Number</option>
                   <option value="uptime">Uptime (d h m s)</option>
@@ -295,11 +296,11 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </select>
               </div>
               <div>
-                <label for="metric-health-order" class="block text-xs text-muted mb-1.5">Display order</label>
+                <HelpLabel for="metric-health-order" class="block text-xs text-muted mb-1.5">Display order</HelpLabel>
                 <input id="metric-health-order" type="number" min="0" step="1" value={metricForm().health_order} onInput={(e) => setMetricForm(f => ({ ...f, health_order: Math.max(0, parseInt(e.currentTarget.value, 10) || 0) }))} placeholder="0" class="input w-full" />
               </div>
               <div>
-                <label for="metric-health-size" class="block text-xs text-muted mb-1.5">Element size</label>
+                <HelpLabel for="metric-health-size" class="block text-xs text-muted mb-1.5">Element size</HelpLabel>
                 <select id="metric-health-size" value={metricForm().health_size} onChange={(e) => setMetricForm(f => ({ ...f, health_size: e.currentTarget.value as 'small' | 'medium' | 'large' }))} class="input w-full">
                   <option value="small">Small (1/3 width)</option>
                   <option value="medium">Medium (1/2 width)</option>
@@ -307,29 +308,29 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </select>
               </div>
               <div class="col-span-2">
-                <label for="metric-health-show-updated-at" class="flex items-center gap-2 text-xs text-secondary">
+                <HelpLabel for="metric-health-show-updated-at" class="flex items-center gap-2 text-xs text-secondary">
                   <input id="metric-health-show-updated-at" type="checkbox" checked={metricForm().health_show_updated_at} onChange={(e) => setMetricForm(f => ({ ...f, health_show_updated_at: e.currentTarget.checked }))} class="checkbox shrink-0" aria-describedby="metric-health-updated-at-help" />
                   <span>Show last parameter update</span>
-                </label>
+                </HelpLabel>
                 <p id="metric-health-updated-at-help" class="text-xs text-muted mt-1">Show when the parameter was last updated in the database, even if its value stayed the same.</p>
               </div>
               <div>
-                <label for="metric-warn" class="block text-xs text-muted mb-1.5">Warn threshold</label>
+                <HelpLabel for="metric-warn" class="block text-xs text-muted mb-1.5">Warn threshold</HelpLabel>
                 <input id="metric-warn" type="number" step="any" value={metricForm().warn_threshold ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, warn_threshold: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="optional" class="input w-full" />
               </div>
               <div>
-                <label for="metric-critical" class="block text-xs text-muted mb-1.5">Critical threshold</label>
+                <HelpLabel for="metric-critical" class="block text-xs text-muted mb-1.5">Critical threshold</HelpLabel>
                 <input id="metric-critical" type="number" step="any" value={metricForm().critical_threshold ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, critical_threshold: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="optional" class="input w-full" />
               </div>
               <div>
-                <label for="metric-threshold-dir" class="block text-xs text-muted mb-1.5">Worse when</label>
+                <HelpLabel for="metric-threshold-dir" class="block text-xs text-muted mb-1.5">Worse when</HelpLabel>
                 <select id="metric-threshold-dir" value={metricForm().threshold_direction} onChange={(e) => setMetricForm(f => ({ ...f, threshold_direction: e.currentTarget.value as 'higher_is_worse' | 'lower_is_worse' }))} class="input w-full">
                   <option value="higher_is_worse">Value is higher</option>
                   <option value="lower_is_worse">Value is lower</option>
                 </select>
               </div>
               <div>
-                <label for="metric-gauge-animated" class="block text-xs text-muted mb-1.5">Animate gauge</label>
+                <HelpLabel for="metric-gauge-animated" class="block text-xs text-muted mb-1.5">Animate gauge</HelpLabel>
                 <select id="metric-gauge-animated" value={metricForm().gauge_animated ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, gauge_animated: e.currentTarget.value === 'true' }))} class="input w-full">
                   <option value="true">Yes — animate on load</option>
                   <option value="false">No — static</option>
@@ -337,21 +338,21 @@ const MetricModal: Component<MetricModalProps> = (props) => {
               </div>
               <Show when={metricForm().display_format === 'gauge'}>
                 <div>
-                  <label for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</label>
+                  <HelpLabel for="metric-gauge-style" class="block text-xs text-muted mb-1.5">Gauge style (ECharts)</HelpLabel>
                   <select id="metric-gauge-style" value={metricForm().gauge_style} onChange={(e) => { const style = e.currentTarget.value as GaugeStyle; setMetricForm(f => ({ ...f, gauge_style: style, gauge_arc: style === 'ring' ? '360' : style === 'temperature' ? '220' : ['speed', 'stage', 'grade', 'barometer'].includes(style) ? '180' : '270' })); }} class="input w-full">
                     <option value="basic">Gauge Basic</option><option value="simple">Simple Gauge</option><option value="speed">Speed Gauge</option><option value="progress">Progress Gauge</option><option value="stage">Stage Speed Gauge</option><option value="grade">Grade Gauge</option><option value="multi">Multi Title Gauge</option><option value="temperature">Temperature Gauge</option><option value="ring">Ring Gauge</option><option value="barometer">Gauge Barometer</option>
                   </select>
                 </div>
                 <div>
-                  <label for="metric-gauge-min" class="block text-xs text-muted mb-1.5">Gauge min</label>
+                  <HelpLabel for="metric-gauge-min" class="block text-xs text-muted mb-1.5">Gauge min</HelpLabel>
                   <input id="metric-gauge-min" type="number" step="any" value={metricForm().gauge_min ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, gauge_min: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="auto" class="input w-full" />
                 </div>
                 <div>
-                  <label for="metric-gauge-max" class="block text-xs text-muted mb-1.5">Gauge max</label>
+                  <HelpLabel for="metric-gauge-max" class="block text-xs text-muted mb-1.5">Gauge max</HelpLabel>
                   <input id="metric-gauge-max" type="number" step="any" value={metricForm().gauge_max ?? ''} onInput={(e) => setMetricForm(f => ({ ...f, gauge_max: e.currentTarget.value === '' ? null : parseFloat(e.currentTarget.value) }))} placeholder="auto" class="input w-full" />
                 </div>
                 <div>
-                  <label for="metric-gauge-arc" class="block text-xs text-muted mb-1.5">Gauge arc</label>
+                  <HelpLabel for="metric-gauge-arc" class="block text-xs text-muted mb-1.5">Gauge arc</HelpLabel>
                   <select id="metric-gauge-arc" value={metricForm().gauge_arc} onChange={(e) => setMetricForm(f => ({ ...f, gauge_arc: e.currentTarget.value as '180' | '220' | '270' | '360' }))} class="input w-full">
                     <option value="180">180° (half circle)</option>
                     <option value="220">220° (temperature gauge)</option>
@@ -360,7 +361,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                   </select>
                 </div>
                 <div>
-                  <label for="metric-gauge-pointer" class="block text-xs text-muted mb-1.5">Show pointer</label>
+                  <HelpLabel for="metric-gauge-pointer" class="block text-xs text-muted mb-1.5">Show pointer</HelpLabel>
                   <select id="metric-gauge-pointer" value={metricForm().gauge_pointer ? 'true' : 'false'} onChange={(e) => setMetricForm(f => ({ ...f, gauge_pointer: e.currentTarget.value === 'true' }))} class="input w-full">
                     <option value="true">Yes</option>
                     <option value="false">No</option>
@@ -368,12 +369,12 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </div>
               </Show>
               <div class="col-span-2">
-                <div class="block text-xs text-muted mb-1.5">Custom threshold bands</div>
+                <HelpLabel as="span" help="metric-thresholds" class="block text-xs text-muted mb-1.5">Custom threshold bands</HelpLabel>
                 <div class="space-y-1.5">
                   <For each={metricForm().thresholds}>
                     {(t, i) => (
                       <div class="flex items-start gap-2">
-                        <label class="w-28 shrink-0 text-xs text-muted">Threshold value
+                        <HelpLabel help="metric-threshold-value" class="w-28 shrink-0 text-xs text-muted">Threshold value
                           <input
                             type="number"
                             step="any"
@@ -385,8 +386,9 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                             })}
                             class="input mt-1 w-full font-mono text-xs"
                           />
-                        </label>
+                        </HelpLabel>
                         <div class="min-w-0 flex-1">
+                          <HelpLabel as="span" help="metric-threshold-color" class="text-xs text-muted">Band color</HelpLabel>
                           <ColorSwatch value={t.color} onChange={(c) => setMetricForm(f => {
                             const thresholds = [...f.thresholds];
                             thresholds[i()].color = c;
@@ -415,10 +417,10 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                 </div>
                 <p class="text-[10px] text-muted mt-1">Each threshold marks the start of a color band. Sorted by value.</p>
               </div>
-              <label for="metric-active" class="col-span-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
+              <HelpLabel for="metric-active" class="col-span-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
                 <input id="metric-active" type="checkbox" checked={metricForm().active} onChange={(e) => setMetricForm(f => ({ ...f, active: e.currentTarget.checked }))} class="checkbox shrink-0" />
                 <span>Active — collect this metric</span>
-              </label>
+              </HelpLabel>
             </div>
           </div>
           </fieldset></Show>
@@ -429,7 +431,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
             {pendingAction() === 'save-metric' ? 'Saving…' : props.editingMetric ? 'Save changes' : 'Create metric'}
           </button>
         </div>
-      </Dialog>
+      </FieldHelpDialog>
     </Show>
   );
 };
