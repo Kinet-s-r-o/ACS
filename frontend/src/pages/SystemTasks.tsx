@@ -53,9 +53,10 @@ const SystemTasks: Component = () => {
   const [savingSettings, setSavingSettings] = createSignal(false);
   const [busyAction, setBusyAction] = createSignal<string | null>(null);
 
-  const pageTotal = createMemo(() => tasks()?.total ?? 0);
+  const taskData = createMemo((previous: { tasks: SystemTask[]; total: number } | undefined) => tasks.error ? previous : tasks.latest);
+  const pageTotal = createMemo(() => taskData()?.total ?? 0);
   const totalPages = createMemo(() => Math.ceil(pageTotal() / pageSize()));
-  const rows = createMemo(() => tasks()?.tasks ?? []);
+  const rows = createMemo(() => taskData()?.tasks ?? []);
 
   const summaryCounts = (type: SystemTaskType) => summary()?.[type] ?? {};
   const countFor = (counts: Partial<Record<SystemTaskStatus, number>>, status: SystemTaskStatus) => counts[status] ?? 0;
@@ -219,7 +220,7 @@ const SystemTasks: Component = () => {
                 <Show when={tasks.error}>
                   <div class="p-4"><ResourceError title="System task records are unavailable" description="Retry the list request. The queue continues processing in the background." onRetry={() => void refetchTasks()} /></div>
                 </Show>
-                <Show when={!tasks.loading && !tasks.error}>
+                <Show when={taskData() !== undefined}>
                   <Show when={rows().length > 0} fallback={<div class="p-4"><EmptyState title={taskSearch() ? 'No system tasks match this search' : `No ${group.label} tasks`} description={taskSearch() ? 'Try another serial number, username, or error phrase.' : 'Tasks created from CPE actions will appear here.'} /></div>}>
                     <div class="overflow-x-auto table-scroll">
                       <table class="data-table w-full text-sm min-w-[950px]">
@@ -258,7 +259,7 @@ const SystemTasks: Component = () => {
                     <Pagination page={taskPage()} totalPages={totalPages()} totalItems={pageTotal()} pageSize={pageSize()} onPageChange={setTaskPage} storageKey="system_tasks" onPageSizeChange={size => { changePageSize(size); setTaskPage(0); }} />
                   </Show>
                 </Show>
-                <Show when={tasks.loading}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
+                <Show when={tasks.loading && taskData() === undefined}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
               </Show>
             </section>
           );

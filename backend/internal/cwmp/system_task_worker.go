@@ -259,6 +259,12 @@ func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
 			switch status {
 			case models.TaskStatusCompleted:
 				if err := w.systemTaskRepo.MarkCompleted(ctx, systemTask.ID); err != nil {
+					if errors.Is(err, database.ErrNoWritableSnapshotParameters) {
+						if failErr := w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, "No writable parameters were returned; no snapshot was created"); failErr != nil {
+							return failErr
+						}
+						continue
+					}
 					return err
 				}
 			case models.TaskStatusFailed, models.TaskStatusDeleted:

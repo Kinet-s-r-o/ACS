@@ -213,6 +213,9 @@ func (r *SystemTaskRepository) ClearFinished(ctx context.Context, taskType model
 
 func (r *SystemTaskRepository) RecoverProcessing(ctx context.Context) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.SystemTask{}).Where("status = ? AND snapshot_kind = ? AND dispatched_at IS NULL", models.SystemTaskStatusProcessing, "manual").Updates(map[string]interface{}{"status": models.SystemTaskStatusFailed, "error_message": "Worker stopped before successful summon was confirmed. No snapshot was created.", "completed_at": time.Now()}).Error; err != nil {
+			return err
+		}
 		if err := tx.Model(&models.SystemTask{}).Where("status = ? AND cwmp_task_id IS NOT NULL", models.SystemTaskStatusProcessing).
 			Update("status", models.SystemTaskStatusWaiting).Error; err != nil {
 			return err

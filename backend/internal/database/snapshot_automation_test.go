@@ -152,6 +152,58 @@ func TestSnapshotRetentionProtectsInitial(t *testing.T) {
 	t.Fatal("missing snapshot retention rule")
 }
 
+func TestManualSnapshotRequiresSuccessfulSummonAndRefresh(t *testing.T) {
+	for _, tc := range []struct {
+		status   models.TaskStatus
+		summoned bool
+		allowed  bool
+	}{
+		{models.TaskStatusPending, true, false}, {models.TaskStatusSent, true, false}, {models.TaskStatusFailed, true, false}, {models.TaskStatusCompleted, false, false}, {models.TaskStatusCompleted, true, true},
+	} {
+		db, err := gorm.Open(postgres.Open("host=127.0.0.1 user=unused dbname=unused sslmode=disable"), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now()
+		cwmpID := int64(2)
+		writable := true
+		job := models.SystemTask{DeviceID: 1, SnapshotKind: "manual", SnapshotName: "Before maintenance", CreatedBy: "test-operator", RefreshParameters: true, CWMPTaskID: &cwmpID}
+		if tc.summoned {
+			job.DispatchedAt = &now
+		}
+		created := false
+		if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+			switch dest := tx.Statement.Dest.(type) {
+			case *models.Task:
+				*dest = models.Task{ID: cwmpID, DeviceID: 1, Status: tc.status}
+			case *models.Device:
+				*dest = models.Device{ID: 1}
+			case *[]models.DeviceParameter:
+				*dest = []models.DeviceParameter{{Name: "Device.Test.Enable", Value: "true", Writable: &writable}}
+			default:
+				t.Fatalf("manual snapshot must not depend on a template: %T", dest)
+			}
+			tx.RowsAffected = 1
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) {
+			snapshot := tx.Statement.Dest.(*models.DeviceSnapshot)
+			if snapshot.Name != job.SnapshotName || snapshot.Kind != "manual" || snapshot.CreatedBy != job.CreatedBy || snapshot.ParameterCount != 1 {
+				t.Fatal("manual snapshot lost its metadata")
+			}
+			created = true
+			tx.RowsAffected = 1
+		}); err != nil {
+			t.Fatal(err)
+		}
+		err = completeAutomaticSnapshot(context.Background(), db, job, now)
+		if created != tc.allowed || (err == nil) != tc.allowed {
+			t.Fatalf("incorrect summon/refresh gate: %+v created=%v error=%v", tc, created, err)
+		}
+	}
+}
+
 func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
 	for _, tc := range []struct {
 		name              string

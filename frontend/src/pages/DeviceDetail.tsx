@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { canDeleteSnapshot } from '../lib/snapshotSchedule';
 import { DEVICE_TAB_SECTIONS } from '../lib/permissions';
 import DeviceStatusBadge from '../components/DeviceStatusBadge';
+import SnapshotRequestStatus from '../components/SnapshotRequestStatus';
 import OntLanVisualization from '../components/OntLanVisualization';
 import { createResource, createSignal, Show, For, Suspense, createEffect, createMemo, lazy, onCleanup, onMount } from 'solid-js';
 import { useParams, A, useNavigate, useSearchParams } from '@solidjs/router';
@@ -450,13 +451,16 @@ const DeviceDetail: Component = () => {
     } finally { setSnapshotLoading(null); }
   };
 
+  const [snapshotRequestID, setSnapshotRequestID] = createSignal<number | null>(null);
+  createEffect(() => { serial(); setSnapshotRequestID(null); });
   const createSnapshot = async () => {
+    if (snapshotLoading() !== null || snapshotRequestID() !== null || !can('cpe', 'write')) return;
     setSnapshotLoading('create');
     try {
-      await api.createDeviceSnapshot(serial(), snapshotName().trim() || undefined);
+      const request = await api.createDeviceSnapshot(serial(), snapshotName().trim() || undefined);
+      setSnapshotRequestID(request.id);
       setSnapshotName('');
-      notify({ tone: 'success', title: 'Snapshot created from cached parameters' });
-      await refetchSnapshots();
+      notify({ tone: 'info', title: 'Snapshot queued', message: `Bulk Summon request #${request.id}. A snapshot will be saved only after successful summon and parameter refresh.` });
     } catch (error) {
       notify({ tone: 'error', title: 'Could not create snapshot', detail: (error as Error).message, persistent: true });
     } finally { setSnapshotLoading(null); }
@@ -2454,12 +2458,13 @@ const DeviceDetail: Component = () => {
                   <Show when={isFullAccess()}>
                     <div class="flex gap-2 mb-4">
                       <input class="input flex-1 text-sm" value={snapshotName()} onInput={(event) => setSnapshotName(event.currentTarget.value)} placeholder="Snapshot name (optional)" disabled={snapshotLoading() === 'create'} />
-                      <button type="button" class="btn btn-primary text-xs" onClick={() => void createSnapshot()} disabled={snapshotLoading() !== null}>
+                      <button type="button" class="btn btn-primary text-xs" onClick={() => void createSnapshot()} disabled={snapshotLoading() !== null || snapshotRequestID() !== null}>
                         <Save size={14} /> Create
                       </button>
                     </div>
                   </Show>
-                  <Show when={(snapshots() || []).length > 0} fallback={<Show when={!snapshots.loading} fallback={<div class="skeleton h-24 w-full" aria-label="Loading snapshots" />}><EmptyState title="No snapshots" description="Create a snapshot to preserve the current cached CPE configuration." /></Show>}>
+                  <Show when={snapshotRequestID()}>{id => <SnapshotRequestStatus taskID={id()} onFinished={success => { setSnapshotRequestID(null); if (success) void refetchSnapshots(); }} />}</Show>
+                  <Show when={(snapshots() || []).length > 0} fallback={<Show when={!snapshots.loading} fallback={<div class="skeleton h-24 w-full" aria-label="Loading snapshots" />}><EmptyState title="No snapshots" description="Queue a snapshot to summon the CPE and preserve its writable parameters after a successful refresh." /></Show>}>
                     <div class="space-y-2">
                       <For each={snapshots()}>
                         {(snapshot) => (

@@ -849,8 +849,8 @@ func (r *Router) handleGetSystemTask(w http.ResponseWriter, req *http.Request) {
 	if auth.OperationAuthorized(req.Context()) && !requestCan(req, "settings.system_tasks", "read") {
 		claims := auth.GetUserFromContext(req.Context())
 		own := claims != nil && claims.Username == task.CreatedBy
-		allowed := task.Type == models.SystemTaskTypeSummonFromCPE && requestCan(req, "cpe", "write")
-		allowed = allowed || (task.Type != models.SystemTaskTypeSummonFromCPE && requestCan(req, "inventory", "write"))
+		allowed := (task.Type == models.SystemTaskTypeSummonFromCPE || (task.Type == models.SystemTaskTypeBulkSummon && task.SnapshotKind == "manual")) && requestCan(req, "cpe", "write")
+		allowed = allowed || ((task.Type == models.SystemTaskTypeBulkSummon || task.Type == models.SystemTaskTypeBulkRestart) && requestCan(req, "inventory", "write"))
 		if !own || !allowed {
 			respondError(w, http.StatusForbidden, "System task read permission required")
 			return
@@ -2564,34 +2564,17 @@ func (r *Router) handleCreateSnapshotBySerial(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Snapshot name must be 128 characters or fewer")
 		return
 	}
-	parameters, err := r.parameterRepo.GetByDeviceID(req.Context(), device.ID)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to read device parameters")
-		return
-	}
-	if len(parameters) == 0 {
-		respondError(w, http.StatusConflict, "No cached device parameters are available")
-		return
-	}
 	actor := ""
 	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
 		actor = claims.Username
 	}
-	snapshot, err := database.BuildDeviceSnapshot(device, parameters, payload.Name, "manual", actor)
-	if err != nil {
-		if errors.Is(err, database.ErrNoWritableSnapshotParameters) {
-			respondError(w, http.StatusConflict, "No writable device parameters are available")
-			return
-		}
-		respondError(w, http.StatusInternalServerError, "Could not protect or encode snapshot values")
+	task := models.SystemTask{Type: models.SystemTaskTypeBulkSummon, DeviceID: device.ID, RefreshParameters: true, SnapshotKind: "manual", SnapshotName: payload.Name, Status: models.SystemTaskStatusPending, CreatedBy: actor}
+	queued := []models.SystemTask{task}
+	if err := r.systemTaskRepo.CreateMany(req.Context(), queued); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to queue snapshot")
 		return
 	}
-	if err := r.snapshotRepo.Create(req.Context(), snapshot); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to create snapshot")
-		return
-	}
-	snapshot.Parameters = nil
-	respondJSON(w, http.StatusCreated, snapshot)
+	respondJSON(w, http.StatusAccepted, queued[0])
 }
 
 func (r *Router) handleGetSnapshotBySerial(w http.ResponseWriter, req *http.Request) {

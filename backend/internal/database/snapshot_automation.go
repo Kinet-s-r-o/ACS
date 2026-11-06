@@ -104,7 +104,7 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 	if task.SnapshotKind == "" {
 		return nil
 	}
-	if (task.SnapshotKind != "initial" && task.SnapshotKind != "scheduled") || !task.RefreshParameters || task.CWMPTaskID == nil || task.SnapshotSlot == nil || task.SnapshotTemplateID == nil {
+	if (task.SnapshotKind != "initial" && task.SnapshotKind != "scheduled" && task.SnapshotKind != "manual") || !task.RefreshParameters || task.CWMPTaskID == nil || (task.SnapshotKind != "manual" && (task.SnapshotSlot == nil || task.SnapshotTemplateID == nil)) {
 		return errors.New("invalid snapshot task")
 	}
 	var cwmpTask models.Task
@@ -117,6 +117,24 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 	var device models.Device
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&device, task.DeviceID).Error; err != nil {
 		return err
+	}
+	if task.SnapshotKind == "manual" {
+		if task.DispatchedAt == nil {
+			return errors.New("manual snapshot requires a successful summon")
+		}
+		parameters, err := NewParameterRepository(tx).GetByDeviceID(ctx, device.ID)
+		if err != nil {
+			return err
+		}
+		name := task.SnapshotName
+		if name == "" {
+			name = "Snapshot " + now.UTC().Format(time.RFC3339)
+		}
+		snapshot, err := BuildDeviceSnapshot(&device, parameters, name, "manual", task.CreatedBy)
+		if err != nil {
+			return err
+		}
+		return tx.Create(snapshot).Error
 	}
 	m, p := snapshotDeviceIdentity(device)
 	template, err := NewProvisioningRepository(tx).ResolveTemplateForDevice(ctx, m, p)

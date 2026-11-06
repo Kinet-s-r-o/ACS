@@ -25,6 +25,7 @@ type SystemTask struct {
 	DeviceID           int64            `json:"device_id" gorm:"not null;index"`
 	RefreshParameters  bool             `json:"refresh_parameters" gorm:"not null;default:false"`
 	SnapshotKind       string           `json:"snapshot_kind,omitempty" gorm:"size:16;not null;default:''"`
+	SnapshotName       string           `json:"snapshot_name,omitempty" gorm:"size:128;not null;default:''"`
 	SnapshotSlot       *time.Time       `json:"snapshot_slot,omitempty"`
 	SnapshotTemplateID *int64           `json:"snapshot_template_id,omitempty"`
 	CWMPTaskID         *int64           `json:"cwmp_task_id,omitempty" gorm:"index"`
