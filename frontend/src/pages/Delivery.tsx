@@ -4,6 +4,7 @@ import { Save, Settings as SettingsIcon, Info, RefreshCw, Eye, EyeOff } from 'lu
 import { api } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
+import { booleanChangePrompt, confirmBooleanChange } from '../lib/booleanConfirmation';
 import { ResourceError } from '../components/ResourceState';
 import { useAuth } from '../lib/auth';
 
@@ -20,7 +21,7 @@ const settingFields: SettingField[] = [
 
 const Delivery: Component = () => {
   const { isFullAccess } = useAuth();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [settings, { refetch }] = createResource(() => api.getSettings());
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
@@ -151,7 +152,7 @@ const Delivery: Component = () => {
                   <p class="text-xs text-muted mt-0.5">Choose how ACS authenticates outbound connection requests to each CPE.</p>
                 </div>
                 <button
-                  onClick={() => handleChange('use_auto_conn_credentials', getValue('use_auto_conn_credentials') === 'true' ? 'false' : 'true')}
+                  onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt('Automatic connection-request credentials', getValue('use_auto_conn_credentials') === 'true'), () => handleChange('use_auto_conn_credentials', getValue('use_auto_conn_credentials') === 'true' ? 'false' : 'true'))}
                   class={`px-3 py-1.5 text-xs font-medium transition-colors ${
                     getValue('use_auto_conn_credentials') === 'true'
                       ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'

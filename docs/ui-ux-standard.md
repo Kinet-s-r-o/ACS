@@ -91,6 +91,7 @@ Analytics tracking is intentionally not embedded in the console. Security audit 
 - **Responsive:** hide low-priority columns where appropriate; otherwise allow deliberate horizontal scroll with a fixed identifier. Essential actions remain visible.
 - **Accessibility:** real links for navigation, buttons for actions and sorting, `aria-sort` for sortable columns, and accessible names for icon-only controls.
 - **Boolean Active cells:** green Yes and red No indicators; authorized editors toggle them with a real button exposing `aria-pressed`. Disable while saving, retain the last confirmed value until refresh, and show persistent errors on failure. Read-only users see the same colored text without mutation controls. Preserve consequence confirmations and self-account protections.
+- **Boolean confirmation:** every indicator toggle, including activation and draft badge toggles in edit dialogs, opens a confirmation identifying the item and requested value before changing state. Use the shared Feedback dialog; cancellation or Escape leaves the value unchanged. The shared BooleanIndicator confirms once per action; standalone toggles retain their contextual consequences. Filters, navigation and ordinary form checkboxes are not indicator state changes.
 
 ### Page header and operational register
 

@@ -2,6 +2,7 @@ import { createSignal, createMemo, createEffect, Show, For, type Component } fro
 import { api, type DeviceParameter } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from './Feedback';
+import { booleanChangePrompt, confirmBooleanChange } from '../lib/booleanConfirmation';
 import Dialog from './Dialog';
 import { Save, Send, Check } from 'lucide-solid';
 import { ALL_FIELDS, GENERAL_FIELDS, BINDING_FIELDS, IPV4_FIELDS, IPV6_FIELDS, ADVANCED_FIELDS, resolveSuffix, getChangedParams, validateChangedFields, type WanFieldDef } from '../lib/wanFields';
@@ -26,7 +27,7 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [activeTab, setActiveTab] = createSignal<TabId>('general');
   const { can } = useAuth();
   const section = (tab: TabId) => `inventory.cpes.overview.wan.${tab}`;
@@ -191,7 +192,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
             id={`wan-${key}`}
             type="button"
             disabled={!writable || !canEditTab()}
-            onClick={() => setValue(field, value === '1' || value === 'true' ? '0' : '1')}
+            onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt(displayLabel, value === '1' || value === 'true'), () => setValue(field, value === '1' || value === 'true' ? '0' : '1'))}
             class={`badge cursor-pointer ${value === '1' || value === 'true' ? 'badge-success' : 'badge-error'}`}
             aria-pressed={value === '1' || value === 'true'}
           >

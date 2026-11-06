@@ -2,6 +2,7 @@ import { createMemo, createSignal, For, Show, type Component } from 'solid-js';
 import { Check, Save, Send } from 'lucide-solid';
 import { api, type DeviceParameter } from '../lib/api';
 import { useFeedback } from './Feedback';
+import { booleanChangePrompt, confirmBooleanChange } from '../lib/booleanConfirmation';
 import Dialog from './Dialog';
 
 interface LanNetworkSettingsModalProps {
@@ -48,7 +49,7 @@ const isIPv6Prefix = (value: string): boolean => {
 };
 
 const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props) => {
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [edits, setEdits] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
   const [saved, setSaved] = createSignal(false);
@@ -191,7 +192,7 @@ const LanNetworkSettingsModal: Component<LanNetworkSettingsModalProps> = (props)
               const value = getValue(field);
               return <div class="flex flex-col gap-1"><label class="text-xs text-muted" for={`lan-network-${field.name}`}>{field.label}</label>
                 <Show when={field.type === 'toggle'} fallback={<input id={`lan-network-${field.name}`} type={field.type === 'number' ? 'number' : 'text'} value={value} placeholder={field.placeholder} disabled={!writable} onInput={event => setEdits(previous => ({ ...previous, [field.name]: event.currentTarget.value }))} class={`input py-1.5 px-2 text-sm ${errors()[field.name] ? 'border-red-500' : ''}`} />}>
-                  <button id={`lan-network-${field.name}`} type="button" disabled={!writable} aria-pressed={value === '1' || value === 'true'} onClick={() => setEdits(previous => ({ ...previous, [field.name]: value === '1' || value === 'true' ? '0' : '1' }))} class={`badge w-fit cursor-pointer ${value === '1' || value === 'true' ? 'badge-success' : 'badge-error'}`}>{value === '1' || value === 'true' ? 'Enabled' : 'Disabled'}</button>
+                  <button id={`lan-network-${field.name}`} type="button" disabled={!writable} aria-pressed={value === '1' || value === 'true'} onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt(field.label, value === '1' || value === 'true'), () => setEdits(previous => ({ ...previous, [field.name]: value === '1' || value === 'true' ? '0' : '1' })))} class={`badge w-fit cursor-pointer ${value === '1' || value === 'true' ? 'badge-success' : 'badge-error'}`}>{value === '1' || value === 'true' ? 'Enabled' : 'Disabled'}</button>
                 </Show>
                 <Show when={errors()[field.name]}><span class="text-xs text-red-400">{errors()[field.name]}</span></Show>
                 <Show when={!writable}><span class="text-[10px] text-muted">Read-only on this device</span></Show>

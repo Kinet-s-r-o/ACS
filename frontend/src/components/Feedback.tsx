@@ -17,7 +17,7 @@ interface Notice extends NoticeInput {
   id: number;
 }
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title: string;
   description: string;
   confirmLabel: string;

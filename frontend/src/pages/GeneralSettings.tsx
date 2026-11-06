@@ -4,6 +4,7 @@ import { Plus, Save, Settings as SettingsIcon, Trash2 } from 'lucide-solid';
 import { api, type DashboardAggregationOption, type DashboardAggregationSource } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import { useFeedback } from '../components/Feedback';
+import { booleanChangePrompt, confirmBooleanChange } from '../lib/booleanConfirmation';
 import { ResourceError } from '../components/ResourceState';
 import { useAuth, usePermissionSection } from '../lib/auth';
 import { initAppName } from '../lib/appName';
@@ -12,7 +13,7 @@ import { DATE_TIME_FORMATS, formatDateTime, setDateTimeFormat, type DateTimeForm
 
 const GeneralSettings: Component = () => {
   const { can, canVisit } = useAuth();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [settings, { refetch }] = createResource(() => api.getSettings());
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
@@ -242,7 +243,7 @@ const GeneralSettings: Component = () => {
                 <p class="text-xs text-muted mt-0.5">Display markers on metric chart lines. Turn off for a line-only view.</p>
               </div>
               <button
-                onClick={() => setFormData((prev) => ({ ...prev, chart_show_points: getValue('chart_show_points') !== 'false' ? 'false' : 'true' }))}
+                onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt('Chart points', getValue('chart_show_points') !== 'false'), () => setFormData((prev) => ({ ...prev, chart_show_points: getValue('chart_show_points') !== 'false' ? 'false' : 'true' })))}
                 class={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   getValue('chart_show_points') !== 'false'
                     ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'

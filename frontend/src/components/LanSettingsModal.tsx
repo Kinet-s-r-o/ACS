@@ -2,6 +2,7 @@ import { createSignal, createMemo, createEffect, Show, For, type Component } fro
 import { api, type DeviceParameter } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from './Feedback';
+import { booleanChangePrompt, confirmBooleanChange } from '../lib/booleanConfirmation';
 import Dialog from './Dialog';
 import { Save, Send, Check } from 'lucide-solid';
 import { ALL_FIELDS, GENERAL_FIELDS, ADVANCED_FIELDS, LAN_PREFIX, resolveSuffix, getChangedParams, validateChangedFields, type LanFieldDef } from '../lib/lanFields';
@@ -24,7 +25,7 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [activeTab, setActiveTab] = createSignal<TabId>('general');
   const { can } = useAuth();
   const section = (tab: TabId) => `inventory.cpes.overview.lan.${tab}`;
@@ -154,7 +155,7 @@ const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
             id={`lan-${props.lanIndex}-${key}`}
             type="button"
             disabled={!writable || !canEditTab()}
-            onClick={() => setValue(field, value === '1' || value === 'true' ? '0' : '1')}
+            onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt(field.label, value === '1' || value === 'true'), () => setValue(field, value === '1' || value === 'true' ? '0' : '1'))}
             class={`badge cursor-pointer ${value === '1' || value === 'true' ? 'badge-success' : 'badge-error'}`}
             aria-pressed={value === '1' || value === 'true'}
           >

@@ -7,7 +7,7 @@ import AccountTransferActions from '../components/AccountTransferActions';
 import { api, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import Dialog from '../components/Dialog';
-import { useFeedback } from '../components/Feedback';
+import { type ConfirmOptions, useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { useAuth, usePermissionSection } from '../lib/auth';
 import ColumnFilter from '../components/ColumnFilter';
@@ -152,10 +152,20 @@ const UsersPage: Component = () => {
     finally { setPendingAction(null); }
   };
 
+  const userActiveConfirmation = (target: User): ConfirmOptions => ({
+    title: target.active ? 'Deactivate operator?' : 'Activate operator?',
+    description: target.active ? `${target.username} will no longer be able to sign in. Existing web sessions and API tokens will be blocked while the account is inactive; account data and dashboard settings will be retained.` : `Allow ${target.username} to sign in and use the access granted by their role?`,
+    confirmLabel: target.active ? 'Deactivate operator' : 'Activate operator',
+    tone: target.active ? 'danger' : 'primary',
+  });
+  const confirmSetUserActive = async (target: User) => {
+    if (pendingAction() || !await confirm(userActiveConfirmation(target))) return;
+    await handleSetUserActive(target);
+  };
+
   const handleSetUserActive = async (target: User) => {
     const active = !target.active;
     if (pendingAction()) return;
-    if (!active && !await confirm({ title: 'Deactivate operator?', description: `${target.username} will no longer be able to sign in. Existing web sessions and API tokens will be blocked while the account is inactive; account data and dashboard settings will be retained.`, confirmLabel: 'Deactivate operator', tone: 'danger' })) return;
     setPendingAction(`set-user-active-${target.id}`);
     try { await api.setUserActive(target.id, active); notify({ tone: 'success', title: `Operator ${active ? 'activated' : 'deactivated'}`, message: target.username }); await refetchUsers(); }
     catch (error) { notify({ tone: 'error', title: `Could not ${active ? 'activate' : 'deactivate'} operator`, message: 'The account status was not changed.', detail: (error as Error).message, persistent: true }); }
@@ -258,7 +268,7 @@ const UsersPage: Component = () => {
                   <tr class="border-b border-subtle/50">
                     <Show when={isVisible('username')}><td data-column-order-id="username#0" class="py-2 text-primary">{u.username}</td></Show>
                     <Show when={isVisible('auth_provider')}><td data-column-order-id="account type#0" class="py-2"><span class={`badge ${(u.auth_provider || 'local').toLowerCase() === 'radius' ? 'badge-warning' : 'badge-success'}`}>{(u.auth_provider || 'local').toLowerCase() === 'radius' ? 'Radius' : 'Local'}</span></td></Show>
-                    <Show when={isVisible('active')}><td data-column-order-id="active#0" class="py-2"><BooleanIndicator value={u.active} label={`Active for operator ${u.username}`} editable={isFullAccess() && hasPermission('users.write')} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)} onToggle={() => handleSetUserActive(u)} /></td></Show>
+                    <Show when={isVisible('active')}><td data-column-order-id="active#0" class="py-2"><BooleanIndicator value={u.active} label={`Active for operator ${u.username}`} editable={isFullAccess() && hasPermission('users.write')} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)} confirmation={userActiveConfirmation(u)} onToggle={() => handleSetUserActive(u)} /></td></Show>
                     <Show when={isVisible('first_name')}><td data-column-order-id="first name#0" class="py-2 text-primary">{u.first_name || '—'}</td></Show>
                     <Show when={isVisible('last_name')}><td data-column-order-id="last name#0" class="py-2 text-primary">{u.last_name || '—'}</td></Show>
                     <Show when={isVisible('email')}><td data-column-order-id="email#0" class="py-2 text-secondary">{u.email || '—'}</td></Show>
@@ -282,7 +292,7 @@ const UsersPage: Component = () => {
                         <Show when={can('settings.users', 'write') && can('fleet', 'read')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
                         <Show when={isFullAccess() && hasPermission('users.write')}>
                           <button type="button" onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}><Edit2 size={14} /></button>
-                          <button type="button" onClick={() => void handleSetUserActive(u)} class={`icon-button ${u.active ? 'text-amber-400' : 'text-emerald-400'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
+                          <button type="button" onClick={() => void confirmSetUserActive(u)} class={`icon-button ${u.active ? 'text-amber-400' : 'text-emerald-400'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
                             {u.active ? <Ban size={14} /> : <Check size={14} />}
                           </button>
                         </Show>

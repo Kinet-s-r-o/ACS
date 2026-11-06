@@ -515,7 +515,7 @@ const DeviceDetail: Component = () => {
 
   const toggleTemplateFeature = async (featureID: string, key: string, label: string, group: string | undefined, enabled: boolean) => {
     if (!isFullAccess() || featureAction()) return;
-    if (!enabled && /wan/i.test(`${group || ''} ${label}`) && !await confirm({ title: `Disable ${label}?`, description: 'This may remove remote access to the ONT. Continue only if you have another way to manage it.', confirmLabel: 'Disable service', tone: 'danger' })) return;
+    if (!await confirm({ title: `${enabled ? 'Enable' : 'Disable'} ${label}?`, description: !enabled && /wan/i.test(`${group || ''} ${label}`) ? 'This may remove remote access to the ONT. Continue only if you have another way to manage it.' : `Queue this state change for ${label} on the current CPE?`, confirmLabel: enabled ? 'Enable service' : 'Disable service', tone: enabled ? 'primary' : 'danger' })) return;
     const actionKey = `${featureID}:${key}`;
     setFeatureAction(actionKey);
     try {
@@ -1421,6 +1421,8 @@ const DeviceDetail: Component = () => {
   };
 
   const toggleParam = async (paramPath: string, value: string, successMsg: string) => {
+    if (actionLoading() !== null || !await confirm({ title: 'Confirm CPE state change', description: `Set ${paramPath} to ${value === '1' ? 'Enabled' : 'Disabled'}? The change will be queued for this CPE.`, confirmLabel: 'Queue change' })) return;
+    if (actionLoading() !== null) return;
     const key = `toggle-${paramPath}`;
     setActionLoading(key);
     try {
@@ -1442,6 +1444,8 @@ const DeviceDetail: Component = () => {
       showMessage('error', 'This CPE does not expose a supported WAN port binding parameter.');
       return;
     }
+    if (actionLoading() !== null || !await confirm({ title: 'Change WAN port binding?', description: `${check ? 'Assign' : 'Remove'} ${kind.toUpperCase()} ${portNumber} ${check ? 'on' : 'from'} ${wan.name}? Other WAN bindings may also change.`, confirmLabel: 'Queue binding change' })) return;
+    if (actionLoading() !== null) return;
     const key = `wan-tie-${wan.path}-${kind}${portNumber}`;
     setActionLoading(key);
     try {
