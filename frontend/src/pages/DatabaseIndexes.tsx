@@ -1,7 +1,7 @@
 import { createMemo, createResource, createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js';
-import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-solid';
+import { Download, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-solid';
 import { formatDateTime } from '../lib/dateTime';
-import { api, type DatabaseIndexColumn, type DatabaseIndexDefinition, type DatabaseIndexPreview, type DatabaseIndexSpec, type ManagedDatabaseIndex } from '../lib/api';
+import { api, type DatabaseIndexCatalogEntry, type DatabaseIndexColumn, type DatabaseIndexDefinition, type DatabaseIndexPreview, type DatabaseIndexSpec, type ManagedDatabaseIndex } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
@@ -37,6 +37,26 @@ const DatabaseIndexes: Component = () => {
   const page = () => Math.min(catalogPage(), Math.max(0, Math.ceil(catalog().length / catalogPageSize()) - 1));
   const catalogRows = () => catalog().slice(page() * catalogPageSize(), (page() + 1) * catalogPageSize());
   const isManaged = (name: string) => data.latest?.managed.some(index => index.active_name === name && index.owned);
+  const catalogProtection = (index: DatabaseIndexCatalogEntry) => isManaged(index.name) ? 'UI managed' : index.primary ? 'Protected primary key' : index.unique || index.constraint ? 'Protected constraint' : 'Protected existing index';
+  const exportCatalogCSV = () => {
+    if (!can('settings.database.indexes', 'read') || data.loading || data.error || !catalog().length) return;
+    const headers = ['Schema', 'Index', 'Table', 'Method', 'Size bytes', 'Scans', 'Valid', 'Primary', 'Unique', 'Constraint', 'Protection', 'Definition'];
+    const rows = catalog().map(index => [index.schema, index.name, index.table_name, index.method, index.size_bytes, index.scans, index.valid, index.primary, index.unique, index.constraint, catalogProtection(index), index.definition]);
+    const escapeCsvValue = (value: unknown) => {
+      const text = String(value ?? '');
+      const safeText = typeof value === 'string' && /^[=+@\-\t\r\n]/.test(text) ? `'${text}` : text;
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
+    const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(escapeCsvValue).join(';')).join('\r\n') + '\r\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'postgresql-index-catalog.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
   const recipeLabel = (recipe: string) => recipe === 'custom' ? 'Custom B-tree' : data.latest?.recipes.find(item => item.id === recipe)?.label ?? recipe;
   const custom = () => form().recipe === 'custom';
   const definition = () => form().definition ?? emptyDefinition();
@@ -147,7 +167,7 @@ const DatabaseIndexes: Component = () => {
 
       <section class="card p-4 space-y-3" aria-label="PostgreSQL index catalog">
         <div class="flex flex-wrap items-end justify-between gap-3"><div><h3 class="text-sm font-medium text-secondary">PostgreSQL index catalog</h3><p class="text-xs text-muted mt-1">Current application schema, largest first. Scan counts are cumulative since statistics were reset.</p></div>
-          <div><label for="db-index-search" class="text-xs text-muted block mb-1">Filter index catalog</label><input id="db-index-search" type="search" class="input w-full" value={catalogSearch()} onInput={event => { setCatalogSearch(event.currentTarget.value); setCatalogPage(0); }} /></div>
+          <div class="flex flex-wrap items-end gap-2"><div><label for="db-index-search" class="text-xs text-muted block mb-1">Filter index catalog</label><input id="db-index-search" type="search" class="input w-full" value={catalogSearch()} onInput={event => { setCatalogSearch(event.currentTarget.value); setCatalogPage(0); }} /></div><Show when={can('settings.database.indexes', 'read')}><button type="button" class="btn btn-secondary" disabled={data.loading || !!data.error || !catalog().length} onClick={exportCatalogCSV} title="Export all filtered indexes, including SQL definitions"><Download size={14} aria-hidden="true" />Export CSV</button></Show></div>
         </div>
         <Show when={catalog().length} fallback={<p class="text-sm text-muted">No indexes match this filter.</p>}>
           <div class="overflow-x-auto"><table class="data-table w-full text-xs" data-column-order-key="database-index-catalog">
@@ -157,7 +177,7 @@ const DatabaseIndexes: Component = () => {
               <td data-column-order-id="method">{index().method}<Show when={!index().valid}><p class="text-warning mt-1">Invalid</p></Show></td>
               <td data-column-order-id="size" class="font-mono whitespace-nowrap">{formatBytes(index().size_bytes)}</td>
               <td data-column-order-id="scans" class="font-mono">{index().scans.toLocaleString()}</td>
-              <td data-column-order-id="ownership">{isManaged(index().name) ? 'UI managed' : index().primary ? 'Protected primary key' : index().unique || index().constraint ? 'Protected constraint' : 'Protected existing index'}</td>
+              <td data-column-order-id="ownership">{catalogProtection(index())}</td>
             </tr>}</Index></tbody>
           </table></div>
           <Pagination page={page()} pageSize={catalogPageSize()} totalItems={catalog().length} totalPages={Math.ceil(catalog().length / catalogPageSize())} storageKey="database-index-catalog" onPageChange={setCatalogPage} onPageSizeChange={size => { setCatalogPageSize(size); setCatalogPage(0); }} />
