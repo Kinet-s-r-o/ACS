@@ -17,6 +17,8 @@ import { sortRows, type SortDirection } from '../lib/sorting';
 import { usePageSize } from '../lib/usePageSize';
 import MetricModal from '../components/MetricModal';
 import CPEEditWindowDesigner from '../components/CPEEditWindowDesigner';
+import TemplateSnapshotsForm from '../components/TemplateSnapshotsForm';
+import { defaultSnapshotSettings, validateSnapshotSettings } from '../lib/snapshotSchedule';
 import ColorSwatch from '../components/ColorSwatch';
 import BooleanIndicator from '../components/BooleanIndicator';
 import { useMetricActiveToggle } from '../lib/useMetricActiveToggle';
@@ -187,9 +189,10 @@ const Provisioning: Component = () => {
   const [isAddObjectRule, setIsAddObjectRule] = createSignal(false);
   const [copyingProv, setCopyingProv] = createSignal(false);
   const [showTemplateModal, setShowTemplateModal] = createSignal(false);
+  const [templateModalTab, setTemplateModalTab] = createSignal<'general' | 'snapshots'>('general');
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
-  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '' });
+  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings() });
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
@@ -944,40 +947,40 @@ const Provisioning: Component = () => {
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setCloningTemplate(null);
-    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '' };
+    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings() };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
-    setShowTemplateModal(true);
+    setTemplateModalTab('general'); setShowTemplateModal(true);
   };
 
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setCloningTemplate(null);
     setEditingTemplate(t);
-    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])], overview_poll_interval: t.overview_poll_interval || '', full_tree_poll_interval: t.full_tree_poll_interval || '' };
+    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])], overview_poll_interval: t.overview_poll_interval || '', full_tree_poll_interval: t.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...t.snapshots } };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     void loadTemplateImage(t);
-    setShowTemplateModal(true);
+    setTemplateModalTab('general'); setShowTemplateModal(true);
   };
 
   const openCloneTemplate = (template: ProvisioningTemplate) => {
     setEditingTemplate(null);
     setCloningTemplate(template);
-    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])], overview_poll_interval: template.overview_poll_interval || '', full_tree_poll_interval: template.full_tree_poll_interval || '' };
+    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])], overview_poll_interval: template.overview_poll_interval || '', full_tree_poll_interval: template.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...template.snapshots } };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
-    setShowTemplateModal(true);
+    setTemplateModalTab('general'); setShowTemplateModal(true);
   };
 
   const handleCreateTemplate = async () => {
     if (pendingAction()) return;
     const form = templateForm();
-    if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
+    if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('create-template');
     try {
-      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim() });
+      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots });
       notify({ tone: 'success', title: 'Template created', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -989,10 +992,10 @@ const Provisioning: Component = () => {
     const source = cloningTemplate();
     const form = templateForm();
     if (!source || pendingAction()) return;
-    if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
+    if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('clone-template');
     try {
-      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim() });
+      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots });
       notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, device photo, and LAN layout.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
@@ -1008,10 +1011,10 @@ const Provisioning: Component = () => {
     const t = editingTemplate();
     if (!t || pendingAction()) return;
     const form = templateForm();
-    if (!form.name.trim()) { notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
+    if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('update-template');
     try {
-      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim() });
+      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots });
       notify({ tone: 'success', title: 'Template updated', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -2171,8 +2174,13 @@ const Provisioning: Component = () => {
           title={editingTemplate() ? 'Edit template' : cloningTemplate() ? 'Duplicate template' : 'Add template'}
           onClose={closeTemplateModal}
         >
-          <form onSubmit={(e) => { e.preventDefault(); editingTemplate() ? handleUpdateTemplate() : cloningTemplate() ? handleCloneTemplate() : handleCreateTemplate(); }} class="space-y-4">
+          <div class="tab-bar mb-4" role="tablist" aria-label="Template settings">
+            <button type="button" role="tab" class={`tab-btn ${templateModalTab() === 'general' ? 'is-active' : ''}`} aria-selected={templateModalTab() === 'general'} onClick={() => setTemplateModalTab('general')}>General</button>
+            <button type="button" role="tab" class={`tab-btn ${templateModalTab() === 'snapshots' ? 'is-active' : ''}`} aria-selected={templateModalTab() === 'snapshots'} onClick={() => setTemplateModalTab('snapshots')}>Snapshots</button>
+          </div>
+          <form onSubmit={(e) => { e.preventDefault(); const error = validateSnapshotSettings(templateForm().snapshots); if (error) { setTemplateModalTab('snapshots'); notify({ tone: 'error', title: 'Invalid snapshot settings', message: error }); return; } editingTemplate() ? handleUpdateTemplate() : cloningTemplate() ? handleCloneTemplate() : handleCreateTemplate(); }} class="space-y-4">
             <Show when={templateFormDirty()}><div class="form-dirty-banner" role="status">Unsaved changes will be lost if this dialog is closed.</div></Show>
+            <Show when={templateModalTab() === 'general'}><div class="space-y-4">
             <div>
               <label for="template-name" class="block text-xs text-muted mb-1.5">Name</label>
               <input id="template-name" type="text" value={templateForm().name} onInput={(e) => setTemplateForm(f => ({ ...f, name: e.currentTarget.value }))} class="input w-full" placeholder="e.g. SkyDash AC1000" required />
@@ -2264,6 +2272,8 @@ const Provisioning: Component = () => {
               </div>
             </Show>
             <p class="text-xs text-muted">Specificity: both fields set = most specific (score 2), one field = partial (score 1), neither = global fallback (score 0). The most specific matching template wins.</p>
+            </div></Show>
+            <Show when={templateModalTab() === 'snapshots'}><TemplateSnapshotsForm value={templateForm().snapshots} disabled={pendingAction() !== null || !can('settings.provisioning', 'write')} onChange={snapshots => setTemplateForm(form => ({ ...form, snapshots }))} /></Show>
             <div class="flex gap-2 pt-2">
               <button type="button" onClick={closeTemplateModal} class="btn btn-secondary flex-1" disabled={pendingAction() !== null}>Cancel</button>
               <button type="submit" class="btn btn-primary flex-1" disabled={pendingAction() !== null}>

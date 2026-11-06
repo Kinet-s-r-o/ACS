@@ -143,6 +143,7 @@ func main() {
 	cwmpHandler.SetWatchdog(watchdog)
 	go watchdog.Start(ctx)
 	go cwmp.NewSystemTaskWorker(db, communication).Start(ctx)
+	go cwmp.NewSnapshotScheduler(db, communication).Start(ctx)
 
 	go func() {
 		log.Printf("ACS CWMP server listening on %s", cwmpServer.Addr)

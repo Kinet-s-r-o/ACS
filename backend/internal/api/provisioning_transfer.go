@@ -39,6 +39,7 @@ type provisioningTransferTemplate struct {
 	LANPortMappings          []models.ProvisioningLANPortMapping `json:"lan_port_mappings,omitempty"`
 	CPEInfoFields            []models.ProvisioningCPEInfoField   `json:"cpe_info_fields,omitempty"`
 	CPEEditWindows           []models.CPEEditWindow              `json:"cpe_edit_windows,omitempty"`
+	Snapshots                models.TemplateSnapshotSettings     `json:"snapshots"`
 	Rules                    []models.ProvisioningRule           `json:"rules,omitempty"`
 	Metrics                  []models.MetricDefinition           `json:"metrics,omitempty"`
 	ParameterPolls           []models.ParameterPollDefinition    `json:"parameter_polls,omitempty"`
@@ -78,6 +79,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
 			CPEInfoFields:  template.CPEInfoFields,
 			CPEEditWindows: template.CPEEditWindows,
+			Snapshots:      template.Snapshots,
 		}
 		rules, err := r.provisioningRepo.ListForTemplate(req.Context(), template.ID)
 		if err != nil {
@@ -210,6 +212,10 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,
 				CPEInfoFields:  item.CPEInfoFields,
 				CPEEditWindows: item.CPEEditWindows,
+				Snapshots:      item.Snapshots,
+			}
+			if err := configureTemplateSnapshots(&template, nil, nil); err != nil {
+				return err
 			}
 			if err := tx.Create(&template).Error; err != nil {
 				return err
@@ -297,6 +303,9 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 		return err
 	}
 	if err := validateEditWindows(item.CPEEditWindows); err != nil {
+		return err
+	}
+	if err := item.Snapshots.Validate(); err != nil {
 		return err
 	}
 	for index := range item.Rules {

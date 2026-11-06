@@ -1,5 +1,7 @@
 # Backend area router
 
+Automatic template snapshots: [automation guide](../docs/automatic-snapshots.md), `internal/cwmp/snapshot_scheduler.go`, `internal/database/snapshot_automation.go`, `snapshot_repository.go` and system-task completion. Preserve atomic snapshot/job/device markers and initial-snapshot protection in deletion and retention.
+
 Template CPE edit form definitions and validation: [edit windows guide](../docs/cpe-edit-windows.md), `internal/api/cpe_edit_window.go` and `internal/models/cpe_edit_window.go`.
 
 Section authorization: [permission model](../docs/permission-expansion-plan.md), `internal/models/permissions.go`, `internal/database/permission_catalog.go`, `internal/api/permission_policy.go` and `permission_network_fields.go`. Saved roles use the operator catalog with per-section action sets; older permission names below identify internal adapters. New routes and fields require explicit policies. Built-in admin resolves the entire current catalog.

@@ -12,6 +12,8 @@ type ProvisioningTemplate struct {
 	DynamicParameterBranches []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
 	OverviewPollInterval     string                       `json:"overview_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
 	FullTreePollInterval     string                       `json:"full_tree_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
+	Snapshots                TemplateSnapshotSettings     `json:"snapshots" gorm:"type:jsonb;serializer:json"`
+	SnapshotInitialSince     *time.Time                   `json:"snapshot_initial_since,omitempty"`
 	Variables                []ProvisioningVariable       `json:"variables" gorm:"type:jsonb;serializer:json"`
 	Features                 []ProvisioningFeature        `json:"features" gorm:"type:jsonb;serializer:json"`
 	LANPortCount             int                          `json:"lan_port_count" gorm:"default:0"`
@@ -153,15 +155,16 @@ type CreateProvisioningRuleRequest struct {
 }
 
 type CreateProvisioningTemplateRequest struct {
-	Name                     string                 `json:"name"`
-	Manufacturer             string                 `json:"manufacturer"`
-	ProductClass             string                 `json:"product_class"`
-	Description              string                 `json:"description"`
-	Inventory                *TemplateInventory     `json:"inventory,omitempty"`
-	DynamicParameterBranches []string               `json:"dynamic_parameter_branches,omitempty"`
-	OverviewPollInterval     *string                `json:"overview_poll_interval,omitempty"`
-	FullTreePollInterval     *string                `json:"full_tree_poll_interval,omitempty"`
-	Variables                []ProvisioningVariable `json:"variables"`
+	Name                     string                    `json:"name"`
+	Manufacturer             string                    `json:"manufacturer"`
+	ProductClass             string                    `json:"product_class"`
+	Description              string                    `json:"description"`
+	Inventory                *TemplateInventory        `json:"inventory,omitempty"`
+	DynamicParameterBranches []string                  `json:"dynamic_parameter_branches,omitempty"`
+	OverviewPollInterval     *string                   `json:"overview_poll_interval,omitempty"`
+	FullTreePollInterval     *string                   `json:"full_tree_poll_interval,omitempty"`
+	Snapshots                *TemplateSnapshotSettings `json:"snapshots,omitempty"`
+	Variables                []ProvisioningVariable    `json:"variables"`
 }
 
 type ProvisioningApplication struct {

@@ -5,16 +5,18 @@ import "time"
 // DeviceSnapshot stores a point-in-time copy of parameters known by the ACS.
 // Sensitive values are encrypted before they are serialized into Parameters.
 type DeviceSnapshot struct {
-	ID              int64     `json:"id" gorm:"primaryKey;autoIncrement"`
-	DeviceID        int64     `json:"device_id" gorm:"index;not null"`
-	Name            string    `json:"name" gorm:"size:128;not null"`
-	Manufacturer    *string   `json:"manufacturer,omitempty"`
-	ProductClass    *string   `json:"product_class,omitempty"`
-	SoftwareVersion *string   `json:"software_version,omitempty"`
-	ParameterCount  int       `json:"parameter_count"`
-	Parameters      JSON      `json:"parameters" gorm:"type:jsonb;not null"`
-	CreatedBy       string    `json:"created_by,omitempty" gorm:"size:128"`
-	CreatedAt       time.Time `json:"created_at" gorm:"autoCreateTime;index"`
+	ID              int64      `json:"id" gorm:"primaryKey;autoIncrement"`
+	DeviceID        int64      `json:"device_id" gorm:"index;not null"`
+	Name            string     `json:"name" gorm:"size:128;not null"`
+	Kind            string     `json:"kind" gorm:"size:16;not null;default:'manual'"`
+	ScheduledFor    *time.Time `json:"scheduled_for,omitempty"`
+	Manufacturer    *string    `json:"manufacturer,omitempty"`
+	ProductClass    *string    `json:"product_class,omitempty"`
+	SoftwareVersion *string    `json:"software_version,omitempty"`
+	ParameterCount  int        `json:"parameter_count"`
+	Parameters      JSON       `json:"parameters" gorm:"type:jsonb;not null"`
+	CreatedBy       string     `json:"created_by,omitempty" gorm:"size:128"`
+	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime;index"`
 }
 
 func (DeviceSnapshot) TableName() string { return "device_snapshots" }

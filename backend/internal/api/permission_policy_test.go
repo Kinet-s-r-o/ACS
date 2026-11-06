@@ -29,6 +29,9 @@ func TestScopedRouteAuthorization(t *testing.T) {
 		name, pattern, section, action string
 		status                         int
 	}{
+		{"snapshot-delete-write", "DELETE /device/{serial}/snapshots/{id}", "cpe", "write", 204},
+		{"snapshot-delete-read-denied", "DELETE /device/{serial}/snapshots/{id}", "cpe", "read", 403},
+		{"snapshot-delete-device-delete-denied", "DELETE /device/{serial}/snapshots/{id}", "cpe", "delete", 403},
 		{"edit-window-read", "GET /device/{serial}/edit-window", "cpe", "read", 204},
 		{"edit-window-write", "POST /device/{serial}/edit-window", "cpe", "write", 204},
 		{"edit-window-read-cannot-write", "POST /device/{serial}/edit-window", "cpe", "read", 403},

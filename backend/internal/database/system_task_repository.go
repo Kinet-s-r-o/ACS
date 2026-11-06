@@ -151,7 +151,19 @@ func (r *SystemTaskRepository) MarkWaiting(ctx context.Context, id int64, cwmpTa
 
 func (r *SystemTaskRepository) MarkCompleted(ctx context.Context, id int64) error {
 	now := time.Now()
-	return r.db.WithContext(ctx).Model(&models.SystemTask{}).Where("id = ?", id).Updates(map[string]interface{}{"status": models.SystemTaskStatusCompleted, "completed_at": now, "error_message": ""}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var task models.SystemTask
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, id).Error; err != nil {
+			return err
+		}
+		if task.Status == models.SystemTaskStatusCompleted {
+			return nil
+		}
+		if err := completeAutomaticSnapshot(ctx, tx, task, now); err != nil {
+			return err
+		}
+		return tx.Model(&task).Updates(map[string]interface{}{"status": models.SystemTaskStatusCompleted, "completed_at": now, "error_message": ""}).Error
+	})
 }
 
 func (r *SystemTaskRepository) MarkFailed(ctx context.Context, id int64, message string) error {

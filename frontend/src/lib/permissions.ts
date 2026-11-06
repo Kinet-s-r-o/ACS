@@ -40,7 +40,7 @@ export const canonicalPermission = (section: string, action: PermissionAction): 
  if (original === 'inventory.cpes' && action === 'delete') section = 'cpe';
  if (original.startsWith('inventory.cpes.tasks') && action === 'delete') section = 'tasks';
  if (original.startsWith('inventory.cpes.faults') && action !== 'read') section = 'faults';
- if (original === 'inventory.cpes.snapshots' && action === 'delete') action = 'full';
+ if (original === 'inventory.cpes.snapshots' && action === 'delete') action = 'write';
  return [section, action];
 };
 

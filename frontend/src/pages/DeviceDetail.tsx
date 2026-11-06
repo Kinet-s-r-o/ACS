@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { canDeleteSnapshot } from '../lib/snapshotSchedule';
 import { DEVICE_TAB_SECTIONS } from '../lib/permissions';
 import DeviceStatusBadge from '../components/DeviceStatusBadge';
 import OntLanVisualization from '../components/OntLanVisualization';
@@ -477,6 +478,7 @@ const DeviceDetail: Component = () => {
   };
 
   const deleteSnapshot = async (snapshot: DeviceSnapshot) => {
+    if (!canDeleteSnapshot(snapshot.kind, can('cpe', 'write'), can('cpe', 'full'))) return;
     if (!await confirm({ title: 'Delete snapshot?', description: `This permanently removes “${snapshot.name}”.`, confirmLabel: 'Delete snapshot', tone: 'danger' })) return;
     setSnapshotLoading(`delete-${snapshot.id}`);
     try {
@@ -2460,10 +2462,10 @@ const DeviceDetail: Component = () => {
                           <div class={`rounded border p-3 ${selectedSnapshot()?.id === snapshot.id ? 'border-primary bg-primary/5' : 'border-subtle'}`}>
                             <div class="flex items-center justify-between gap-3">
                               <button type="button" class="text-left min-w-0 flex-1" onClick={() => void openSnapshot(snapshot)} disabled={snapshotLoading() !== null}>
-                                <div class="text-sm text-primary truncate">{snapshot.name}</div>
+                                <div class="text-sm text-primary truncate">{snapshot.name}<Show when={snapshot.kind === 'initial'}><span class="ml-2 text-xs text-muted">Initial - protected</span></Show></div>
                                 <div class="text-xs text-muted mt-1">{formatDate(snapshot.created_at)} · {snapshot.parameter_count} parameters</div>
                               </button>
-                              <Show when={can('cpe', 'full')}>
+                              <Show when={canDeleteSnapshot(snapshot.kind, can('cpe', 'write'), can('cpe', 'full'))}>
                                 <button type="button" class="icon-button text-muted hover:text-rose-400" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button></Show>
                             </div>
                           </div>

@@ -27,14 +27,15 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		return
 	}
 	var body struct {
-		Name                     string                    `json:"name"`
-		Manufacturer             string                    `json:"manufacturer"`
-		ProductClass             string                    `json:"product_class"`
-		Description              string                    `json:"description"`
-		Inventory                *models.TemplateInventory `json:"inventory,omitempty"`
-		DynamicParameterBranches []string                  `json:"dynamic_parameter_branches,omitempty"`
-		OverviewPollInterval     *string                   `json:"overview_poll_interval,omitempty"`
-		FullTreePollInterval     *string                   `json:"full_tree_poll_interval,omitempty"`
+		Name                     string                           `json:"name"`
+		Manufacturer             string                           `json:"manufacturer"`
+		ProductClass             string                           `json:"product_class"`
+		Description              string                           `json:"description"`
+		Inventory                *models.TemplateInventory        `json:"inventory,omitempty"`
+		DynamicParameterBranches []string                         `json:"dynamic_parameter_branches,omitempty"`
+		OverviewPollInterval     *string                          `json:"overview_poll_interval,omitempty"`
+		FullTreePollInterval     *string                          `json:"full_tree_poll_interval,omitempty"`
+		Snapshots                *models.TemplateSnapshotSettings `json:"snapshots,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -90,6 +91,11 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
 		CPEInfoFields:  append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),
 		CPEEditWindows: source.CPEEditWindows,
+		Snapshots:      source.Snapshots,
+	}
+	if err := configureTemplateSnapshots(&clone, body.Snapshots, nil); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	targetMetricScope := templateMetricScope(clone.Manufacturer, clone.ProductClass)
 	imageCopyPath, lanVisualizationCopyPath := "", ""

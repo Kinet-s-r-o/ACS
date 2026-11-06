@@ -77,7 +77,7 @@ func CanonicalPermission(section, action string) (string, string) {
 	}
 	// Snapshot deletion is not the Delete CPE action.
 	if original == "inventory.cpes.snapshots" && action == "delete" {
-		action = "full"
+		action = "write"
 	}
 	return section, action
 }

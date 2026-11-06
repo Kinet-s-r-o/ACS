@@ -161,7 +161,7 @@ var retentionRules = []retentionRule{
 	{"retention_resolved_fault_days", "faults", "resolved = true AND resolved_at < ?", 24 * time.Hour, false},
 	{"retention_completed_task_days", "tasks", "status = 'completed' AND completed_at < ?", 24 * time.Hour, false},
 	{"retention_failed_task_days", "tasks", "status = 'failed' AND completed_at < ?", 24 * time.Hour, false},
-	{"retention_snapshot_days", "device_snapshots", "created_at < ?", 24 * time.Hour, false},
+	{"retention_snapshot_days", "device_snapshots", "created_at < ? AND kind <> 'initial'", 24 * time.Hour, false},
 	{"retention_device_log_days", "device_logs", "received_at < ?", 24 * time.Hour, false},
 	{"retention_metric_hours", "metric_samples", "", time.Hour, true},
 	{"retention_interface_metric_hours", "interface_metric_samples", "", time.Hour, true},

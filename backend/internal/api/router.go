@@ -2573,39 +2573,18 @@ func (r *Router) handleCreateSnapshotBySerial(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusConflict, "No cached device parameters are available")
 		return
 	}
-	snapshotParameters := make([]models.SnapshotParameter, 0, len(parameters))
-	for _, parameter := range parameters {
-		if parameter.Writable == nil || !*parameter.Writable {
-			continue
-		}
-		value := parameter.Value
-		if database.IsSensitiveParameterName(parameter.Name) {
-			value, err = database.EncryptValue(value)
-			if err != nil {
-				respondError(w, http.StatusInternalServerError, "Failed to protect snapshot values")
-				return
-			}
-		}
-		snapshotParameters = append(snapshotParameters, models.SnapshotParameter{
-			Name: parameter.Name, Value: value, ValueType: parameter.ValueType, Writable: parameter.Writable,
-		})
-	}
-	if len(snapshotParameters) == 0 {
-		respondError(w, http.StatusConflict, "No writable device parameters are available")
-		return
-	}
-	encoded, err := json.Marshal(snapshotParameters)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to encode snapshot")
-		return
-	}
-	snapshot := &models.DeviceSnapshot{
-		DeviceID: device.ID, Name: payload.Name, Manufacturer: device.Manufacturer,
-		ProductClass: device.ProductClass, SoftwareVersion: device.SoftwareVersion,
-		ParameterCount: len(snapshotParameters), Parameters: models.JSON(encoded),
-	}
+	actor := ""
 	if claims := auth.GetUserFromContext(req.Context()); claims != nil {
-		snapshot.CreatedBy = claims.Username
+		actor = claims.Username
+	}
+	snapshot, err := database.BuildDeviceSnapshot(device, parameters, payload.Name, "manual", actor)
+	if err != nil {
+		if errors.Is(err, database.ErrNoWritableSnapshotParameters) {
+			respondError(w, http.StatusConflict, "No writable device parameters are available")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "Could not protect or encode snapshot values")
+		return
 	}
 	if err := r.snapshotRepo.Create(req.Context(), snapshot); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create snapshot")
@@ -2731,7 +2710,15 @@ func (r *Router) handleDeleteSnapshotBySerial(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusBadRequest, "Invalid snapshot ID")
 		return
 	}
-	if err := r.snapshotRepo.Delete(req.Context(), device.ID, id); err != nil {
+	if err := r.snapshotRepo.Delete(req.Context(), device.ID, id, requestCan(req, "cpe", "full")); err != nil {
+		if errors.Is(err, database.ErrInitialSnapshotLocked) {
+			respondError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			respondError(w, http.StatusNotFound, "Snapshot not found")
+			return
+		}
 		respondError(w, http.StatusInternalServerError, "Failed to delete snapshot")
 		return
 	}
@@ -4692,6 +4679,10 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		Variables:                body.Variables,
 	}
 
+	if err := configureTemplateSnapshots(template, body.Snapshots, nil); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -4787,6 +4778,10 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		FullTreePollInterval:     fullTreeInterval,
 		Variables:                body.Variables,
 	}
+	if err := configureTemplateSnapshots(template, body.Snapshots, previous); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if body.Variables == nil {
 		template.Variables = previous.Variables
 	}
@@ -4795,7 +4790,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 			respondError(w, http.StatusForbidden, "Variables edit permission required")
 			return
 		}
-		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval
+		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval || template.Snapshots != previous.Snapshots
 		if metadataChanged && !requestCan(req, "settings.provisioning.templates", "edit") {
 			respondError(w, http.StatusForbidden, "Templates edit permission required")
 			return

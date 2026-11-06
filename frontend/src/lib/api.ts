@@ -82,7 +82,7 @@ export interface ReauthenticationCredentials { current_password?: string; totp_c
 export interface DeviceTaskCounts { pending: number; sent: number; completed: number; failed: number; deleted: number; total: number }
 export interface DeviceReachability { status: 'reachable' | 'unreachable' | 'unknown'; ip_address?: string; checked_at: string; response_time_ms?: number }
 export interface SnapshotParameter { name: string; value: string; value_type?: string; writable?: boolean }
-export interface DeviceSnapshot { id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
+export interface DeviceSnapshot { kind?: 'manual' | 'initial' | 'scheduled'; scheduled_for?: string; id: number; device_id: number; name: string; manufacturer?: string | null; product_class?: string | null; software_version?: string | null; parameter_count: number; parameters?: SnapshotParameter[]; created_by?: string; created_at: string }
 export interface Firmware { id: number; filename: string; version: string; manufacturer?: string; product_class?: string; file_size: number; checksum?: string; description?: string; created_at: string; updated_at: string }
 export interface Fault { id: number; device_id: number; serial_number: string; model_name?: string; software_version?: string; hardware_version?: string; manufacturer_oui?: string; fault_code: string; fault_string: string; parameter_name: string; resolved: boolean; created_at: string; resolved_at: string | null }
 export interface FaultCounts { active: number; resolved: number; total: number }
@@ -133,7 +133,8 @@ export interface CPEEditTab { id: string; name: string; columns: number; fields:
 export interface CPEEditWindow { version: 1; target: CPEEditTarget; enabled: boolean; base_pattern: string; tabs: CPEEditTab[] }
 export interface CPEEditParameterMetadata { name: string; type: CPEEditType; target: CPEEditTarget; base_pattern: string; parameter: string }
 export interface CPEHelpParameterMetadata { name: string; type: string; target: string; base_pattern: string; parameter: string }
-export interface ProvisioningTemplate { cpe_edit_windows?: CPEEditWindow[] }
+export interface TemplateSnapshotSettings { initial_enabled: boolean; initial_delay_minutes: number; scheduled_enabled: boolean; scheduled_interval_minutes: number }
+export interface ProvisioningTemplate { cpe_edit_windows?: CPEEditWindow[]; snapshots?: TemplateSnapshotSettings; snapshot_initial_since?: string }
 export interface CPEEditWindowState { window: CPEEditWindow | null; parameters: DeviceParameter[] }
 
 export interface DatabaseIndexColumn {
@@ -414,9 +415,9 @@ export const api = {
   saveEditWindows: (id: number, referenceSerial: string, windows: CPEEditWindow[]) => request<{ cpe_edit_windows: CPEEditWindow[] }>(`/provisioning/templates/${id}/edit-windows`, { method: 'PUT', body: JSON.stringify({ reference_serial: referenceSerial, windows }) }),
   getCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string) => request<CPEEditWindowState>(`/device/${encodeURIComponent(serial)}/edit-window?target=${target}&prefix=${encodeURIComponent(prefix)}`),
   applyCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/edit-window`, { method: 'POST', body: JSON.stringify({ target, prefix, parameters }) }),
-  createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
-  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
-  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; snapshots?: TemplateSnapshotSettings }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
+  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; snapshots?: TemplateSnapshotSettings }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
+  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; snapshots?: TemplateSnapshotSettings; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
   getProvisioningTemplateImage: (id: number) => requestBlob(`/provisioning/templates/${id}/image`),
   uploadProvisioningTemplateImage: (id: number, file: File) => {

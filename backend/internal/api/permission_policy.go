@@ -190,6 +190,8 @@ func endpointPermissions(pattern string) ([]string, string, bool) {
 		return []string{"settings.system_tasks", "cpe", "inventory"}, "read", false
 	case (strings.HasPrefix(path, "/device/") || strings.HasPrefix(path, "/devices/") || strings.HasPrefix(path, "/v1/devices/")) && strings.HasSuffix(path, "/factory-reset"):
 		return []string{"cpe"}, "write", false
+	case method == "DELETE" && path == "/device/{serial}/snapshots/{id}":
+		return []string{"cpe"}, "write", false
 	case method == "DELETE" && strings.HasPrefix(path, "/device/") && (strings.Contains(path, "/wifi/") || strings.Contains(path, "/wan-interfaces/") || strings.Contains(path, "/features/")):
 		return []string{"cpe"}, "write", false
 	case method == "GET" && ((strings.HasPrefix(path, "/device/") && strings.Count(path, "/") == 2) || (strings.HasPrefix(path, "/devices/") && strings.Count(path, "/") == 2) || (strings.HasPrefix(path, "/v1/devices/") && strings.Count(path, "/") == 3)):

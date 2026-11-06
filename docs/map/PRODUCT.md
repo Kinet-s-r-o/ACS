@@ -2,6 +2,7 @@
 
 | Task | Where | Notes |
 | --- | --- | --- |
+| Automatic CPE snapshots | [Snapshot automation](../automatic-snapshots.md) → `snapshot_scheduler.go`, `snapshot_automation.go`, `TemplateSnapshotsForm.tsx` | Initial protection, anchored schedules, durable summon/refresh queue, existing Provisioning and CPE permissions |
 | Template CPE edit forms | [Edit windows guide](../cpe-edit-windows.md) → `cpe_edit_window.go`, `CPEEditWindowDesigner.tsx`, `CustomCPEEditModal.tsx` | Writable reference metadata, interface-relative fields, typed selects, existing provisioning/CPE permissions |
 | External billing/API integration | [Integration guide](../integration-api.md) → `backend/internal/api/integration.go`, `api_tokens.go`, `openapi.json`, `internal/auth/api_token.go` | User-linked tokens, serial-based CPE operations, Swagger contract and tests |
 | Backend entrypoint and lifecycle | [backend/README.md](../../backend/README.md) → `backend/cmd/server/main.go` | Servers, migrations, recovery, retention, watchdog startup |
