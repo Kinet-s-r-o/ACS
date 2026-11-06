@@ -8,8 +8,9 @@ const TemplateSnapshotsForm: Component<{ value: TemplateSnapshotSettings; disabl
       <label class="flex items-center gap-2 text-sm text-primary"><input type="checkbox" checked={props.value.initial_enabled} onChange={event => update({ initial_enabled: event.currentTarget.checked })} />Initial snapshot</label>
       <label for="snapshot-initial-delay" class="block text-xs text-muted">Delay after adding a new ONT (minutes)</label>
       <input id="snapshot-initial-delay" type="number" class="input w-full" min={0} max={525600} step={1} required disabled={!props.value.initial_enabled} value={props.value.initial_delay_minutes} onInput={event => update({ initial_delay_minutes: event.currentTarget.valueAsNumber })} />
-      <p class="text-xs text-muted">Checked every 15 minutes. Applies to ONTs added after initial snapshots were enabled. Zero means eligible immediately. The ACS summons the ONT, waits for a successful parameter refresh and then creates one initial snapshot. Failed contacts retry on a later check.</p>
+      <p class="text-xs text-muted">Checked every 5 minutes. Applies to ONTs added after initial snapshots were enabled. Zero means eligible immediately. The ACS summons the ONT, waits for a successful parameter refresh and then creates one initial snapshot. Failed contacts retry on a later check.</p>
       <p class="text-xs text-muted">Initial snapshots are protected from retention cleanup and deletion by CPE Write operators. Deletion requires CPE Full access.</p>
+      <p class="text-xs text-muted">Every ONT needs an initial snapshot. If it has none, its next successful scheduled snapshot becomes the protected initial snapshot, including older ONTs and ONTs whose initial snapshot was deleted. This also applies when the separate initial-delay policy is disabled.</p>
     </section>
     <section class="space-y-3 border-t border-subtle pt-4" aria-label="Scheduled snapshot settings">
       <label class="flex items-center gap-2 text-sm text-primary"><input type="checkbox" checked={props.value.scheduled_enabled} onChange={event => update({ scheduled_enabled: event.currentTarget.checked })} />Scheduled snapshots</label>

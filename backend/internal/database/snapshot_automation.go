@@ -131,6 +131,8 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 	}
 	column := "snapshot_scheduled_at"
 	stamp := *task.SnapshotSlot
+	kind := task.SnapshotKind
+	updates := map[string]interface{}{}
 	if task.SnapshotKind == "initial" {
 		if !InitialSnapshotDue(device, *template, now) {
 			return nil
@@ -138,12 +140,21 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 		column, stamp = "snapshot_initial_at", now
 	} else if !template.Snapshots.ScheduledEnabled || (device.SnapshotScheduledAt != nil && !stamp.After(*device.SnapshotScheduledAt)) {
 		return nil
+	} else {
+		var initial []models.DeviceSnapshot
+		if err := tx.Select("id").Where("device_id = ? AND kind = ?", device.ID, "initial").Limit(1).Find(&initial).Error; err != nil {
+			return err
+		}
+		if len(initial) == 0 {
+			kind = "initial"
+			updates["snapshot_initial_at"] = now
+		}
 	}
 	parameters, err := NewParameterRepository(tx).GetByDeviceID(ctx, device.ID)
 	if err != nil {
 		return err
 	}
-	snapshot, err := BuildDeviceSnapshot(&device, parameters, fmt.Sprintf("%s snapshot %s", task.SnapshotKind, stamp.UTC().Format(time.RFC3339)), task.SnapshotKind, "snapshot scheduler")
+	snapshot, err := BuildDeviceSnapshot(&device, parameters, fmt.Sprintf("%s snapshot %s", kind, stamp.UTC().Format(time.RFC3339)), kind, "snapshot scheduler")
 	if err != nil {
 		return err
 	}
@@ -151,5 +162,6 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 	if err := tx.Create(snapshot).Error; err != nil {
 		return err
 	}
-	return tx.Model(&device).UpdateColumn(column, stamp).Error
+	updates[column] = stamp
+	return tx.Model(&device).UpdateColumns(updates).Error
 }

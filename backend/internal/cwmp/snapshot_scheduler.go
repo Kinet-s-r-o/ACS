@@ -21,19 +21,15 @@ func NewSnapshotScheduler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Sna
 }
 
 func (s *SnapshotScheduler) Start(ctx context.Context) {
-	initial := time.NewTicker(15 * time.Minute)
-	scheduled := time.NewTicker(5 * time.Minute)
-	defer initial.Stop()
-	defer scheduled.Stop()
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 	s.check(ctx, true, true)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-initial.C:
-			s.check(ctx, true, false)
-		case <-scheduled.C:
-			s.check(ctx, false, true)
+		case <-ticker.C:
+			s.check(ctx, true, true)
 		}
 	}
 }

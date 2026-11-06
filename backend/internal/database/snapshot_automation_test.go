@@ -152,6 +152,98 @@ func TestSnapshotRetentionProtectsInitial(t *testing.T) {
 	t.Fatal("missing snapshot retention rule")
 }
 
+func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		exists, oldMarker bool
+	}{
+		{"old-ONT", false, false}, {"deleted-initial", false, true}, {"existing-initial", true, true}, {"existing-without-marker", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			old := now.Add(-365 * 24 * time.Hour)
+			activation := now.Add(-time.Hour)
+			templateID, cwmpID := int64(2), int64(3)
+			job := models.SystemTask{DeviceID: 1, SnapshotKind: "scheduled", SnapshotSlot: &now, SnapshotTemplateID: &templateID, CWMPTaskID: &cwmpID, RefreshParameters: true}
+			device := models.Device{ID: 1, CreatedAt: old}
+			if tc.oldMarker {
+				device.SnapshotInitialAt = &old
+			}
+			hasInitial := tc.exists
+			db, err := gorm.Open(postgres.Open("host=127.0.0.1 user=unused dbname=unused sslmode=disable"), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			writable := true
+			kinds := []string{}
+			if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+				switch dest := tx.Statement.Dest.(type) {
+				case *models.Task:
+					*dest = models.Task{ID: cwmpID, DeviceID: 1, Status: models.TaskStatusCompleted}
+				case *models.Device:
+					*dest = device
+				case *models.ProvisioningTemplate:
+					*dest = models.ProvisioningTemplate{ID: templateID, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: false, ScheduledEnabled: true}}
+				case *[]models.DeviceSnapshot:
+					if hasInitial {
+						*dest = []models.DeviceSnapshot{{ID: 1, Kind: "initial"}}
+					}
+				case *[]models.DeviceParameter:
+					*dest = []models.DeviceParameter{{Name: "Device.Test.Enable", Value: "true", Writable: &writable}}
+				default:
+					t.Fatalf("unexpected read %T", dest)
+				}
+				tx.RowsAffected = 1
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) {
+				snapshot := tx.Statement.Dest.(*models.DeviceSnapshot)
+				kinds = append(kinds, snapshot.Kind)
+				if snapshot.Kind == "initial" {
+					hasInitial = true
+				}
+				tx.RowsAffected = 1
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Callback().Update().Replace("gorm:update", func(tx *gorm.DB) {
+				changes := tx.Statement.Dest.(map[string]interface{})
+				if stamp, ok := changes["snapshot_initial_at"].(time.Time); ok {
+					device.SnapshotInitialAt = &stamp
+				}
+				if stamp, ok := changes["snapshot_scheduled_at"].(time.Time); ok {
+					device.SnapshotScheduledAt = &stamp
+				}
+				tx.RowsAffected = 1
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := completeAutomaticSnapshot(context.Background(), db, job, now); err != nil {
+				t.Fatal(err)
+			}
+			want := "initial"
+			if tc.exists {
+				want = "scheduled"
+			}
+			if len(kinds) != 1 || kinds[0] != want || device.SnapshotScheduledAt == nil {
+				t.Fatalf("incorrect scheduled result: %v", kinds)
+			}
+			if !tc.exists && (device.SnapshotInitialAt == nil || !device.SnapshotInitialAt.Equal(now)) {
+				t.Fatal("missing initial marker update")
+			}
+			if err := completeAutomaticSnapshot(context.Background(), db, job, now); err != nil || len(kinds) != 1 {
+				t.Fatalf("duplicate slot: %v", err)
+			}
+			next := now.Add(time.Hour)
+			job.SnapshotSlot = &next
+			if err := completeAutomaticSnapshot(context.Background(), db, job, next); err != nil || len(kinds) != 2 || kinds[1] != "scheduled" {
+				t.Fatalf("next snapshot did not remain scheduled: %v %v", kinds, err)
+			}
+		})
+	}
+}
+
 func TestAutomaticSnapshotQueueDeduplicatesAndReusesFailedJobs(t *testing.T) {
 	now := time.Now().UTC()
 	activation := now.Add(-time.Hour)
