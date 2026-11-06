@@ -211,7 +211,7 @@ func buildManagedIndex(ctx context.Context, db *gorm.DB, conn *indexSession, m m
 	if err := db.WithContext(ctx).Model(&m).Updates(map[string]any{"status": "building", "message": "Building concurrently; CPE reads and writes remain available."}).Error; err != nil {
 		return err
 	}
-	spec := IndexSpec{Label: m.Label, Purpose: m.Purpose, Recipe: m.Recipe, ParameterPath: m.ParameterPath}
+	spec := storedIndexSpec(m)
 	var buildErr error
 	if m.CancelRequested {
 		buildErr = fmt.Errorf("Index creation cancelled.")
@@ -281,7 +281,7 @@ func buildManagedIndex(ctx context.Context, db *gorm.DB, conn *indexSession, m m
 				if err == nil {
 					for _, c := range state.Catalog {
 						if c.Name == m.CandidateName && c.SizeBytes > ManagedIndexMaxBytes {
-							err = fmt.Errorf("Index exceeded the 256 MiB size limit.")
+							err = fmt.Errorf("Index exceeded the 1 GiB size limit.")
 						}
 					}
 				}
@@ -381,9 +381,9 @@ func enforceManagedIndexBudgets(ctx context.Context, db *gorm.DB, conn *indexSes
 		case !v.Valid:
 			reason = "An invalid UI index was removed from PostgreSQL."
 		case v.SizeBytes > ManagedIndexMaxBytes:
-			reason = "UI index removed after exceeding the 256 MiB limit."
+			reason = "UI index removed after exceeding the 1 GiB limit."
 		case state.Budget.ManagedBytes > ManagedIndexTotalBytes:
-			reason = "UI index removed to restore the 1 GiB total storage budget."
+			reason = "UI index removed to restore the 5 GiB total storage budget."
 		case state.Budget.ProbeFresh && state.Budget.FreeBytes < state.Budget.ReserveBytes:
 			reason = "UI index removed to restore the PostgreSQL disk reserve."
 		}

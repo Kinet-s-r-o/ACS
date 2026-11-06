@@ -125,11 +125,18 @@ export interface InterfaceMetricSample { device_id: number; metric_id: number; p
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; excluded_tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
 export interface AuditLog { id: number; user_id?: number; username: string; action: string; resource: string; status: number; ip_address: string; user_agent?: string; created_at: string }
 
+export interface DatabaseIndexColumn {
+  name: string; direction: 'ASC' | 'DESC'; nulls: '' | 'FIRST' | 'LAST';
+}
+export interface DatabaseIndexDefinition {
+  table_name: string; columns: DatabaseIndexColumn[]; include_columns: string[];
+}
 export interface DatabaseIndexSpec {
   label: string;
   purpose: string;
-  recipe: 'parameter_presence' | 'parameter_freshness' | 'devices_last_inform' | 'parameters_device_latest';
+  recipe: 'parameter_presence' | 'parameter_freshness' | 'devices_last_inform' | 'parameters_device_latest' | 'custom';
   parameter_path: string;
+  definition?: DatabaseIndexDefinition;
 }
 export interface ManagedDatabaseIndex extends DatabaseIndexSpec {
   id: number; status: string; message: string; active_name: string;
@@ -155,6 +162,7 @@ export interface DatabaseIndexRecipe {
 export interface DatabaseIndexOverview {
   managed: ManagedDatabaseIndex[]; catalog: DatabaseIndexCatalogEntry[];
   recipes: DatabaseIndexRecipe[];
+  tables: { name: string; columns: string[] }[];
   budget: DatabaseIndexBudget;
 }
 export interface DatabaseIndexPreview {

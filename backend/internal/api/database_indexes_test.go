@@ -21,6 +21,9 @@ func TestDatabaseIndexStrictPayload(t *testing.T) {
 		`{"label":"Test","purpose":"Test parameter query","recipe":"devices_last_inform","parameter_path":"","include_columns":["value"]}`,
 		`{"label":"Test","purpose":"Test parameter query","recipe":"parameters_device_latest","parameter_path":"","table_name":"users"}`,
 		`{"label":"Test","purpose":"Test parameter query","recipe":"parameters_device_latest","parameter_path":"Device.Test.Name"}`,
+		`{"label":"Test","purpose":"Test parameter query","recipe":"custom","definition":{"table_name":"devices","columns":[{"name":"conn_cred_password"}]}}`,
+		`{"label":"Test","purpose":"Test parameter query","recipe":"custom","definition":{"table_name":"devices","columns":[{"name":"id"}],"method":"gin"}}`,
+		`{"label":"Test","purpose":"Test parameter query","recipe":"custom","definition":{"table_name":"devices","columns":[{"name":"id","expression":"lower(id)"}]}}`,
 		`{"label":"Test","purpose":"Test parameter query","recipe":"parameter_presence","parameter_path":"Device.Test.Name"} {}`,
 		strings.Repeat("x", 5000),
 	} {
@@ -40,6 +43,15 @@ func TestDatabaseIndexFleetPayload(t *testing.T) {
 		if spec, ok := decodeIndexSpec(w, r); !ok || spec.Recipe != recipe || spec.ParameterPath != "" {
 			t.Fatalf("approved Fleet payload rejected: %d %s", w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestDatabaseIndexCustomPayload(t *testing.T) {
+	payload := `{"label":"Custom index","purpose":"Sort recent CPE informs","recipe":"custom","parameter_path":"","definition":{"table_name":"devices","columns":[{"name":"last_inform","direction":"DESC","nulls":"LAST"}],"include_columns":["id"]}}`
+	r := httptest.NewRequest("POST", "/settings/database/indexes", strings.NewReader(payload))
+	w := httptest.NewRecorder()
+	if spec, ok := decodeIndexSpec(w, r); !ok || spec.Definition == nil || spec.Definition.Columns[0].Name != "last_inform" {
+		t.Fatalf("custom payload rejected: %d %s", w.Code, w.Body.String())
 	}
 }
 

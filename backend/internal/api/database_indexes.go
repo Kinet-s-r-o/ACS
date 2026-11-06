@@ -21,7 +21,7 @@ func decodeIndexSpec(w http.ResponseWriter, req *http.Request) (database.IndexSp
 	decoder := json.NewDecoder(req.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&spec); err != nil {
-		respondError(w, http.StatusBadRequest, "Provide label, purpose, recipe and parameter_path only. Custom SQL and index methods, including GIN, are forbidden.")
+		respondError(w, http.StatusBadRequest, "Provide label, purpose, recipe, parameter_path and an optional structured definition only. Free SQL and index methods, including GIN, are forbidden.")
 		return spec, false
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {

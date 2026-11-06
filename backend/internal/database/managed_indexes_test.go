@@ -126,11 +126,11 @@ func TestManagedIndexFleetRecipes(t *testing.T) {
 
 func TestManagedIndexFullTableEstimate(t *testing.T) {
 	spec := IndexSpec{Recipe: "parameters_device_latest"}
-	rows, size, err := estimateIndexStorage(spec, 2_000_000, 10_000, 150)
-	if err != nil || rows != 4_000_000 || size <= ManagedIndexMaxBytes {
+	rows, size, err := estimateIndexStorage(spec, 4_000_000, 10_000, 150)
+	if err != nil || rows != 8_000_000 || size <= ManagedIndexMaxBytes {
 		t.Fatalf("parameter estimate used CPE count instead of all parameters: %d rows, %d bytes, %v", rows, size, err)
 	}
-	_, fallback, err := estimateIndexStorage(spec, 2_000_000, 10_000, 0)
+	_, fallback, err := estimateIndexStorage(spec, 4_000_000, 10_000, 0)
 	if err != nil || fallback <= size {
 		t.Fatal("missing name statistics did not use conservative width")
 	}
@@ -437,7 +437,8 @@ func TestManagedIndexPostgresBudgetsAndDefinitionLimit(t *testing.T) {
 	setIndexProbe(t, db, 90<<30, 0)
 	// The full physical size allowance is reserved for queued work, so parallel
 	// API requests cannot overbook the total budget with small-looking estimates.
-	for i := 0; i < 4; i++ {
+	queuedSlots := int(ManagedIndexTotalBytes / ManagedIndexMaxBytes)
+	for i := 0; i < queuedSlots; i++ {
 		spec := testIndexSpec()
 		spec.ParameterPath = fmt.Sprintf("Device.Budget.Param%d", i)
 		if _, err := QueueManagedIndex(ctx, db, 0, spec, 1); err != nil {
@@ -449,10 +450,10 @@ func TestManagedIndexPostgresBudgetsAndDefinitionLimit(t *testing.T) {
 	if _, err := QueueManagedIndex(ctx, db, 0, extra, 1); !errors.Is(err, ErrIndexPolicy) {
 		t.Fatal("queued jobs overbooked total index budget")
 	}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < queuedSlots; i++ {
 		indexTick(t, db)
 	}
-	for i := 4; i < ManagedIndexMaxCount; i++ {
+	for i := queuedSlots; i < ManagedIndexMaxCount; i++ {
 		spec := testIndexSpec()
 		spec.ParameterPath = fmt.Sprintf("Device.Budget.Param%d", i)
 		if _, err := QueueManagedIndex(ctx, db, 0, spec, 1); err != nil {

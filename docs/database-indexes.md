@@ -40,10 +40,20 @@ The two Fleet recipes cover all rows of their target table. The latest-parameter
 index can therefore be much larger than an exact-path index. Parameter values
 are never indexed or included, so a long value received in Inform/GPV cannot
 violate a B-tree key-size limit. Only the fixed recent-CPE recipe includes `id`.
-GIN and every other method, free SQL, caller-selected tables/columns/expressions,
-INCLUDE lists, uniqueness, wildcard paths, branches, sensitive paths and device
-logs are rejected by the backend, including forged API requests. Full-table
-recipes require an empty `parameter_path`.
+The **Custom B-tree definition** builder also supports 1–4 ordered keys (ASC/DESC
+and default/FIRST/LAST NULL ordering), up to 4 distinct INCLUDE columns, and an
+optional exact `name = '<parameter_path>'` filter on `device_parameters`.
+Supported fields are `devices` (`id`, `online`, `last_inform`, `last_bootstrap`,
+`last_boot`, `created_at`, `updated_at`) and `device_parameters` (`id`, `device_id`,
+`name`, `updated_at`, `writable`). Key and INCLUDE columns cannot overlap.
+The backend advertises these fields in `tables` and validates every request.
+GIN and every other method, free SQL, other tables/columns, expressions,
+uniqueness, wildcard paths, branches, sensitive paths and device logs are
+rejected, including forged API requests. Full-table presets require an empty
+`parameter_path`. Custom definitions use `recipe: "custom"` and a `definition`
+object with `table_name`, `columns` (`name`, `direction`, `nulls`) and
+`include_columns`. Definitions persist in the ownership registry as JSON;
+startup adds the nullable registry field but creates no optional index.
 
 The planner must be able to prove the exact path predicate to use a partial
 index. A generic wildcard query does not automatically benefit from an exact
@@ -69,7 +79,7 @@ startup and migrations do not create these indexes.
 
 Limits are fixed in the backend and cannot be raised through the UI:
 
-- At most 8 definitions, 256 MiB per physical UI index, 1 GiB total UI indexes.
+- At most 8 definitions, 1 GiB per physical UI index, 5 GiB total UI indexes.
 - A disk reserve of the greater of 10 GiB or 20% of the monitored filesystem
   capacity. Construction additionally reserves space for the index, sorting and
   WAL. Queued/replacement indexes reserve their full size allowance.
@@ -154,7 +164,8 @@ durable queued operation. Unknown JSON fields and multiple JSON bodies are
 rejected. IDs refer to registry records, never arbitrary catalog OIDs.
 
 Models live in `backend/internal/models/database_index.go`; policy, catalog and
-preflight in `backend/internal/database/managed_indexes.go`; DDL/recovery/watchdog
+preflight in `backend/internal/database/managed_indexes.go`; the structured
+builder policy is in `managed_index_definition.go`; DDL/recovery/watchdog
 in `managed_index_worker.go`; routes in `backend/internal/api/database_indexes.go`;
 console in `frontend/src/pages/DatabaseIndexes.tsx`.
 

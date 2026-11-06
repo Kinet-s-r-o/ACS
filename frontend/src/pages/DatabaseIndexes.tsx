@@ -1,7 +1,7 @@
 import { createMemo, createResource, createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js';
 import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-solid';
 import { formatDateTime } from '../lib/dateTime';
-import { api, type DatabaseIndexPreview, type DatabaseIndexSpec, type ManagedDatabaseIndex } from '../lib/api';
+import { api, type DatabaseIndexColumn, type DatabaseIndexDefinition, type DatabaseIndexPreview, type DatabaseIndexSpec, type ManagedDatabaseIndex } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
@@ -13,6 +13,7 @@ const formatBytes = (bytes: number) => bytes >= 1024 ** 3
   : `${(bytes / 1024 ** 2).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB`;
 const pending = (index: ManagedDatabaseIndex) => ['queued', 'building', 'deleting'].includes(index.status) || index.cleanup_pending;
 const emptySpec = (): DatabaseIndexSpec => ({ label: '', purpose: '', recipe: 'parameter_presence', parameter_path: '' });
+const emptyDefinition = (): DatabaseIndexDefinition => ({ table_name: 'devices', columns: [{ name: 'last_inform', direction: 'DESC', nulls: 'LAST' }], include_columns: [] });
 
 const DatabaseIndexes: Component = () => {
   const { hasPermission, can } = useAuth();
@@ -36,19 +37,34 @@ const DatabaseIndexes: Component = () => {
   const page = () => Math.min(catalogPage(), Math.max(0, Math.ceil(catalog().length / catalogPageSize()) - 1));
   const catalogRows = () => catalog().slice(page() * catalogPageSize(), (page() + 1) * catalogPageSize());
   const isManaged = (name: string) => data.latest?.managed.some(index => index.active_name === name && index.owned);
-  const recipeLabel = (recipe: string) => data.latest?.recipes.find(item => item.id === recipe)?.label ?? recipe;
-  const selectedRecipe = () => data.latest?.recipes.find(item => item.id === form().recipe);
+  const recipeLabel = (recipe: string) => recipe === 'custom' ? 'Custom B-tree' : data.latest?.recipes.find(item => item.id === recipe)?.label ?? recipe;
+  const custom = () => form().recipe === 'custom';
+  const definition = () => form().definition ?? emptyDefinition();
+  const availableColumns = () => data.latest?.tables.find(table => table.name === definition().table_name)?.columns ?? [];
+  const selectedRecipe = () => custom() ? {
+    id: 'custom', label: 'Custom B-tree', description: 'Choose key columns in priority order. Use INCLUDE for covered fields and an optional exact parameter filter.',
+    table_name: definition().table_name,
+    columns: definition().columns.map(column => `${column.name} ${column.direction}${column.nulls ? ` NULLS ${column.nulls}` : ''}`),
+    include_columns: definition().include_columns, requires_parameter_path: definition().table_name === 'device_parameters',
+  } : data.latest?.recipes.find(item => item.id === form().recipe);
   onMount(() => {
     const timer = window.setInterval(() => { if (!document.hidden && !data.loading) void refetch(); }, 5000);
     onCleanup(() => window.clearInterval(timer));
   });
 
   const openEditor = (index?: ManagedDatabaseIndex) => {
-    setForm(index ? { label: index.label, purpose: index.purpose, recipe: index.recipe, parameter_path: index.parameter_path } : emptySpec());
+    setForm(index ? { label: index.label, purpose: index.purpose, recipe: index.recipe, parameter_path: index.parameter_path, definition: index.definition ? structuredClone(index.definition) : undefined } : emptySpec());
     setPreview(undefined); setFormError(''); setDialog(index ? { id: index.id } : {});
   };
   const change = <K extends keyof DatabaseIndexSpec>(key: K, value: DatabaseIndexSpec[K]) => {
-    setForm(current => ({ ...current, [key]: value, ...(key === 'recipe' ? { parameter_path: '' } : {}) })); setPreview(undefined); setFormError('');
+    setForm(current => ({ ...current, [key]: value, ...(key === 'recipe' ? { parameter_path: '', definition: value === 'custom' ? emptyDefinition() : undefined } : {}) })); setPreview(undefined); setFormError('');
+  };
+  const changeDefinition = (value: Partial<DatabaseIndexDefinition>) => change('definition', { ...definition(), ...value });
+  const changeColumn = (position: number, value: Partial<DatabaseIndexColumn>) => changeDefinition({ columns: definition().columns.map((column, index) => index === position ? { ...column, ...value } : column) });
+  const moveColumn = (position: number, offset: number) => {
+    const columns = [...definition().columns];
+    [columns[position], columns[position + offset]] = [columns[position + offset], columns[position]];
+    changeDefinition({ columns });
   };
   const inspect = async (event: SubmitEvent) => {
     event.preventDefault(); setBusy(true); setFormError('');
@@ -96,7 +112,7 @@ const DatabaseIndexes: Component = () => {
           <div><dt class="text-muted">PostgreSQL disk available</dt><dd class="font-mono text-primary mt-1">{current().budget.probe_fresh ? formatBytes(current().budget.free_bytes) : 'Measurement unavailable'}</dd></div>
           <div><dt class="text-muted">Protected disk reserve</dt><dd class="font-mono text-primary mt-1">{formatBytes(current().budget.reserve_bytes)} minimum</dd></div>
         </dl>
-        <p class="text-xs text-muted">Choose an approved B-tree definition for an exact parameter path, recent CPEs by Inform, or latest parameters per CPE. Only the recent-CPE definition includes id; parameter values are never indexed. Existing database indexes are protected.</p>
+        <p class="text-xs text-muted">Choose a B-tree preset or build a custom definition from supported CPE and parameter columns. Parameter values and credentials cannot be indexed. Existing database indexes are protected.</p>
         <p class="text-xs text-muted">UI indexes exceeding a size limit or the disk reserve are automatically removed. PostgreSQL checks run every two seconds; limits are monitored budgets, not filesystem quotas. Index use depends on matching query predicates and the query planner.</p>
         <Show when={current().budget.reserved_bytes > 0}><p class="text-xs text-secondary">Queued construction reserve: {formatBytes(current().budget.reserved_bytes)}.</p></Show>
         <Show when={!current().budget.can_create}><p class="text-xs text-warning" role="status">{current().budget.reason}</p></Show>
@@ -110,7 +126,7 @@ const DatabaseIndexes: Component = () => {
             <thead><tr><th data-column-order-id="label">Name and purpose</th><th data-column-order-id="path">Target and definition</th><th data-column-order-id="status">Status</th><th data-column-order-id="size">Size / scans</th><th data-column-fixed="actions" data-column-order-id="actions">Actions</th><th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead>
             <tbody><Index each={current().managed}>{index => <tr class="align-top border-t border-subtle">
               <td data-column-order-id="label"><span class="font-medium text-primary">{index().label}</span><p class="text-muted mt-1 max-w-xs break-words">{index().purpose}</p></td>
-              <td data-column-order-id="path"><span class="font-mono break-all">{index().parameter_path || current().recipes.find(recipe => recipe.id === index().recipe)?.table_name}</span><p class="text-muted mt-1">{recipeLabel(index().recipe)}</p></td>
+              <td data-column-order-id="path"><span class="font-mono break-all">{index().parameter_path || index().definition?.table_name || current().recipes.find(recipe => recipe.id === index().recipe)?.table_name}</span><p class="text-muted mt-1">{recipeLabel(index().recipe)}</p><Show when={index().definition}><p class="font-mono text-muted mt-1 break-words">{index().definition?.columns.map(column => `${column.name} ${column.direction || 'ASC'}`).join(', ')}</p></Show></td>
               <td data-column-order-id="status"><span class={index().status === 'ready' && index().valid && index().owned ? 'text-success' : 'text-secondary'}>{index().cancel_requested ? 'Cancellation requested' : index().status === 'ready' && (!index().valid || !index().owned) ? 'Needs attention' : index().status}</span><p class="text-muted mt-1 max-w-sm break-words">{index().message}</p>
                 <Show when={index().phase}><p class="text-muted mt-1">{index().phase}{index().blocks_total > 0 ? ` · ${index().blocks_done.toLocaleString()} / ${index().blocks_total.toLocaleString()} blocks` : ''}</p></Show>
                 <Show when={index().active_name && ['queued', 'building', 'failed'].includes(index().status)}><p class="text-muted mt-1">Previous index retained; its current definition is in the catalog.</p></Show>
@@ -149,23 +165,46 @@ const DatabaseIndexes: Component = () => {
       </section>
     </>}</Show>
 
-    <Show when={dialog()}>{editing => <Dialog title={editing().id ? 'Edit UI index' : 'Create DB index'} description="The server permits only approved B-tree recipes and rechecks storage before executing PostgreSQL DDL." onClose={() => { if (!busy()) setDialog(null); }} size="medium" actions={<>
+    <Show when={dialog()}>{editing => <Dialog title={editing().id ? 'Edit UI index' : 'Create DB index'} description="Choose a preset or define a custom B-tree index. Review its storage estimate and generated SQL before queueing." onClose={() => { if (!busy()) setDialog(null); }} size="large" actions={<>
       <button type="button" class="btn btn-secondary" disabled={busy()} onClick={() => setDialog(null)}>Cancel</button>
       <Show when={preview()} fallback={<button type="submit" form="db-index-form" class="btn btn-primary" disabled={busy()}>{busy() ? 'Checking…' : 'Review estimate'}</button>}><button type="button" class="btn btn-primary" disabled={busy()} onClick={() => void save()}>{busy() ? 'Queuing…' : editing().id ? 'Queue replacement' : 'Queue creation'}</button></Show>
     </>}>
       <form id="db-index-form" class="space-y-4" onSubmit={inspect}>
         <div><label for="db-index-label" class="block text-xs text-muted mb-1">Name</label><input id="db-index-label" class="input w-full" required minlength={3} maxlength={80} autofocus value={form().label} disabled={busy()} aria-describedby="db-index-label-help" onInput={event => change('label', event.currentTarget.value)} /><p id="db-index-label-help" class="text-xs text-muted mt-1">Display name. ACS generates the physical PostgreSQL index name.</p></div>
         <div><label for="db-index-purpose" class="block text-xs text-muted mb-1">Query or purpose</label><textarea id="db-index-purpose" class="input w-full" required minlength={8} maxlength={256} rows={2} value={form().purpose} disabled={busy()} onInput={event => change('purpose', event.currentTarget.value)} /></div>
-        <div><label for="db-index-recipe" class="block text-xs text-muted mb-1">Index definition</label><select id="db-index-recipe" class="input w-full" value={form().recipe} disabled={busy()} aria-describedby="db-index-recipe-help" onChange={event => change('recipe', event.currentTarget.value as DatabaseIndexSpec['recipe'])}><Index each={data.latest?.recipes}>{recipe => <option value={recipe().id}>{recipe().label}</option>}</Index></select><p id="db-index-recipe-help" class="text-xs text-muted mt-1">{selectedRecipe()?.description}</p></div>
+        <div><label for="db-index-recipe" class="block text-xs text-muted mb-1">Index definition</label><select id="db-index-recipe" class="input w-full" value={form().recipe} disabled={busy()} aria-describedby="db-index-recipe-help" onChange={event => change('recipe', event.currentTarget.value as DatabaseIndexSpec['recipe'])}><Index each={data.latest?.recipes}>{recipe => <option value={recipe().id}>{recipe().label}</option>}</Index><option value="custom">Custom B-tree definition</option></select><p id="db-index-recipe-help" class="text-xs text-muted mt-1">{selectedRecipe()?.description}</p></div>
+        <Show when={custom()}>
+          <fieldset class="space-y-3 border border-subtle p-3" disabled={busy()}>
+            <legend class="text-xs text-secondary px-1">Custom definition</legend>
+            <div><label for="db-index-table" class="block text-xs text-muted mb-1">Table</label><select id="db-index-table" class="input w-full" value={definition().table_name} onChange={event => {
+              change('parameter_path', '');
+              changeDefinition({ table_name: event.currentTarget.value, columns: [{ name: 'id', direction: 'ASC', nulls: '' }], include_columns: [] });
+            }}><Index each={data.latest?.tables}>{table => <option value={table().name}>{table().name}</option>}</Index></select></div>
+            <p class="text-xs text-muted">Key priority runs from top to bottom. Up / Down changes column order. Method: B-tree; unique: No.</p>
+            <Index each={definition().columns}>{(column, position) => <div class="border border-subtle p-2 space-y-2">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <label class="text-xs text-muted">Key {position + 1}<select class="input w-full mt-1" value={column().name} onChange={event => changeColumn(position, { name: event.currentTarget.value })}><Index each={availableColumns()}>{name => <option value={name()} disabled={definition().columns.some((item, index) => index !== position && item.name === name()) || definition().include_columns.includes(name())}>{name()}</option>}</Index></select></label>
+                <label class="text-xs text-muted">Direction<select class="input w-full mt-1" value={column().direction} onChange={event => changeColumn(position, { direction: event.currentTarget.value as DatabaseIndexColumn['direction'] })}><option value="ASC">ASC</option><option value="DESC">DESC</option></select></label>
+                <label class="text-xs text-muted">NULL values<select class="input w-full mt-1" value={column().nulls} onChange={event => changeColumn(position, { nulls: event.currentTarget.value as DatabaseIndexColumn['nulls'] })}><option value="">Default</option><option value="FIRST">First</option><option value="LAST">Last</option></select></label>
+              </div>
+              <div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary" aria-label={`Move key ${position + 1} up`} disabled={position === 0} onClick={() => moveColumn(position, -1)}>Up</button><button type="button" class="btn btn-secondary" aria-label={`Move key ${position + 1} down`} disabled={position === definition().columns.length - 1} onClick={() => moveColumn(position, 1)}>Down</button><button type="button" class="btn btn-secondary" aria-label={`Remove key ${position + 1}`} disabled={definition().columns.length === 1} onClick={() => changeDefinition({ columns: definition().columns.filter((_, index) => index !== position) })}>Remove</button></div>
+            </div>}</Index>
+            <button type="button" class="btn btn-secondary" disabled={definition().columns.length >= 4 || !availableColumns().some(name => !definition().columns.some(column => column.name === name) && !definition().include_columns.includes(name))} onClick={() => {
+              const name = availableColumns().find(name => !definition().columns.some(column => column.name === name) && !definition().include_columns.includes(name));
+              if (name) changeDefinition({ columns: [...definition().columns, { name, direction: 'ASC', nulls: '' }] });
+            }}>Add key column</button>
+            <fieldset class="space-y-2"><legend class="text-xs text-muted mb-1">INCLUDE — optional covered columns (up to 4)</legend><div class="flex flex-wrap gap-3"><Index each={availableColumns()}>{name => <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={definition().include_columns.includes(name())} disabled={definition().columns.some(column => column.name === name()) || (!definition().include_columns.includes(name()) && definition().include_columns.length >= 4)} onChange={event => changeDefinition({ include_columns: event.currentTarget.checked ? [...definition().include_columns, name()] : definition().include_columns.filter(column => column !== name()) })} />{name()}</label>}</Index></div></fieldset>
+          </fieldset>
+        </Show>
         <Show when={selectedRecipe()?.requires_parameter_path}>
-          <div><label for="db-index-path" class="block text-xs text-muted mb-1">Exact parameter path</label><input id="db-index-path" class="input w-full font-mono" required maxlength={256} value={form().parameter_path} disabled={busy()} aria-describedby="db-index-path-help" placeholder="InternetGatewayDevice.DeviceInfo.UpTime" onInput={event => change('parameter_path', event.currentTarget.value)} /><p id="db-index-path-help" class="text-xs text-muted mt-1">Use a complete leaf path beginning with InternetGatewayDevice. or Device. Instance numbers must be explicit. Passwords, credentials, wildcards and object branches are rejected.</p></div>
+          <div><label for="db-index-path" class="block text-xs text-muted mb-1">Exact parameter path{custom() ? ' (optional; blank indexes all rows)' : ''}</label><input id="db-index-path" class="input w-full font-mono" required={!custom()} maxlength={256} value={form().parameter_path} disabled={busy()} aria-describedby="db-index-path-help" placeholder="InternetGatewayDevice.DeviceInfo.UpTime" onInput={event => change('parameter_path', event.currentTarget.value)} /><p id="db-index-path-help" class="text-xs text-muted mt-1">Use a complete leaf path beginning with InternetGatewayDevice. or Device. Instance numbers must be explicit. Passwords, credentials, wildcards and object branches are rejected.</p></div>
         </Show>
         <Show when={selectedRecipe()}>{recipe => <dl class="border border-subtle p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs" aria-label="Index parameters">
           <div><dt class="text-muted">Table</dt><dd class="font-mono text-primary break-all mt-1">{recipe().table_name}</dd></div>
           <div><dt class="text-muted">Method / unique</dt><dd class="text-primary mt-1">B-tree / No</dd></div>
           <div class="sm:col-span-2"><dt class="text-muted">Columns in order (ASC unless specified)</dt><dd class="font-mono text-primary break-words mt-1">{recipe().columns.join(', ')}</dd></div>
           <div><dt class="text-muted">INCLUDE</dt><dd class="font-mono text-primary mt-1">{recipe().include_columns.join(', ') || 'None'}</dd></div>
-          <div><dt class="text-muted">WHERE</dt><dd class="font-mono text-primary break-all mt-1">{recipe().requires_parameter_path ? `name = '${form().parameter_path || '<exact parameter path>'}'` : 'None (all rows)'}</dd></div>
+          <div><dt class="text-muted">WHERE</dt><dd class="font-mono text-primary break-all mt-1">{recipe().requires_parameter_path && (!custom() || form().parameter_path) ? `name = '${form().parameter_path || '<exact parameter path>'}'` : 'None (all rows)'}</dd></div>
         </dl>}</Show>
         <Show when={editing().id}><p class="text-xs text-muted">Editing builds a replacement first and removes the previous UI index only after the replacement is verified. Extra construction space is required.</p></Show>
         <Show when={preview()}>{estimate => <div class="border border-subtle p-3 text-xs space-y-2" role="status"><p class="text-primary">Conservative estimate: {formatBytes(estimate().estimated_bytes)} for {estimate().estimated_rows.toLocaleString()} rows.</p><p class="text-muted">Current query plan: {estimate().plan}. This estimate does not guarantee index usage or final size. Construction and future growth are monitored.</p><details><summary class="cursor-pointer text-secondary">Generated SQL</summary><pre class="font-mono text-xs whitespace-pre-wrap break-all mt-2">{estimate().sql}</pre><p class="text-muted mt-2">The generated name is assigned when creation is queued.</p></details></div>}</Show>
