@@ -8,6 +8,7 @@ import { ArrowLeft, RefreshCw, Trash2, Server, Network, Radio, Users, Zap, Edit,
 import { api, type DeviceParameter, type DeviceReachability, type DeviceSnapshot, type InterfaceMetricDefinition, type MetricDefinition, type ProvisioningFeature, type ProvisioningLANPortMapping, type ReauthenticationCredentials, type SnapshotParameter, type Task } from '../lib/api';
 import { formatUptime, findHealthValue, formatHealthValue, healthColor, gaugeRange, type HealthTileGroup } from '../lib/health';
 import { metricsTabMetrics, healthPanelMetrics } from '../lib/metricViews';
+import { loadChartPreferences } from '../lib/chartPreferences';
 import { useAuth, usePermissionSection } from '../lib/auth';
 import Dialog from '../components/Dialog';
 const HealthGauge = lazy(() => import('../components/HealthGauge'));
@@ -148,7 +149,7 @@ const DeviceDetail: Component = () => {
   const [device, { refetch: refetchDevice }] = createResource(serial, api.getDevice);
   const [featureRefreshTaskID, setFeatureRefreshTaskID] = createSignal<number | null>(null);
   const taskSource = () => activeTab() === 'tasks' || featureRefreshTaskID() !== null ? ({ serial: serial(), page: taskPage(), size: taskPageSize(), search: taskSearch(), sort: taskSort(), filters: taskColumnFilters() }) : false;
-  const [systemSettings] = createResource(api.getSettings);
+  const [displayPreferences] = createResource(() => loadChartPreferences(api.getMeta));
   const [provisioningTemplates] = createResource(api.getProvisioningTemplates);
   const [tagCatalog] = createResource(api.getTags);
   const [tasks, { refetch: refetchTaskRows }] = createResource(taskSource, query => api.getDeviceTasksPage(query.serial, query.size, query.page * query.size, { search: query.search, sort: query.sort, filters: query.filters }));
@@ -1516,7 +1517,7 @@ const DeviceDetail: Component = () => {
 
   createEffect(() => {
     if (autoRefreshEnabled() !== 'true') return;
-    const interval = Number(systemSettings()?.auto_refresh_interval ?? 30);
+    const interval = displayPreferences()?.autoRefreshInterval ?? 30;
     if (!Number.isFinite(interval) || interval <= 0) return;
     const timer = window.setInterval(() => {
       if (autoRefreshRunning() || document.visibilityState !== 'visible') return;

@@ -8,6 +8,7 @@ import { api, type AggregatedMetric, type MetricDefinition, type MetricSample } 
 import { thresholdLines, effectiveUnit } from '../lib/health';
 import { isTimeSeriesType } from '../lib/echartsTypes';
 import { formatDateTime, dateTimeFormat } from '../lib/dateTime';
+import { loadChartPreferences } from '../lib/chartPreferences';
 
 echarts.use([
   LineChart, BarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart,
@@ -120,8 +121,8 @@ const MetricChart: Component<MetricChartProps> = (props) => {
   let resizeObserver: ResizeObserver | null = null;
   let chartBoundEl: HTMLElement | null = null;
 
-  const [settings] = createResource(() => api.getSettings());
-  const chartShowPoints = createMemo(() => settings()?.['chart_show_points'] !== 'false');
+  const [preferences] = createResource(() => loadChartPreferences(api.getMeta));
+  const chartShowPoints = createMemo(() => preferences()?.showPoints ?? true);
 
   const [data] = createResource(
     () => ({ serial: props.serial, ids: props.metrics.map((m) => m.id), bucket: bucket().value, hours: bucket().hours, refreshKey: props.refreshKey ?? 0 }),

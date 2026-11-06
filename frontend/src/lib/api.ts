@@ -349,7 +349,7 @@ export const api = {
   deleteFault: (id: number) => request<{ status: string }>(`/faults/${id}`, { method: 'DELETE' }),
   deleteFaults: (ids: number[]) => request<{ deleted: number }>('/faults/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
 
-  getMeta: () => request<{ app_name: string; app_logo?: string; ui_datetime_format?: string }>('/meta'),
+  getMeta: () => request<{ app_name: string; app_logo?: string; ui_datetime_format?: string; chart_show_points?: string; auto_refresh_interval?: string }>('/meta'),
   getSettings: () => request<Record<string, string>>('/settings'),
   getCWMPControl: () => request<{ enabled: boolean; updated_at?: string; updated_by?: string }>('/cwmp-control'),
   setCWMPControl: (enabled: boolean) => request<{ enabled: boolean; updated_at?: string; updated_by?: string }>(`/cwmp-control/${enabled ? 'on' : 'off'}`, { method: 'PUT' }),

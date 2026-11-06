@@ -426,7 +426,17 @@ func (r *Router) handleMeta(w http.ResponseWriter, req *http.Request) {
 	if s, err := r.settingsRepo.Get(req.Context(), "ui_datetime_format"); err == nil && s != nil && validUIDateTimeFormat(s.Value) {
 		dateTimeFormat = s.Value
 	}
-	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName, "app_logo": appLogo, "ui_datetime_format": dateTimeFormat})
+	chartShowPoints := "true"
+	if s, err := r.settingsRepo.Get(req.Context(), "chart_show_points"); err == nil && s != nil && s.Value == "false" {
+		chartShowPoints = "false"
+	}
+	autoRefreshInterval := "30"
+	if s, err := r.settingsRepo.Get(req.Context(), "auto_refresh_interval"); err == nil && s != nil {
+		if interval, err := strconv.Atoi(s.Value); err == nil && (interval == 0 || (interval >= 15 && interval <= 3600)) {
+			autoRefreshInterval = strconv.Itoa(interval)
+		}
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"app_name": appName, "app_logo": appLogo, "ui_datetime_format": dateTimeFormat, "chart_show_points": chartShowPoints, "auto_refresh_interval": autoRefreshInterval})
 }
 
 func validUIDateTimeFormat(value string) bool {
