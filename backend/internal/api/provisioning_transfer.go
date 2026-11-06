@@ -38,6 +38,7 @@ type provisioningTransferTemplate struct {
 	LANPortCount             int                                 `json:"lan_port_count,omitempty"`
 	LANPortMappings          []models.ProvisioningLANPortMapping `json:"lan_port_mappings,omitempty"`
 	CPEInfoFields            []models.ProvisioningCPEInfoField   `json:"cpe_info_fields,omitempty"`
+	CPEEditWindows           []models.CPEEditWindow              `json:"cpe_edit_windows,omitempty"`
 	Rules                    []models.ProvisioningRule           `json:"rules,omitempty"`
 	Metrics                  []models.MetricDefinition           `json:"metrics,omitempty"`
 	ParameterPolls           []models.ParameterPollDefinition    `json:"parameter_polls,omitempty"`
@@ -75,7 +76,8 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
 			OverviewPollInterval: template.OverviewPollInterval, FullTreePollInterval: template.FullTreePollInterval,
 			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
-			CPEInfoFields: template.CPEInfoFields,
+			CPEInfoFields:  template.CPEInfoFields,
+			CPEEditWindows: template.CPEEditWindows,
 		}
 		rules, err := r.provisioningRepo.ListForTemplate(req.Context(), template.ID)
 		if err != nil {
@@ -206,7 +208,8 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, Variables: item.Variables, Features: item.Features,
 				OverviewPollInterval: item.OverviewPollInterval, FullTreePollInterval: item.FullTreePollInterval,
 				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,
-				CPEInfoFields: item.CPEInfoFields,
+				CPEInfoFields:  item.CPEInfoFields,
+				CPEEditWindows: item.CPEEditWindows,
 			}
 			if err := tx.Create(&template).Error; err != nil {
 				return err
@@ -291,6 +294,9 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 	var err error
 	item.CPEInfoFields, err = validateTemplateCPEInfoFields(item.CPEInfoFields)
 	if err != nil {
+		return err
+	}
+	if err := validateEditWindows(item.CPEEditWindows); err != nil {
 		return err
 	}
 	for index := range item.Rules {

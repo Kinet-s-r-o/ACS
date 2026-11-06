@@ -1,5 +1,7 @@
 # Backend area router
 
+Template CPE edit form definitions and validation: [edit windows guide](../docs/cpe-edit-windows.md), `internal/api/cpe_edit_windows.go` and `internal/models/cpe_edit_window.go`.
+
 Section authorization: [permission model](../docs/permission-expansion-plan.md), `internal/models/permissions.go`, `internal/database/permission_catalog.go`, `internal/api/permission_policy.go` and `permission_network_fields.go`. Saved roles use the operator catalog with per-section action sets; older permission names below identify internal adapters. New routes and fields require explicit policies. Built-in admin resolves the entire current catalog.
 
 | Folder or file | What lives there | Read before changing |

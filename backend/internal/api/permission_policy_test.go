@@ -29,6 +29,12 @@ func TestScopedRouteAuthorization(t *testing.T) {
 		name, pattern, section, action string
 		status                         int
 	}{
+		{"edit-window-read", "GET /device/{serial}/edit-window", "cpe", "read", 204},
+		{"edit-window-write", "POST /device/{serial}/edit-window", "cpe", "write", 204},
+		{"edit-window-read-cannot-write", "POST /device/{serial}/edit-window", "cpe", "read", 403},
+		{"edit-designer-read", "GET /provisioning/templates/{id}/edit-windows/parameters", "settings.provisioning", "read", 204},
+		{"edit-designer-save", "PUT /provisioning/templates/{id}/edit-windows", "settings.provisioning", "write", 204},
+		{"edit-designer-read-cannot-save", "PUT /provisioning/templates/{id}/edit-windows", "settings.provisioning", "read", 403},
 		{"database-full-includes-index-read", "GET /settings/database/indexes", "settings.database", "full", 204},
 		{"retired-leaf-full-denied", "GET /settings/database/indexes", "settings.database.indexes", "full", 403},
 		{"read-not-edit", "POST /roles", "settings.users", "read", 403},

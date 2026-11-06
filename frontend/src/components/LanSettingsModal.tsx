@@ -8,6 +8,7 @@ import { ALL_FIELDS, GENERAL_FIELDS, ADVANCED_FIELDS, LAN_PREFIX, resolveSuffix,
 
 interface LanSettingsModalProps {
   lanIndex: number;
+  interfacePrefix?: string;
   parameters: DeviceParameter[];
   serial: string;
   isFullAccess: boolean;
@@ -39,7 +40,7 @@ const LanSettingsModal: Component<LanSettingsModalProps> = (props) => {
   const [summoning, setSummoning] = createSignal(false);
   const [errors, setErrors] = createSignal<Record<string, string>>({});
 
-  const prefix = LAN_PREFIX(props.lanIndex);
+  const prefix = props.interfacePrefix ?? LAN_PREFIX(props.lanIndex);
   const validationMessage = createMemo(() => {
     const [parameterName, message] = Object.entries(errors())[0] || [];
     if (!parameterName || !message) return null;

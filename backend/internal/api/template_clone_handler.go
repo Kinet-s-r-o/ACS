@@ -88,7 +88,8 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), Variables: source.Variables, Features: source.Features,
 		OverviewPollInterval: overviewInterval, FullTreePollInterval: fullTreeInterval,
 		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
-		CPEInfoFields: append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),
+		CPEInfoFields:  append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),
+		CPEEditWindows: source.CPEEditWindows,
 	}
 	targetMetricScope := templateMetricScope(clone.Manufacturer, clone.ProductClass)
 	imageCopyPath, lanVisualizationCopyPath := "", ""

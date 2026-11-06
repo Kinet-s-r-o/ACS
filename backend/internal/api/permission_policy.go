@@ -344,6 +344,8 @@ func internalEndpointPermissions(pattern string) ([]string, string, bool) {
 		return scope("settings.metrics.metric", "settings.metrics.health")
 	case strings.HasPrefix(path, "/provisioning/templates/"):
 		switch {
+		case strings.Contains(path, "/edit-windows"):
+			return scope("settings.provisioning.cpe_detail.edit_windows")
 		case strings.Contains(path, "/interface-metrics"):
 			return scope("settings.provisioning.metrics.interface")
 		case strings.Contains(path, "/parameter-polls"):

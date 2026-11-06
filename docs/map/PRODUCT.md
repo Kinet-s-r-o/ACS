@@ -2,6 +2,7 @@
 
 | Task | Where | Notes |
 | --- | --- | --- |
+| Template CPE edit forms | [Edit windows guide](../cpe-edit-windows.md) → `cpe_edit_windows.go`, `CPEEditWindowDesigner.tsx`, `CustomCPEEditModal.tsx` | Writable reference metadata, interface-relative fields, typed selects, existing provisioning/CPE permissions |
 | External billing/API integration | [Integration guide](../integration-api.md) → `backend/internal/api/integration.go`, `api_tokens.go`, `openapi.json`, `internal/auth/api_token.go` | User-linked tokens, serial-based CPE operations, Swagger contract and tests |
 | Backend entrypoint and lifecycle | [backend/README.md](../../backend/README.md) → `backend/cmd/server/main.go` | Servers, migrations, recovery, retention, watchdog startup |
 | CWMP/TR-069 protocol behavior | [backend/README.md](../../backend/README.md) → `backend/internal/cwmp/` | SOAP sessions, Inform, RPC handling, conditions, device watchdog |

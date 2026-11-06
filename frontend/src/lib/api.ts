@@ -125,6 +125,16 @@ export interface InterfaceMetricSample { device_id: number; metric_id: number; p
 export interface ProvisioningRule { id: number; template_id: number; parameter_name: string; parameter_value: string; parameter_type: string; phase: string; tags?: string[]; excluded_tags?: string[]; enabled: boolean; description: string; add_object_path?: string; order: number; condition?: string }
 export interface AuditLog { id: number; user_id?: number; username: string; action: string; resource: string; status: number; ip_address: string; user_agent?: string; created_at: string }
 
+export type CPEEditTarget = 'wifi' | 'lan' | 'wan_ip' | 'wan_ppp';
+export type CPEEditType = 'string' | 'int' | 'unsignedInt' | 'boolean';
+export interface CPEEditOption { label: string; value: string }
+export interface CPEEditField { id: string; name: string; parameter: string; type: CPEEditType; input: 'auto' | 'select'; span: number; new_row: boolean; help: string; options: CPEEditOption[] }
+export interface CPEEditTab { id: string; name: string; columns: number; fields: CPEEditField[] }
+export interface CPEEditWindow { version: 1; target: CPEEditTarget; enabled: boolean; base_pattern: string; tabs: CPEEditTab[] }
+export interface CPEEditParameterMetadata { name: string; type: CPEEditType; target: CPEEditTarget; base_pattern: string; parameter: string }
+export interface ProvisioningTemplate { cpe_edit_windows?: CPEEditWindow[] }
+export interface CPEEditWindowState { window: CPEEditWindow | null; parameters: DeviceParameter[] }
+
 export interface DatabaseIndexColumn {
   name: string; direction: 'ASC' | 'DESC'; nulls: '' | 'FIRST' | 'LAST';
 }
@@ -397,6 +407,11 @@ export const api = {
   bulkProvisioningRules: (templateId: number, ids: number[], action: 'enable' | 'disable' | 'delete', currentPassword?: string) => request<{ status: string }>('/provisioning/bulk', { method: 'POST', body: JSON.stringify({ template_id: templateId, ids, action, ...(currentPassword ? { current_password: currentPassword } : {}) }) }),
   reorderProvisioningRules: (templateId: number, ids: number[]) => request<{ status: string }>('/provisioning/reorder', { method: 'POST', body: JSON.stringify({ template_id: templateId, ids }) }),
   getProvisioningTemplates: () => request<ProvisioningTemplate[]>('/provisioning/templates'),
+  getEditWindowReferences: (id: number, search = '') => request<{ serial: string }[]>(`/provisioning/templates/${id}/edit-windows/references?search=${encodeURIComponent(search)}`),
+  getEditWindowParameters: (id: number, serial: string) => request<CPEEditParameterMetadata[]>(`/provisioning/templates/${id}/edit-windows/parameters?serial=${encodeURIComponent(serial)}`),
+  saveEditWindows: (id: number, referenceSerial: string, windows: CPEEditWindow[]) => request<{ cpe_edit_windows: CPEEditWindow[] }>(`/provisioning/templates/${id}/edit-windows`, { method: 'PUT', body: JSON.stringify({ reference_serial: referenceSerial, windows }) }),
+  getCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string) => request<CPEEditWindowState>(`/device/${encodeURIComponent(serial)}/edit-window?target=${target}&prefix=${encodeURIComponent(prefix)}`),
+  applyCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/edit-window`, { method: 'POST', body: JSON.stringify({ target, prefix, parameters }) }),
   createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
   cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
   updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),

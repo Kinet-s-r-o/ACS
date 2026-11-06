@@ -8,6 +8,7 @@ import { ALL_FIELDS, GENERAL_FIELDS, SECURITY_FIELDS, ADVANCED_FIELDS, WLAN_PREF
 
 interface WifiSettingsModalProps {
   wlanIndex: number;
+  interfacePrefix?: string;
   parameters: DeviceParameter[];
   serial: string;
   isFullAccess: boolean;
@@ -40,7 +41,7 @@ const WifiSettingsModal: Component<WifiSettingsModalProps> = (props) => {
   const [summoning, setSummoning] = createSignal(false);
   const [errors, setErrors] = createSignal<Record<string, string>>({});
 
-  const prefix = WLAN_PREFIX(props.wlanIndex);
+  const prefix = props.interfacePrefix ?? WLAN_PREFIX(props.wlanIndex);
 
   const resolveFieldSuffix = (suffixes: string[]): string | null => resolveSuffix(props.parameters, prefix, suffixes);
 

@@ -1,5 +1,7 @@
 # Frontend area router
 
+Template CPE edit form designer and runtime: [edit windows guide](../docs/cpe-edit-windows.md), `components/CPEEditWindowDesigner.tsx`, `CustomCPEEditModal.tsx`, `CPEEditWindowFields.tsx` and `lib/cpeEditWindows.ts`.
+
 Section authorization: [permission model](../docs/permission-expansion-plan.md), `lib/permissions.ts`, `components/SectionPage.tsx`, `pages/RolesTab.tsx` and route/menu/tab guards. Use `can(section, action)` for actions and `canVisit(section)` for navigation. Each catalog row defines its own actions and covers its existing/future subtabs; CPE overview is independent of inventory. Older permission names below identify internal component adapters.
 
 | Folder or file | What lives there | Read before changing |

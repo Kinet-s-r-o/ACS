@@ -16,6 +16,7 @@ import { applyColumnFilters, type ColumnFilterState } from '../lib/filters';
 import { sortRows, type SortDirection } from '../lib/sorting';
 import { usePageSize } from '../lib/usePageSize';
 import MetricModal from '../components/MetricModal';
+import CPEEditWindowDesigner from '../components/CPEEditWindowDesigner';
 import ColorSwatch from '../components/ColorSwatch';
 import BooleanIndicator from '../components/BooleanIndicator';
 import { useMetricActiveToggle } from '../lib/useMetricActiveToggle';
@@ -205,11 +206,11 @@ const Provisioning: Component = () => {
   let templateImageObjectUrl: string | null = null;
   let lanVisualizationObjectUrl: string | null = null;
   const [templateTab, setTemplateTab] = createSignal<'rules' | 'variables' | 'metrics' | 'features' | 'cpe_detail'>('rules');
-  const [templateDetailTab, setTemplateDetailTab] = createSignal<'lan' | 'cpe_info'>('lan');
+  const [templateDetailTab, setTemplateDetailTab] = createSignal<'lan' | 'cpe_info' | 'edit_windows'>('lan');
   const [metricSubTab, setMetricSubTab] = createSignal<'general' | 'interface' | 'polling'>('general');
   const templateTabSections = { rules: 'settings.provisioning.rules', variables: 'settings.provisioning.variables', metrics: 'settings.provisioning.metrics', features: 'settings.provisioning.features', cpe_detail: 'settings.provisioning.cpe_detail' };
   const metricTabSections = { general: 'settings.provisioning.metrics.general', interface: 'settings.provisioning.metrics.interface', polling: 'settings.provisioning.metrics.polling' };
-  const detailTabSections = { lan: 'settings.provisioning.cpe_detail.lan', cpe_info: 'settings.provisioning.cpe_detail.info' };
+  const detailTabSections = { lan: 'settings.provisioning.cpe_detail.lan', cpe_info: 'settings.provisioning.cpe_detail.info', edit_windows: 'settings.provisioning.cpe_detail.edit_windows' };
   const currentSection = () => !selectedTemplate() ? 'settings.provisioning.templates' : templateTab() === 'features' && activeFeature() ? `settings.provisioning.features.${activeFeature()!.id}` : templateTab() === 'metrics' ? metricTabSections[metricSubTab()] : templateTab() === 'cpe_detail' ? detailTabSections[templateDetailTab()] : templateTabSections[templateTab()];
   usePermissionSection(currentSection);
   createEffect(() => {
@@ -1565,9 +1566,11 @@ const Provisioning: Component = () => {
 
             <Show when={canVisit('settings.provisioning.cpe_detail') && templateTab() === 'cpe_detail'}>
               <div class="mb-4 flex gap-1 border-b border-subtle" role="tablist" aria-label="CPE detail settings">
+                <Show when={canVisit('settings.provisioning.cpe_detail.edit_windows')}><button type="button" role="tab" aria-selected={templateDetailTab() === 'edit_windows'} onClick={() => setTemplateDetailTab('edit_windows')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'edit_windows' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Edit windows</button></Show>
                 <Show when={canVisit('settings.provisioning.cpe_detail.lan')}><button type="button" role="tab" aria-selected={templateDetailTab() === 'lan'} onClick={() => setTemplateDetailTab('lan')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'lan' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><Network size={12} />LAN ports</span></button></Show>
                 <Show when={canVisit('settings.provisioning.cpe_detail.info')}><button type="button" role="tab" aria-selected={templateDetailTab() === 'cpe_info'} onClick={() => setTemplateDetailTab('cpe_info')} class={`px-3 py-1.5 rounded-t text-xs font-medium ${templateDetailTab() === 'cpe_info' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}><span class="flex items-center gap-1.5"><ListChecks size={12} />CPE info</span></button></Show>
               </div>
+              <Show when={canVisit('settings.provisioning.cpe_detail.edit_windows') && templateDetailTab() === 'edit_windows'}><CPEEditWindowDesigner template={selectedTemplate()!} onSaved={windows => setSelectedTemplate(current => current ? { ...current, cpe_edit_windows: windows } : current)} /></Show>
               <Show when={canVisit('settings.provisioning.cpe_detail.lan') && templateDetailTab() === 'lan'}>
               <section class="space-y-4">
                 <div class="flex flex-wrap items-end justify-between gap-3">

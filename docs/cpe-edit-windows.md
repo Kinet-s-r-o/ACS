@@ -1,0 +1,13 @@
+# CPE edit windows
+
+Provisioning → template → CPE detail → Edit windows opens the designer for Wi-Fi, LAN, WAN IP and WAN PPP forms. Each target supports up to eight ordered tabs, 128 fields in total and one to four columns per tab. Fields have a name, relative parameter path, automatic read-only CWMP type, column span, optional new row and help text. Drag handles and up/down buttons reorder tabs and fields.
+
+Select an online reference CPE whose effective provisioning template is this template. The picker returns only confirmed writable parameters with string, int, unsignedInt or boolean types. It returns metadata, never parameter values. The interface base uses wildcard instance segments; runtime resolves fields against the exact interface opened in CPE Overview. Nested field suffixes retain their instance segments. A design applies to the same interface model across CPEs using the template, not across unrelated TR-098/TR-181 paths.
+
+Automatic controls use text/password inputs, integer inputs or boolean checkboxes. Custom select options pair a displayed label with the exact string value sent through CWMP; numeric and boolean options must satisfy their CWMP type. Sensitive parameters cannot use custom selects. A current value outside the options remains visible and is preserved until explicitly changed. Missing parameters, changed types and unknown/read-only write access disable the field; the server rechecks all changes before queuing the existing SetParameterValues task. Stored sensitive values are never returned by this editor.
+
+Enable each custom editor explicitly. Disabled or absent definitions use the built-in form. Reset to built-in clears that target after Save design. Preview never queues device changes. Definitions are stored as JSONB on provisioning_templates, travel with template clone/import/export and contain no reference CPE values. Existing templates require no configuration. No PostgreSQL indexes are introduced.
+
+Permissions: Provisioning Read views designs, Write saves them; browsing or validating a reference additionally requires CPE overview Read. CPE overview Read opens runtime forms, Write queues changes. These use the existing section permissions and do not grant inventory access.
+
+Implementation: backend `internal/api/cpe_edit_windows.go`, `internal/models/cpe_edit_window.go`; frontend `components/CPEEditWindowDesigner.tsx`, `CustomCPEEditModal.tsx`, shared `CPEEditWindowFields.tsx`, validation `lib/cpeEditWindows.ts`. Runtime routes are GET/POST `/device/{serial}/edit-window`; template routes are PUT `/provisioning/templates/{id}/edit-windows` and GET its `/references` and `/parameters` children.

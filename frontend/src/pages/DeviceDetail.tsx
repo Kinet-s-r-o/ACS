@@ -27,6 +27,7 @@ import { parseLanLinkState, type OntLanPort } from '../lib/ontLan';
 import { usePageSize } from '../lib/usePageSize';
 import { appName } from '../lib/appName';
 import WifiSettingsModal from '../components/WifiSettingsModal';
+import CustomCPEEditModal from '../components/CustomCPEEditModal';
 import LanSettingsModal from '../components/LanSettingsModal';
 import LanNetworkSettingsModal from '../components/LanNetworkSettingsModal';
 import WanSettingsModal from '../components/WanSettingsModal';
@@ -699,6 +700,8 @@ const DeviceDetail: Component = () => {
   const filteredDeviceLog = () => deviceLogPageData()?.items || [];
   const [wifiModalIndex, setWifiModalIndex] = createSignal<number | null>(null);
   const [lanModalIndex, setLanModalIndex] = createSignal<number | null>(null);
+  const [wifiModalPrefix, setWifiModalPrefix] = createSignal('');
+  const [lanModalPrefix, setLanModalPrefix] = createSignal('');
   const [showLanNetworkModal, setShowLanNetworkModal] = createSignal(false);
   const [wanModalPath, setWanModalPath] = createSignal<string | null>(null);
 
@@ -1670,6 +1673,7 @@ const DeviceDetail: Component = () => {
     const params = parameters() || [];
     const lans: Array<{
       index: number;
+      prefix: string;
       name: string;
       mac: string;
       status: string;
@@ -1679,8 +1683,9 @@ const DeviceDetail: Component = () => {
       enabled: boolean;
     }> = [];
 
-    for (let i = 1; i <= 8; i++) {
-      const prefix = `InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.${i}.`;
+    const prefixes = [...new Set(params.flatMap(parameter => parameter.name.match(/^InternetGatewayDevice\.LANDevice\.\d+\.LANEthernetInterfaceConfig\.\d+\./)?.[0] ?? []))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    for (const prefix of prefixes) {
+      const i = Number(prefix.split('.').at(-2));
       const getVal = (suffix: string) => params.find(p => p.name === prefix + suffix)?.value;
 
       const name = getVal('Name');
@@ -1692,6 +1697,7 @@ const DeviceDetail: Component = () => {
 
       lans.push({
         index: i,
+        prefix,
         name: name || `LAN${i}`,
         mac: mac || '-',
         status: status || '-',
@@ -1731,6 +1737,7 @@ const DeviceDetail: Component = () => {
     const params = parameters() || [];
     const wlans: Array<{
       index: number;
+      prefix: string;
       enabled: boolean;
       status: string;
       ssid: string;
@@ -1741,8 +1748,9 @@ const DeviceDetail: Component = () => {
       maxBitrate: string;
     }> = [];
     
-    for (let i = 1; i <= 8; i++) {
-      const prefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.`;
+    const prefixes = [...new Set(params.flatMap(parameter => parameter.name.match(/^InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.\d+\./)?.[0] ?? []))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    for (const prefix of prefixes) {
+      const i = Number(prefix.split('.').at(-2));
       const getVal = (suffix: string) => params.find(p => p.name === prefix + suffix)?.value;
       
       const enabled = getVal('Enable');
@@ -1751,6 +1759,7 @@ const DeviceDetail: Component = () => {
       if (ssid || enabled) {
         wlans.push({
           index: i,
+          prefix,
           enabled: enabled === '1' || enabled === 'true',
           status: getVal('Status') || (enabled === '1' ? 'Up' : 'Down'),
           ssid: ssid || '-',
@@ -2947,7 +2956,7 @@ const DeviceDetail: Component = () => {
                               </button>
                               <Show when={canVisit('inventory.cpes.overview.lan')} fallback={<span class="text-muted text-xs">-</span>}>
                                 <button
-                                  onClick={() => setLanModalIndex(lan.index)}
+                                  onClick={() => { setLanModalPrefix(lan.prefix); setLanModalIndex(lan.index); }}
                                   class="icon-button"
                                   aria-label={`Edit LAN interface ${lan.name}`}
                                 >
@@ -3049,7 +3058,7 @@ const DeviceDetail: Component = () => {
                             <td data-column-order-id="actions#0" class="px-3 py-2" classList={{ hidden: !isWifiColumnVisible('actions') }}>
                               <Show when={canVisit('inventory.cpes.overview.wifi')}>
                                 <button
-                                  onClick={() => setWifiModalIndex(wlan.index)}
+                                  onClick={() => { setWifiModalPrefix(wlan.prefix); setWifiModalIndex(wlan.index); }}
                                   class="icon-button"
                                   aria-label={`Edit Wi-Fi SSID${wlan.index}`}
                                 >
@@ -3782,25 +3791,27 @@ const DeviceDetail: Component = () => {
       </Show>
 
       <Show when={wifiModalIndex() !== null && parameters()}>
-        <WifiSettingsModal
+        <CustomCPEEditModal serial={serial()} target="wifi" prefix={wifiModalPrefix()} onClose={() => setWifiModalIndex(null)} onSaved={() => { loadDeviceParameters(); refetchTasks(); }} fallback={<WifiSettingsModal
           wlanIndex={wifiModalIndex()!}
+          interfacePrefix={wifiModalPrefix()}
           parameters={parameters()!}
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setWifiModalIndex(null)}
           onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
-        />
+        />} />
       </Show>
 
       <Show when={lanModalIndex() !== null && parameters()}>
-        <LanSettingsModal
+        <CustomCPEEditModal serial={serial()} target="lan" prefix={lanModalPrefix()} onClose={() => setLanModalIndex(null)} onSaved={() => { loadDeviceParameters(); refetchTasks(); }} fallback={<LanSettingsModal
           lanIndex={lanModalIndex()!}
+          interfacePrefix={lanModalPrefix()}
           parameters={parameters()!}
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setLanModalIndex(null)}
           onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
-        />
+        />} />
       </Show>
 
       <Show when={showLanNetworkModal() && parameters()}>
@@ -3813,14 +3824,14 @@ const DeviceDetail: Component = () => {
       </Show>
 
       <Show when={wanModalPath() !== null && parameters()}>
-        <WanSettingsModal
+        <CustomCPEEditModal serial={serial()} target={wanModalPath()!.includes('WANPPPConnection') ? 'wan_ppp' : 'wan_ip'} prefix={wanModalPath()!} onClose={() => setWanModalPath(null)} onSaved={() => { loadDeviceParameters(); refetchTasks(); }} fallback={<WanSettingsModal
           wanPath={wanModalPath()!}
           parameters={parameters()!}
           serial={serial()}
           isFullAccess={isFullAccess()}
           onClose={() => setWanModalPath(null)}
           onSaved={() => { loadDeviceParameters(); refetchTasks(); }}
-        />
+        />} />
       </Show>
 
     </div>
