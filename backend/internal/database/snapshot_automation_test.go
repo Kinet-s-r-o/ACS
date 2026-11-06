@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,66 @@ func TestAutomaticSnapshotDueTimes(t *testing.T) {
 	}
 }
 
+func TestOfflineDeviceCreatesNoAutomaticSnapshotTask(t *testing.T) {
+	for _, kind := range []string{"initial", "scheduled"} {
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: snapshotTestConnection{}}), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+			device, ok := tx.Statement.Dest.(*models.Device)
+			if !ok {
+				t.Fatalf("offline queue check continued with %T", tx.Statement.Dest)
+			}
+			*device = models.Device{ID: 1, Online: false}
+			tx.RowsAffected = 1
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) { t.Fatal("offline CPE created a task") }); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Callback().Update().Replace("gorm:update", func(tx *gorm.DB) { t.Fatal("offline CPE retried a task or changed due markers") }); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now()
+		if err := NewSnapshotRepository(db).QueueAutomatic(context.Background(), 1, 2, kind, now, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestOfflineDeviceCannotSaveSnapshotAfterRefresh(t *testing.T) {
+	for _, kind := range []string{"initial", "scheduled", "manual"} {
+		db, err := gorm.Open(postgres.Open("host=127.0.0.1 user=unused dbname=unused sslmode=disable"), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+			switch dest := tx.Statement.Dest.(type) {
+			case *models.Task:
+				*dest = models.Task{ID: 3, DeviceID: 1, Status: models.TaskStatusCompleted}
+			case *models.Device:
+				*dest = models.Device{ID: 1, Online: false}
+			default:
+				t.Fatalf("offline capture continued with %T", dest)
+			}
+			tx.RowsAffected = 1
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) { t.Fatal("saved snapshot for offline CPE") }); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now()
+		id := int64(3)
+		job := models.SystemTask{DeviceID: 1, SnapshotKind: kind, SnapshotTemplateID: &id, SnapshotSlot: &now, DispatchedAt: &now, CWMPTaskID: &id, RefreshParameters: true}
+		if err := completeAutomaticSnapshot(context.Background(), db, job, now); !errors.Is(err, ErrSnapshotDeviceOffline) {
+			t.Fatalf("offline snapshot error: %v", err)
+		}
+	}
+}
+
 func TestAutomaticSnapshotWaitsForRefreshAndIsIdempotent(t *testing.T) {
 	now := time.Now().UTC()
 	activation := now.Add(-time.Hour)
@@ -75,7 +136,7 @@ func TestAutomaticSnapshotWaitsForRefreshAndIsIdempotent(t *testing.T) {
 				case *models.Task:
 					*dest = models.Task{ID: jobID, DeviceID: 1, Status: status}
 				case *models.Device:
-					*dest = models.Device{ID: 1, CreatedAt: created, SnapshotInitialAt: marker}
+					*dest = models.Device{ID: 1, Online: true, CreatedAt: created, SnapshotInitialAt: marker}
 				case *models.ProvisioningTemplate:
 					*dest = models.ProvisioningTemplate{ID: templateID, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: true}}
 				case *[]models.DeviceParameter:
@@ -177,7 +238,7 @@ func TestManualSnapshotRequiresSuccessfulSummonAndRefresh(t *testing.T) {
 			case *models.Task:
 				*dest = models.Task{ID: cwmpID, DeviceID: 1, Status: tc.status}
 			case *models.Device:
-				*dest = models.Device{ID: 1}
+				*dest = models.Device{ID: 1, Online: true}
 			case *[]models.DeviceParameter:
 				*dest = []models.DeviceParameter{{Name: "Device.Test.Enable", Value: "true", Writable: &writable}}
 			default:
@@ -217,7 +278,7 @@ func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
 			activation := now.Add(-time.Hour)
 			templateID, cwmpID := int64(2), int64(3)
 			job := models.SystemTask{DeviceID: 1, SnapshotKind: "scheduled", SnapshotSlot: &now, SnapshotTemplateID: &templateID, CWMPTaskID: &cwmpID, RefreshParameters: true}
-			device := models.Device{ID: 1, CreatedAt: old}
+			device := models.Device{ID: 1, Online: true, CreatedAt: old}
 			if tc.oldMarker {
 				device.SnapshotInitialAt = &old
 			}
@@ -311,7 +372,7 @@ func TestAutomaticSnapshotQueueDeduplicatesAndReusesFailedJobs(t *testing.T) {
 				if _, locked := tx.Statement.Clauses["FOR"]; !locked {
 					t.Fatal("queue must lock the device row")
 				}
-				*dest = models.Device{ID: 1, CreatedAt: activation.Add(time.Minute)}
+				*dest = models.Device{ID: 1, Online: true, CreatedAt: activation.Add(time.Minute)}
 			case *models.ProvisioningTemplate:
 				*dest = models.ProvisioningTemplate{ID: 2, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: true}}
 			case *int64:

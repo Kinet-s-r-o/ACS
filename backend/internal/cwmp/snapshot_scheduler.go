@@ -67,7 +67,7 @@ func (s *SnapshotScheduler) scan(ctx context.Context, initial, scheduled bool, n
 			return nil
 		}
 		var devices []models.Device
-		if err := s.db.WithContext(ctx).Select("id", "manufacturer", "product_class", "created_at", "snapshot_initial_at", "snapshot_scheduled_at").Where("id > ?", after).Order("id").Limit(200).Find(&devices).Error; err != nil {
+		if err := s.db.WithContext(ctx).Select("id", "manufacturer", "product_class", "created_at", "snapshot_initial_at", "snapshot_scheduled_at").Where("id > ? AND online = ?", after, true).Order("id").Limit(200).Find(&devices).Error; err != nil {
 			return err
 		}
 		if len(devices) == 0 {

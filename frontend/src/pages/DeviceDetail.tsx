@@ -454,7 +454,7 @@ const DeviceDetail: Component = () => {
   const [snapshotRequestID, setSnapshotRequestID] = createSignal<number | null>(null);
   createEffect(() => { serial(); setSnapshotRequestID(null); });
   const createSnapshot = async () => {
-    if (snapshotLoading() !== null || snapshotRequestID() !== null || !can('cpe', 'write')) return;
+    if (snapshotLoading() !== null || snapshotRequestID() !== null || !device()?.online || !can('cpe', 'write')) return;
     setSnapshotLoading('create');
     try {
       const request = await api.createDeviceSnapshot(serial(), snapshotName().trim() || undefined);
@@ -2451,14 +2451,14 @@ const DeviceDetail: Component = () => {
                   <div class="flex items-center justify-between gap-3 mb-3">
                     <div>
                       <h2 class="text-sm font-medium text-secondary">Configuration Snapshots</h2>
-                      <p class="text-xs text-muted mt-1">Stored from the parameters currently cached by ACS.</p>
+                      <p class="text-xs text-muted mt-1">Writable parameters are saved after a successful summon and refresh. Creating a snapshot requires Online status.</p>
                     </div>
                     <span class="text-xs text-muted">{snapshots()?.length || 0}</span>
                   </div>
                   <Show when={isFullAccess()}>
                     <div class="flex gap-2 mb-4">
                       <input class="input flex-1 text-sm" value={snapshotName()} onInput={(event) => setSnapshotName(event.currentTarget.value)} placeholder="Snapshot name (optional)" disabled={snapshotLoading() === 'create'} />
-                      <button type="button" class="btn btn-primary text-xs" onClick={() => void createSnapshot()} disabled={snapshotLoading() !== null || snapshotRequestID() !== null}>
+                      <button type="button" class="btn btn-primary text-xs" onClick={() => void createSnapshot()} disabled={snapshotLoading() !== null || snapshotRequestID() !== null || !device()?.online}>
                         <Save size={14} /> Create
                       </button>
                     </div>

@@ -42,6 +42,7 @@ func (r *SnapshotRepository) GetByID(ctx context.Context, deviceID, id int64) (*
 
 var ErrInitialSnapshotLocked = errors.New("initial snapshots can only be deleted with CPE Full access")
 var ErrNoWritableSnapshotParameters = errors.New("no writable device parameters are available")
+var ErrSnapshotDeviceOffline = errors.New("CPE is offline; no snapshot was created")
 
 func (r *SnapshotRepository) Delete(ctx context.Context, deviceID, id int64, full bool) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

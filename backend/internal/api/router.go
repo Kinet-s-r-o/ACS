@@ -2549,6 +2549,10 @@ func (r *Router) handleCreateSnapshotBySerial(w http.ResponseWriter, req *http.R
 		respondError(w, http.StatusNotFound, "Device not found")
 		return
 	}
+	if !device.Online {
+		respondError(w, http.StatusConflict, database.ErrSnapshotDeviceOffline.Error())
+		return
+	}
 	var payload struct {
 		Name string `json:"name"`
 	}

@@ -143,6 +143,14 @@ func (w *SystemTaskWorker) process(ctx context.Context, systemTask *models.Syste
 		_ = w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, message)
 		return
 	}
+	if systemTask.SnapshotKind != "" && !device.Online {
+		message := database.ErrSnapshotDeviceOffline.Error()
+		if systemTask.CWMPTaskID != nil {
+			_, _ = w.taskRepo.FailPending(ctx, *systemTask.CWMPTaskID, message)
+		}
+		_ = w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, message)
+		return
+	}
 	if device.ConnectionRequestURL == nil || strings.TrimSpace(*device.ConnectionRequestURL) == "" {
 		_ = w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, "CPE has no connection request URL")
 		return
@@ -259,8 +267,8 @@ func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
 			switch status {
 			case models.TaskStatusCompleted:
 				if err := w.systemTaskRepo.MarkCompleted(ctx, systemTask.ID); err != nil {
-					if errors.Is(err, database.ErrNoWritableSnapshotParameters) {
-						if failErr := w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, "No writable parameters were returned; no snapshot was created"); failErr != nil {
+					if errors.Is(err, database.ErrNoWritableSnapshotParameters) || errors.Is(err, database.ErrSnapshotDeviceOffline) {
+						if failErr := w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, err.Error()); failErr != nil {
 							return failErr
 						}
 						continue

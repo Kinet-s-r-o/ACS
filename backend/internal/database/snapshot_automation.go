@@ -18,6 +18,9 @@ func (r *SnapshotRepository) QueueAutomatic(ctx context.Context, deviceID, templ
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&device, deviceID).Error; err != nil {
 			return err
 		}
+		if !device.Online {
+			return nil
+		}
 		manufacturer, productClass := snapshotDeviceIdentity(device)
 		template, err := NewProvisioningRepository(tx).ResolveTemplateForDevice(ctx, manufacturer, productClass)
 		if err != nil {
@@ -117,6 +120,9 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 	var device models.Device
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&device, task.DeviceID).Error; err != nil {
 		return err
+	}
+	if !device.Online {
+		return ErrSnapshotDeviceOffline
 	}
 	if task.SnapshotKind == "manual" {
 		if task.DispatchedAt == nil {

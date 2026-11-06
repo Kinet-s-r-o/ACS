@@ -25,7 +25,7 @@ func TestManualSnapshotQueuesSummonWithoutReadingCachedValues(t *testing.T) {
 		if !ok {
 			t.Fatalf("snapshot request read cached data: %T", tx.Statement.Dest)
 		}
-		*device = models.Device{ID: 1, SerialNumber: "test-ONT"}
+		*device = models.Device{ID: 1, SerialNumber: "test-ONT", Online: true}
 		tx.RowsAffected = 1
 	}); err != nil {
 		t.Fatal(err)
@@ -81,5 +81,29 @@ func TestCPEWriterCanTrackOnlyOwnManualSnapshotRequest(t *testing.T) {
 		if w.Code != tc.want {
 			t.Fatalf("owner=%s kind=%s: got %d want %d", tc.owner, tc.kind, w.Code, tc.want)
 		}
+	}
+}
+
+func TestOfflineManualSnapshotCreatesNoQueueTask(t *testing.T) {
+	db, err := gorm.Open(postgres.Open("host=127.0.0.1 user=unused dbname=unused sslmode=disable"), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+		*tx.Statement.Dest.(*models.Device) = models.Device{ID: 1, Online: false}
+		tx.RowsAffected = 1
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) { t.Fatal("offline request created a queue task or snapshot") }); err != nil {
+		t.Fatal(err)
+	}
+	r := &Router{db: db, deviceRepo: database.NewDeviceRepository(db), systemTaskRepo: database.NewSystemTaskRepository(db)}
+	req := httptest.NewRequest(http.MethodPost, "/device/test-ONT/snapshots", strings.NewReader(`{"name":"Offline test"}`))
+	req.SetPathValue("serial", "test-ONT")
+	w := httptest.NewRecorder()
+	r.handleCreateSnapshotBySerial(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("offline request got %d", w.Code)
 	}
 }
