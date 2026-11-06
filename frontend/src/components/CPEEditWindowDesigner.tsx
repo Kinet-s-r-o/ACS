@@ -7,6 +7,7 @@ import Dialog from './Dialog';
 import CPEEditWindowFields from './CPEEditWindowFields';
 import { useFeedback } from './Feedback';
 import { ResourceError } from './ResourceState';
+import SearchableSelect from './SearchableSelect';
 
 const CPEEditWindowDesigner: Component<{ template: ProvisioningTemplate; onSaved: (windows: CPEEditWindow[]) => void }> = props => {
   const { can } = useAuth();
@@ -19,8 +20,9 @@ const CPEEditWindowDesigner: Component<{ template: ProvisioningTemplate; onSaved
   const [fieldID, setFieldID] = createSignal('');
   const [reference, setReference] = createSignal('');
   const [referenceSearch, setReferenceSearch] = createSignal('');
-  const [parameterSearch, setParameterSearch] = createSignal('');
   const [picked, setPicked] = createSignal('');
+  const [helpPicked, setHelpPicked] = createSignal('');
+  const [helpRelative, setHelpRelative] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
   const editable = () => can('settings.provisioning', 'write') && !saving();
@@ -30,8 +32,12 @@ const CPEEditWindowDesigner: Component<{ template: ProvisioningTemplate; onSaved
   const field = () => tab()?.fields.find(item => item.id === fieldID());
   const [references, { refetch: refreshReferences }] = createResource(() => open() && can('cpe', 'read') ? { id: props.template.id, search: referenceSearch() } : false, query => api.getEditWindowReferences(query.id, query.search));
   const [parameters, { refetch: refreshParameters }] = createResource(() => open() && reference() && can('cpe', 'read') ? { id: props.template.id, serial: reference() } : false, query => api.getEditWindowParameters(query.id, query.serial));
+  const [helpParameters, { refetch: refreshHelpParameters }] = createResource(() => open() && reference() && can('cpe', 'read') ? { id: props.template.id, serial: reference() } : false, query => api.getEditWindowHelpParameters(query.id, query.serial));
+  const helpChoices = () => helpParameters.error ? [] : helpParameters.latest ?? [];
+  const helpSelected = () => helpChoices().find(item => item.name === helpPicked());
+  const helpCanBind = () => !!helpSelected() && helpSelected()!.target === target() && helpSelected()!.base_pattern === window()?.base_pattern;
   const referenceList = () => references.error ? [] : references.latest ?? [];
-  const choices = () => (parameters.error ? [] : parameters.latest ?? []).filter(item => item.target === target() && (!window()?.base_pattern || item.base_pattern === window().base_pattern) && item.name.toLowerCase().includes(parameterSearch().toLowerCase()));
+  const choices = () => (parameters.error ? [] : parameters.latest ?? []).filter(item => item.target === target() && (!window()?.base_pattern || item.base_pattern === window().base_pattern));
   const updateWindow = (patch: Partial<CPEEditWindow>) => setWindows(current => current.map(item => item.target === target() ? { ...item, ...patch } : item));
   const updateTab = (patch: Partial<CPEEditTab>) => updateWindow({ tabs: window().tabs.map(item => item.id === tab()?.id ? { ...item, ...patch } : item) });
   const updateField = (patch: Partial<CPEEditField>) => updateTab({ fields: tab()!.fields.map(item => item.id === fieldID() ? { ...item, ...patch } : item) });
@@ -62,6 +68,14 @@ const CPEEditWindowDesigner: Component<{ template: ProvisioningTemplate; onSaved
   const rebind = (metadata: CPEEditParameterMetadata) => {
     if (window().tabs.some(item => item.fields.some(candidate => candidate.id !== fieldID() && candidate.parameter === metadata.parameter))) { setError('This parameter is already in the editor.'); return; }
     updateField({ parameter: metadata.parameter, type: metadata.type, input: 'auto', options: [] }); setError('');
+  };
+  const insertHelpParameter = () => {
+    const selected = helpSelected();
+    if (!editable() || !field() || !selected || helpParameters.loading || helpParameters.error) return;
+    const path = helpRelative() && helpCanBind() ? selected.parameter : selected.name;
+    const next = field()!.help + `{{param:${path}}}`;
+    if (next.length > 1024) { setError('Help text cannot exceed 1024 characters.'); return; }
+    updateField({ help: next }); setError('');
   };
   const removeField = async () => {
     if (!field() || !editable()) return;
@@ -134,10 +148,9 @@ const CPEEditWindowDesigner: Component<{ template: ProvisioningTemplate; onSaved
                 <button type="button" class="btn btn-secondary self-end" disabled={!editable() || window().tabs.length === 1} onClick={async () => { if (await confirm({ title: 'Remove tab?', description: 'The tab and its fields will be removed from this editor design.', confirmLabel: 'Remove tab', tone: 'danger' })) { updateWindow({ tabs: window().tabs.filter(item => item.id !== current().id) }); setTabID(''); setFieldID(''); } }}>Remove tab</button>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label class="text-xs text-muted">Find writable parameter<input class="input mt-1 w-full" value={parameterSearch()} disabled={!editable()} onInput={event => setParameterSearch(event.currentTarget.value)} /></label>
-                <label class="text-xs text-muted">Parameter from reference<select class="input mt-1 w-full font-mono" value={picked()} disabled={!editable() || !reference() || parameters.loading || !!parameters.error} onChange={event => setPicked(event.currentTarget.value)}><option value="">Choose a writable parameter</option><Index each={choices().slice(0, 200)}>{item => <option value={item().name}>{item().name} ({item().type})</option>}</Index></select></label>
+                <div class="sm:col-span-2"><SearchableSelect label="Parameter from reference" placeholder="Choose a writable parameter" value={picked()} options={choices().map(item => ({ value: item.name, label: `${item.name} (${item.type})` }))} disabled={!editable() || !reference() || parameters.loading || !!parameters.error} onChange={setPicked} /></div>
               </div>
-              <div class="flex flex-wrap items-center gap-2"><button type="button" class="btn btn-secondary" disabled={!editable() || !picked() || window().tabs.reduce((sum, item) => sum + item.fields.length, 0) >= 128} onClick={addParameter}><Plus size={14} aria-hidden="true" />Add field</button><span class="text-xs text-muted">{choices().length} matching paths; first 200 shown. Refine the search as needed.</span></div>
+              <div class="flex flex-wrap items-center gap-2"><button type="button" class="btn btn-secondary" disabled={!editable() || !picked() || window().tabs.reduce((sum, item) => sum + item.fields.length, 0) >= 128} onClick={addParameter}><Plus size={14} aria-hidden="true" />Add field</button></div>
               <div class="space-y-2"><Index each={current().fields}>{(item, index) => <div class="flex flex-wrap items-center gap-2 border border-subtle p-2" onDragOver={event => event.preventDefault()} onDrop={event => dropField(event, index)}>
                 <button type="button" class="icon-button" draggable={editable()} disabled={!editable()} aria-label={`Drag field ${item().name}`} onDragStart={event => event.dataTransfer?.setData('text/plain', `field:${item().id}`)}>↕</button>
                 <button type="button" class={`btn min-w-0 flex-1 ${fieldID() === item().id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFieldID(item().id)}>{item().name || 'Unnamed field'}</button>
@@ -155,6 +168,13 @@ const CPEEditWindowDesigner: Component<{ template: ProvisioningTemplate; onSaved
                   <label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={selected().new_row} onChange={event => updateField({ new_row: event.currentTarget.checked })} />Start a new row</label>
                 </div>
                 <label class="block text-xs text-muted">Help text<textarea class="input mt-1 w-full" rows={2} maxlength={1024} value={selected().help} onInput={event => updateField({ help: event.currentTarget.value })} /></label>
+                <div class="space-y-2">
+                  <SearchableSelect label="Insert parameter value into help" placeholder="Choose a parameter (including read-only)" value={helpPicked()} options={helpChoices().map(item => ({ value: item.name, label: `${item.name} (${item.type})` }))} disabled={!editable() || !reference() || helpParameters.loading || !!helpParameters.error} onChange={value => { setHelpPicked(value); setHelpRelative(true); }} />
+                  <Show when={helpCanBind()}><label class="flex items-center gap-2 text-xs text-secondary"><input type="checkbox" checked={helpRelative()} onChange={event => setHelpRelative(event.currentTarget.checked)} />Use the opened interface's instance</label></Show>
+                  <button type="button" class="btn btn-secondary" disabled={!editable() || !helpSelected() || helpParameters.loading || !!helpParameters.error} onClick={insertHelpParameter}>Insert value reference</button>
+                  <p class="text-xs text-muted">Insert a reference at the end of the help text, then move it as needed. Example: {'Channel: {{param:Channel}}'}. The form shows the last stored value from the current CPE; missing values show —. Read-only parameters are available; sensitive values are excluded.</p>
+                  <Show when={helpParameters.error}><ResourceError title="Help parameters unavailable" description="Retry loading parameter names from the reference CPE." onRetry={() => void refreshHelpParameters()} /></Show>
+                </div>
                 <Show when={selected().input === 'select'}><div class="space-y-2"><p class="text-xs text-muted">Custom select options: label shown to the operator and exact {selected().type} value sent to the CPE. Existing values outside this list are displayed without being overwritten.</p>
                   <Index each={selected().options}>{(option, index) => <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
                     <label class="text-xs text-muted">Label<input class="input mt-1 w-full" maxlength={128} value={option().label} onInput={event => updateField({ options: selected().options.map((item, position) => position === index ? { ...item, label: event.currentTarget.value } : item) })} /></label>

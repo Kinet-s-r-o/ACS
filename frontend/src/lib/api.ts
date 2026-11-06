@@ -132,6 +132,7 @@ export interface CPEEditField { id: string; name: string; parameter: string; typ
 export interface CPEEditTab { id: string; name: string; columns: number; fields: CPEEditField[] }
 export interface CPEEditWindow { version: 1; target: CPEEditTarget; enabled: boolean; base_pattern: string; tabs: CPEEditTab[] }
 export interface CPEEditParameterMetadata { name: string; type: CPEEditType; target: CPEEditTarget; base_pattern: string; parameter: string }
+export interface CPEHelpParameterMetadata { name: string; type: string; target: string; base_pattern: string; parameter: string }
 export interface ProvisioningTemplate { cpe_edit_windows?: CPEEditWindow[] }
 export interface CPEEditWindowState { window: CPEEditWindow | null; parameters: DeviceParameter[] }
 
@@ -409,6 +410,7 @@ export const api = {
   getProvisioningTemplates: () => request<ProvisioningTemplate[]>('/provisioning/templates'),
   getEditWindowReferences: (id: number, search = '') => request<{ serial: string }[]>(`/provisioning/templates/${id}/edit-windows/references?search=${encodeURIComponent(search)}`),
   getEditWindowParameters: (id: number, serial: string) => request<CPEEditParameterMetadata[]>(`/provisioning/templates/${id}/edit-windows/parameters?serial=${encodeURIComponent(serial)}`),
+  getEditWindowHelpParameters: (id: number, serial: string) => request<CPEHelpParameterMetadata[]>(`/provisioning/templates/${id}/edit-windows/parameters?serial=${encodeURIComponent(serial)}&purpose=help`),
   saveEditWindows: (id: number, referenceSerial: string, windows: CPEEditWindow[]) => request<{ cpe_edit_windows: CPEEditWindow[] }>(`/provisioning/templates/${id}/edit-windows`, { method: 'PUT', body: JSON.stringify({ reference_serial: referenceSerial, windows }) }),
   getCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string) => request<CPEEditWindowState>(`/device/${encodeURIComponent(serial)}/edit-window?target=${target}&prefix=${encodeURIComponent(prefix)}`),
   applyCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/edit-window`, { method: 'POST', body: JSON.stringify({ target, prefix, parameters }) }),

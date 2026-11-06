@@ -9,6 +9,16 @@ export const editFieldInput = (field: CPEEditField) => field.input === 'select' 
 export const editFieldTypeMatches = (field: CPEEditField, parameter?: DeviceParameter) => parameter?.value_type?.replace(/^xsd:/, '') === field.type;
 export const editFieldUnavailable = (field: CPEEditField, parameter?: DeviceParameter) => !parameter ? 'Parameter is missing on this CPE.' : !editFieldTypeMatches(field, parameter) ? 'Parameter type differs from the template.' : parameter.writable !== true ? 'The CPE has not confirmed write access.' : '';
 
+export function renderCPEEditHelp(help: string, prefix: string, parameters: DeviceParameter[], preview = false): string {
+  return help.replace(/\{\{param:([^{}]*)\}\}/g, (_, reference: string) => {
+    const path = /^(Device|InternetGatewayDevice)\./.test(reference) ? reference : prefix + reference;
+    if (editFieldSensitive(path)) return '[protected]';
+    if (preview) return `[${reference}]`;
+    const parameter = parameters.find(item => item.name === path);
+    return parameter && parameter.value !== '' ? parameter.value : '—';
+  });
+}
+
 export function validateCPEEditValue(type: CPEEditType, value: string): string {
   if (type === 'string') return '';
   if (type === 'boolean') return ['true', 'false', '1', '0'].includes(value) ? '' : 'Choose true or false.';

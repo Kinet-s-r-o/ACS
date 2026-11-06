@@ -20,6 +20,39 @@ import (
 var editBindingPath = regexp.MustCompile(`^(InternetGatewayDevice\.(?:LANDevice\.[0-9]+\.(WLANConfiguration|LANEthernetInterfaceConfig)\.[0-9]+|WANDevice\.[0-9]+\.WANConnectionDevice\.[0-9]+\.(WANIPConnection|WANPPPConnection)\.[0-9]+)|Device\.(WiFi\.SSID|Ethernet\.Interface|IP\.Interface|PPP\.Interface)\.[0-9]+)\.(.+)$`)
 var editSuffix = regexp.MustCompile(`^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$`)
 var editID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+var editHelpToken = regexp.MustCompile(`\{\{param:([^{}]*)\}\}`)
+
+func editHelpReferences(help string) ([]string, error) {
+	refs := []string{}
+	for _, match := range editHelpToken.FindAllStringSubmatch(help, -1) {
+		path := match[1]
+		if len(refs) >= 16 || len(path) > 512 || !editSuffix.MatchString(path) || database.IsSensitiveParameterName("."+path) || path == database.DeviceLogParameterName {
+			return nil, errors.New("help references must use non-sensitive parameter paths (at most 16 per field)")
+		}
+		refs = append(refs, path)
+	}
+	if strings.Contains(editHelpToken.ReplaceAllString(help, ""), "{{param:") {
+		return nil, errors.New("invalid help reference; use {{param:Parameter.Path}}")
+	}
+	return refs, nil
+}
+
+func editHelpPath(prefix, path string) string {
+	if strings.HasPrefix(path, "Device.") || strings.HasPrefix(path, "InternetGatewayDevice.") {
+		return path
+	}
+	return prefix + path
+}
+
+func editHelpReferenceExists(window models.CPEEditWindow, ref string, parameters []models.DeviceParameter) bool {
+	for _, parameter := range parameters {
+		target, base, suffix := parseEditBinding(parameter.Name)
+		if parameter.Name == ref || (target == window.Target && base == window.BasePattern && suffix == ref) {
+			return true
+		}
+	}
+	return false
+}
 
 func parseEditBinding(path string) (target, pattern, suffix string) {
 	m := editBindingPath.FindStringSubmatch(path)
@@ -99,6 +132,9 @@ func validateEditWindows(windows []models.CPEEditWindow) error {
 					return errors.New("invalid or duplicate field, parameter or layout")
 				}
 				ids[field.ID], paths[field.Parameter] = true, true
+				if _, err := editHelpReferences(field.Help); err != nil {
+					return err
+				}
 				switch field.Type {
 				case "string", "int", "unsignedInt", "boolean":
 				default:
@@ -236,15 +272,23 @@ func (r *Router) handleEditWindowParameters(w http.ResponseWriter, req *http.Req
 		return
 	}
 	var parameters []models.DeviceParameter
-	if err := r.db.WithContext(req.Context()).Select("name", "value_type").Where("device_id = ? AND writable = ?", device.ID, true).Order("name").Find(&parameters).Error; err != nil {
+	help := req.URL.Query().Get("purpose") == "help"
+	query := r.db.WithContext(req.Context()).Select("name", "value_type").Where("device_id = ?", device.ID)
+	if !help {
+		query = query.Where("writable = ?", true)
+	}
+	if err := query.Order("name").Find(&parameters).Error; err != nil {
 		respondError(w, http.StatusServiceUnavailable, "Parameter metadata is unavailable")
 		return
 	}
 	result := []editParameterMetadata{}
 	for _, parameter := range parameters {
+		if help && (database.IsSensitiveParameterName(parameter.Name) || parameter.Name == database.DeviceLogParameterName) {
+			continue
+		}
 		target, base, suffix := parseEditBinding(parameter.Name)
 		kind := normalizeEditType(parameter.ValueType)
-		if target == "" || (kind != "string" && kind != "int" && kind != "unsignedInt" && kind != "boolean") {
+		if !help && (target == "" || (kind != "string" && kind != "int" && kind != "unsignedInt" && kind != "boolean")) {
 			continue
 		}
 		result = append(result, editParameterMetadata{Name: parameter.Name, Type: kind, Target: target, BasePattern: base, Parameter: suffix})
@@ -293,7 +337,7 @@ func (r *Router) handleSaveEditWindows(w http.ResponseWriter, req *http.Request)
 			return
 		}
 		var parameters []models.DeviceParameter
-		if err := r.db.WithContext(req.Context()).Select("name", "value_type", "writable").Where("device_id = ? AND writable = ?", device.ID, true).Find(&parameters).Error; err != nil {
+		if err := r.db.WithContext(req.Context()).Select("name", "value_type", "writable").Where("device_id = ?", device.ID).Find(&parameters).Error; err != nil {
 			respondError(w, http.StatusServiceUnavailable, "Cannot verify reference parameters")
 			return
 		}
@@ -303,7 +347,7 @@ func (r *Router) handleSaveEditWindows(w http.ResponseWriter, req *http.Request)
 					found := false
 					for _, parameter := range parameters {
 						target, base, suffix := parseEditBinding(parameter.Name)
-						if target == window.Target && base == window.BasePattern && suffix == field.Parameter && normalizeEditType(parameter.ValueType) == field.Type {
+						if parameter.Writable != nil && *parameter.Writable && target == window.Target && base == window.BasePattern && suffix == field.Parameter && normalizeEditType(parameter.ValueType) == field.Type {
 							found = true
 							break
 						}
@@ -311,6 +355,13 @@ func (r *Router) handleSaveEditWindows(w http.ResponseWriter, req *http.Request)
 					if !found {
 						respondError(w, http.StatusBadRequest, "Every field must match a writable reference parameter and its actual type: "+field.Name)
 						return
+					}
+					refs, _ := editHelpReferences(field.Help)
+					for _, ref := range refs {
+						if !editHelpReferenceExists(window, ref, parameters) {
+							respondError(w, http.StatusBadRequest, "Help parameter is missing on the reference CPE: "+ref)
+							return
+						}
 					}
 				}
 			}
@@ -362,6 +413,10 @@ func (r *Router) loadEditWindow(req *http.Request, target, prefix string) (*mode
 	for _, tab := range state.Window.Tabs {
 		for _, field := range tab.Fields {
 			names = append(names, prefix+field.Parameter)
+			refs, _ := editHelpReferences(field.Help)
+			for _, ref := range refs {
+				names = append(names, editHelpPath(prefix, ref))
+			}
 		}
 	}
 	if err := r.db.WithContext(req.Context()).Where("device_id = ? AND name IN ?", device.ID, names).Find(&state.Parameters).Error; err != nil {

@@ -1,6 +1,6 @@
 import { Index, Show, createUniqueId, type Component } from 'solid-js';
 import type { CPEEditTab, DeviceParameter } from '../lib/api';
-import { editFieldInput, editFieldSensitive, editFieldUnavailable } from '../lib/cpeEditWindows';
+import { editFieldInput, editFieldSensitive, editFieldUnavailable, renderCPEEditHelp } from '../lib/cpeEditWindows';
 
 const CPEEditWindowFields: Component<{
   tab: CPEEditTab; prefix: string; parameters: DeviceParameter[]; edits: Record<string, string>;
@@ -26,7 +26,7 @@ const CPEEditWindowFields: Component<{
           <Index each={field().options}>{option => <option value={option().value}>{option().label}</option>}</Index>
         </select>
       </Show>
-      <Show when={field().help}><p class="mt-1 text-xs text-muted">{field().help}</p></Show>
+      <Show when={field().help}><p class="mt-1 text-xs text-muted whitespace-pre-wrap break-words">{renderCPEEditHelp(field().help, props.prefix, props.parameters, props.preview)}</p></Show>
       <Show when={reason()}><p class="mt-1 text-xs text-warning">{reason()}</p></Show>
       <Show when={props.errors?.[path()]}><p class="mt-1 text-xs text-error" role="alert">{props.errors?.[path()]}</p></Show>
     </div>;

@@ -1,10 +1,48 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/matrix8412/acs/internal/models"
 )
+
+func TestEditHelpReferences(t *testing.T) {
+	refs, err := editHelpReferences("Channel: {{param:Channel}} / {{param:InternetGatewayDevice.DeviceInfo.ModelName}}")
+	if err != nil || len(refs) != 2 || refs[0] != "Channel" {
+		t.Fatalf("invalid references: %v %v", refs, err)
+	}
+	for _, help := range []string{"{{param:}}", "{{param:Channel}", "{{param:Name with spaces}}", "{{param:Username}}", "{{param:PreSharedKey.1.KeyPassphrase}}", "{{param:Device.PPP.Interface.1.Password}}", strings.Repeat("{{param:Channel}}", 17)} {
+		if _, err := editHelpReferences(help); err == nil {
+			t.Fatalf("accepted unsafe or malformed help: %s", help)
+		}
+	}
+	window := testEditWindow()
+	readonly := false
+	parameters := []models.DeviceParameter{{Name: "InternetGatewayDevice.LANDevice.7.WLANConfiguration.25.Channel", Writable: &readonly}, {Name: "InternetGatewayDevice.DeviceInfo.ModelName"}}
+	for _, ref := range refs {
+		if !editHelpReferenceExists(window, ref, parameters) {
+			t.Fatalf("missing valid read-only reference: %s", ref)
+		}
+	}
+	if editHelpReferenceExists(window, "Missing", parameters) {
+		t.Fatal("accepted missing reference")
+	}
+	if editHelpReferenceExists(models.CPEEditWindow{Target: "lan"}, "Channel", parameters) {
+		t.Fatal("bound to unrelated interface")
+	}
+	prefix := "InternetGatewayDevice.LANDevice.9.WLANConfiguration.88."
+	if got := editHelpPath(prefix, refs[0]); got != prefix+"Channel" {
+		t.Fatal(got)
+	}
+	if got := editHelpPath(prefix, refs[1]); got != refs[1] {
+		t.Fatal(got)
+	}
+	window.Tabs[0].Fields[0].Help = "{{param:Password}}"
+	if validateEditWindows([]models.CPEEditWindow{window}) == nil {
+		t.Fatal("accepted sensitive help in imported definition")
+	}
+}
 
 func testEditWindow() models.CPEEditWindow {
 	return models.CPEEditWindow{Version: 1, Target: "wifi", Enabled: true, BasePattern: "InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.", Tabs: []models.CPEEditTab{{ID: "general", Name: "General", Columns: 2, Fields: []models.CPEEditField{{ID: "ssid", Name: "SSID", Parameter: "SSID", Type: "string", Input: "select", Span: 1, Options: []models.CPEEditOption{{Label: "Home network", Value: "home"}}}}}}}
