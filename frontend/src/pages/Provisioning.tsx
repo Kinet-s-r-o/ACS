@@ -414,7 +414,7 @@ const Provisioning: Component = () => {
   const provDragEnabled = createMemo(() => Object.keys(columnFilters()).length === 0);
 
   onMount(() => {
-    const refreshCWMPState = () => { if (!cwmpControlSaving()) void refetchCWMPControl(); };
+    const refreshCWMPState = () => { if (!showTemplateModal() && !cwmpControlSaving()) void refetchCWMPControl(); };
     const cwmpStateTimer = window.setInterval(refreshCWMPState, 10000);
     window.addEventListener('focus', refreshCWMPState);
     onCleanup(() => { window.clearInterval(cwmpStateTimer); window.removeEventListener('focus', refreshCWMPState); });
