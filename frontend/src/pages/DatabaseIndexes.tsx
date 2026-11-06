@@ -177,8 +177,9 @@ const DatabaseIndexes: Component = () => {
           <fieldset class="space-y-3 border border-subtle p-3" disabled={busy()}>
             <legend class="text-xs text-secondary px-1">Custom definition</legend>
             <div><label for="db-index-table" class="block text-xs text-muted mb-1">Table</label><select id="db-index-table" class="input w-full" value={definition().table_name} onChange={event => {
+              const tableName = event.currentTarget.value;
               change('parameter_path', '');
-              changeDefinition({ table_name: event.currentTarget.value, columns: [{ name: 'id', direction: 'ASC', nulls: '' }], include_columns: [] });
+              changeDefinition({ table_name: tableName, columns: [{ name: 'id', direction: 'ASC', nulls: '' }], include_columns: [] });
             }}><Index each={data.latest?.tables}>{table => <option value={table().name}>{table().name}</option>}</Index></select></div>
             <p class="text-xs text-muted">Key priority runs from top to bottom. Up / Down changes column order. Method: B-tree; unique: No.</p>
             <Index each={definition().columns}>{(column, position) => <div class="border border-subtle p-2 space-y-2">
