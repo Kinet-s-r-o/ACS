@@ -3,6 +3,7 @@ import { createEffect, createResource, createSignal, createMemo, Show, For } fro
 import { useNavigate } from '@solidjs/router';
 import { Users, ShieldCheck, Ban, Check, Edit2, Plus, Search, X, KeyRound, LayoutDashboard, Trash2 } from 'lucide-solid';
 import UserAPITokens from '../components/UserAPITokens';
+import UserSessionSettingsMenu from '../components/UserSessionSettingsMenu';
 import AccountTransferActions from '../components/AccountTransferActions';
 import { api, type User } from '../lib/api';
 import PageHeader from '../components/PageHeader';
@@ -195,7 +196,9 @@ const UsersPage: Component = () => {
 
   return (
     <div class="space-y-5">
-      <PageHeader title="Users and Roles" description="Manage operator accounts and their access levels." />
+      <PageHeader title="Users and Roles" description="Manage operator accounts and their access levels.">
+        <Show when={activeTab() === 'users' && can('settings.users', 'read')}><UserSessionSettingsMenu /></Show>
+      </PageHeader>
 
       <div class="border-b border-subtle flex gap-1" role="tablist" aria-label="Users and roles">
         <Show when={canVisit('settings.users.users')}><button type="button" role="tab" aria-selected={activeTab() === 'users'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'users' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => { setActiveTab('users'); void refetchRoles(); void refetchUsers(); }}><Users size={13} />Users</button></Show>

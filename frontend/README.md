@@ -1,5 +1,9 @@
 # Frontend area router
 
+Users → top-right actions → Session settings is `components/UserSessionSettingsMenu.tsx`. Users Read can view; Users Write can save local/external lifetimes through `/users/session-settings`. Values use whole minutes, defaults 1440/60, range 5–43200; changes apply at the next sign-in. See [authentication](../docs/authentication.md).
+
+Template General → Bootstrap completion configures optional [reboot after successful bootstrap](../docs/bootstrap-reboot.md). Keep `reboot_after_bootstrap` false for new/legacy forms, preserve it in edit/clone/save, and use existing template edit permission with the shared boolean confirmation. Saving does not immediately reboot ONTs.
+
 Automatic template snapshots: [automation guide](../docs/automatic-snapshots.md), `components/TemplateSnapshotsForm.tsx`, `lib/snapshotSchedule.ts`, Edit template tabs and DeviceDetail snapshot actions. CPE Write deletes ordinary snapshots; initial snapshots require CPE Full.
 
 Manual CPE snapshots enqueue Bulk Summon and return a system task (HTTP 202). `components/SnapshotRequestStatus.tsx` follows the owned request until completion/failure; refresh the snapshot list only on successful completion and retain failed-request feedback. Unmounting the UI stops polling while the durable queue keeps processing.

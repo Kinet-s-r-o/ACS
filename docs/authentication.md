@@ -12,6 +12,14 @@ example `first.last@example.net` or `DOMAIN\operator`, alongside letters, number
 dot, dash and underscore. Local accounts retain the original character rules;
 switching a domain-style RADIUS account to local requires a compatible username.
 
+## Session duration
+
+Open **Users and Roles → Users → ⋮ (top right) → Session settings**. Users Read can view the policy; Users Write can save it. Local accounts default to 1440 minutes (24 hours), and external accounts including RADIUS default to 60 minutes. Each value accepts 5–43200 whole minutes (up to 30 days).
+
+Changes apply to new sign-ins, including sessions issued after completing ACS two-factor authentication. Existing tokens retain their original expiration; activity does not renew them. The two-factor challenge remains valid for five minutes, and user-linked API token expiration is independent.
+
+`GET/PUT /users/session-settings` reads/writes only these values in the existing settings table (`session_local_minutes`, `session_external_minutes`); PUT requires both values. No migration or index is needed. Missing keys use the original defaults. Login loads both values before issuing its token; a failed read or invalid stored policy returns an error without issuing a session.
+
 ## Configure RADIUS
 
 Open **System settings → Authentication** and select the **RADIUS** tile to open
@@ -69,7 +77,7 @@ factors also work after RADIUS acceptance. RADIUS Access-Challenge continuation,
 EAP and MS-CHAP are outside this version; use ACS TOTP or a compatible password-only
 RADIUS policy. Login audit events include `auth_provider` without credentials.
 
-External browser sessions expire after one hour. Disabling a RADIUS identity or
+External browser sessions default to one hour, configurable in Session settings. Disabling a RADIUS identity or
 the module does not revoke already-issued sessions; deactivate the ACS account
 to block existing sessions immediately. User-linked API tokens remain independent
 of RADIUS and must be revoked separately or blocked through ACS account activation.

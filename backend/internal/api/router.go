@@ -187,6 +187,8 @@ func (r *Router) Handler() http.Handler {
 
 	// User management
 	apiMux.HandleFunc("GET /users", auth.RequirePermission(models.PermUsersRead)(r.handleListUsers))
+	apiMux.HandleFunc("GET /users/session-settings", auth.RequirePermission(models.PermUsersRead)(r.handleGetSessionSettings))
+	apiMux.HandleFunc("PUT /users/session-settings", auth.RequirePermission(models.PermUsersWrite)(r.handleUpdateSessionSettings))
 	apiMux.HandleFunc("POST /users", auth.RequirePermission(models.PermUsersWrite)(r.handleCreateUser))
 	apiMux.HandleFunc("POST /users/export", r.handleExportAccounts("users"))
 	apiMux.HandleFunc("POST /users/import", r.handleImportAccounts("users"))
@@ -3535,7 +3537,12 @@ func (r *Router) finishLogin(w http.ResponseWriter, req *http.Request, user *mod
 		respondError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
-	token, err := auth.GenerateToken(user)
+	sessionSettings, err := r.loadSessionSettings(req.Context())
+	if err != nil {
+		respondError(w, http.StatusServiceUnavailable, "Session settings are unavailable")
+		return
+	}
+	token, err := auth.GenerateTokenWithSessionSettings(user, sessionSettings)
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to generate token")
@@ -4670,6 +4677,9 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if body.RebootAfterBootstrap != nil {
+		template.RebootAfterBootstrap = *body.RebootAfterBootstrap
+	}
 	if err := prepareProvisioningVariableSecrets(template.Variables, nil); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -4769,6 +4779,10 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	template.RebootAfterBootstrap = previous.RebootAfterBootstrap
+	if body.RebootAfterBootstrap != nil {
+		template.RebootAfterBootstrap = *body.RebootAfterBootstrap
+	}
 	if body.Variables == nil {
 		template.Variables = previous.Variables
 	}
@@ -4777,7 +4791,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 			respondError(w, http.StatusForbidden, "Variables edit permission required")
 			return
 		}
-		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval || template.Snapshots != previous.Snapshots
+		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval || template.Snapshots != previous.Snapshots || template.RebootAfterBootstrap != previous.RebootAfterBootstrap
 		if metadataChanged && !requestCan(req, "settings.provisioning.templates", "edit") {
 			respondError(w, http.StatusForbidden, "Templates edit permission required")
 			return

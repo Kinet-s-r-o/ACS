@@ -8,6 +8,7 @@ type ProvisioningTemplate struct {
 	Manufacturer             string                       `json:"manufacturer" gorm:"size:128;default:''"`
 	ProductClass             string                       `json:"product_class" gorm:"size:128;default:''"`
 	Description              string                       `json:"description,omitempty"`
+	RebootAfterBootstrap     bool                         `json:"reboot_after_bootstrap" gorm:"not null;default:false"`
 	Inventory                TemplateInventory            `json:"inventory" gorm:"type:jsonb;serializer:json"`
 	DynamicParameterBranches []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
 	OverviewPollInterval     string                       `json:"overview_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
@@ -155,6 +156,7 @@ type CreateProvisioningRuleRequest struct {
 }
 
 type CreateProvisioningTemplateRequest struct {
+	RebootAfterBootstrap     *bool                     `json:"reboot_after_bootstrap,omitempty"`
 	Name                     string                    `json:"name"`
 	Manufacturer             string                    `json:"manufacturer"`
 	ProductClass             string                    `json:"product_class"`

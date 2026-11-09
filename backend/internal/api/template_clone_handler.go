@@ -36,6 +36,7 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		OverviewPollInterval     *string                          `json:"overview_poll_interval,omitempty"`
 		FullTreePollInterval     *string                          `json:"full_tree_poll_interval,omitempty"`
 		Snapshots                *models.TemplateSnapshotSettings `json:"snapshots,omitempty"`
+		RebootAfterBootstrap     *bool                            `json:"reboot_after_bootstrap,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -85,13 +86,17 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		body.DynamicParameterBranches = append([]string(nil), source.DynamicParameterBranches...)
 	}
 	clone := models.ProvisioningTemplate{
-		Name: body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
+		RebootAfterBootstrap: source.RebootAfterBootstrap,
+		Name:                 body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
 		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), Variables: source.Variables, Features: source.Features,
 		OverviewPollInterval: overviewInterval, FullTreePollInterval: fullTreeInterval,
 		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
 		CPEInfoFields:  append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),
 		CPEEditWindows: source.CPEEditWindows,
 		Snapshots:      source.Snapshots,
+	}
+	if body.RebootAfterBootstrap != nil {
+		clone.RebootAfterBootstrap = *body.RebootAfterBootstrap
 	}
 	if err := configureTemplateSnapshots(&clone, body.Snapshots, nil); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())

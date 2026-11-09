@@ -2,6 +2,8 @@
 
 | Task | Where | Notes |
 | --- | --- | --- |
+| Operator session lifetimes | [Authentication guide](../authentication.md) → `auth/session_settings.go`, `api/session_settings.go`, `UserSessionSettingsMenu.tsx` | Users Read/Write, top-right Users menu, local/external durations applied at sign-in |
+| Reboot after successful bootstrap | [Bootstrap reboot](../bootstrap-reboot.md) → `cwmp/bootstrap_reboot.go`, template General settings | Opt-in template policy, defaults off, waits for confirmed provisioning, existing template edit permission |
 | Automatic CPE snapshots | [Snapshot automation](../automatic-snapshots.md) → `snapshot_scheduler.go`, `snapshot_automation.go`, `TemplateSnapshotsForm.tsx` | Initial protection, anchored schedules, durable summon/refresh queue, existing Provisioning and CPE permissions |
 | Template CPE edit forms | [Edit windows guide](../cpe-edit-windows.md) → `cpe_edit_window.go`, `CPEEditWindowDesigner.tsx`, `CustomCPEEditModal.tsx` | Writable reference metadata, interface-relative fields, typed selects, existing provisioning/CPE permissions |
 | External billing/API integration | [Integration guide](../integration-api.md) → `backend/internal/api/integration.go`, `api_tokens.go`, `openapi.json`, `internal/auth/api_token.go` | User-linked tokens, serial-based CPE operations, Swagger contract and tests |

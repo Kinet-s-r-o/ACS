@@ -192,7 +192,7 @@ const Provisioning: Component = () => {
   const [templateModalTab, setTemplateModalTab] = createSignal<'general' | 'parameter_refresh' | 'dynamic_parameters' | 'snapshots'>('general');
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
-  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings() });
+  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false });
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
@@ -947,7 +947,7 @@ const Provisioning: Component = () => {
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setCloningTemplate(null);
-    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings() };
+    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -957,7 +957,7 @@ const Provisioning: Component = () => {
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setCloningTemplate(null);
     setEditingTemplate(t);
-    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])], overview_poll_interval: t.overview_poll_interval || '', full_tree_poll_interval: t.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...t.snapshots } };
+    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])], overview_poll_interval: t.overview_poll_interval || '', full_tree_poll_interval: t.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...t.snapshots }, reboot_after_bootstrap: t.reboot_after_bootstrap ?? false };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     void loadTemplateImage(t);
@@ -967,7 +967,7 @@ const Provisioning: Component = () => {
   const openCloneTemplate = (template: ProvisioningTemplate) => {
     setEditingTemplate(null);
     setCloningTemplate(template);
-    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])], overview_poll_interval: template.overview_poll_interval || '', full_tree_poll_interval: template.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...template.snapshots } };
+    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])], overview_poll_interval: template.overview_poll_interval || '', full_tree_poll_interval: template.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...template.snapshots }, reboot_after_bootstrap: template.reboot_after_bootstrap ?? false };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -980,7 +980,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('create-template');
     try {
-      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots });
+      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
       notify({ tone: 'success', title: 'Template created', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -995,7 +995,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('clone-template');
     try {
-      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots });
+      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
       notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, device photo, and LAN layout.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
@@ -1014,7 +1014,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('update-template');
     try {
-      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots });
+      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
       notify({ tone: 'success', title: 'Template updated', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -2223,6 +2223,16 @@ const Provisioning: Component = () => {
               <label for="template-description" class="block text-xs text-muted mb-1.5">Description (optional)</label>
               <input id="template-description" type="text" value={templateForm().description} onInput={(e) => setTemplateForm(f => ({ ...f, description: e.currentTarget.value }))} class="input w-full" placeholder="e.g. Rules for SkyDash AC1000 devices" />
             </div>
+            <fieldset class="space-y-2 rounded border border-subtle p-3">
+              <legend class="px-1 text-xs font-medium text-secondary">Bootstrap completion</legend>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs text-secondary">Reboot after successful bootstrap</span>
+                <BooleanIndicator value={templateForm().reboot_after_bootstrap} label="Reboot after successful bootstrap" editable={can('settings.provisioning.templates', 'edit')} disabled={pendingAction() !== null}
+                  confirmation={{ title: templateForm().reboot_after_bootstrap ? 'Disable reboot after bootstrap?' : 'Enable reboot after bootstrap?', description: templateForm().reboot_after_bootstrap ? 'After saving, future bootstrap sessions will finish without an automatic reboot.' : 'After saving, ONTs matching this template will reboot after their bootstrap rules succeed. This temporarily interrupts ONT services. Ordinary BOOT events do not trigger this action.', confirmLabel: templateForm().reboot_after_bootstrap ? 'Disable' : 'Enable', tone: 'danger' }}
+                  onToggle={async () => { setTemplateForm(form => ({ ...form, reboot_after_bootstrap: !form.reboot_after_bootstrap })); }} />
+              </div>
+              <p class="text-xs text-muted">Disabled by default. Queues one reboot after at least one applicable bootstrap rule succeeds and all provisioning operations finish. A provisioning failure prevents the reboot. Enabling this does not reboot existing ONTs immediately.</p>
+            </fieldset>
             <Show when={cloningTemplate()}><p class="text-xs text-muted">Rules, matching metrics, interface metrics, variables, advanced settings, the device photo, and LAN layout will be copied. Set the identity for the new device type.</p></Show>
             <Show when={editingTemplate()}>
               <div class="space-y-2">

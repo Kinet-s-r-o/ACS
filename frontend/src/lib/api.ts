@@ -134,7 +134,8 @@ export interface CPEEditWindow { version: 1; target: CPEEditTarget; enabled: boo
 export interface CPEEditParameterMetadata { name: string; type: CPEEditType; target: CPEEditTarget; base_pattern: string; parameter: string }
 export interface CPEHelpParameterMetadata { name: string; type: string; target: string; base_pattern: string; parameter: string }
 export interface TemplateSnapshotSettings { initial_enabled: boolean; initial_delay_minutes: number; scheduled_enabled: boolean; scheduled_interval_minutes: number }
-export interface ProvisioningTemplate { cpe_edit_windows?: CPEEditWindow[]; snapshots?: TemplateSnapshotSettings; snapshot_initial_since?: string }
+export interface UserSessionSettings { local_minutes: number; external_minutes: number }
+export interface ProvisioningTemplate { cpe_edit_windows?: CPEEditWindow[]; reboot_after_bootstrap?: boolean; snapshots?: TemplateSnapshotSettings; snapshot_initial_since?: string }
 export interface CPEEditWindowState { window: CPEEditWindow | null; parameters: DeviceParameter[] }
 
 export interface DatabaseIndexColumn {
@@ -384,6 +385,8 @@ export const api = {
   saveRadiusSettings: (settings: RadiusConfig) => request<RadiusConfig>('/settings/authentication/radius', { method: 'PUT', body: JSON.stringify(settings) }),
   testRadius: (username: string, password: string) => request<{ status: string }>('/settings/authentication/radius/test', { method: 'POST', body: JSON.stringify({ username, password }) }),
   getUsers: () => request<User[]>('/users'),
+  getUserSessionSettings: () => request<UserSessionSettings>('/users/session-settings'),
+  updateUserSessionSettings: (settings: UserSessionSettings) => request<UserSessionSettings>('/users/session-settings', { method: 'PUT', body: JSON.stringify(settings) }),
   deleteUser: (id: number) => request<void>(`/users/${id}`, { method: 'DELETE' }),
   exportAccounts: (kind: 'users' | 'roles', ids: number[]) => requestBlob(`/${kind}/export`, { method: 'POST', body: JSON.stringify({ ids }) }),
   importAccounts: (kind: 'users' | 'roles', backup: unknown) => request<{ created: number; skipped: number }>(`/${kind}/import`, { method: 'POST', body: JSON.stringify(backup) }),
@@ -415,9 +418,9 @@ export const api = {
   saveEditWindows: (id: number, referenceSerial: string, windows: CPEEditWindow[]) => request<{ cpe_edit_windows: CPEEditWindow[] }>(`/provisioning/templates/${id}/edit-windows`, { method: 'PUT', body: JSON.stringify({ reference_serial: referenceSerial, windows }) }),
   getCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string) => request<CPEEditWindowState>(`/device/${encodeURIComponent(serial)}/edit-window?target=${target}&prefix=${encodeURIComponent(prefix)}`),
   applyCPEEditWindow: (serial: string, target: CPEEditTarget, prefix: string, parameters: Record<string, string>) => request<Task>(`/device/${encodeURIComponent(serial)}/edit-window`, { method: 'POST', body: JSON.stringify({ target, prefix, parameters }) }),
-  createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; snapshots?: TemplateSnapshotSettings }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
-  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; snapshots?: TemplateSnapshotSettings }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
-  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; snapshots?: TemplateSnapshotSettings; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createProvisioningTemplate: (body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; reboot_after_bootstrap?: boolean; snapshots?: TemplateSnapshotSettings }) => request<ProvisioningTemplate>('/provisioning/templates', { method: 'POST', body: JSON.stringify(body) }),
+  cloneProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; reboot_after_bootstrap?: boolean; snapshots?: TemplateSnapshotSettings }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}/clone`, { method: 'POST', body: JSON.stringify(body) }),
+  updateProvisioningTemplate: (id: number, body: { name: string; manufacturer?: string; product_class?: string; description?: string; inventory?: TemplateInventory; dynamic_parameter_branches?: string[]; overview_poll_interval?: string; full_tree_poll_interval?: string; reboot_after_bootstrap?: boolean; snapshots?: TemplateSnapshotSettings; variables?: ProvisioningVariable[] }) => request<ProvisioningTemplate>(`/provisioning/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvisioningTemplate: (id: number) => request<{ status: string }>(`/provisioning/templates/${id}`, { method: 'DELETE' }),
   getProvisioningTemplateImage: (id: number) => requestBlob(`/provisioning/templates/${id}/image`),
   uploadProvisioningTemplateImage: (id: number, file: File) => {

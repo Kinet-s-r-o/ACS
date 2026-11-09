@@ -106,6 +106,8 @@ func splitPermission(key string) (string, string, bool) {
 
 func settingSection(key string) string {
 	switch {
+	case key == auth.LocalSessionMinutesSetting || key == auth.ExternalSessionMinutesSetting:
+		return "settings.users"
 	case strings.HasPrefix(key, "retention_") || strings.HasPrefix(key, "compression_"):
 		return "settings.database.retention"
 	case key == "fleet_aggregation_options":

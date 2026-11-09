@@ -25,6 +25,7 @@ type provisioningTransfer struct {
 }
 
 type provisioningTransferTemplate struct {
+	RebootAfterBootstrap     bool                                `json:"reboot_after_bootstrap"`
 	Name                     string                              `json:"name"`
 	Manufacturer             string                              `json:"manufacturer"`
 	ProductClass             string                              `json:"product_class"`
@@ -74,7 +75,8 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 		}
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
-			Description: template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
+			RebootAfterBootstrap: template.RebootAfterBootstrap,
+			Description:          template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, Variables: template.Variables, Features: template.Features,
 			OverviewPollInterval: template.OverviewPollInterval, FullTreePollInterval: template.FullTreePollInterval,
 			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
 			CPEInfoFields:  template.CPEInfoFields,
@@ -206,7 +208,8 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 				return err
 			}
 			template := models.ProvisioningTemplate{
-				Name: item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
+				RebootAfterBootstrap: item.RebootAfterBootstrap,
+				Name:                 item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
 				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, Variables: item.Variables, Features: item.Features,
 				OverviewPollInterval: item.OverviewPollInterval, FullTreePollInterval: item.FullTreePollInterval,
 				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,

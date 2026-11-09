@@ -47,6 +47,7 @@ type Session struct {
 	DynamicDiscoveryVerification    *DynamicInstanceVerification
 	InformEvents                    []string
 	Provisioning                    *SetParameterValues
+	BootstrapReboot                 bootstrapRebootState
 	ProvisioningRules               []models.ProvisioningApplication
 	ProvisioningVariables           map[string]string
 	// PendingSetParameters mirrors the last SetParameterValues request. A

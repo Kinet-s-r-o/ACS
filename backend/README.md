@@ -1,5 +1,9 @@
 # Backend area router
 
+Operator session lifetimes: [authentication guide](../docs/authentication.md), `auth/session_settings.go`, `api/session_settings.go`, and `finishLogin` in `api/router.go`. `/users/session-settings` uses Users Read/Write. Missing keys retain 24h local / 1h external defaults; existing sessions and 2FA challenge lifetime are unaffected. Read only the two policy keys during login and fail without issuing a token if loading/validation fails.
+
+Optional [reboot after bootstrap](../docs/bootstrap-reboot.md): template `reboot_after_bootstrap` defaults false. `cwmp/bootstrap_reboot.go`, `handler.go`, and `session.go` gate a recorded reboot task on confirmed bootstrap applications with no pending provisioning or failures. Preserve the option in template CRUD, clone, and transfer; omitted updates retain it. No new indexes or grants.
+
 Automatic template snapshots: [automation guide](../docs/automatic-snapshots.md), `internal/cwmp/snapshot_scheduler.go`, `internal/database/snapshot_automation.go`, `snapshot_repository.go` and system-task completion. Preserve atomic snapshot/job/device markers and initial-snapshot protection in deletion and retention.
 
 Template CPE edit form definitions and validation: [edit windows guide](../docs/cpe-edit-windows.md), `internal/api/cpe_edit_window.go` and `internal/models/cpe_edit_window.go`.

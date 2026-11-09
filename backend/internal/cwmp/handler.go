@@ -396,6 +396,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 
 	hasBootstrap := hasEvent(inform, EventBootstrap)
+	bootstrapReboot := bootstrapRebootForInform(inform, resolvedTemplate)
 	var provisioning *SetParameterValues
 	var provisioningRules []models.ProvisioningApplication
 	var addObjectQueue []*AddObject
@@ -454,6 +455,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			}
 		}
 		if values, err := resolveProvisioningVariables(template.Variables, inform.DeviceId, parameterValues, applicationSecret); err != nil {
+			bootstrapReboot.Failed = true
 			logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Could not resolve provisioning variables: %v", err)
 		} else {
 			provisioningVariableValues = values
@@ -464,6 +466,8 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 		defaultRules, err := h.provisioningRepo.ListPendingForDevice(ctx, deviceID, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass, "default")
 		if err == nil {
 			allRules = append(allRules, defaultRules...)
+		} else {
+			bootstrapReboot.Failed = true
 		}
 
 		// Bootstrap phase rules: on BOOTSTRAP event the CPE is in factory state,
@@ -472,6 +476,11 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			bootstrapRules, err := h.provisioningRepo.ListForDevice(ctx, deviceID, inform.DeviceId.Manufacturer, inform.DeviceId.ProductClass, "bootstrap")
 			if err == nil {
 				allRules = append(allRules, bootstrapRules...)
+				for _, rule := range bootstrapRules {
+					bootstrapReboot.RuleIDs[rule.ID] = true
+				}
+			} else {
+				bootstrapReboot.Failed = true
 			}
 		}
 
@@ -492,6 +501,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 					value, err := expandProvisioningValue(rule.ParameterValue, provisioningVariableValues)
 					if err != nil {
 						logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Could not expand provisioning rule %d: %v", rule.ID, err)
+						bootstrapReboot.Failed = true
 						continue
 					}
 					provisioningRules = append(provisioningRules, models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version})
@@ -523,6 +533,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 					cond, err := ParseCondition(rule.Condition)
 					if err != nil {
 						logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Invalid condition on rule %d: %v (skipping)", rule.ID, err)
+						bootstrapReboot.Failed = true
 						continue
 					}
 					app := models.ProvisioningApplication{RuleID: rule.ID, RuleVersion: rule.Version}
@@ -579,6 +590,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DynamicParameterBranches = dynamicBranches
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
+	session.BootstrapReboot = bootstrapReboot
 	session.InformStaggerPending = informStagger != nil && hasSetParameter(provisioning, informStagger.ParameterName)
 	if informStagger != nil {
 		session.InformStaggerInterval = informStagger.Interval
@@ -745,6 +757,12 @@ func (h *Handler) nextSessionRequest(ctx context.Context, session *Session) (int
 	}
 	if session.ConditionalFetchActive && len(session.ConditionalExistsPaths) == 0 && len(session.PendingConditionalParams) == 0 {
 		h.evaluateConditionalRules(session, h.buildDeviceAttrs(ctx, session.DeviceID))
+		if session.bootstrapRebootReady() {
+			request, err := h.getNextTask(ctx, session)
+			if err != nil || request != nil {
+				return request, namespace, err
+			}
+		}
 	}
 	if len(session.AddObjectQueue) > 0 && session.AddObjectPhase < len(session.AddObjectQueue) {
 		nextObj := session.AddObjectQueue[session.AddObjectPhase]
@@ -1141,6 +1159,9 @@ func (h *Handler) handleSetParameterValuesResponse(ctx context.Context, resp *Se
 	session.LastSentContext = ""
 	pendingParameters := session.PendingSetParameters
 	session.PendingSetParameters = nil
+	if resp.Status != 0 && resp.Status != 1 {
+		session.BootstrapReboot.Failed = true
+	}
 	if resp.Status == 0 && h.parameterRepo != nil && session.DeviceID > 0 && len(pendingParameters) > 0 {
 		params := make([]models.DeviceParameter, 0, len(pendingParameters))
 		for _, parameter := range pendingParameters {
@@ -1178,6 +1199,7 @@ func (h *Handler) handleSetParameterValuesResponse(ctx context.Context, resp *Se
 				return nil, fmt.Errorf("record provisioning application: %w", err)
 			}
 		}
+		session.confirmBootstrapProvisioning()
 		session.ProvisioningRules = nil
 		return h.getNextTask(ctx, session)
 	}
@@ -1224,6 +1246,9 @@ func (h *Handler) handleAddObjectResponse(ctx context.Context, resp *AddObjectRe
 	}
 
 	// Preserve every AddObject result so later rules can refer to any instance.
+	if (resp.Status != 0 && resp.Status != 1) || strings.Trim(resp.InstanceNumber, "0") == "" || strings.IndexFunc(resp.InstanceNumber, func(value rune) bool { return value < '0' || value > '9' }) >= 0 {
+		session.BootstrapReboot.Failed = true
+	}
 	session.AddObjectInstances = append(session.AddObjectInstances, resp.InstanceNumber)
 	session.AddObjectPhase++
 
@@ -1248,6 +1273,7 @@ func (h *Handler) handleAddObjectResponse(ctx context.Context, resp *AddObjectRe
 			return nil, fmt.Errorf("record add-object provisioning application: %w", err)
 		}
 	}
+	session.confirmBootstrapProvisioning()
 	session.ProvisioningRules = nil
 	return h.getNextTask(ctx, session)
 }
@@ -1342,6 +1368,7 @@ func (h *Handler) evaluateConditionalRules(session *Session, params map[string]s
 		result, err := Evaluate(cond, params)
 		if err != nil {
 			log.Printf("Error evaluating condition for rule %d: %v (skipping)", session.PendingConditionalRules[i].RuleID, err)
+			session.BootstrapReboot.Failed = true
 			continue
 		}
 		if !result {
@@ -1357,6 +1384,7 @@ func (h *Handler) evaluateConditionalRules(session *Session, params map[string]s
 			value, err := expandProvisioningValue(rule.ParameterValue, session.ProvisioningVariables)
 			if err != nil {
 				log.Printf("Could not expand conditional provisioning rule %d for device %s: %v", rule.ID, session.SerialNumber, err)
+				session.BootstrapReboot.Failed = true
 				continue
 			}
 			satisfiedApps = append(satisfiedApps, session.PendingConditionalRules[i])
@@ -1369,15 +1397,13 @@ func (h *Handler) evaluateConditionalRules(session *Session, params map[string]s
 	}
 
 	// Merge into existing provisioning or create new
-	if len(spvParams) > 0 || len(addObjectQueue) > 0 {
+	if len(spvParams) > 0 {
 		if session.Provisioning == nil {
 			session.Provisioning = &SetParameterValues{ParameterKey: "auto-provisioning"}
 		}
 		session.Provisioning.ParameterList.Parameters = append(session.Provisioning.ParameterList.Parameters, spvParams...)
-		if len(addObjectQueue) > 0 {
-			session.AddObjectQueue = append(session.AddObjectQueue, addObjectQueue...)
-		}
 	}
+	session.AddObjectQueue = append(session.AddObjectQueue, addObjectQueue...)
 
 	// Track satisfied rules for MarkApplied
 	session.ProvisioningRules = append(session.ProvisioningRules, satisfiedApps...)
@@ -1543,11 +1569,16 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 			// faults must not make NOT exists(...) apply a rule.
 			if faultCode == "9005" {
 				value = "false"
+			} else {
+				session.BootstrapReboot.Failed = true
 			}
 			session.ConditionalExistsResults[conditionExistsKey(path)] = value
 			session.ConditionalExistsCurrent = ""
 			request, _, err := h.nextSessionRequest(ctx, session)
 			return request, err
+		}
+		if session.CurrentTaskID == 0 && (len(session.ProvisioningRules) > 0 || len(session.AddObjectQueue) > 0 || len(session.PendingConditionalRules) > 0) {
+			session.BootstrapReboot.Failed = true
 		}
 		if faultCode == "9005" {
 			if request := startDynamicInstanceVerification(session, faultMessage); request != nil {
@@ -1657,6 +1688,9 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 		}
 	}
 
+	if err := h.queueBootstrapReboot(ctx, session); err != nil {
+		return nil, err
+	}
 	for {
 		task, err := h.taskRepo.ClaimNextPending(ctx, session.DeviceID, session.InformEvents)
 		if err != nil {
