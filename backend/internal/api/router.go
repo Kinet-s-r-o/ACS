@@ -1709,8 +1709,8 @@ func (r *Router) handleUpdateSettings(w http.ResponseWriter, req *http.Request) 
 	}
 	if value, ok := settings["default_page_size"]; ok {
 		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < 5 || parsed > 500 {
-			respondError(w, http.StatusBadRequest, "default_page_size must be an integer between 5 and 500")
+		if err != nil || parsed < 5 || parsed > 1000 {
+			respondError(w, http.StatusBadRequest, "default_page_size must be an integer between 5 and 1000")
 			return
 		}
 	}

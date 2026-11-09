@@ -69,8 +69,8 @@ const GeneralSettings: Component = () => {
 
   const handleSave = async () => {
     const pageSize = parseInt(getValue('default_page_size'), 10);
-    if (isNaN(pageSize) || pageSize < 5 || pageSize > 500) {
-      notify({ tone: 'error', title: 'Invalid value', message: 'Default page size must be between 5 and 500.' });
+    if (isNaN(pageSize) || pageSize < 5 || pageSize > 1000) {
+      notify({ tone: 'error', title: 'Invalid value', message: 'Default page size must be between 5 and 1000.' });
       return;
     }
     const appName = getValue('app_name').trim();
@@ -210,7 +210,7 @@ const GeneralSettings: Component = () => {
                 id="default-page-size"
                 type="number"
                 min={5}
-                max={500}
+                max={1000}
                 value={getValue('default_page_size') || '20'}
                 onInput={(e) => setFormData((prev) => ({ ...prev, default_page_size: e.currentTarget.value }))}
                 placeholder="20"
