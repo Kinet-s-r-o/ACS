@@ -3562,6 +3562,7 @@ func (r *Router) finishLogin(w http.ResponseWriter, req *http.Request, user *mod
 	r.recordLoginAudit(req, user.Username, http.StatusOK)
 	clearTwoFactorChallengeCookie(w, req)
 	setSessionCookies(w, req, token, csrfToken)
+	user.TwoFactorConfigured = user.TwoFactorSecret != ""
 	var perms []string
 	if user.RoleID != nil {
 		perms, _ = r.roleRepo.GetPermissions(req.Context(), *user.RoleID)
@@ -3606,6 +3607,7 @@ func (r *Router) handleAuthMe(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	user.TwoFactorConfigured = user.TwoFactorSecret != ""
 	perms := auth.GetPermissionsFromContext(req.Context())
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"user":        user,
