@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectTableRecords } from '../src/lib/tableSelection.ts';
+import { createTableRangeSelection, selectTableRecords } from '../src/lib/tableSelection.ts';
 
 class Element {
   controls = [];
@@ -18,11 +18,13 @@ class Element {
 }
 
 class Input extends Element {
+  dataset = {};
   type = 'checkbox';
   checked = false;
   disabled = false;
   clicks = 0;
-  click() { this.checked = !this.checked; this.clicks++; }
+  hasAttribute(name) { return name === 'data-table-select-all' && this.selectAll; }
+  click() { this.checked = !this.checked; this.clicks++; this.onClick?.({ target: this }); }
 }
 
 const setup = () => {
@@ -100,4 +102,79 @@ test('unmodified and already handled shortcuts retain their behavior', () => {
   assert.equal(control.clicks, 0);
   press({ ctrlKey: false, metaKey: true });
   assert.equal(control.checked, true);
+});
+
+const rangeSetup = () => {
+  const { main, dialogs } = setup();
+  const handlers = createTableRangeSelection();
+  const table = new Element();
+  const rows = Array.from({ length: 5 }, (_, index) => {
+    const row = new Input();
+    row.table = table;
+    row.dataset.tableSelectRow = String(index);
+    row.onClick = handlers.click;
+    return row;
+  });
+  table.controls = rows;
+  main.controls = [table];
+  const click = (index, shiftKey = false) => {
+    rows[index].checked = !rows[index].checked;
+    handlers.click({ target: rows[index], shiftKey });
+  };
+  const press = (index, repeat = false) => {
+    const event = { target: rows[index], key: ' ', shiftKey: true, repeat, preventDefault() { this.defaultPrevented = true; } };
+    handlers.keyDown(event);
+    return event;
+  };
+  return { rows, table, dialogs, click, press, handlers };
+};
+
+test('Shift+click selects an inclusive range and keeps other selections', () => {
+  const { rows, click } = rangeSetup();
+  rows[4].checked = true;
+  click(3);
+  click(1, true);
+  assert.deepEqual(rows.map(row => row.checked), [false, true, true, true, true]);
+  click(0, true);
+  assert.deepEqual(rows.map(row => row.checked), [true, true, true, true, true]);
+});
+
+test('Shift+click on a checked endpoint clears the range and skips disabled rows', () => {
+  const { rows, click } = rangeSetup();
+  click(0);
+  click(4, true);
+  rows[2].disabled = true;
+  click(3, true);
+  assert.deepEqual(rows.map(row => row.checked), [false, false, true, false, true]);
+});
+
+test('Shift+Space selects the same range without toggling again on key repeat', () => {
+  const { rows, click, press } = rangeSetup();
+  click(1);
+  assert.equal(press(4).defaultPrevented, true);
+  press(4, true);
+  assert.deepEqual(rows.map(row => row.checked), [false, true, true, true, true]);
+});
+
+test('a first Shift+Space selects one row and anchors the next range', () => {
+  const { rows, press } = rangeSetup();
+  press(2);
+  press(4);
+  assert.deepEqual(rows.map(row => row.checked), [false, false, true, true, true]);
+});
+
+test('a reused anchor representing another record cannot extend a stale range', () => {
+  const { rows, click } = rangeSetup();
+  click(0);
+  rows[0].dataset.tableSelectRow = 'new-page-record';
+  click(4, true);
+  assert.deepEqual(rows.map(row => row.checked), [true, false, false, false, true]);
+});
+
+test('an open modal prevents keyboard range selection in the underlying table', () => {
+  const { rows, dialogs, click, press } = rangeSetup();
+  click(0);
+  dialogs.push(new Element());
+  assert.equal(press(4).defaultPrevented, undefined);
+  assert.deepEqual(rows.map(row => row.checked), [true, false, false, false, false]);
 });

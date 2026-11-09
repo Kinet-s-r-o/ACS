@@ -3444,7 +3444,7 @@ const DeviceDetail: Component = () => {
                               </td>
                               <Show when={can('faults', 'delete')}>
                                 <td class="px-3 py-2">
-                                  <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
+                                  <input data-table-select-row={fault.id} type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
                                 </td>
                               </Show>
                               <td data-column-order-id="code#0" class="px-4 py-2">

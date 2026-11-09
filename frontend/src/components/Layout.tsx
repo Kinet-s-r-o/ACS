@@ -11,7 +11,7 @@ import { APP_VERSION } from '../lib/version';
 import { appName, appLogo } from '../lib/appName';
 import ThemeSwitcher from './ThemeSwitcher';
 import { enableTableColumnReordering } from '../lib/tableColumnReorder';
-import { selectTableRecords } from '../lib/tableSelection';
+import { createTableRangeSelection, selectTableRecords } from '../lib/tableSelection';
 import { playUITransition, transitionSettingsFromAPI, updateUITransitionSettings } from '../lib/uiTransitions';
 
 const navigation = [
@@ -94,6 +94,7 @@ const Layout: ParentComponent = (props) => {
   };
   onMount(() => {
     const disableTableColumnReordering = enableTableColumnReordering(() => location.pathname);
+    const rangeSelection = createTableRangeSelection();
     void api.getSettings().then(values => updateUITransitionSettings(transitionSettingsFromAPI(values))).catch(() => {});
     const media = window.matchMedia('(min-width: 1024px)');
     const updateViewport = () => setDesktopViewport(media.matches);
@@ -113,8 +114,10 @@ const Layout: ParentComponent = (props) => {
     };
     document.addEventListener('keydown', closeOnEscape);
     document.addEventListener('keydown', selectTableRecords);
+    document.addEventListener('keydown', rangeSelection.keyDown);
+    document.addEventListener('click', rangeSelection.click);
     document.addEventListener('click', animateSectionSwitch);
-    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('keydown', selectTableRecords); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
+    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('keydown', selectTableRecords); document.removeEventListener('keydown', rangeSelection.keyDown); document.removeEventListener('click', rangeSelection.click); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
   });
 
   const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();

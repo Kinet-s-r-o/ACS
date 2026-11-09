@@ -360,7 +360,7 @@ const Faults: Component = () => {
                       <tr class="border-t border-subtle/50 hover:bg-elevated/30">
                         <Show when={isFullAccess()}>
                           <td class="px-3 py-3">
-                            <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedFaults().has(fault.id)} onChange={() => toggleSelect(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
+                            <input data-table-select-row={fault.id} type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedFaults().has(fault.id)} onChange={() => toggleSelect(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
                           </td>
                         </Show>
                         <Show when={isVisible('serial_number')}>

@@ -271,7 +271,7 @@ const Tasks: Component = () => {
                     <For each={pagedTasks()}>
                       {(task) => (
                         <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                          <Show when={canCurrent('delete')}><td class="px-3 py-2">{task.status === 'pending' ? <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedTasks().has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select pending task ${task.id}`} /> : null}</td></Show>
+                          <Show when={canCurrent('delete')}><td class="px-3 py-2">{task.status === 'pending' ? <input data-table-select-row={task.id} type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedTasks().has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select pending task ${task.id}`} /> : null}</td></Show>
                           <Show when={isTaskColumnVisible('serial_number')}><td data-column-order-id="serial number#0" class="px-4 py-2"><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(task.serial_number)}?tab=tasks`} aria-label={`Open tasks for CPE ${task.serial_number}`}>{task.serial_number}</A></td></Show>
                           <Show when={isTaskColumnVisible('type')}><td data-column-order-id="type#0" class="px-4 py-2 text-primary">{task.type}</td></Show>
                           <Show when={isTaskColumnVisible('trigger_event')}><td data-column-order-id="trigger event#0" class="px-4 py-2 text-secondary text-xs">{formatTriggerEvents(task.trigger_events)}</td></Show>
