@@ -1,7 +1,8 @@
 import type { Component } from 'solid-js';
-import { createSignal, Show, For, onCleanup } from 'solid-js';
+import { createEffect, createSignal, Show, For, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Filter, Plus, X } from 'lucide-solid';
+import { floatingPanelPosition } from '../lib/floatingPanel';
 import {
   type ColumnFilterState,
   type FilterOperator,
@@ -20,6 +21,7 @@ interface ColumnFilterProps {
 
 const ColumnFilter: Component<ColumnFilterProps> = (props) => {
   const [open, setOpen] = createSignal(false);
+  const [pos, setPos] = createSignal<{ top: number; left: number } | null>(null);
   const [logic, setLogic] = createSignal<FilterLogic>(props.active?.logic ?? 'all');
   const [rules, setRules] = createSignal<{ operator: FilterOperator; value: string }[]>(
     props.active?.rules?.length ? props.active.rules : [{ operator: 'contains', value: '' }]
@@ -34,31 +36,19 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
     }
   };
 
-  const positionPanel = (panel: HTMLDivElement) => {
-    if (!btnRef) return;
-
-    const viewportPadding = 8;
-    const buttonRect = btnRef.getBoundingClientRect();
-
-    // Start below the trigger so the panel can be measured before choosing
-    // whether it needs to open left-aligned or above the trigger.
-    panel.style.top = `${buttonRect.bottom + 4}px`;
-    panel.style.left = `${buttonRect.left}px`;
-
-    const panelRect = panel.getBoundingClientRect();
-    const maxLeft = Math.max(viewportPadding, window.innerWidth - panelRect.width - viewportPadding);
-    const left = Math.min(buttonRect.left, maxLeft);
-    const opensBelow = buttonRect.bottom + 4 + panelRect.height <= window.innerHeight - viewportPadding;
-    const preferredTop = opensBelow ? buttonRect.bottom + 4 : buttonRect.top - panelRect.height - 4;
-    const maxTop = Math.max(viewportPadding, window.innerHeight - panelRect.height - viewportPadding);
-    const top = Math.min(Math.max(viewportPadding, preferredTop), maxTop);
-
-    panel.style.top = `${top}px`;
-    panel.style.left = `${left}px`;
+  const positionPanel = () => {
+    if (!open() || !btnRef || !panelRef) return;
+    const anchor = btnRef.getBoundingClientRect();
+    if (anchor.bottom < 0 || anchor.top > window.innerHeight || anchor.right < 0 || anchor.left > window.innerWidth) {
+      setOpen(false);
+      return;
+    }
+    setPos(floatingPanelPosition(anchor, panelRef.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }));
   };
 
   const toggle = () => {
     if (!open()) {
+      setPos(null);
       setLogic(props.active?.logic ?? 'all');
       setRules(props.active?.rules?.length ? props.active.rules : [{ operator: 'contains', value: '' }]);
     }
@@ -100,8 +90,40 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
     setOpen(false);
   };
 
-  onCleanup(() => {
-    document.removeEventListener('click', handleClickOutside);
+  const close = () => { setOpen(false); btnRef?.focus(); };
+
+  createEffect(() => {
+    if (!open()) return;
+    let active = true;
+    const observer = new ResizeObserver(positionPanel);
+    // Portal refs run before insertion; measure only after the panel is mounted.
+    queueMicrotask(() => {
+      if (!active || !open() || !panelRef) return;
+      positionPanel();
+      observer.observe(panelRef);
+    });
+    const handleScroll = (event: Event) => {
+      if (event.target instanceof Node && panelRef?.contains(event.target)) return;
+      positionPanel();
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('scroll', handleScroll, true);
+    document.addEventListener('keydown', handleEscape, true);
+    window.addEventListener('resize', positionPanel);
+    onCleanup(() => {
+      active = false;
+      observer.disconnect();
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('keydown', handleEscape, true);
+      window.removeEventListener('resize', positionPanel);
+    });
   });
 
   return (
@@ -123,17 +145,13 @@ const ColumnFilter: Component<ColumnFilterProps> = (props) => {
         <Portal>
           <div
             class="filter-dropdown"
-            ref={(el) => {
-              panelRef = el;
-              el.style.position = 'fixed';
-              positionPanel(el);
-              document.addEventListener('click', handleClickOutside);
-            }}
-            onClick={(e) => e.stopPropagation()}
+            ref={panelRef}
+            data-dynamic-style="Filter menu anchored to its trigger and constrained to the viewport"
+            style={{ top: `${pos()?.top ?? 8}px`, left: `${pos()?.left ?? 8}px`, visibility: pos() ? 'visible' : 'hidden' }}
           >
             <div class="filter-dropdown-header">
               <span class="filter-dropdown-title">{props.label}</span>
-              <button type="button" class="filter-dropdown-close" onClick={() => setOpen(false)} aria-label="Close filter">
+              <button type="button" class="filter-dropdown-close" onClick={close} aria-label="Close filter">
                 <X size={12} />
               </button>
             </div>

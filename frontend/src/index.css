@@ -427,26 +427,26 @@ table tbody td :is(.text-primary, .text-secondary, .text-muted):not(.badge):not(
 .filter-toggle:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
 .filter-toggle-active { color: rgb(var(--accent)); }
 .filter-badge { position: absolute; top: -4px; right: -4px; min-width: 12px; height: 12px; display: grid; place-items: center; padding: 0 2px; font-size: 8px; font-weight: 700; color: white; background: rgb(var(--accent)); border-radius: 6px; line-height: 1; }
-.filter-dropdown { z-index: 110; width: 320px; max-width: calc(100vw - 16px); box-sizing: border-box; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
-.filter-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
+.filter-dropdown { position: fixed; z-index: 110; display: flex; flex-direction: column; width: 320px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); box-sizing: border-box; background: rgb(var(--bg-surface)); border: 1px solid rgb(var(--border-default)); border-radius: var(--radius-control); box-shadow: 0 12px 32px rgb(0 0 0 / .28); }
+.filter-dropdown-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
 .filter-dropdown-title { font-size: 11px; font-weight: 600; color: rgb(var(--text-primary)); }
 .filter-dropdown-close { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }
 .filter-dropdown-close:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
-.filter-dropdown-body { padding: 4px 12px 10px; }
+.filter-dropdown-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 10px; }
 .filter-dropdown-label { display: block; font-size: 10px; font-weight: 600; color: rgb(var(--text-muted)); margin-bottom: 4px; }
 .filter-dropdown-select { width: 100%; min-height: 28px; padding: 4px 8px; font-size: 11px; color: rgb(var(--text-primary)); background: rgb(var(--bg-base) / .45); border: 1px solid rgb(var(--border-default)); border-radius: 3px; appearance: auto; }
 .filter-dropdown-select:focus { outline: 0; border-color: rgb(var(--accent)); }
 .filter-rules { margin-top: 8px; display: grid; gap: 6px; }
 .filter-rule { display: flex; align-items: center; gap: 4px; }
 .filter-rule-op { flex: 0 0 100px; min-width: 100px; }
-.filter-rule-input { flex: 1; min-height: 28px; padding: 4px 8px; font-size: 11px; color: rgb(var(--text-primary)); background: rgb(var(--bg-base) / .45); border: 1px solid rgb(var(--border-default)); border-radius: 3px; }
+.filter-rule-input { flex: 1; min-width: 0; min-height: 28px; padding: 4px 8px; font-size: 11px; color: rgb(var(--text-primary)); background: rgb(var(--bg-base) / .45); border: 1px solid rgb(var(--border-default)); border-radius: 3px; }
 .filter-rule-input:focus { outline: 0; border-color: rgb(var(--accent)); }
 .filter-rule-input::placeholder { color: rgb(var(--text-muted)); }
 .filter-rule-remove { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; color: rgb(var(--text-muted)); background: transparent; border: 0; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
 .filter-rule-remove:hover { color: rgb(var(--error-text)); background: rgb(var(--error) / .1); }
 .filter-add-rule { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; padding: 4px 8px; font-size: 10px; font-weight: 600; color: rgb(var(--accent)); background: transparent; border: 1px dashed rgb(var(--accent) / .4); border-radius: 3px; cursor: pointer; }
 .filter-add-rule:hover { background: rgb(var(--accent) / .08); }
-.filter-dropdown-footer { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 8px 12px; border-top: 1px solid rgb(var(--border-subtle)); }
+.filter-dropdown-footer { display: flex; flex-shrink: 0; align-items: center; justify-content: flex-end; gap: 6px; padding: 8px 12px; border-top: 1px solid rgb(var(--border-subtle)); }
 .filter-btn-clear { padding: 4px 10px; font-size: 10px; font-weight: 600; color: rgb(var(--text-muted)); background: transparent; border: 1px solid rgb(var(--border-default)); border-radius: 3px; cursor: pointer; }
 .filter-btn-clear:hover { color: rgb(var(--text-primary)); background: rgb(var(--bg-elevated)); }
 .filter-btn-apply { padding: 4px 10px; font-size: 10px; font-weight: 600; color: white; background: rgb(var(--action-primary)); border: 1px solid rgb(var(--action-primary)); border-radius: 3px; cursor: pointer; }
