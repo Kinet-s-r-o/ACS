@@ -277,7 +277,7 @@ const Faults: Component = () => {
                   <tr class="border-b border-subtle bg-surface/50">
                     <Show when={isFullAccess()}>
                       <th class="px-3 py-3 w-8">
-                        <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={toggleSelectAll} aria-label="Select all faults on this page" />
+                        <input data-table-select-all type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={toggleSelectAll} aria-label="Select all faults on this page" />
                       </th>
                     </Show>
                     <Show when={isVisible('serial_number')}>

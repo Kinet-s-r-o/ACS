@@ -11,6 +11,7 @@ import { APP_VERSION } from '../lib/version';
 import { appName, appLogo } from '../lib/appName';
 import ThemeSwitcher from './ThemeSwitcher';
 import { enableTableColumnReordering } from '../lib/tableColumnReorder';
+import { selectTableRecords } from '../lib/tableSelection';
 import { playUITransition, transitionSettingsFromAPI, updateUITransitionSettings } from '../lib/uiTransitions';
 
 const navigation = [
@@ -111,8 +112,9 @@ const Layout: ParentComponent = (props) => {
       }
     };
     document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('keydown', selectTableRecords);
     document.addEventListener('click', animateSectionSwitch);
-    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
+    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('keydown', selectTableRecords); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
   });
 
   const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();

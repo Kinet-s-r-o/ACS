@@ -3400,7 +3400,7 @@ const DeviceDetail: Component = () => {
                           <th class="px-3 py-2 w-8" aria-label="Fault details" />
                           <Show when={can('faults', 'delete')}>
                             <th class="px-3 py-2 w-8">
-                              <input type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
+                              <input data-table-select-all type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
                             </th>
                           </Show>
                           <th data-column-order-id="code#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
