@@ -163,7 +163,12 @@ func (r *ProvisioningRepository) Create(ctx context.Context, rule *models.Provis
 		}
 		stored.ParameterValue = value
 	}
-	if err := r.db.WithContext(ctx).Create(&stored).Error; err != nil {
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := validateProvisioningPhaseWrite(tx, &stored); err != nil {
+			return err
+		}
+		return tx.Create(&stored).Error
+	}); err != nil {
 		return err
 	}
 	plaintext := rule.ParameterValue
@@ -286,6 +291,9 @@ func (r *ProvisioningRepository) Update(ctx context.Context, rule *models.Provis
 		tagsJSON = string(b)
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := validateProvisioningPhaseWrite(tx, rule); err != nil {
+			return err
+		}
 		return tx.Model(&models.ProvisioningRule{}).Where("id = ?", rule.ID).Updates(map[string]interface{}{
 			"template_id": rule.TemplateID, "parameter_name": rule.ParameterName, "parameter_value": value, "parameter_type": rule.ParameterType,
 			"phase": rule.Phase, "tags": tagsJSON, "excluded_tags": excludedTagsJSON, "enabled": rule.Enabled, "description": rule.Description,
@@ -293,6 +301,27 @@ func (r *ProvisioningRepository) Update(ctx context.Context, rule *models.Provis
 			"version": gorm.Expr("version + 1"),
 		}).Error
 	})
+}
+
+func validateProvisioningPhaseWrite(tx *gorm.DB, rule *models.ProvisioningRule) error {
+	// Serialize rule writers for this template without introducing an index.
+	var template models.ProvisioningTemplate
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&template, rule.TemplateID).Error; err != nil {
+		return err
+	}
+	var rules []models.ProvisioningRule
+	if err := tx.Select("id", "template_id", "parameter_name", "add_object_path", "phase", "condition", "tags", "excluded_tags").
+		Where("template_id = ? AND id <> ?", rule.TemplateID, rule.ID).Find(&rules).Error; err != nil {
+		return err
+	}
+	// Validate the candidate against each existing rule so unrelated legacy
+	// conflicts do not prevent operators from correcting their configuration.
+	for _, existing := range rules {
+		if err := models.ValidateProvisioningPhases([]models.ProvisioningRule{existing, *rule}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // MaxOrder returns the highest order value for the given template and phase, or 0 if no rules exist.

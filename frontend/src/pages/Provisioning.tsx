@@ -1,4 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
+import { startDragAutoScroll } from '../lib/dragAutoScroll';
 import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth, usePermissionSection } from '../lib/auth';
@@ -411,7 +412,7 @@ const Provisioning: Component = () => {
       : ids.filter(id => !pageIDs.includes(id))
     );
   };
-  const provDragEnabled = createMemo(() => Object.keys(columnFilters()).length === 0);
+  const provDragEnabled = createMemo(() => Object.keys(columnFilters()).length === 0 && isFullAccess() && can('settings.provisioning.rules', 'edit') && !pendingAction());
 
   onMount(() => {
     const refreshCWMPState = () => { if (!showTemplateModal() && !cwmpControlSaving()) void refetchCWMPControl(); };
@@ -759,8 +760,18 @@ const Provisioning: Component = () => {
     }
   };
 
+  let stopRuleScroll: (() => void) | undefined;
+  const endRuleDrag = () => {
+    stopRuleScroll?.();
+    stopRuleScroll = undefined;
+    setProvDraggedRow(null);
+  };
+  onCleanup(endRuleDrag);
+
   const handleRowDragStart = (e: DragEvent, id: number) => {
+    endRuleDrag();
     setProvDraggedRow(id);
+    stopRuleScroll = startDragAutoScroll(e);
     e.dataTransfer?.setData('text/plain', String(id));
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
   };
@@ -773,7 +784,7 @@ const Provisioning: Component = () => {
   const handleRowDrop = async (e: DragEvent, targetId: number) => {
     e.preventDefault();
     const sourceId = provDraggedRow();
-    setProvDraggedRow(null);
+    endRuleDrag();
     if (!sourceId || sourceId === targetId) return;
     const rules = provRules() ?? [];
     const sourceIdx = rules.findIndex(r => r.id === sourceId);
@@ -1494,7 +1505,7 @@ const Provisioning: Component = () => {
             </Show>
             <Show when={!provError() && provTemplates() !== null}>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <For each={provTemplates()}>
+                <For each={[...(provTemplates() ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id - b.id)}>
                   {(t) => (
                       <div class="rounded border border-subtle p-4 hover:border-primary/30 transition-colors">
                       <div class="flex items-start justify-between">
@@ -1761,6 +1772,7 @@ const Provisioning: Component = () => {
                         class={`border-b border-subtle/50 hover:bg-elevated/40 transition-colors ${provDraggedRow() === p.id ? 'opacity-50' : ''}`}
                         draggable={provDragEnabled()}
                         onDragStart={(e) => handleRowDragStart(e, p.id)}
+                        onDragEnd={endRuleDrag}
                         onDragOver={handleRowDragOver}
                         onDrop={(e) => handleRowDrop(e, p.id)}
                       >

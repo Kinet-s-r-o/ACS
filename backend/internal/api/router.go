@@ -4315,6 +4315,10 @@ func (r *Router) handleCreateProvisioningRule(w http.ResponseWriter, req *http.R
 	}
 
 	if err := r.provisioningRepo.Create(req.Context(), rule); err != nil {
+		if errors.Is(err, models.ErrProvisioningPhaseConflict) {
+			respondError(w, http.StatusConflict, err.Error())
+			return
+		}
 		respondError(w, http.StatusInternalServerError, "Failed to create rule")
 		return
 	}
@@ -4378,6 +4382,10 @@ func (r *Router) handleUpdateProvisioningRule(w http.ResponseWriter, req *http.R
 	body.Tags = normalizeTags(body.Tags)
 	body.ExcludedTags = normalizeTags(body.ExcludedTags)
 	if err := r.provisioningRepo.Update(req.Context(), &body); err != nil {
+		if errors.Is(err, models.ErrProvisioningPhaseConflict) {
+			respondError(w, http.StatusConflict, err.Error())
+			return
+		}
 		respondError(w, http.StatusInternalServerError, "Failed to update rule")
 		return
 	}

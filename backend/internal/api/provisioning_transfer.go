@@ -313,12 +313,16 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 	}
 	for index := range item.Rules {
 		rule := &item.Rules[index]
+		rule.TemplateID = 0
 		if err := validateProvisioningRule(rule.ParameterName, rule.ParameterValue, rule.ParameterType, rule.AddObjectPath, rule.Phase, append(append([]string{}, rule.Tags...), rule.ExcludedTags...), rule.Description); err != nil {
 			return fmt.Errorf("rule %d: %w", index+1, err)
 		}
 		if err := validateAddObjectPath(rule.AddObjectPath); err != nil {
 			return fmt.Errorf("rule %d: %w", index+1, err)
 		}
+	}
+	if err := models.ValidateProvisioningPhases(item.Rules); err != nil {
+		return err
 	}
 	for index := range item.Metrics {
 		metric := &item.Metrics[index]

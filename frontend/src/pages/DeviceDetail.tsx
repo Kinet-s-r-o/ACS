@@ -727,7 +727,7 @@ const DeviceDetail: Component = () => {
   const [connCredPassword, setConnCredPassword] = createSignal('');
   const [generatedCred, setGeneratedCred] = createSignal<{ username: string; password: string } | null>(null);
   const [iperfRunning, setIperfRunning] = createSignal(false);
-  const [iperfForm, setIperfForm] = createSignal<IperfForm>({ serverAddr: '', port: '5201', testMode: 'UPLOAD', protocolType: 'TCP', maxTime: '10', parallel: '1', bandwidth: '0' });
+  const [iperfForm, setIperfForm] = createSignal<IperfForm>({ serverAddr: '176.107.17.5', port: '5201', testMode: 'DOWNLOAD', protocolType: 'TCP', maxTime: '10', parallel: '4', bandwidth: '0' });
   const [iperfResult, setIperfResult] = createSignal<IperfRunResult[] | null>(null);
   const [nsLookupHost, setNsLookupHost] = createSignal('');
   const [nsLookupServer, setNsLookupServer] = createSignal('');
@@ -760,17 +760,17 @@ const DeviceDetail: Component = () => {
   const traceRouteRoot = createMemo(() => TRACEROUTE_ROOTS.find(root => (parameters() || []).some(parameter => parameter.name.startsWith(root))) || '');
   const iperfParameter = (suffix: string) => (parameters() || []).find(p => p.name === IPERF_CLIENT_ROOT + suffix)?.value || '';
 
+  let iperfInitialized = false;
   createEffect(() => {
-    if (!iperfSupported() || iperfForm().serverAddr) return;
-    setIperfForm({
-      serverAddr: iperfParameter('ServerAddr'),
+    if (!iperfSupported() || iperfInitialized) return;
+    iperfInitialized = true;
+    setIperfForm(form => ({
+      ...form,
       port: iperfParameter('Port') || '5201',
-      testMode: iperfParameter('TestMode') === 'DOWNLOAD' ? 'DOWNLOAD' : iperfParameter('TestMode') === 'BOTH' ? 'BOTH' : 'UPLOAD',
       protocolType: iperfParameter('ProtocolType') === 'UDP' ? 'UDP' : 'TCP',
       maxTime: iperfParameter('MaxTime') || '10',
-      parallel: iperfParameter('Parallel') || '1',
       bandwidth: iperfParameter('Bandwidth') || '0',
-    });
+    }));
   });
 
   onMount(() => {

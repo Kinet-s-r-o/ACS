@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,6 +98,19 @@ func TestValidateTransferTemplateAcceptsInterfaceMetricWithoutParameterName(t *t
 	}
 	if err := validateTransferTemplate(&template); err != nil {
 		t.Fatalf("interface metric without parameter_name was rejected: %v", err)
+	}
+}
+
+func TestValidateTransferTemplateRejectsCrossPhaseParameter(t *testing.T) {
+	template := provisioningTransferTemplate{
+		Name: "Test",
+		Rules: []models.ProvisioningRule{
+			{TemplateID: 10, ParameterName: "Device.Test", ParameterValue: "first", ParameterType: "string", Phase: "bootstrap", Tags: []string{"a", "b"}},
+			{TemplateID: 20, ParameterName: "Device.Test", ParameterValue: "second", ParameterType: "string", Phase: "default", Tags: []string{"b", "a"}},
+		},
+	}
+	if err := validateTransferTemplate(&template); !errors.Is(err, models.ErrProvisioningPhaseConflict) {
+		t.Fatalf("expected cross-phase conflict despite source template IDs, got %v", err)
 	}
 }
 

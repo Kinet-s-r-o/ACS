@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path"
@@ -120,6 +121,9 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 			rules[index].UpdatedAt = time.Time{}
 		}
 		if len(rules) > 0 {
+			if err := models.ValidateProvisioningPhases(rules); err != nil {
+				return err
+			}
 			if err := tx.Create(&rules).Error; err != nil {
 				return err
 			}
@@ -226,6 +230,10 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		}
 		if lanVisualizationCopyPath != "" {
 			_ = os.Remove(lanVisualizationCopyPath)
+		}
+		if errors.Is(err, models.ErrProvisioningPhaseConflict) {
+			respondError(w, http.StatusConflict, err.Error())
+			return
 		}
 		respondError(w, http.StatusInternalServerError, "Failed to clone provisioning template")
 		return
