@@ -573,8 +573,8 @@ const Devices: Component = () => {
                     const isSorted = () => currentSort()?.column === col.id;
                     
                     return (
-                      <th data-column-order-id={`${col.label.toLowerCase()}#0`} class={`${['wan_interfaces_count', 'active_faults'].includes(col.id) ? 'text-center' : 'text-left'} whitespace-nowrap`} aria-sort={isSorted() ? (currentSort()?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
-                        <div class={`flex items-center gap-1.5 ${['wan_interfaces_count', 'active_faults'].includes(col.id) ? 'justify-center' : ''}`}>
+                      <th data-column-order-id={`${col.label.toLowerCase()}#0`} class={`${['wan_interfaces_count', 'active_faults', 'snapshot_count'].includes(col.id) ? 'text-center' : 'text-left'} whitespace-nowrap`} aria-sort={isSorted() ? (currentSort()?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
+                        <div class={`flex items-center gap-1.5 ${['wan_interfaces_count', 'active_faults', 'snapshot_count'].includes(col.id) ? 'justify-center' : ''}`}>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -645,7 +645,7 @@ const Devices: Component = () => {
                       <tr class={`border-t border-subtle hover:bg-elevated transition-fast ${idx() % 2 === 1 ? 'bg-base/50' : ''}`}>
                         <For each={visibleColumns()}>
                           {(col) => (
-                            <td data-column-order-id={`${col.label.toLowerCase()}#0`} class={`px-4 py-3 whitespace-nowrap ${['wan_interfaces_count', 'active_faults'].includes(col.id) ? 'text-center' : ''}`}>
+                            <td data-column-order-id={`${col.label.toLowerCase()}#0`} class={`px-4 py-3 whitespace-nowrap ${['wan_interfaces_count', 'active_faults', 'snapshot_count'].includes(col.id) ? 'text-center' : ''}`}>
                               {getCellValue(device, col.id)}
                             </td>
                           )}
