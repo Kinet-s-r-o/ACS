@@ -266,7 +266,13 @@ func (w *SystemTaskWorker) reconcile(ctx context.Context) error {
 			}
 			switch status {
 			case models.TaskStatusCompleted:
-				if err := w.systemTaskRepo.MarkCompleted(ctx, systemTask.ID); err != nil {
+				if systemTask.SnapshotKind != "" && strings.TrimSpace(message) != "" {
+					if err := w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, "Snapshot requires a complete parameter refresh: "+message); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := w.systemTaskRepo.MarkCompleted(ctx, systemTask.ID, message); err != nil {
 					if errors.Is(err, database.ErrNoWritableSnapshotParameters) || errors.Is(err, database.ErrSnapshotDeviceOffline) {
 						if failErr := w.systemTaskRepo.MarkFailed(ctx, systemTask.ID, err.Error()); failErr != nil {
 							return failErr

@@ -208,9 +208,10 @@ func TestFullTreeReadIsolates9002Parameter(t *testing.T) {
 				s.FullTreeRead.names = append(s.FullTreeRead.names, fmt.Sprintf("Device.Test.Value%d", index))
 			}
 			badName := s.FullTreeRead.names[badIndex]
+			read := s.FullTreeRead
 			var request interface{} = s.FullTreeRead.next()
 			for calls := 0; request != nil; calls++ {
-				if calls > 13 {
+				if calls > 80 {
 					t.Fatal("parameter isolation did not terminate")
 				}
 				gpv := request.(*GetParameterValues)
@@ -231,7 +232,7 @@ func TestFullTreeReadIsolates9002Parameter(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if len(*faults) != 1 || (*faults)[0].ParameterName != badName || (*faults)[0].FaultCode != "9002" || s.FullTreeRead != nil || s.CurrentFullTreeFetch {
+			if len(*faults) != 1 || (*faults)[0].ParameterName != badName || (*faults)[0].FaultCode != "9002" || s.FullTreeRead != nil || s.CurrentFullTreeFetch || len(read.values) != 63 {
 				t.Fatalf("parameter not isolated: faults=%v", *faults)
 			}
 		})
@@ -239,7 +240,7 @@ func TestFullTreeReadIsolates9002Parameter(t *testing.T) {
 }
 
 func TestFullTreeReadSplitBudgetAndOtherFaults(t *testing.T) {
-	for _, code := range []string{"9002", "9005", "9001"} {
+	for _, code := range []string{"9002", "9000", "8999"} {
 		t.Run(code, func(t *testing.T) {
 			h, faults := diagnostic9005TestHandler(t, nil)
 			s := h.sessions.GetOrCreate("split-budget", "TEST")

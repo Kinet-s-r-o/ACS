@@ -909,15 +909,25 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 	}
 	if read := session.FullTreeRead; read != nil {
 		if !read.accept(resp) {
+			if request := read.split(); request != nil {
+				return request, nil
+			}
+			if len(read.current) == 1 {
+				return h.skipFullTreeParameter(ctx, session, "9002", "CPE returned no value for the requested parameter")
+			}
 			return h.failFullTreeRead(ctx, session, "Full parameter refresh failed: incomplete batched GetParameterValues response after fault 9002")
 		}
-		if request := read.next(); request != nil {
-			return request, nil
-		}
-		resp = &GetParameterValuesResp{ParameterList: ParameterList{Parameters: read.values}}
-		session.FullTreeRead = nil
+		return h.nextFullTreeRead(ctx, session)
 	}
+	return h.saveParameterValuesResponse(ctx, session, resp, "")
+}
 
+// Called with session.mu held, including when the final batch was a fault.
+func (h *Handler) saveParameterValuesResponse(ctx context.Context, session *Session, resp *GetParameterValuesResp, warning string) (interface{}, error) {
+	partial := warning != ""
+	if partial {
+		session.CurrentFullTreeFetch = false
+	}
 	if h.parameterRepo != nil && session.DeviceID > 0 {
 		params := make([]models.DeviceParameter, 0, len(resp.ParameterList.Parameters))
 		for _, p := range resp.ParameterList.Parameters {
@@ -928,7 +938,7 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 				ValueType: p.ValueType,
 			})
 		}
-		fullTree := len(params) > 0 && ((session.AutoFetchPhase == 1 && session.CurrentTaskID == 0) || session.CurrentFullTreeFetch)
+		fullTree := !partial && len(params) > 0 && ((session.AutoFetchPhase == 1 && session.CurrentTaskID == 0) || session.CurrentFullTreeFetch)
 		session.CurrentFullTreeFetch = false
 		var saveErr error
 		if session.DynamicDiscoveryActive {
@@ -948,9 +958,12 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 			saveErr = h.parameterRepo.UpsertMany(ctx, session.DeviceID, params)
 		}
 		if err := saveErr; err != nil {
+			if partial {
+				return nil, fmt.Errorf("save partial parameter refresh: %w", err)
+			}
 			log.Printf("Error saving parameters: %v", err)
 		} else {
-			logCWMPSession(session.SerialNumber, remoteAddr, "Saved %d parameters for device %d", len(params), session.DeviceID)
+			logCWMPSession(session.SerialNumber, session.ID, "Saved %d parameters for device %d", len(params), session.DeviceID)
 			if h.deviceRepo != nil {
 				if err := h.deviceRepo.UpdateFromParameters(ctx, session.DeviceID, ExtractImportantParameters(resp.ParameterList.Parameters)); err != nil {
 					log.Printf("Error updating device details from parameters: %v", err)
@@ -1027,7 +1040,11 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 				result[p.Name] = p.Value
 			}
 		}
-		if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, models.TaskStatusCompleted, result, ""); err != nil {
+		status := models.TaskStatusCompleted
+		if partial && len(resp.ParameterList.Parameters) == 0 {
+			status = models.TaskStatusFailed
+		}
+		if err := h.taskRepo.UpdateStatus(ctx, session.CurrentTaskID, status, result, warning); err != nil {
 			return nil, fmt.Errorf("complete parameter task: %w", err)
 		}
 		session.CurrentTaskID = 0
@@ -1593,12 +1610,15 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 
 	if session.State == StateProcessingTasks {
 		logCWMPSession(session.SerialNumber, session.ID, "Fault request: RPC=%s source=%s task=%d context=%s", session.LastSentRPC, session.LastSentSource, session.CurrentTaskID, session.LastSentContext)
-		if read := session.FullTreeRead; read != nil && faultCode == "9002" && session.LastSentRPC == "GetParameterValues" {
+		if read := session.FullTreeRead; read != nil && recoverableParameterReadFault(faultCode) && session.LastSentRPC == "GetParameterValues" {
 			if request := read.split(); request != nil {
 				return request, nil
 			}
+			if len(read.current) == 1 {
+				return h.skipFullTreeParameter(ctx, session, faultCode, faultMessage)
+			}
 		}
-		if faultCode == "9002" && session.FullTreeRead == nil && (session.CurrentFullTreeFetch || session.AutoFetchPhase == 1) && session.LastSentRPC == "GetParameterValues" && len(session.LastSentParameters) == 1 &&
+		if recoverableParameterReadFault(faultCode) && session.FullTreeRead == nil && (session.CurrentFullTreeFetch || session.AutoFetchPhase == 1) && session.LastSentRPC == "GetParameterValues" && len(session.LastSentParameters) == 1 &&
 			(session.LastSentParameters[0] == "InternetGatewayDevice." || session.LastSentParameters[0] == "Device.") {
 			session.FullTreeRead = &fullTreeRead{root: session.LastSentParameters[0]}
 			return &GetParameterNames{ParameterPath: session.FullTreeRead.root, NextLevel: false}, nil

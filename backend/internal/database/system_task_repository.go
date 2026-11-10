@@ -149,7 +149,11 @@ func (r *SystemTaskRepository) MarkWaiting(ctx context.Context, id int64, cwmpTa
 	}).Error
 }
 
-func (r *SystemTaskRepository) MarkCompleted(ctx context.Context, id int64) error {
+func (r *SystemTaskRepository) MarkCompleted(ctx context.Context, id int64, warnings ...string) error {
+	warning := ""
+	if len(warnings) > 0 {
+		warning = warnings[0]
+	}
 	now := time.Now()
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var task models.SystemTask
@@ -162,7 +166,7 @@ func (r *SystemTaskRepository) MarkCompleted(ctx context.Context, id int64) erro
 		if err := completeAutomaticSnapshot(ctx, tx, task, now); err != nil {
 			return err
 		}
-		return tx.Model(&task).Updates(map[string]interface{}{"status": models.SystemTaskStatusCompleted, "completed_at": now, "error_message": ""}).Error
+		return tx.Model(&task).Updates(map[string]interface{}{"status": models.SystemTaskStatusCompleted, "completed_at": now, "error_message": warning}).Error
 	})
 }
 

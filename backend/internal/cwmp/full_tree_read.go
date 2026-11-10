@@ -13,8 +13,8 @@ const (
 	fullTreeReadMaxSplits = 128
 )
 
-// Keep the original task active until every batch succeeds. Partial results
-// must never replace the cached full tree or complete a snapshot refresh.
+// Keep the original task active until every batch is processed. Partial results
+// only update confirmed values and must never replace the cached full tree.
 type fullTreeRead struct {
 	root      string
 	names     []string
@@ -23,6 +23,44 @@ type fullTreeRead struct {
 	retries   [][]string
 	batchSize int
 	splits    int
+	skipped   []string
+}
+
+func recoverableParameterReadFault(code string) bool {
+	switch code {
+	case "9001", "9002", "9003", "9004", "9005":
+		return true
+	}
+	return false
+}
+
+func (h *Handler) skipFullTreeParameter(ctx context.Context, session *Session, code, message string) (interface{}, error) {
+	read := session.FullTreeRead
+	name := read.current[0]
+	if h.faultRepo != nil && session.DeviceID > 0 {
+		if err := h.faultRepo.Create(ctx, &models.Fault{DeviceID: session.DeviceID, FaultCode: code, FaultString: requestFaultMessage(session, message), ParameterName: name}); err != nil {
+			return nil, fmt.Errorf("record skipped parameter fault: %w", err)
+		}
+	}
+	read.skipped = append(read.skipped, name)
+	// A singleton failure identifies an unreadable parameter, rather than a
+	// batch-size limit. Do not force the remainder of the tree into single reads.
+	read.batchSize = fullTreeReadBatchSize
+	return h.nextFullTreeRead(ctx, session)
+}
+
+func (h *Handler) nextFullTreeRead(ctx context.Context, session *Session) (interface{}, error) {
+	read := session.FullTreeRead
+	if request := read.next(); request != nil {
+		return request, nil
+	}
+	warning := ""
+	if len(read.skipped) > 0 {
+		warning = fmt.Sprintf("Partial parameter refresh: read %d parameters; skipped %d unreadable parameters (see CWMP faults)", len(read.values), len(read.skipped))
+	}
+	session.FullTreeRead = nil
+	response := &GetParameterValuesResp{ParameterList: ParameterList{Parameters: read.values}}
+	return h.saveParameterValuesResponse(ctx, session, response, warning)
 }
 
 func (read *fullTreeRead) next() *GetParameterValues {

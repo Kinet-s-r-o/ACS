@@ -117,6 +117,32 @@ func TestOfflineDeviceCannotSaveSnapshotAfterRefresh(t *testing.T) {
 	}
 }
 
+func TestSnapshotRejectsPartialCompletedRefresh(t *testing.T) {
+	for _, kind := range []string{"initial", "scheduled", "manual"} {
+		t.Run(kind, func(t *testing.T) {
+			db, err := gorm.Open(postgres.Open("host=localhost user=test dbname=test"), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+				task, ok := tx.Statement.Dest.(*models.Task)
+				if !ok {
+					t.Fatalf("partial snapshot continued with query %T", tx.Statement.Dest)
+				}
+				*task = models.Task{ID: 42, DeviceID: 1, Status: models.TaskStatusCompleted, ErrorMessage: "Partial parameter refresh: skipped 1 unreadable parameter"}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now()
+			id := int64(42)
+			job := models.SystemTask{DeviceID: 1, SnapshotKind: kind, SnapshotTemplateID: &id, SnapshotSlot: &now, CWMPTaskID: &id, RefreshParameters: true}
+			if err := completeAutomaticSnapshot(context.Background(), db, job, now); err == nil || !strings.Contains(err.Error(), "completed CPE refresh") {
+				t.Fatalf("partial snapshot was accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestAutomaticSnapshotWaitsForRefreshAndIsIdempotent(t *testing.T) {
 	now := time.Now().UTC()
 	activation := now.Add(-time.Hour)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/matrix8412/acs/internal/models"
@@ -130,10 +131,10 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 		return errors.New("invalid snapshot task")
 	}
 	var cwmpTask models.Task
-	if err := tx.Select("id", "device_id", "status").First(&cwmpTask, *task.CWMPTaskID).Error; err != nil {
+	if err := tx.Select("id", "device_id", "status", "error_message").First(&cwmpTask, *task.CWMPTaskID).Error; err != nil {
 		return err
 	}
-	if cwmpTask.Status != models.TaskStatusCompleted || cwmpTask.DeviceID != task.DeviceID {
+	if cwmpTask.Status != models.TaskStatusCompleted || cwmpTask.DeviceID != task.DeviceID || strings.TrimSpace(cwmpTask.ErrorMessage) != "" {
 		return errors.New("snapshot requires a completed CPE refresh")
 	}
 	var device models.Device
