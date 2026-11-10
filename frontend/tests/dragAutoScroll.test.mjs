@@ -30,7 +30,7 @@ test('continues scrolling with a stationary pointer and releases the frame and l
   const first = container.scrollTop;
   tick(116);
   assert.ok(container.scrollTop > first && first > 0);
-  listeners.get('dragover')({ clientX: 30, clientY: 110 });
+  listeners.get('pointermove')({ clientX: 30, clientY: 110 });
   const beforeUp = container.scrollTop;
   tick(132);
   assert.ok(container.scrollTop < beforeUp);
@@ -69,10 +69,10 @@ function setupScroll() {
 test('keeps scrolling the source table after the pointer leaves its bottom edge', () => {
   const state = setupScroll();
   try {
-    state.listeners.get('dragover')({ clientX: 30, clientY: 540 });
+    state.listeners.get('pointermove')({ clientX: 30, clientY: 540 });
     state.frame(100);
     assert.ok(state.table.scrollTop > 100);
-    state.listeners.get('dragover')({ clientX: 30, clientY: 70 });
+    state.listeners.get('pointermove')({ clientX: 30, clientY: 70 });
     const before = state.table.scrollTop;
     state.frame(116);
     assert.ok(state.table.scrollTop < before);
@@ -102,7 +102,7 @@ test('moves the page when the source table has reached its end near the viewport
   const state = setupScroll();
   try {
     state.table.scrollTop = 1600;
-    state.listeners.get('dragover')({ clientX: 30, clientY: 790 });
+    state.listeners.get('pointermove')({ clientX: 30, clientY: 790 });
     state.frame(100);
     assert.ok(state.root.scrollTop > 100);
   } finally { state.stop(); }

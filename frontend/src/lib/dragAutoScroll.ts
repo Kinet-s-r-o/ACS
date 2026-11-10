@@ -1,9 +1,10 @@
-// Native drag events do not continuously fire while the pointer is stationary.
-export function startDragAutoScroll(initial: DragEvent, source: HTMLElement): () => void {
+// Pointer dragging keeps wheel events available while a row is held.
+export function startDragAutoScroll(initial: PointerEvent, source: HTMLElement): () => void {
   let x = initial.clientX;
   let y = initial.clientY;
   let frame = 0;
   let previous = 0;
+  let wheelPauseUntil = 0;
   const containers: Element[] = [];
   for (let element: Element | null = source; element; element = element.parentElement) {
     containers.push(element);
@@ -12,13 +13,18 @@ export function startDragAutoScroll(initial: DragEvent, source: HTMLElement): ()
   if (root && !containers.includes(root)) containers.push(root);
   const scrollable = (element: Element) => element.scrollHeight > element.clientHeight
     && (element === root || /auto|scroll/.test(getComputedStyle(element).overflowY));
-  const track = (event: DragEvent) => {
+  const track = (event: PointerEvent) => {
+    if (event.pointerId !== initial.pointerId) return;
     x = event.clientX;
     y = event.clientY;
   };
   const tick = (time: number) => {
     const elapsed = previous ? Math.min(time - previous, 40) : 16;
     previous = time;
+    if (time < wheelPauseUntil) {
+      frame = requestAnimationFrame(tick);
+      return;
+    }
     for (const element of containers) {
       if (!scrollable(element)) continue;
       const bounds = element === root
@@ -37,6 +43,7 @@ export function startDragAutoScroll(initial: DragEvent, source: HTMLElement): ()
   };
   const wheel = (event: WheelEvent) => {
     if (event.ctrlKey || !event.deltaY) return;
+    wheelPauseUntil = performance.now() + 200;
     let remaining = event.deltaY;
     if (event.deltaMode === 1) remaining *= 16;
     if (event.deltaMode === 2) remaining *= containers.find(scrollable)?.clientHeight || window.innerHeight;
@@ -52,12 +59,12 @@ export function startDragAutoScroll(initial: DragEvent, source: HTMLElement): ()
     }
     if (moved) event.preventDefault();
   };
-  document.addEventListener('dragover', track, true);
+  document.addEventListener('pointermove', track, true);
   document.addEventListener('wheel', wheel, { capture: true, passive: false });
   frame = requestAnimationFrame(tick);
   return () => {
     cancelAnimationFrame(frame);
-    document.removeEventListener('dragover', track, true);
+    document.removeEventListener('pointermove', track, true);
     document.removeEventListener('wheel', wheel, true);
   };
 }

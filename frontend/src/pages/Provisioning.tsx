@@ -1,5 +1,5 @@
 import { createSignal, createEffect, createMemo, createResource, onMount, onCleanup, Show, For, Index, type Component } from 'solid-js';
-import { startDragAutoScroll } from '../lib/dragAutoScroll';
+import { startPointerRowReorder } from '../lib/pointerRowReorder';
 import { Activity, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Edit, Edit2, GripVertical, Image as ImageIcon, ListChecks, MoreVertical, Network, Plus, Save, Search, Settings as SettingsIcon, SlidersHorizontal, Trash2, Upload, Variable, X } from 'lucide-solid';
 import { api, type InterfaceMetricDefinition, type MetricDefinition, type ParameterPollDefinition, type ProvisioningCPEInfoField, type ProvisioningFeature, type ProvisioningFeatureControl, type ProvisioningLANPortMapping, type ProvisioningObjectField, type ProvisioningRule, type ProvisioningTemplate, type ProvisioningVariable, type ProvisioningTransform, type TemplateInventory } from '../lib/api';
 import { useAuth, usePermissionSection } from '../lib/auth';
@@ -347,6 +347,7 @@ const Provisioning: Component = () => {
     return [...defaultProvColumns];
   })());
   const [provDraggedRow, setProvDraggedRow] = createSignal<number | null>(null);
+  const [provDropTarget, setProvDropTarget] = createSignal<number | null>(null);
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.provisioning', {});
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.provisioning.rules');
 
@@ -760,32 +761,27 @@ const Provisioning: Component = () => {
     }
   };
 
-  let stopRuleScroll: (() => void) | undefined;
+  let stopRuleDrag: (() => void) | undefined;
   const endRuleDrag = () => {
-    stopRuleScroll?.();
-    stopRuleScroll = undefined;
+    stopRuleDrag = undefined;
     setProvDraggedRow(null);
+    setProvDropTarget(null);
   };
-  onCleanup(endRuleDrag);
+  onCleanup(() => stopRuleDrag?.());
 
-  const handleRowDragStart = (e: DragEvent, id: number) => {
-    endRuleDrag();
-    setProvDraggedRow(id);
-    stopRuleScroll = startDragAutoScroll(e, e.currentTarget as HTMLElement);
-    e.dataTransfer?.setData('text/plain', String(id));
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  const handleRowPointerDown = (event: PointerEvent, id: number) => {
+    if (event.button !== 0 || !event.isPrimary || !provDragEnabled()) return;
+    stopRuleDrag?.();
+    stopRuleDrag = startPointerRowReorder(event, event.currentTarget as HTMLElement, {
+      onStart: () => setProvDraggedRow(id),
+      onTarget: setProvDropTarget,
+      onDrop: targetId => { void moveProvRule(id, targetId); },
+      onEnd: endRuleDrag,
+    });
   };
 
-  const handleRowDragOver = (e: DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleRowDrop = async (e: DragEvent, targetId: number) => {
-    e.preventDefault();
-    const sourceId = provDraggedRow();
-    endRuleDrag();
-    if (!sourceId || sourceId === targetId) return;
+  const moveProvRule = async (sourceId: number, targetId: number) => {
+    if (!provDragEnabled() || sourceId === targetId) return;
     const rules = provRules() ?? [];
     const sourceIdx = rules.findIndex(r => r.id === sourceId);
     const targetIdx = rules.findIndex(r => r.id === targetId);
@@ -794,13 +790,14 @@ const Provisioning: Component = () => {
     const [moved] = reordered.splice(sourceIdx, 1);
     reordered.splice(targetIdx, 0, moved);
     setProvRules(reordered.map((r, i) => ({ ...r, order: i })));
+    setPendingAction('reorder-provisioning');
     try {
       await api.reorderProvisioningRules(selectedTemplate()!.id, reordered.map(r => r.id));
       notify({ tone: 'success', title: 'Rules reordered' });
     } catch (error) {
       notify({ tone: 'error', title: 'Reorder failed', detail: (error as Error).message, persistent: true });
       refetchProvRules();
-    }
+    } finally { setPendingAction(null); }
   };
 
   // Provisioning handlers
@@ -1769,21 +1766,17 @@ const Provisioning: Component = () => {
                   <For each={pagedProvRules()}>
                     {(p) => (
                       <tr
-                        class={`border-b border-subtle/50 hover:bg-elevated/40 transition-colors ${provDraggedRow() === p.id ? 'opacity-50' : ''}`}
-                        draggable={provDragEnabled()}
-                        onDragStart={(e) => handleRowDragStart(e, p.id)}
-                        onDragEnd={endRuleDrag}
-                        onDragOver={handleRowDragOver}
-                        onDrop={(e) => handleRowDrop(e, p.id)}
+                        data-row-reorder-id={p.id}
+                        class={`border-b border-subtle/50 hover:bg-elevated/40 transition-colors ${provDraggedRow() === p.id ? 'opacity-50' : ''} ${provDropTarget() === p.id && provDraggedRow() !== p.id ? 'bg-elevated' : ''}`}
                       >
                         <Show when={can('settings.provisioning.rules', 'edit') || can('settings.provisioning.rules', 'delete')}>
                           <td class="py-2 pr-2 text-center whitespace-nowrap">
                             <input data-table-select-row={p.id} type="checkbox" aria-label={`Select provisioning rule ${p.parameter_name}`} checked={selectedProvRuleIDs().includes(p.id)} onChange={() => toggleProvRuleSelection(p.id)} disabled={pendingAction() !== null} />
                           </td>
                         </Show>
-                        <td data-column-order-id="##0" class="py-2 pr-2 cursor-grab active:cursor-grabbing select-none">
+                        <td data-column-order-id="##0" class="py-2 pr-2 select-none">
                           <span class="flex items-center gap-1 text-muted">
-                            <GripVertical size={12} />
+                            <button type="button" class="icon-button touch-none select-none cursor-grab active:cursor-grabbing" disabled={!provDragEnabled()} aria-label={`Reorder provisioning rule ${p.parameter_name || p.add_object_path}`} title="Drag to reorder; scroll with the mouse wheel while holding. Use Edit to set an explicit order." onPointerDown={event => handleRowPointerDown(event, p.id)} onDragStart={event => event.preventDefault()}><GripVertical size={12} aria-hidden="true" /></button>
                             <span class="text-xs">{p.order}</span>
                           </span>
                         </td>
