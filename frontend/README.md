@@ -4,7 +4,7 @@ Users → top-right actions → Session settings is `components/UserSessionSetti
 
 Template General → Bootstrap completion configures optional [reboot after successful bootstrap](../docs/bootstrap-reboot.md). Keep `reboot_after_bootstrap` false for new/legacy forms, preserve it in edit/clone/save, and use existing template edit permission with the shared boolean confirmation. Saving does not immediately reboot ONTs.
 
-Automatic template snapshots: [automation guide](../docs/automatic-snapshots.md), `components/TemplateSnapshotsForm.tsx`, `lib/snapshotSchedule.ts`, Edit template tabs and DeviceDetail snapshot actions. CPE Write deletes ordinary snapshots; initial snapshots require CPE Full.
+Automatic template snapshots: [automation guide](../docs/automatic-snapshots.md), `components/TemplateSnapshotsForm.tsx`, `lib/snapshotSchedule.ts`, Edit template tabs and DeviceDetail snapshot actions. Both policies check each Inform: Initial uses missing-snapshot existence and `created_at + delay`; Scheduled uses the last saved Scheduled snapshot plus interval (CPE creation time if none). Display Initial, Scheduled and Manual in the list/detail and preserve their independent types; scheduled/manual snapshots never replace Initial. CPE Write deletes ordinary snapshots; initial snapshots require CPE Full.
 
 Manual CPE snapshots enqueue Bulk Summon and return a system task (HTTP 202). `components/SnapshotRequestStatus.tsx` follows the owned request until completion/failure; refresh the snapshot list only on successful completion and retain failed-request feedback. Unmounting the UI stops polling while the durable queue keeps processing.
 

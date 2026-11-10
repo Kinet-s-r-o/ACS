@@ -30,6 +30,13 @@ func (r *SnapshotRepository) QueueAutomatic(ctx context.Context, deviceID, templ
 			return nil
 		}
 		if kind == "initial" {
+			exists, err := hasInitialSnapshot(ctx, tx, device.ID)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return nil
+			}
 			if !InitialSnapshotDue(device, *template, now) {
 				return nil
 			}
@@ -37,19 +44,14 @@ func (r *SnapshotRepository) QueueAutomatic(ctx context.Context, deviceID, templ
 			if !template.Snapshots.ScheduledEnabled {
 				return nil
 			}
-			var anchor models.DeviceParameter
-			err := tx.Select("value").Where("device_id = ? AND name = ?", deviceID, "InternetGatewayDevice.ManagementServer.PeriodicInformTime").Take(&anchor).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
-			}
+			last, err := lastScheduledSnapshot(ctx, tx, device.ID)
 			if err != nil {
 				return err
 			}
-			var due bool
-			slot, due = ScheduledSnapshotSlot(now, device.CreatedAt, anchor.Value, template.Snapshots.ScheduledIntervalMinutes)
-			if !due || (device.SnapshotScheduledAt != nil && !slot.After(*device.SnapshotScheduledAt)) {
+			if !ScheduledSnapshotDue(now, device.CreatedAt, last, template.Snapshots.ScheduledIntervalMinutes) {
 				return nil
 			}
+			slot = now
 		} else {
 			return errors.New("invalid automatic snapshot kind")
 		}
@@ -75,20 +77,37 @@ func (r *SnapshotRepository) QueueAutomatic(ctx context.Context, deviceID, templ
 }
 
 func InitialSnapshotDue(device models.Device, template models.ProvisioningTemplate, now time.Time) bool {
-	return template.Snapshots.InitialEnabled && template.SnapshotInitialSince != nil && device.SnapshotInitialAt == nil && !device.CreatedAt.Before(*template.SnapshotInitialSince) && !now.Before(device.CreatedAt.Add(time.Duration(template.Snapshots.InitialDelayMinutes)*time.Minute))
+	// Existence is checked against saved snapshots while holding the device row;
+	// cached completion/activation markers must not exclude older or restored CPEs.
+	return template.Snapshots.InitialEnabled && !now.Before(device.CreatedAt.Add(time.Duration(template.Snapshots.InitialDelayMinutes)*time.Minute))
 }
 
-func ScheduledSnapshotSlot(now, createdAt time.Time, anchorValue string, minutes int) (time.Time, bool) {
+func hasInitialSnapshot(ctx context.Context, tx *gorm.DB, deviceID int64) (bool, error) {
+	var initial []models.DeviceSnapshot
+	err := tx.WithContext(ctx).Select("id").Where("device_id = ? AND kind = ?", deviceID, "initial").Limit(1).Find(&initial).Error
+	return len(initial) > 0, err
+}
+
+func ScheduledSnapshotDue(now, createdAt time.Time, last *time.Time, minutes int) bool {
 	if minutes < 1 || minutes > 525600 {
-		return time.Time{}, false
+		return false
 	}
-	anchor, err := time.Parse(time.RFC3339Nano, anchorValue)
-	if err != nil || anchor.Year() < 1970 || anchor.After(now) {
-		return time.Time{}, false
+	anchor := createdAt
+	if last != nil {
+		anchor = *last
 	}
-	interval := time.Duration(minutes) * time.Minute
-	slot := anchor.Add(now.Sub(anchor) / interval * interval)
-	return slot, !slot.Before(createdAt)
+	return !now.Before(anchor.Add(time.Duration(minutes) * time.Minute))
+}
+
+func lastScheduledSnapshot(ctx context.Context, tx *gorm.DB, deviceID int64) (*time.Time, error) {
+	var snapshots []models.DeviceSnapshot
+	if err := tx.WithContext(ctx).Select("created_at").Where("device_id = ? AND kind = ?", deviceID, "scheduled").Order("created_at DESC, id DESC").Limit(1).Find(&snapshots).Error; err != nil {
+		return nil, err
+	}
+	if len(snapshots) == 0 {
+		return nil, nil
+	}
+	return &snapshots[0].CreatedAt, nil
 }
 
 func snapshotDeviceIdentity(device models.Device) (string, string) {
@@ -154,24 +173,31 @@ func completeAutomaticSnapshot(ctx context.Context, tx *gorm.DB, task models.Sys
 		return nil
 	}
 	column := "snapshot_scheduled_at"
-	stamp := *task.SnapshotSlot
+	stamp := now
 	kind := task.SnapshotKind
 	updates := map[string]interface{}{}
 	if task.SnapshotKind == "initial" {
 		if !InitialSnapshotDue(device, *template, now) {
 			return nil
 		}
-		column, stamp = "snapshot_initial_at", now
-	} else if !template.Snapshots.ScheduledEnabled || (device.SnapshotScheduledAt != nil && !stamp.After(*device.SnapshotScheduledAt)) {
-		return nil
-	} else {
-		var initial []models.DeviceSnapshot
-		if err := tx.Select("id").Where("device_id = ? AND kind = ?", device.ID, "initial").Limit(1).Find(&initial).Error; err != nil {
+		exists, err := hasInitialSnapshot(ctx, tx, device.ID)
+		if err != nil {
 			return err
 		}
-		if len(initial) == 0 {
-			kind = "initial"
-			updates["snapshot_initial_at"] = now
+		if exists {
+			return nil
+		}
+		column, stamp = "snapshot_initial_at", now
+	} else {
+		if !template.Snapshots.ScheduledEnabled {
+			return nil
+		}
+		last, err := lastScheduledSnapshot(ctx, tx, device.ID)
+		if err != nil {
+			return err
+		}
+		if !ScheduledSnapshotDue(now, device.CreatedAt, last, template.Snapshots.ScheduledIntervalMinutes) {
+			return nil
 		}
 	}
 	parameters, err := NewParameterRepository(tx).GetByDeviceID(ctx, device.ID)

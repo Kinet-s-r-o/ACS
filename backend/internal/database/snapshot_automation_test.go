@@ -24,35 +24,36 @@ func TestAutomaticSnapshotDueTimes(t *testing.T) {
 		t.Fatal("initial snapshot not due at delay")
 	}
 	device.SnapshotInitialAt = &start
-	if InitialSnapshotDue(device, template, start.Add(time.Hour)) {
-		t.Fatal("initial snapshot repeated")
+	if !InitialSnapshotDue(device, template, start.Add(time.Hour)) {
+		t.Fatal("stale completion marker prevented checking actual snapshot existence")
 	}
 	device.SnapshotInitialAt = nil
 	device.CreatedAt = start.Add(-time.Minute)
-	if InitialSnapshotDue(device, template, start.Add(time.Hour)) {
-		t.Fatal("initial snapshots backfilled pre-existing ONTs")
+	if !InitialSnapshotDue(device, template, start.Add(time.Hour)) {
+		t.Fatal("older ONT was excluded from Inform snapshot eligibility")
 	}
+}
+
+func TestScheduledSnapshotDueUsesLastSuccessfulSnapshot(t *testing.T) {
+	start := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
-		value   string
+		name    string
+		last    *time.Time
+		now     time.Time
 		minutes int
-		want    time.Time
-		valid   bool
+		want    bool
 	}{
-		{"2026-11-06T10:02:00Z", 15, start.Add(32 * time.Minute), true},
-		{"2026-11-06T11:02:00+01:00", 15, start.Add(32 * time.Minute), true},
-		{"2026-11-06T10:02:30Z", 15, start.Add(32*time.Minute + 30*time.Second), true},
-		{"", 15, time.Time{}, false}, {"bad", 15, time.Time{}, false},
-		{"0001-01-01T00:00:00Z", 15, time.Time{}, false},
-		{"2026-11-07T10:02:00Z", 15, time.Time{}, false},
-		{"2026-11-06T10:02:00Z", 0, time.Time{}, false},
+		{"first before delay", nil, start.Add(14 * time.Minute), 15, false},
+		{"first at delay", nil, start.Add(15 * time.Minute), 15, true},
+		{"last before delay", &start, start.Add(15*time.Minute - time.Nanosecond), 15, false},
+		{"last at delay", &start, start.Add(15 * time.Minute), 15, true},
+		{"late Inform", &start, start.Add(48 * time.Hour), 15, true},
+		{"future snapshot", &start, start.Add(-time.Minute), 15, false},
+		{"zero interval", &start, start.Add(time.Hour), 0, false},
 	} {
-		slot, valid := ScheduledSnapshotSlot(start.Add(34*time.Minute), start, tc.value, tc.minutes)
-		if valid != tc.valid || (valid && !slot.Equal(tc.want)) {
-			t.Fatalf("wrong schedule for %s / %d: %s %v", tc.value, tc.minutes, slot, valid)
+		if got := ScheduledSnapshotDue(tc.now, start, tc.last, tc.minutes); got != tc.want {
+			t.Errorf("%s: due=%v want=%v", tc.name, got, tc.want)
 		}
-	}
-	if _, ok := ScheduledSnapshotSlot(start.Add(34*time.Minute), start.Add(33*time.Minute), "2026-11-06T10:02:00Z", 15); ok {
-		t.Fatal("scheduled slot predates device creation")
 	}
 }
 
@@ -130,6 +131,7 @@ func TestAutomaticSnapshotWaitsForRefreshAndIsIdempotent(t *testing.T) {
 			}
 			writable := true
 			var marker *time.Time
+			hasInitial := false
 			createdCount := 0
 			if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
 				switch dest := tx.Statement.Dest.(type) {
@@ -139,6 +141,10 @@ func TestAutomaticSnapshotWaitsForRefreshAndIsIdempotent(t *testing.T) {
 					*dest = models.Device{ID: 1, Online: true, CreatedAt: created, SnapshotInitialAt: marker}
 				case *models.ProvisioningTemplate:
 					*dest = models.ProvisioningTemplate{ID: templateID, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: true}}
+				case *[]models.DeviceSnapshot:
+					if hasInitial {
+						*dest = []models.DeviceSnapshot{{ID: 1, Kind: "initial"}}
+					}
 				case *[]models.DeviceParameter:
 					*dest = []models.DeviceParameter{{Name: "Device.Test.Enabled", Value: "true", Writable: &writable}}
 				default:
@@ -154,6 +160,7 @@ func TestAutomaticSnapshotWaitsForRefreshAndIsIdempotent(t *testing.T) {
 					t.Fatal("invalid automatic snapshot")
 				}
 				createdCount++
+				hasInitial = true
 				tx.RowsAffected = 1
 			}); err != nil {
 				t.Fatal(err)
@@ -265,7 +272,7 @@ func TestManualSnapshotRequiresSuccessfulSummonAndRefresh(t *testing.T) {
 	}
 }
 
-func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
+func TestScheduledSnapshotKeepsItsTypeAndInitialState(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
 		exists, oldMarker bool
@@ -277,12 +284,15 @@ func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
 			old := now.Add(-365 * 24 * time.Hour)
 			activation := now.Add(-time.Hour)
 			templateID, cwmpID := int64(2), int64(3)
-			job := models.SystemTask{DeviceID: 1, SnapshotKind: "scheduled", SnapshotSlot: &now, SnapshotTemplateID: &templateID, CWMPTaskID: &cwmpID, RefreshParameters: true}
+			queuedAt := now.Add(-20 * time.Minute)
+			job := models.SystemTask{DeviceID: 1, SnapshotKind: "scheduled", SnapshotSlot: &queuedAt, SnapshotTemplateID: &templateID, CWMPTaskID: &cwmpID, RefreshParameters: true}
 			device := models.Device{ID: 1, Online: true, CreatedAt: old}
 			if tc.oldMarker {
 				device.SnapshotInitialAt = &old
 			}
 			hasInitial := tc.exists
+			var lastScheduled *time.Time
+			captureTime := now
 			db, err := gorm.Open(postgres.Open("host=127.0.0.1 user=unused dbname=unused sslmode=disable"), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
 			if err != nil {
 				t.Fatal(err)
@@ -296,9 +306,13 @@ func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
 				case *models.Device:
 					*dest = device
 				case *models.ProvisioningTemplate:
-					*dest = models.ProvisioningTemplate{ID: templateID, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: false, ScheduledEnabled: true}}
+					*dest = models.ProvisioningTemplate{ID: templateID, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: false, ScheduledEnabled: true, ScheduledIntervalMinutes: 60}}
 				case *[]models.DeviceSnapshot:
-					if hasInitial {
+					if len(tx.Statement.Selects) == 1 && tx.Statement.Selects[0] == "created_at" {
+						if lastScheduled != nil {
+							*dest = []models.DeviceSnapshot{{Kind: "scheduled", CreatedAt: *lastScheduled}}
+						}
+					} else if hasInitial {
 						*dest = []models.DeviceSnapshot{{ID: 1, Kind: "initial"}}
 					}
 				case *[]models.DeviceParameter:
@@ -313,17 +327,19 @@ func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
 			if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) {
 				snapshot := tx.Statement.Dest.(*models.DeviceSnapshot)
 				kinds = append(kinds, snapshot.Kind)
-				if snapshot.Kind == "initial" {
-					hasInitial = true
+				if snapshot.Kind != "scheduled" {
+					t.Fatal("scheduled job changed its snapshot type")
 				}
+				savedAt := captureTime
+				lastScheduled = &savedAt
 				tx.RowsAffected = 1
 			}); err != nil {
 				t.Fatal(err)
 			}
 			if err := db.Callback().Update().Replace("gorm:update", func(tx *gorm.DB) {
 				changes := tx.Statement.Dest.(map[string]interface{})
-				if stamp, ok := changes["snapshot_initial_at"].(time.Time); ok {
-					device.SnapshotInitialAt = &stamp
+				if _, ok := changes["snapshot_initial_at"]; ok {
+					t.Fatal("scheduled snapshot changed the initial completion marker")
 				}
 				if stamp, ok := changes["snapshot_scheduled_at"].(time.Time); ok {
 					device.SnapshotScheduledAt = &stamp
@@ -335,21 +351,18 @@ func TestScheduledSnapshotProvidesMissingInitialForAnyONT(t *testing.T) {
 			if err := completeAutomaticSnapshot(context.Background(), db, job, now); err != nil {
 				t.Fatal(err)
 			}
-			want := "initial"
-			if tc.exists {
-				want = "scheduled"
-			}
-			if len(kinds) != 1 || kinds[0] != want || device.SnapshotScheduledAt == nil {
+			if len(kinds) != 1 || kinds[0] != "scheduled" || device.SnapshotScheduledAt == nil || !device.SnapshotScheduledAt.Equal(now) {
 				t.Fatalf("incorrect scheduled result: %v", kinds)
 			}
-			if !tc.exists && (device.SnapshotInitialAt == nil || !device.SnapshotInitialAt.Equal(now)) {
-				t.Fatal("missing initial marker update")
+			if (device.SnapshotInitialAt != nil) != tc.oldMarker {
+				t.Fatal("scheduled snapshot changed initial snapshot state")
 			}
 			if err := completeAutomaticSnapshot(context.Background(), db, job, now); err != nil || len(kinds) != 1 {
 				t.Fatalf("duplicate slot: %v", err)
 			}
 			next := now.Add(time.Hour)
 			job.SnapshotSlot = &next
+			captureTime = next
 			if err := completeAutomaticSnapshot(context.Background(), db, job, next); err != nil || len(kinds) != 2 || kinds[1] != "scheduled" {
 				t.Fatalf("next snapshot did not remain scheduled: %v %v", kinds, err)
 			}
@@ -375,6 +388,8 @@ func TestAutomaticSnapshotQueueDeduplicatesAndReusesFailedJobs(t *testing.T) {
 				*dest = models.Device{ID: 1, Online: true, CreatedAt: activation.Add(time.Minute)}
 			case *models.ProvisioningTemplate:
 				*dest = models.ProvisioningTemplate{ID: 2, SnapshotInitialSince: &activation, Snapshots: models.TemplateSnapshotSettings{InitialEnabled: true}}
+			case *[]models.DeviceSnapshot:
+				*dest = nil
 			case *int64:
 				*dest = active
 			case *models.SystemTask:

@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { canDeleteSnapshot } from '../lib/snapshotSchedule';
+import { canDeleteSnapshot, snapshotKindLabel } from '../lib/snapshotSchedule';
 import { DEVICE_TAB_SECTIONS } from '../lib/permissions';
 import DeviceStatusBadge from '../components/DeviceStatusBadge';
 import SnapshotRequestStatus from '../components/SnapshotRequestStatus';
@@ -2471,7 +2471,7 @@ const DeviceDetail: Component = () => {
                           <div class={`rounded border p-3 ${selectedSnapshot()?.id === snapshot.id ? 'border-primary bg-primary/5' : 'border-subtle'}`}>
                             <div class="flex items-center justify-between gap-3">
                               <button type="button" class="text-left min-w-0 flex-1" onClick={() => void openSnapshot(snapshot)} disabled={snapshotLoading() !== null}>
-                                <div class="text-sm text-primary truncate">{snapshot.name}<Show when={snapshot.kind === 'initial'}><span class="ml-2 text-xs text-muted">Initial - protected</span></Show></div>
+                                <div class="flex min-w-0 items-center gap-2 text-sm text-primary"><span class="min-w-0 truncate">{snapshot.name}</span><span class="shrink-0 text-xs text-muted">{snapshotKindLabel(snapshot.kind)}{snapshot.kind === 'initial' ? ' - protected' : ''}</span></div>
                                 <div class="text-xs text-muted mt-1">{formatDate(snapshot.created_at)} · {snapshot.parameter_count} parameters</div>
                               </button>
                               <Show when={canDeleteSnapshot(snapshot.kind, can('cpe', 'write'), can('cpe', 'full'))}>
@@ -2490,7 +2490,7 @@ const DeviceDetail: Component = () => {
                       <>
                         <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                           <div>
-                            <h2 class="text-sm font-medium text-secondary">Diff: {snapshot().name}</h2>
+                            <h2 class="text-sm font-medium text-secondary">Diff: {snapshot().name} <span class="text-xs text-muted">({snapshotKindLabel(snapshot().kind)})</span></h2>
                             <p class="text-xs text-muted mt-1">Select a branch to select all writable parameters below it.</p>
                           </div>
                           <Show when={isFullAccess()}>

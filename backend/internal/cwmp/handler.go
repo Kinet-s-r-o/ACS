@@ -33,6 +33,7 @@ type Handler struct {
 	blockedRepo          *database.BlockedDeviceRepository
 	metricRepo           *database.MetricRepository
 	settingsRepo         *database.SettingsRepository
+	snapshotRepo         *database.SnapshotRepository
 	watchdog             *DeviceWatchdog
 	metricPollInterval   time.Duration
 	overviewPollInterval time.Duration
@@ -65,6 +66,7 @@ func NewHandler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Handler {
 	var blockedRepo *database.BlockedDeviceRepository
 	var metricRepo *database.MetricRepository
 	var settingsRepo *database.SettingsRepository
+	var snapshotRepo *database.SnapshotRepository
 
 	if db != nil {
 		deviceRepo = database.NewDeviceRepository(db)
@@ -75,6 +77,7 @@ func NewHandler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Handler {
 		blockedRepo = database.NewBlockedDeviceRepository(db)
 		metricRepo = database.NewMetricRepository(db)
 		settingsRepo = database.NewSettingsRepository(db)
+		snapshotRepo = database.NewSnapshotRepository(db)
 	}
 
 	pollInterval := 15 * time.Minute
@@ -94,6 +97,7 @@ func NewHandler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Handler {
 		blockedRepo:          blockedRepo,
 		metricRepo:           metricRepo,
 		settingsRepo:         settingsRepo,
+		snapshotRepo:         snapshotRepo,
 		metricPollInterval:   pollInterval,
 		overviewPollInterval: 15 * time.Minute,
 		fullPollInterval:     6 * time.Hour,
@@ -393,6 +397,18 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 			}
 			if err := h.metricRepo.ExtractAndStore(ctx, deviceID, deviceType, paramMap, inform.DeviceId.SerialNumber); err != nil {
 				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error extracting metrics from Inform: %v", err)
+			}
+		}
+	}
+
+	if h.snapshotRepo != nil && deviceID > 0 && resolvedTemplate != nil {
+		now := time.Now().UTC()
+		for _, kind := range []string{"initial", "scheduled"} {
+			if (kind == "initial" && !resolvedTemplate.Snapshots.InitialEnabled) || (kind == "scheduled" && !resolvedTemplate.Snapshots.ScheduledEnabled) {
+				continue
+			}
+			if err := h.snapshotRepo.QueueAutomatic(ctx, deviceID, resolvedTemplate.ID, kind, now, now); err != nil {
+				logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Could not queue %s snapshot after Inform: %v", kind, err)
 			}
 		}
 	}

@@ -9,3 +9,5 @@ export function validateSnapshotSettings(settings: TemplateSnapshotSettings): st
 }
 
 export const canDeleteSnapshot = (kind: string | undefined, write: boolean, full: boolean) => full || (kind !== 'initial' && write);
+
+export const snapshotKindLabel = (kind: string | undefined) => kind === 'initial' ? 'Initial' : kind === 'scheduled' ? 'Scheduled' : 'Manual';
