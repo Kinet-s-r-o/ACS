@@ -10,6 +10,7 @@ interface DialogProps {
   actions?: JSX.Element;
   sidePanel?: JSX.Element;
   size?: 'small' | 'medium' | 'large';
+  preferredWidth?: number;
   closeLabel?: string;
   closeOnBackdrop?: boolean;
   onClose: () => void;
@@ -148,8 +149,8 @@ const Dialog: ParentComponent<DialogProps> = (props) => {
           ref={panel}
           class={`dialog-panel dialog-${props.size ?? 'medium'}${sidePanel() ? ' dialog-with-side-panel' : ''}`}
           classList={{ 'dialog-user-sized': !!userRect() }}
-          data-dynamic-style="User-selected dialog dimensions and position, constrained to the viewport"
-          style={userRect() ? { width: `${userRect()!.width}px`, height: `${userRect()!.height}px`, left: `${userRect()!.left}px`, top: `${userRect()!.top}px` } : undefined}
+          data-dynamic-style="Preferred or user-selected dialog dimensions and position, constrained to the viewport"
+          style={userRect() ? { width: `${userRect()!.width}px`, height: `${userRect()!.height}px`, left: `${userRect()!.left}px`, top: `${userRect()!.top}px` } : props.preferredWidth ? { width: `${Math.min(props.preferredWidth, availableSize().width)}px`, "max-width": `${availableSize().width}px` } : undefined}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}

@@ -272,7 +272,7 @@ const Faults: Component = () => {
             />
           }>
             <div class="overflow-x-auto table-scroll">
-              <table id="cwmp-faults-table" data-column-order-key="cwmp-fault-center" data-column-order-legacy-schema="actions|code|device|message|parameter|status|time" class="data-table w-full text-sm min-w-[700px]">
+              <table id="cwmp-faults-table" data-column-order-key="cwmp-fault-center" data-column-order-legacy-schema="actions|code|device|message|parameter|status|time" class="data-table cwmp-fault-table w-full text-sm">
                 <thead>
                   <tr class="border-b border-subtle bg-surface/50">
                     <Show when={isFullAccess()}>
@@ -381,12 +381,12 @@ const Faults: Component = () => {
                           </td>
                         </Show>
                         <Show when={isVisible('fault_string')}>
-                          <td data-column-order-id="message#0" class="px-4 py-3 text-secondary max-w-xs truncate" title={fault.fault_string}>
-                            {fault.fault_string.length > 40 ? fault.fault_string.slice(0, 40) + '...' : fault.fault_string}
+                          <td data-column-order-id="message#0" class="px-4 py-3 text-secondary" title={fault.fault_string}>
+                            {fault.fault_string}
                           </td>
                         </Show>
                         <Show when={isVisible('parameter_name')}>
-                          <td data-column-order-id="parameter#0" class="px-4 py-3 text-muted font-mono text-xs max-w-xs truncate hidden lg:table-cell" title={fault.parameter_name}>
+                          <td data-column-order-id="parameter#0" class="px-4 py-3 text-muted font-mono text-xs hidden lg:table-cell" title={fault.parameter_name}>
                             {fault.parameter_name || '-'}
                           </td>
                         </Show>

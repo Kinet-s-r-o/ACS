@@ -3394,7 +3394,7 @@ const DeviceDetail: Component = () => {
                   <EmptyState compact icon={<AlertTriangle size={22} />} title="No CWMP faults recorded for this device" description="Protocol faults will appear here when the device reports a CWMP error during a session." />
                 }>
                   <div class="table-scroll">
-                    <table id="device-faults-table" class="data-table w-full text-sm min-w-[680px]">
+                    <table id="device-faults-table" class="data-table cwmp-fault-table w-full text-sm">
                       <thead class="bg-base sticky top-0 z-10">
                         <tr class="bg-base">
                           <th class="px-3 py-2 w-8" aria-label="Fault details" />
@@ -3452,10 +3452,10 @@ const DeviceDetail: Component = () => {
                                   {fault.fault_code}
                                 </span>
                               </td>
-                              <td data-column-order-id="message#0" class="px-4 py-2 text-secondary max-w-xs truncate" title={fault.fault_string}>
-                                {fault.fault_string.length > 50 ? fault.fault_string.slice(0, 50) + '...' : fault.fault_string}
+                              <td data-column-order-id="message#0" class="px-4 py-2 text-secondary" title={fault.fault_string}>
+                                {fault.fault_string}
                               </td>
-                              <td data-column-order-id="parameter#0" class="px-4 py-2 text-muted font-mono text-xs max-w-xs truncate" title={fault.parameter_name}>
+                              <td data-column-order-id="parameter#0" class="px-4 py-2 text-muted font-mono text-xs" title={fault.parameter_name}>
                                 {fault.parameter_name || '-'}
                               </td>
                               <td data-column-order-id="time#0" class="px-4 py-2 text-muted text-xs">{formatDate(fault.created_at)}</td>

@@ -194,6 +194,19 @@ const Provisioning: Component = () => {
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], ignored_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false });
+  const [templatePathFontLoaded, setTemplatePathFontLoaded] = createSignal(false);
+  onMount(() => { void document.fonts.ready.then(() => setTemplatePathFontLoaded(true)); });
+  const templatePathMeasure = document.createElement('canvas').getContext('2d');
+  const templatePreferredWidth = createMemo(() => {
+    templatePathFontLoaded();
+    const branches = [...templateForm().dynamic_parameter_branches, ...templateForm().ignored_parameter_branches];
+    // Match the branch inputs' font-mono text-xs typography. Include body,
+    // fieldset and input padding, the remove button, gap and panel borders.
+    const fontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.75;
+    if (templatePathMeasure) templatePathMeasure.font = `${fontSize}px "IBM Plex Mono", monospace`;
+    const textWidth = Math.max(0, ...branches.map(branch => templatePathMeasure?.measureText(branch).width ?? branch.length * fontSize * 0.6));
+    return Math.max(560, Math.ceil(textWidth + 144));
+  });
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
   const [templateImageUploading, setTemplateImageUploading] = createSignal(false);
@@ -2177,6 +2190,7 @@ const Provisioning: Component = () => {
       <Show when={showTemplateModal()}>
         <Dialog
           title={editingTemplate() ? 'Edit template' : cloningTemplate() ? 'Duplicate template' : 'Add template'}
+          preferredWidth={templatePreferredWidth()}
           onClose={closeTemplateModal}
         >
           <div class="tab-bar mb-4 overflow-x-auto" role="tablist" aria-label="Template settings">
@@ -2282,7 +2296,7 @@ const Provisioning: Component = () => {
             </fieldset>
             </Show>
             <Show when={templateModalTab() === 'dynamic_parameters'}>
-            <fieldset class="space-y-3 rounded border border-subtle p-3">
+            <fieldset class="min-w-0 space-y-3 rounded border border-subtle p-3">
               <legend class="px-1 text-xs font-medium text-secondary">Dynamic parameter branches</legend>
               <p class="text-xs text-muted">These object branches are discovered live before overview polling, so removed CPE objects are not requested from the ACS cache.</p>
               <div class="space-y-2">
@@ -2292,11 +2306,11 @@ const Provisioning: Component = () => {
                 </div>}</Index>
                 <button type="button" class="btn btn-secondary text-xs" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: [...form.dynamic_parameter_branches, ''] }))}><Plus size={13} />Add branch</button>
               </div>
-              <p class="text-[10px] text-muted">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.AssociatedDevice.</code></p>
+              <p class="text-[10px] text-muted [overflow-wrap:anywhere]">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.AssociatedDevice.</code></p>
             </fieldset>
             </Show>
             <Show when={templateModalTab() === 'ignored_parameters'}>
-            <fieldset class="space-y-3 rounded border border-subtle p-3">
+            <fieldset class="min-w-0 space-y-3 rounded border border-subtle p-3">
               <legend class="px-1 text-xs font-medium text-secondary">Ignored parameter branches</legend>
               <p class="text-xs text-muted">Matching branches are skipped during full refresh (including snapshots), overview refresh, and automatic polling. Explicit parameter reads and provisioning still work. Existing cached values are removed after a successful full refresh; saved snapshots and faults remain unchanged.</p>
               <div class="space-y-2">
@@ -2308,7 +2322,7 @@ const Provisioning: Component = () => {
                 </div></div>}</Index>
                 <button type="button" class="btn btn-secondary text-xs" onClick={() => setTemplateForm(form => ({ ...form, ignored_parameter_branches: [...form.ignored_parameter_branches, ''] }))}><Plus size={13} />Add branch</button>
               </div>
-              <p class="text-[10px] text-muted">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.STAWMMParameter.</code></p>
+              <p class="text-[10px] text-muted [overflow-wrap:anywhere]">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.STAWMMParameter.</code></p>
             </fieldset>
             </Show>
             <Show when={templateModalTab() === 'snapshots'}><TemplateSnapshotsForm value={templateForm().snapshots} disabled={pendingAction() !== null || !can('settings.provisioning', 'write')} onChange={snapshots => setTemplateForm(form => ({ ...form, snapshots }))} /></Show>

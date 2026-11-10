@@ -386,6 +386,12 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .data-table tbody td { padding: 10px 14px; border-top: 1px solid rgb(var(--border-subtle)); line-height: 1.35; vertical-align: middle; }
 .data-table tbody tr:first-child td { border-top: 0; }
 .data-table tbody tr:hover { background: rgb(var(--bg-elevated) / .42); }
+/* Native auto layout gives fault text its preferred width, then wraps it within
+   the available table width. Stable IDs keep this behavior after reordering. */
+.cwmp-fault-table { table-layout: auto; }
+.cwmp-fault-table th:not([data-column-order-id="message#0"]):not([data-column-order-id="parameter#0"]) { width: 1%; white-space: nowrap; }
+.cwmp-fault-table td:is([data-column-order-id="message#0"], [data-column-order-id="parameter#0"]) { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cwmp-fault-table td[data-column-order-id="time#0"] { white-space: nowrap; }
 .data-table .icon-button { width: 30px; height: 30px; }
 .data-table .btn-xs { min-height: 28px; padding: 4px 8px; font-size: 11px; }
 .data-table th.text-right, .data-table td.text-right { text-align: right; }

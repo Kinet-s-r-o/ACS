@@ -105,3 +105,61 @@ func TestQueuedFullTreeRefreshUsesIgnoredBranches(t *testing.T) {
 		t.Fatalf("queued refresh=%#v err=%v", request, err)
 	}
 }
+
+// Exercise the real Inform -> template -> session -> discovery path rather than
+// injecting exclusions directly into the session. These patterns include the
+// final instance wildcard used for WMM categories in the template editor.
+func TestInformLoadsIgnoredWMMBranchesBeforeFullRefresh(t *testing.T) {
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: snapshotInformConnection{}}), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	branches := []string{
+		"InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.APWMMParameter.*.",
+		"InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.STAWMMParameter.*.",
+	}
+	if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+		switch dest := tx.Statement.Dest.(type) {
+		case *models.ProvisioningTemplate:
+			*dest = models.ProvisioningTemplate{ID: 7, IgnoredParameterBranches: branches}
+		case *models.Device:
+			*dest = models.Device{ID: 1, SerialNumber: "IGNORED-INFORM-TEST"}
+		}
+		tx.RowsAffected = 1
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Callback().Create().Replace("gorm:create", func(tx *gorm.DB) {
+		if device, ok := tx.Statement.Dest.(*models.Device); ok {
+			device.ID = 1
+		}
+		tx.RowsAffected = 1
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(nil)
+	h.deviceRepo = database.NewDeviceRepository(db)
+	h.provisioningRepo = database.NewProvisioningRepository(db)
+	envelope := &SOAPEnvelope{Body: SOAPBody{Inform: &Inform{DeviceId: DeviceId{SerialNumber: "IGNORED-INFORM-TEST"}, ParameterList: ParameterList{Parameters: []ParameterValueStruct{{Name: "InternetGatewayDevice.DeviceInfo.UpTime", Value: "1"}}}}}}
+	ctx := context.Background()
+	if _, err := h.handleInform(ctx, envelope, "ignored-inform"); err != nil {
+		t.Fatal(err)
+	}
+	s := h.sessions.Get("ignored-inform")
+	if !slices.Equal(s.IgnoredParameterBranches, branches) {
+		t.Fatalf("Inform lost exclusions: %v", s.IgnoredParameterBranches)
+	}
+	request, _, err := h.handleEmptyPost(ctx, s.ID)
+	if _, ok := request.(*GetParameterNames); err != nil || !ok {
+		t.Fatalf("full refresh did not discover first: %#v err=%v", request, err)
+	}
+	allowed := "InternetGatewayDevice.DeviceInfo.UpTime"
+	request, err = h.handleGetParameterNamesResponse(ctx, &GetParameterNamesResp{ParameterList: []ParameterInfoStruct{
+		{Name: "InternetGatewayDevice.LANDevice.1.WLANConfiguration.8.STAWMMParameter.4.AckPolicy"},
+		{Name: "InternetGatewayDevice.LANDevice.1.WLANConfiguration.8.APWMMParameter.4.TXOP"},
+		{Name: allowed},
+	}}, s.ID)
+	if gpv, ok := request.(*GetParameterValues); err != nil || !ok || !slices.Equal(gpv.ParameterNames, []string{allowed}) {
+		t.Fatalf("WMM exclusion bypassed: %#v err=%v", request, err)
+	}
+}
