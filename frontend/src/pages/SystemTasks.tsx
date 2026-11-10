@@ -32,7 +32,7 @@ const statusClass = (status: SystemTaskStatus) => {
 
 const SystemTasks: Component = () => {
   const { can } = useAuth();
-  const { confirm, notify } = useFeedback();
+  const { notify } = useFeedback();
   const canConfigure = () => can(`settings.system_tasks.${settingsType()}`, 'edit');
   const canManageTasks = () => expandedType() !== null && can(`settings.system_tasks.${expandedType()}`, 'edit');
   const canClearTasks = (type: SystemTaskType) => can(`settings.system_tasks.${type}`, 'delete');
@@ -52,6 +52,11 @@ const SystemTasks: Component = () => {
   const [settingsForm, setSettingsForm] = createSignal<BulkSummonSettings>({ max_in_flight: 2, interval_seconds: 5, contact_timeout_seconds: 120 });
   const [savingSettings, setSavingSettings] = createSignal(false);
   const [busyAction, setBusyAction] = createSignal<string | null>(null);
+  const [clearType, setClearType] = createSignal<SystemTaskType | null>(null);
+  const [clearStatuses, setClearStatuses] = createSignal<SystemTaskStatus[]>(['completed', 'failed']);
+  const clearLabel = () => taskGroups.find(group => group.type === clearType())?.label ?? 'system';
+  const clearCount = () => clearStatuses().reduce((sum, status) => sum + countFor(summaryCounts(clearType()!), status), 0);
+  const closeClearDialog = () => { if (!busyAction()) setClearType(null); };
 
   const taskData = createMemo((previous: { tasks: SystemTask[]; total: number } | undefined) => tasks.error ? previous : tasks.latest);
   const pageTotal = createMemo(() => taskData()?.total ?? 0);
@@ -137,21 +142,18 @@ const SystemTasks: Component = () => {
     }
   };
 
-  const clearFinished = async (type: SystemTaskType) => {
-    const label = taskGroups.find(group => group.type === type)?.label ?? 'system task';
-    if (!await confirm({
-      title: `Clear finished ${label} history?`,
-      description: 'Completed and failed records will be permanently deleted. Pending and processing tasks will remain in the queue.',
-      confirmLabel: 'Clear finished tasks',
-      tone: 'danger',
-    })) return;
+  const clearSelectedTasks = async () => {
+    const type = clearType();
+    if (!type || !canClearTasks(type) || busyAction() || clearStatuses().length === 0) return;
     setBusyAction(`clear-${type}`);
     try {
-      const result = await api.clearFinishedSystemTasks(type);
-      notify({ tone: 'success', title: 'Finished tasks cleared', message: `${result.deleted} records deleted.` });
+      const result = await api.clearSystemTasks(type, clearStatuses());
+      setClearType(null);
+      setTaskPage(0);
+      notify({ tone: 'success', title: 'Selected tasks cleared', message: `${result.deleted} records deleted.${result.skipped ? ` ${result.skipped} tasks already sent to CPEs were kept.` : ''}` });
       await refreshGroup();
     } catch (error) {
-      notify({ tone: 'error', title: 'Could not clear finished tasks', detail: (error as Error).message, persistent: true });
+      notify({ tone: 'error', title: 'Could not clear selected tasks', detail: (error as Error).message, persistent: true });
     } finally {
       setBusyAction(null);
     }
@@ -193,7 +195,7 @@ const SystemTasks: Component = () => {
                     </button>
                   </Show>
                   <Show when={canClearTasks(group.type)}>
-                    <button type="button" class="icon-button text-error" onClick={() => void clearFinished(group.type)} disabled={busyAction() === `clear-${group.type}`} title={`Clear finished ${group.label} tasks`} aria-label={`Clear finished ${group.label} tasks`}>
+                    <button type="button" class="icon-button text-error" onClick={() => { setClearStatuses(['completed', 'failed']); setClearType(group.type); }} disabled={busyAction() !== null} title={`Clear ${group.label} tasks`} aria-label={`Clear ${group.label} tasks`}>
                       <Trash2 size={14} aria-hidden="true" />
                     </button>
                   </Show>
@@ -265,6 +267,24 @@ const SystemTasks: Component = () => {
           );
         }}</For>
       </div>
+
+      <Show when={clearType()}>
+        <Dialog title={`Clear ${clearLabel()} tasks?`} description="Choose which task statuses to delete from this queue. This applies to the whole group, including records outside the current page or search." onClose={closeClearDialog} size="small" actions={<>
+          <button type="button" class="btn btn-secondary" onClick={closeClearDialog} disabled={busyAction() !== null}>Cancel</button>
+          <button type="button" class="btn btn-danger" onClick={() => void clearSelectedTasks()} disabled={busyAction() !== null || clearStatuses().length === 0 || !canClearTasks(clearType()!)}>{busyAction() ? 'Deleting…' : `Delete selected tasks (${clearCount()})`}</button>
+        </>}>
+          <fieldset class="space-y-3" disabled={busyAction() !== null}>
+            <legend class="mb-3 text-sm font-medium text-secondary">Task statuses</legend>
+            <For each={['pending', 'completed', 'failed'] as SystemTaskStatus[]}>{status => <label class="flex items-center gap-3 text-sm text-secondary">
+              <input type="checkbox" checked={clearStatuses().includes(status)} onChange={event => setClearStatuses(current => event.currentTarget.checked ? [...current, status] : current.filter(value => value !== status))} />
+              <span class="capitalize">{status}</span><span class="text-muted">({countFor(summaryCounts(clearType()!), status)})</span>
+            </label>}</For>
+          </fieldset>
+          <p class="mt-4 text-xs text-muted">Processing and Waiting tasks are kept because they may already be running on a CPE.</p>
+          <Show when={clearStatuses().includes('pending')}><p class="mt-3 text-sm text-warning">Pending tasks will be cancelled and deleted, including linked CWMP requests that have not been sent. Automatic snapshots can queue new tasks while their schedule is enabled.</p></Show>
+          <p class="mt-3 text-xs text-error">Deletion is permanent. Existing snapshots are kept.</p>
+        </Dialog>
+      </Show>
 
       <Show when={settingsOpen()}>
         <Dialog title={`${settingsLabel()} settings`} description="Control dispatch pacing, concurrent CPEs, and how long each task waits for its CPE to connect." onClose={() => setSettingsOpen(false)} size="small" actions={<>

@@ -273,6 +273,7 @@ export const api = {
   createBulkRestart: (deviceIDs: number[], credentials: ReauthenticationCredentials) => request<{ status: string; count: number }>('/system-tasks/bulk-restart', { method: 'POST', body: JSON.stringify({ device_ids: deviceIDs, ...credentials }) }),
   retrySystemTask: (id: number) => request<{ status: string }>(`/system-tasks/${id}/retry`, { method: 'POST' }),
   clearFinishedSystemTasks: (type: SystemTaskType) => request<{ deleted: number }>(`/system-tasks/${type}/finished`, { method: 'DELETE' }),
+  clearSystemTasks: (type: SystemTaskType, statuses: SystemTaskStatus[]) => request<{ deleted: number; skipped: number }>(`/system-tasks/${type}`, { method: 'DELETE', body: JSON.stringify({ statuses }) }),
   getBulkSummonSettings: () => request<BulkSummonSettings>('/system-tasks/bulk-summon-settings'),
   saveBulkSummonSettings: (settings: BulkSummonSettings) => request<BulkSummonSettings>('/system-tasks/bulk-summon-settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getBulkRestartSettings: () => request<BulkRestartSettings>('/system-tasks/bulk-restart-settings'),

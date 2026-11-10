@@ -8,6 +8,8 @@ Automatic template snapshots: [automation guide](../docs/automatic-snapshots.md)
 
 Manual CPE snapshots enqueue Bulk Summon and return a system task (HTTP 202). `components/SnapshotRequestStatus.tsx` follows the owned request until completion/failure; refresh the snapshot list only on successful completion and retain failed-request feedback. Unmounting the UI stops polling while the durable queue keeps processing.
 
+System tasks cleanup (`pages/SystemTasks.tsx`) opens one confirmation dialog with Pending, Completed and Failed checkboxes; default to Completed/Failed. Deletion covers the entire selected group, regardless of search/pagination, using the existing System tasks Delete grant. Show counts and pending-cancellation consequences, preserve selections after errors, and keep Processing/Waiting protected. Backend atomically cancels linked pending CWMP tasks; an enabled snapshot schedule may queue new work afterwards.
+
 Template CPE edit form designer and runtime: [edit windows guide](../docs/cpe-edit-windows.md), `components/CPEEditWindowDesigner.tsx`, `CustomCPEEditModal.tsx`, `CPEEditWindowFields.tsx` and `lib/cpeEditWindows.ts`.
 
 Section authorization: [permission model](../docs/permission-expansion-plan.md), `lib/permissions.ts`, `components/SectionPage.tsx`, `pages/RolesTab.tsx` and route/menu/tab guards. Use `can(section, action)` for actions and `canVisit(section)` for navigation. Each catalog row defines its own actions and covers its existing/future subtabs; CPE overview is independent of inventory. Older permission names below identify internal component adapters.

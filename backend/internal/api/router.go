@@ -231,6 +231,7 @@ func (r *Router) Handler() http.Handler {
 	apiMux.HandleFunc("POST /system-tasks/bulk-restart", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleCreateBulkRestart))
 	apiMux.HandleFunc("POST /system-tasks/{id}/retry", auth.RequireAnyPermission(models.PermDevicesCommand, models.PermDevicesWrite)(r.handleRetrySystemTask))
 	apiMux.HandleFunc("DELETE /system-tasks/{type}/finished", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleClearFinishedSystemTasks))
+	apiMux.HandleFunc("DELETE /system-tasks/{type}", auth.RequireAnyPermission(models.PermDevicesDelete, models.PermDevicesWrite)(r.handleClearSystemTasks))
 	apiMux.HandleFunc("GET /system-tasks/bulk-summon-settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetBulkSummonSettings))
 	apiMux.HandleFunc("PUT /system-tasks/bulk-summon-settings", auth.RequirePermission(models.PermSettingsWrite)(r.handleSaveBulkSummonSettings))
 	apiMux.HandleFunc("GET /system-tasks/bulk-restart-settings", auth.RequirePermission(models.PermSettingsRead)(r.handleGetBulkRestartSettings))
