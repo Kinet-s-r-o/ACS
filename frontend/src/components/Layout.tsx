@@ -11,7 +11,7 @@ import { APP_VERSION } from '../lib/version';
 import { appName, appLogo } from '../lib/appName';
 import ThemeSwitcher from './ThemeSwitcher';
 import { enableTableColumnReordering } from '../lib/tableColumnReorder';
-import { createTableRangeSelection, selectTableRecords } from '../lib/tableSelection';
+import { createTableRangeSelection, deleteSelectedTableRecords, selectTableRecords } from '../lib/tableSelection';
 import { playUITransition, transitionSettingsFromAPI, updateUITransitionSettings } from '../lib/uiTransitions';
 
 const navigation = [
@@ -114,10 +114,11 @@ const Layout: ParentComponent = (props) => {
     };
     document.addEventListener('keydown', closeOnEscape);
     document.addEventListener('keydown', selectTableRecords);
+    document.addEventListener('keydown', deleteSelectedTableRecords);
     document.addEventListener('keydown', rangeSelection.keyDown);
     document.addEventListener('click', rangeSelection.click);
     document.addEventListener('click', animateSectionSwitch);
-    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('keydown', selectTableRecords); document.removeEventListener('keydown', rangeSelection.keyDown); document.removeEventListener('click', rangeSelection.click); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
+    onCleanup(() => { disableTableColumnReordering(); window.clearInterval(timer); document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('keydown', selectTableRecords); document.removeEventListener('keydown', deleteSelectedTableRecords); document.removeEventListener('keydown', rangeSelection.keyDown); document.removeEventListener('click', rangeSelection.click); document.removeEventListener('click', animateSectionSwitch); media.removeEventListener('change', updateViewport); });
   });
 
   const isSidebarCollapsed = () => sidebarCollapsed() && desktopViewport();

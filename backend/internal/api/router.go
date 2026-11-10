@@ -821,12 +821,12 @@ func (r *Router) handleListSystemTasks(w http.ResponseWriter, req *http.Request)
 		respondError(w, http.StatusForbidden, "System task type read permission required")
 		return
 	}
-	options, err := parseTableQuery(req, "serial_number", "status", "attempts", "created_at", "created_by", "error")
+	options, err := parseTableQuery(req, "id", "serial_number", "status", "attempts", "created_at", "created_by", "cwmp_task_id", "error")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid system task query")
 		return
 	}
-	items, total, err := r.systemTaskRepo.ListPage(req.Context(), taskType, options.Limit, options.Offset, options.Search, options.Sort, options.Direction)
+	items, total, err := r.systemTaskRepo.ListPage(req.Context(), taskType, options.Limit, options.Offset, options.Search, options.Sort, options.Direction, options.Filters)
 	if err != nil {
 		log.Printf("Error listing system tasks: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list system tasks")

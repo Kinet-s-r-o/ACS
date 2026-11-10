@@ -219,7 +219,7 @@ const Faults: Component = () => {
 
       <Show when={can('faults', 'delete') && selectedFaults().size > 0}>
         <div class="flex justify-end">
-          <button onClick={handleBulkDelete} class="btn btn-danger" disabled={bulkDeleting()}>
+          <button type="button" data-table-delete-selected aria-controls="cwmp-faults-table" aria-keyshortcuts="Delete" onClick={handleBulkDelete} class="btn btn-danger" disabled={bulkDeleting()}>
             <Trash2 size={14} />
             Delete selected ({selectedFaults().size})
           </button>
@@ -272,7 +272,7 @@ const Faults: Component = () => {
             />
           }>
             <div class="overflow-x-auto table-scroll">
-              <table data-column-order-key="cwmp-fault-center" data-column-order-legacy-schema="actions|code|device|message|parameter|status|time" class="data-table w-full text-sm min-w-[700px]">
+              <table id="cwmp-faults-table" data-column-order-key="cwmp-fault-center" data-column-order-legacy-schema="actions|code|device|message|parameter|status|time" class="data-table w-full text-sm min-w-[700px]">
                 <thead>
                   <tr class="border-b border-subtle bg-surface/50">
                     <Show when={isFullAccess()}>

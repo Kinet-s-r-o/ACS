@@ -263,9 +263,10 @@ export const api = {
   getWANInterfaces: (limit = 20, offset = 0, options?: TableQueryOptions) => request<WANInterfacePage>(`/wan-interfaces?${tableQuery(limit, offset, options)}`),
   getTasks: (limit = 20, offset = 0, options?: TableQueryOptions) => request<{ tasks: GlobalTask[]; total: number; limit: number; offset: number; counts: Record<string, number> }>(`/tasks?${tableQuery(limit, offset, options)}`),
   getSystemTaskSummary: () => request<SystemTaskSummary>('/system-tasks/summary'),
-  getSystemTasks: (type: SystemTaskType, limit = 20, offset = 0, search = '', sort = 'created_at', direction: 'asc' | 'desc' = 'desc') => {
+  getSystemTasks: (type: SystemTaskType, limit = 20, offset = 0, search = '', sort = 'created_at', direction: 'asc' | 'desc' = 'desc', filters?: Record<string, ColumnFilterState>) => {
     const params = new URLSearchParams({ type, limit: String(limit), offset: String(offset), sort, direction });
     if (search) params.set('search', search);
+    if (filters && Object.keys(filters).length > 0) params.set('filters', JSON.stringify(filters));
     return request<{ tasks: SystemTask[]; total: number; limit: number; offset: number }>(`/system-tasks?${params}`);
   },
   getSystemTask: (id: number) => request<SystemTask>(`/system-tasks/${id}`),

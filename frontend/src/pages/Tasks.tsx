@@ -212,7 +212,7 @@ const Tasks: Component = () => {
 
       <Show when={canCurrent('delete') && selectedTasks().size > 0}>
         <div class="flex justify-end">
-          <button type="button" onClick={() => void deleteSelectedTasks()} class="btn btn-danger" disabled={bulkDeleting()}>
+          <button type="button" data-table-delete-selected aria-controls="cwmp-tasks-table" aria-keyshortcuts="Delete" onClick={() => void deleteSelectedTasks()} class="btn btn-danger" disabled={bulkDeleting()}>
             <Trash2 size={14} />
             Delete selected ({selectedTasks().size})
           </button>
@@ -250,7 +250,7 @@ const Tasks: Component = () => {
           <Show when={!tasks.loading} fallback={<div class="p-5 space-y-2"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /></div>}>
             <Show when={filteredTasks().length > 0} fallback={<EmptyState compact title="No CWMP tasks found" description={searchQuery() ? 'Try a different search term.' : 'Tasks will appear here after an operator creates an operation for a CPE.'} />}>
               <div class="table-scroll">
-                <table class="data-table w-full text-sm min-w-[1240px]">
+                <table id="cwmp-tasks-table" class="data-table w-full text-sm min-w-[1240px]">
                   <thead class="opaque-table-header">
                     <tr class="border-b border-subtle">
                       <Show when={canCurrent('delete')}><th class="w-8"><input data-table-select-all type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={togglePageTaskSelection} aria-label="Select all pending tasks on this page" /></th></Show>

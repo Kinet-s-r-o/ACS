@@ -40,14 +40,25 @@ func (r *SystemTaskRepository) CreateMany(ctx context.Context, tasks []models.Sy
 	return r.db.WithContext(ctx).CreateInBatches(&tasks, 200).Error
 }
 
-func (r *SystemTaskRepository) ListPage(ctx context.Context, taskType models.SystemTaskType, limit, offset int, search, sort, direction string) ([]SystemTaskListItem, int, error) {
+func (r *SystemTaskRepository) ListPage(ctx context.Context, taskType models.SystemTaskType, limit, offset int, search, sort, direction string, filters map[string]TableColumnFilter) ([]SystemTaskListItem, int, error) {
 	query := r.db.WithContext(ctx).Table("system_tasks st").Joins("JOIN devices d ON d.id = st.device_id").Where("st.type = ?", taskType)
 	query = applySearchTerms(query, search, []string{"d.serial_number", "st.created_by", "st.status", "st.error_message", "CAST(st.id AS TEXT)"})
+	expressions := map[string]string{
+		"id": "st.id", "serial_number": "d.serial_number", "status": "st.status", "attempts": "st.attempts",
+		"created_at": "st.created_at", "created_by": "st.created_by", "cwmp_task_id": "st.cwmp_task_id", "error": "st.error_message",
+	}
+	numericExpressions := map[string]string{"id": "st.id", "attempts": "st.attempts", "cwmp_task_id": "st.cwmp_task_id"}
+	var err error
+	query, err = ApplyTableColumnFilters(query, filters, expressions, numericExpressions)
+	if err != nil {
+		return nil, 0, err
+	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	sortColumns := map[string]string{
+		"id": "st.id", "cwmp_task_id": "st.cwmp_task_id",
 		"serial_number": "d.serial_number", "status": "st.status", "attempts": "st.attempts",
 		"created_at": "st.created_at", "created_by": "st.created_by", "error": "st.error_message",
 	}
@@ -59,7 +70,7 @@ func (r *SystemTaskRepository) ListPage(ctx context.Context, taskType models.Sys
 		return nil, 0, fmt.Errorf("invalid system task sort direction")
 	}
 	var items []SystemTaskListItem
-	err := query.Select("st.id, st.type, st.device_id, d.serial_number, st.cwmp_task_id, st.status, st.attempts, st.error_message, st.created_by, st.created_at, st.completed_at").
+	err = query.Select("st.id, st.type, st.device_id, d.serial_number, st.cwmp_task_id, st.status, st.attempts, st.error_message, st.created_by, st.created_at, st.completed_at").
 		Order(order + " " + strings.ToUpper(direction) + " NULLS LAST").Order("st.id DESC").Limit(limit).Offset(offset).Scan(&items).Error
 	return items, int(total), err
 }

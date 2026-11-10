@@ -3375,7 +3375,7 @@ const DeviceDetail: Component = () => {
                 </h2>
                 <div class="flex items-center gap-3">
                   <Show when={can('faults', 'delete') && selectedDeviceFaults().size > 0}>
-                    <button onClick={handleBulkDeleteFaults} class="btn btn-danger" disabled={bulkDeletingFaults()}>
+                    <button type="button" data-table-delete-selected aria-controls="device-faults-table" aria-keyshortcuts="Delete" onClick={handleBulkDeleteFaults} class="btn btn-danger" disabled={bulkDeletingFaults()}>
                       <Trash2 size={14} />
                       Delete selected ({selectedDeviceFaults().size})
                     </button>
@@ -3394,7 +3394,7 @@ const DeviceDetail: Component = () => {
                   <EmptyState compact icon={<AlertTriangle size={22} />} title="No CWMP faults recorded for this device" description="Protocol faults will appear here when the device reports a CWMP error during a session." />
                 }>
                   <div class="table-scroll">
-                    <table class="data-table w-full text-sm min-w-[680px]">
+                    <table id="device-faults-table" class="data-table w-full text-sm min-w-[680px]">
                       <thead class="bg-base sticky top-0 z-10">
                         <tr class="bg-base">
                           <th class="px-3 py-2 w-8" aria-label="Fault details" />

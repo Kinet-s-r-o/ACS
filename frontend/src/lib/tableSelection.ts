@@ -4,6 +4,24 @@ const selectionScope = () => {
   return dialogs.at(-1) ?? document.querySelector<HTMLElement>('main');
 };
 
+export const deleteSelectedTableRecords = (event: KeyboardEvent) => {
+  if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.key !== 'Delete') return;
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (target?.closest('textarea, select, [role="textbox"], [contenteditable]:not([contenteditable="false"]), [role="menu"], [role="listbox"]')) return;
+  if (target instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit', 'reset'].includes(target.type)) return;
+  const scope = selectionScope();
+  if (!scope) return;
+  const focusedTable = target?.closest('table');
+  const actions = Array.from(scope.querySelectorAll<HTMLButtonElement>('button[data-table-delete-selected]')).filter(button => {
+    if (button.disabled || !visible(button)) return false;
+    const table = document.getElementById(button.getAttribute('aria-controls') ?? '');
+    return table !== null && scope.contains(table) && visible(table) && (!focusedTable || focusedTable === table);
+  });
+  if (actions.length !== 1) return;
+  event.preventDefault();
+  actions[0].click();
+};
+
 /** Reuse each table's select-all control so pagination and permissions stay authoritative. */
 export const selectTableRecords = (event: KeyboardEvent) => {
   if (event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'a') return;

@@ -8,6 +8,8 @@ import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
 import PageHeader from '../components/PageHeader';
 import Pagination from '../components/Pagination';
+import ColumnFilter from '../components/ColumnFilter';
+import type { ColumnFilterState } from '../lib/filters';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import { usePageSize } from '../lib/usePageSize';
 import { formatDateTime } from '../lib/dateTime';
@@ -19,6 +21,17 @@ const taskGroups: { type: SystemTaskType; label: string; description: string }[]
 ];
 
 const statusLabels: SystemTaskStatus[] = ['pending', 'processing', 'waiting', 'completed', 'failed'];
+
+const taskColumns = [
+  { id: 'id', label: 'ID', numeric: true },
+  { id: 'serial_number', label: 'CPE' },
+  { id: 'status', label: 'Status' },
+  { id: 'attempts', label: 'Attempts', numeric: true },
+  { id: 'created_at', label: 'Created' },
+  { id: 'created_by', label: 'Username' },
+  { id: 'cwmp_task_id', label: 'CWMP task', numeric: true },
+  { id: 'error', label: 'Error' },
+];
 
 const statusClass = (status: SystemTaskStatus) => {
   switch (status) {
@@ -39,11 +52,31 @@ const SystemTasks: Component = () => {
   const [expandedType, setExpandedType] = createSignal<SystemTaskType | null>(null);
   const [taskSearch, setTaskSearch] = createSignal('');
   const [taskPage, setTaskPage] = createSignal(0);
+  const [groupFilters, setGroupFilters] = createSignal<Partial<Record<SystemTaskType, Record<string, ColumnFilterState>>>>({});
+  const columnFilters = createMemo(() => groupFilters()[expandedType()!] ?? {});
+  const updateFilter = (column: string, state: ColumnFilterState | null) => {
+    const type = expandedType();
+    if (!type) return;
+    setTaskPage(0);
+    setGroupFilters(previous => {
+      const filters = { ...previous[type] };
+      if (state) filters[column] = state;
+      else delete filters[column];
+      return { ...previous, [type]: filters };
+    });
+  };
+  const clearFilters = () => {
+    const type = expandedType();
+    if (!type) return;
+    setTaskPage(0);
+    setGroupFilters(previous => ({ ...previous, [type]: {} }));
+  };
+  const hasFilters = () => taskSearch().trim() !== '' || Object.keys(columnFilters()).length > 0;
   const { pageSize, changePageSize } = usePageSize('system_tasks', 20);
   const [summary, { refetch: refetchSummary }] = createResource<SystemTaskSummary>(() => api.getSystemTaskSummary());
   const [tasks, { refetch: refetchTasks }] = createResource(
-    () => expandedType() ? ({ type: expandedType()!, page: taskPage(), size: pageSize(), search: taskSearch() }) : false,
-    query => api.getSystemTasks(query.type, query.size, query.page * query.size, query.search),
+    () => expandedType() ? ({ type: expandedType()!, page: taskPage(), size: pageSize(), search: taskSearch(), filters: columnFilters() }) : false,
+    query => api.getSystemTasks(query.type, query.size, query.page * query.size, query.search, 'created_at', 'desc', query.filters),
   );
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [settingsType, setSettingsType] = createSignal<'bulk_summon' | 'bulk_restart'>('bulk_summon');
@@ -223,21 +256,25 @@ const SystemTasks: Component = () => {
                   <div class="p-4"><ResourceError title="System task records are unavailable" description="Retry the list request. The queue continues processing in the background." onRetry={() => void refetchTasks()} /></div>
                 </Show>
                 <Show when={taskData() !== undefined}>
-                  <Show when={rows().length > 0} fallback={<div class="p-4"><EmptyState title={taskSearch() ? 'No system tasks match this search' : `No ${group.label} tasks`} description={taskSearch() ? 'Try another serial number, username, or error phrase.' : 'Tasks created from CPE actions will appear here.'} /></div>}>
                     <div class="overflow-x-auto table-scroll">
                       <table class="data-table w-full text-sm min-w-[950px]">
                         <thead><tr class="border-b border-subtle bg-surface/50">
-                          <th data-column-order-id="id#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">ID</th>
-                          <th data-column-order-id="cpe#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">CPE</th>
-                          <th data-column-order-id="status#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Status</th>
-                          <th data-column-order-id="attempts#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Attempts</th>
-                          <th data-column-order-id="created#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Created</th>
-                          <th data-column-order-id="username#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Username</th>
-                          <th data-column-order-id="cwmp task#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">CWMP task</th>
-                          <th data-column-order-id="error#0" class="text-left px-3 py-2.5 text-xs font-medium text-muted">Error</th>
+                          <For each={taskColumns}>{column => (
+                            <th data-column-order-id={`${column.label.toLowerCase()}#0`} class="text-left px-3 py-2.5 text-xs font-medium text-muted">
+                              <div class="flex items-center gap-1.5">
+                                <span>{column.label}</span>
+                                <ColumnFilter columnId={column.id} label={column.label} numeric={column.numeric} active={columnFilters()[column.id] ?? null} onApply={state => updateFilter(column.id, state)} />
+                              </div>
+                            </th>
+                          )}</For>
                           <th data-column-order-id="actions#0" data-column-fixed="actions" class="text-right px-3 py-2.5 text-xs font-medium text-muted">Actions</th>
                         <th data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2" aria-label="Column visibility"></th></tr></thead>
                         <tbody>
+                          <Show when={rows().length === 0}>
+                            <tr><td colspan={taskColumns.length + 2} class="p-4">
+                              <EmptyState title={hasFilters() ? 'No system tasks match these filters' : `No ${group.label} tasks`} description={hasFilters() ? 'Change or clear the search and column filters to see matching tasks.' : 'Tasks created from CPE actions will appear here.'} action={hasFilters() ? <button type="button" class="btn btn-secondary" onClick={() => { setTaskSearch(''); clearFilters(); }}>Clear search and filters</button> : undefined} />
+                            </td></tr>
+                          </Show>
                           <For each={rows()}>{task => (
                             <tr class="border-b border-subtle">
                               <td data-column-order-id="id#0" class="px-3 py-2.5 font-mono text-xs text-secondary">{task.id}</td>
@@ -258,8 +295,7 @@ const SystemTasks: Component = () => {
                         </tbody>
                       </table>
                     </div>
-                    <Pagination page={taskPage()} totalPages={totalPages()} totalItems={pageTotal()} pageSize={pageSize()} onPageChange={setTaskPage} storageKey="system_tasks" onPageSizeChange={size => { changePageSize(size); setTaskPage(0); }} />
-                  </Show>
+                    <Pagination page={taskPage()} totalPages={totalPages()} totalItems={pageTotal()} pageSize={pageSize()} onPageChange={setTaskPage} storageKey="system_tasks" onPageSizeChange={size => { changePageSize(size); setTaskPage(0); }} filters={columnFilters()} onClearFilters={clearFilters} onRemoveFilter={column => updateFilter(column, null)} />
                 </Show>
                 <Show when={tasks.loading && taskData() === undefined}><div class="p-4 space-y-3"><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-full" /><div class="skeleton h-8 w-4/5" /></div></Show>
               </Show>
