@@ -127,3 +127,5 @@ A UI change is complete only when:
 - `npm run check:ui` and `npm run build` pass.
 
 The automated gate intentionally covers objective regressions only. Product-task fit, responsive prioritization, copy quality, and realistic-data review still require human judgment.
+
+Dynamic-branch error-code multiselects expand inline to avoid clipped overlays in scrollable dialogs. Show selected codes in the summary, labelled checkboxes for common codes, and numeric search for vendor codes. Empty selection means all faults are recorded. Escape closes the selector and returns focus to its summary before the parent dialog handles Escape.

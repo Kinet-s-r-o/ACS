@@ -49,9 +49,9 @@ func (h *Handler) handleDynamicInstanceVerification(ctx context.Context, session
 
 func (h *Handler) failDynamicInstanceVerification(ctx context.Context, session *Session) (interface{}, error) {
 	verification := session.DynamicDiscoveryVerification
-	// Keep the original fault and path when absence was not proved. Do not retry
-	// the same instance or suppress a firmware error for an object still advertised.
-	if h.faultRepo != nil && session.DeviceID > 0 {
+	// Without an explicit template policy, retain the original fault and path
+	// when absence was not proved. Never retry the same instance indefinitely.
+	if h.faultRepo != nil && session.DeviceID > 0 && !suppressDynamicReadFault(session, "9005", []string{verification.Step.Path}) {
 		if err := h.faultRepo.Create(ctx, &models.Fault{
 			DeviceID: session.DeviceID, FaultCode: "9005", FaultString: verification.FaultMessage, ParameterName: verification.Step.Path,
 		}); err != nil {

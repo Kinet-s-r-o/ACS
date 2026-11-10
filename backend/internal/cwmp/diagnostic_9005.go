@@ -202,6 +202,9 @@ func (h *Handler) finish9005Diagnostic(ctx context.Context, session *Session) (i
 	logCWMPSession(session.SerialNumber, session.ID, "9005 diagnostic finished: %d requests, %d isolated parameters, %d untested candidates", session.Diagnostic9005Requests, len(invalid), len(unresolved))
 	if h.faultRepo != nil && session.DeviceID > 0 {
 		for _, name := range invalid {
+			if suppressDynamicReadFault(session, "9005", []string{name}) {
+				continue
+			}
 			if err := h.faultRepo.Create(ctx, &models.Fault{DeviceID: session.DeviceID, FaultCode: "9005", FaultString: "Invalid parameter name (isolated by diagnostic mode)", ParameterName: name}); err != nil {
 				return nil, fmt.Errorf("save isolated 9005 fault: %w", err)
 			}

@@ -28,17 +28,18 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		return
 	}
 	var body struct {
-		Name                     string                           `json:"name"`
-		Manufacturer             string                           `json:"manufacturer"`
-		ProductClass             string                           `json:"product_class"`
-		Description              string                           `json:"description"`
-		Inventory                *models.TemplateInventory        `json:"inventory,omitempty"`
-		DynamicParameterBranches []string                         `json:"dynamic_parameter_branches,omitempty"`
-		IgnoredParameterBranches []string                         `json:"ignored_parameter_branches,omitempty"`
-		OverviewPollInterval     *string                          `json:"overview_poll_interval,omitempty"`
-		FullTreePollInterval     *string                          `json:"full_tree_poll_interval,omitempty"`
-		Snapshots                *models.TemplateSnapshotSettings `json:"snapshots,omitempty"`
-		RebootAfterBootstrap     *bool                            `json:"reboot_after_bootstrap,omitempty"`
+		Name                             string                           `json:"name"`
+		Manufacturer                     string                           `json:"manufacturer"`
+		ProductClass                     string                           `json:"product_class"`
+		Description                      string                           `json:"description"`
+		Inventory                        *models.TemplateInventory        `json:"inventory,omitempty"`
+		DynamicParameterBranches         []string                         `json:"dynamic_parameter_branches,omitempty"`
+		IgnoredParameterBranches         []string                         `json:"ignored_parameter_branches,omitempty"`
+		DynamicParameterSuppressedFaults map[string][]string              `json:"dynamic_parameter_suppressed_faults,omitempty"`
+		OverviewPollInterval             *string                          `json:"overview_poll_interval,omitempty"`
+		FullTreePollInterval             *string                          `json:"full_tree_poll_interval,omitempty"`
+		Snapshots                        *models.TemplateSnapshotSettings `json:"snapshots,omitempty"`
+		RebootAfterBootstrap             *bool                            `json:"reboot_after_bootstrap,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -94,10 +95,15 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	suppressedFaults, err := resolveDynamicFaultSuppression(body.DynamicParameterSuppressedFaults, source.DynamicParameterSuppressedFaults, body.DynamicParameterBranches)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	clone := models.ProvisioningTemplate{
 		RebootAfterBootstrap: source.RebootAfterBootstrap,
 		Name:                 body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
-		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), IgnoredParameterBranches: normalizeDynamicParameterBranches(body.IgnoredParameterBranches), Variables: source.Variables, Features: source.Features,
+		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), IgnoredParameterBranches: normalizeDynamicParameterBranches(body.IgnoredParameterBranches), DynamicParameterSuppressedFaults: suppressedFaults, Variables: source.Variables, Features: source.Features,
 		OverviewPollInterval: overviewInterval, FullTreePollInterval: fullTreeInterval,
 		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
 		CPEInfoFields:  append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),

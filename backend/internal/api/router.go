@@ -4669,6 +4669,11 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	suppressedFaults, err := resolveDynamicFaultSuppression(body.DynamicParameterSuppressedFaults, nil, body.DynamicParameterBranches)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	overviewInterval := templateIntervalValue(body.OverviewPollInterval, "")
 	fullTreeInterval := templateIntervalValue(body.FullTreePollInterval, "")
 	if err := validateTemplateRefreshIntervals(overviewInterval, fullTreeInterval); err != nil {
@@ -4677,16 +4682,17 @@ func (r *Router) handleCreateProvisioningTemplate(w http.ResponseWriter, req *ht
 	}
 
 	template := &models.ProvisioningTemplate{
-		Name:                     strings.TrimSpace(body.Name),
-		Manufacturer:             strings.ToLower(strings.TrimSpace(body.Manufacturer)),
-		ProductClass:             strings.ToLower(strings.TrimSpace(body.ProductClass)),
-		Description:              strings.TrimSpace(body.Description),
-		Inventory:                inventory,
-		DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches),
-		IgnoredParameterBranches: normalizeDynamicParameterBranches(body.IgnoredParameterBranches),
-		OverviewPollInterval:     overviewInterval,
-		FullTreePollInterval:     fullTreeInterval,
-		Variables:                body.Variables,
+		Name:                             strings.TrimSpace(body.Name),
+		Manufacturer:                     strings.ToLower(strings.TrimSpace(body.Manufacturer)),
+		ProductClass:                     strings.ToLower(strings.TrimSpace(body.ProductClass)),
+		Description:                      strings.TrimSpace(body.Description),
+		Inventory:                        inventory,
+		DynamicParameterBranches:         normalizeDynamicParameterBranches(body.DynamicParameterBranches),
+		IgnoredParameterBranches:         normalizeDynamicParameterBranches(body.IgnoredParameterBranches),
+		DynamicParameterSuppressedFaults: suppressedFaults,
+		OverviewPollInterval:             overviewInterval,
+		FullTreePollInterval:             fullTreeInterval,
+		Variables:                        body.Variables,
 	}
 
 	if err := configureTemplateSnapshots(template, body.Snapshots, nil); err != nil {
@@ -4780,6 +4786,11 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	suppressedFaults, err := resolveDynamicFaultSuppression(body.DynamicParameterSuppressedFaults, previous.DynamicParameterSuppressedFaults, dynamicBranches)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	overviewInterval := templateIntervalValue(body.OverviewPollInterval, previous.OverviewPollInterval)
 	fullTreeInterval := templateIntervalValue(body.FullTreePollInterval, previous.FullTreePollInterval)
 	if err := validateTemplateRefreshIntervals(overviewInterval, fullTreeInterval); err != nil {
@@ -4788,17 +4799,18 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 	}
 
 	template := &models.ProvisioningTemplate{
-		ID:                       id,
-		Name:                     strings.TrimSpace(body.Name),
-		Manufacturer:             strings.ToLower(strings.TrimSpace(body.Manufacturer)),
-		ProductClass:             strings.ToLower(strings.TrimSpace(body.ProductClass)),
-		Description:              strings.TrimSpace(body.Description),
-		Inventory:                inventory,
-		DynamicParameterBranches: dynamicBranches,
-		IgnoredParameterBranches: ignoredBranches,
-		OverviewPollInterval:     overviewInterval,
-		FullTreePollInterval:     fullTreeInterval,
-		Variables:                body.Variables,
+		ID:                               id,
+		Name:                             strings.TrimSpace(body.Name),
+		Manufacturer:                     strings.ToLower(strings.TrimSpace(body.Manufacturer)),
+		ProductClass:                     strings.ToLower(strings.TrimSpace(body.ProductClass)),
+		Description:                      strings.TrimSpace(body.Description),
+		Inventory:                        inventory,
+		DynamicParameterBranches:         dynamicBranches,
+		IgnoredParameterBranches:         ignoredBranches,
+		DynamicParameterSuppressedFaults: suppressedFaults,
+		OverviewPollInterval:             overviewInterval,
+		FullTreePollInterval:             fullTreeInterval,
+		Variables:                        body.Variables,
 	}
 	if err := configureTemplateSnapshots(template, body.Snapshots, previous); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -4816,7 +4828,7 @@ func (r *Router) handleUpdateProvisioningTemplate(w http.ResponseWriter, req *ht
 			respondError(w, http.StatusForbidden, "Variables edit permission required")
 			return
 		}
-		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || !slices.Equal(template.IgnoredParameterBranches, previous.IgnoredParameterBranches) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval || template.Snapshots != previous.Snapshots || template.RebootAfterBootstrap != previous.RebootAfterBootstrap
+		metadataChanged := template.Name != previous.Name || template.Manufacturer != previous.Manufacturer || template.ProductClass != previous.ProductClass || template.Description != previous.Description || template.Inventory != previous.Inventory || !slices.Equal(template.DynamicParameterBranches, previous.DynamicParameterBranches) || !slices.Equal(template.IgnoredParameterBranches, previous.IgnoredParameterBranches) || !equalDynamicFaultSuppression(template.DynamicParameterSuppressedFaults, previous.DynamicParameterSuppressedFaults) || template.OverviewPollInterval != previous.OverviewPollInterval || template.FullTreePollInterval != previous.FullTreePollInterval || template.Snapshots != previous.Snapshots || template.RebootAfterBootstrap != previous.RebootAfterBootstrap
 		if metadataChanged && !requestCan(req, "settings.provisioning.templates", "edit") {
 			respondError(w, http.StatusForbidden, "Templates edit permission required")
 			return

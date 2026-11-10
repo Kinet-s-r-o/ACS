@@ -13,7 +13,7 @@ import (
 )
 
 func TestPartialRefreshSavesGoodValuesWithoutPurgingOrMarkingFullRefresh(t *testing.T) {
-	for _, scenario := range []string{"queued", "automatic", "missing value", "all unreadable", "bad last"} {
+	for _, scenario := range []string{"queued", "automatic", "missing value", "all unreadable", "bad last", "suppressed", "suppressed all unreadable"} {
 		t.Run(scenario, func(t *testing.T) {
 			db, err := gorm.Open(postgres.New(postgres.Config{Conn: snapshotInformConnection{}}), &gorm.Config{DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true})
 			if err != nil {
@@ -76,6 +76,9 @@ func TestPartialRefreshSavesGoodValuesWithoutPurgingOrMarkingFullRefresh(t *test
 			}
 			read := &fullTreeRead{root: "Device.", names: []string{"Device.Test.A", "Device.Test.B", "Device.Test.C"}}
 			s.FullTreeRead = read
+			if strings.HasPrefix(scenario, "suppressed") {
+				s.DynamicParameterSuppressedFaults = map[string][]string{"Device.Test.": {"9005"}}
+			}
 			var request interface{} = read.next()
 			for calls := 0; request != nil; calls++ {
 				if calls > 20 {
@@ -92,7 +95,7 @@ func TestPartialRefreshSavesGoodValuesWithoutPurgingOrMarkingFullRefresh(t *test
 				response := &GetParameterValuesResp{}
 				code := ""
 				for _, name := range gpv.ParameterNames {
-					bad := name == "Device.Test.B" || scenario == "all unreadable" || (scenario == "bad last" && name == "Device.Test.C")
+					bad := name == "Device.Test.B" || (scenario == "all unreadable" || scenario == "suppressed all unreadable") || (scenario == "bad last" && name == "Device.Test.C")
 					if bad {
 						code = "9005"
 						continue
@@ -109,12 +112,19 @@ func TestPartialRefreshSavesGoodValuesWithoutPurgingOrMarkingFullRefresh(t *test
 				}
 			}
 			wantRead, wantSkipped := 2, 1
-			if scenario == "all unreadable" {
+			if scenario == "all unreadable" || scenario == "suppressed all unreadable" {
 				wantRead, wantSkipped = 0, 3
 			} else if scenario == "bad last" {
 				wantRead, wantSkipped = 1, 2
 			}
-			if len(read.values) != wantRead || len(faults) != wantSkipped || cache["Device.Test.B"] != "old-B" || cache["Device.Test.Stale"] != "retain" {
+			wantFaults := wantSkipped
+			if strings.HasPrefix(scenario, "suppressed") {
+				wantFaults = 0
+				if read.suppressed != wantSkipped || !strings.Contains(warning, "fault records suppressed by template policy") || strings.Contains(warning, "see CWMP faults") {
+					t.Fatalf("suppression hid partial-refresh warning: %q", warning)
+				}
+			}
+			if len(read.values) != wantRead || len(faults) != wantFaults || cache["Device.Test.B"] != "old-B" || cache["Device.Test.Stale"] != "retain" {
 				t.Fatalf("read=%d faults=%d cache=%v", len(read.values), len(faults), cache)
 			}
 			if wantRead > 0 && cache["Device.Test.A"] != "new" {

@@ -19,39 +19,40 @@ const (
 
 // Session represents single CPE session
 type Session struct {
-	mu                              sync.Mutex
-	ID                              string
-	SerialNumber                    string
-	DeviceID                        int64
-	CurrentTaskID                   int64
-	AutomaticFactoryResetActive     bool
-	AutoFactoryResetSessionFinished bool
-	CurrentDeleteObjectPath         string
-	CurrentFullTreeFetch            bool
-	FullTreeRead                    *fullTreeRead
-	FeatureObjectPath               string
-	FeatureObjectInstance           string
-	FeatureObjectStage              int
-	FeatureObjectNames              []string
-	AutoFetchPhase                  int
-	DataModelRoot                   string
-	CWMPNamespace                   string
-	AutoFetchReady                  bool
-	OverviewFetchReady              bool
-	OverviewFetchActive             bool
-	OverviewFetchParams             []string
-	IgnoredParameterBranches        []string
-	DynamicParameterBranches        []string
-	DynamicDiscoveryActive          bool
-	DynamicDiscoveryQueue           []DynamicDiscoveryStep
-	DynamicDiscoveryCurrent         *DynamicDiscoveryStep
-	DynamicDiscoveryNames           []string
-	DynamicDiscoveryVerification    *DynamicInstanceVerification
-	InformEvents                    []string
-	Provisioning                    *SetParameterValues
-	BootstrapReboot                 bootstrapRebootState
-	ProvisioningRules               []models.ProvisioningApplication
-	ProvisioningVariables           map[string]string
+	mu                               sync.Mutex
+	ID                               string
+	SerialNumber                     string
+	DeviceID                         int64
+	CurrentTaskID                    int64
+	AutomaticFactoryResetActive      bool
+	AutoFactoryResetSessionFinished  bool
+	CurrentDeleteObjectPath          string
+	CurrentFullTreeFetch             bool
+	FullTreeRead                     *fullTreeRead
+	FeatureObjectPath                string
+	FeatureObjectInstance            string
+	FeatureObjectStage               int
+	FeatureObjectNames               []string
+	AutoFetchPhase                   int
+	DataModelRoot                    string
+	CWMPNamespace                    string
+	AutoFetchReady                   bool
+	OverviewFetchReady               bool
+	OverviewFetchActive              bool
+	OverviewFetchParams              []string
+	DynamicParameterSuppressedFaults map[string][]string
+	IgnoredParameterBranches         []string
+	DynamicParameterBranches         []string
+	DynamicDiscoveryActive           bool
+	DynamicDiscoveryQueue            []DynamicDiscoveryStep
+	DynamicDiscoveryCurrent          *DynamicDiscoveryStep
+	DynamicDiscoveryNames            []string
+	DynamicDiscoveryVerification     *DynamicInstanceVerification
+	InformEvents                     []string
+	Provisioning                     *SetParameterValues
+	BootstrapReboot                  bootstrapRebootState
+	ProvisioningRules                []models.ProvisioningApplication
+	ProvisioningVariables            map[string]string
 	// PendingSetParameters mirrors the last SetParameterValues request. A
 	// successful response confirms these values on the CPE even when the next
 	// periodic Inform does not include the affected parameters.

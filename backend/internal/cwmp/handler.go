@@ -447,10 +447,12 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 
 	dynamicBranches := []string(nil)
 	ignoredBranches := []string(nil)
+	var suppressedFaults map[string][]string
 	if deviceID > 0 && resolvedTemplate != nil {
 		template := resolvedTemplate
 		dynamicBranches = append(dynamicBranches, template.DynamicParameterBranches...)
 		ignoredBranches = append(ignoredBranches, template.IgnoredParameterBranches...)
+		suppressedFaults = template.DynamicParameterSuppressedFaults
 		parameterValues := make(map[string]string, len(inform.ParameterList.Parameters))
 		for _, parameter := range inform.ParameterList.Parameters {
 			parameterValues[parameter.Name] = parameter.Value
@@ -609,6 +611,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DataModelRoot = DetectDataModelRoot(inform.ParameterList.Parameters)
 	session.DynamicParameterBranches = dynamicBranches
 	session.IgnoredParameterBranches = ignoredBranches
+	session.DynamicParameterSuppressedFaults = suppressedFaults
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
 	session.LastSentRPC = ""
@@ -1673,7 +1676,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 				return request, nil
 			}
 		}
-		if h.faultRepo != nil && session.DeviceID > 0 && (session.AutoFetchPhase == 0 || fullTreeReadFailed) && !(faultCode == "9005" && session.CurrentDeleteObjectPath != "") {
+		if h.faultRepo != nil && session.DeviceID > 0 && (session.AutoFetchPhase == 0 || fullTreeReadFailed) && !(faultCode == "9005" && session.CurrentDeleteObjectPath != "") && !suppressDynamicReadFault(session, faultCode, requestedReadPaths(session)) {
 			deviceFault := &models.Fault{
 				DeviceID:      session.DeviceID,
 				FaultCode:     faultCode,

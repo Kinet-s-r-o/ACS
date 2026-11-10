@@ -25,26 +25,27 @@ type provisioningTransfer struct {
 }
 
 type provisioningTransferTemplate struct {
-	RebootAfterBootstrap     bool                                `json:"reboot_after_bootstrap"`
-	Name                     string                              `json:"name"`
-	Manufacturer             string                              `json:"manufacturer"`
-	ProductClass             string                              `json:"product_class"`
-	Description              string                              `json:"description,omitempty"`
-	Inventory                models.TemplateInventory            `json:"inventory,omitempty"`
-	DynamicParameterBranches []string                            `json:"dynamic_parameter_branches,omitempty"`
-	IgnoredParameterBranches []string                            `json:"ignored_parameter_branches,omitempty"`
-	OverviewPollInterval     string                              `json:"overview_poll_interval,omitempty"`
-	FullTreePollInterval     string                              `json:"full_tree_poll_interval,omitempty"`
-	Variables                []models.ProvisioningVariable       `json:"variables,omitempty"`
-	Features                 []models.ProvisioningFeature        `json:"features,omitempty"`
-	LANPortCount             int                                 `json:"lan_port_count,omitempty"`
-	LANPortMappings          []models.ProvisioningLANPortMapping `json:"lan_port_mappings,omitempty"`
-	CPEInfoFields            []models.ProvisioningCPEInfoField   `json:"cpe_info_fields,omitempty"`
-	CPEEditWindows           []models.CPEEditWindow              `json:"cpe_edit_windows,omitempty"`
-	Snapshots                models.TemplateSnapshotSettings     `json:"snapshots"`
-	Rules                    []models.ProvisioningRule           `json:"rules,omitempty"`
-	Metrics                  []models.MetricDefinition           `json:"metrics,omitempty"`
-	ParameterPolls           []models.ParameterPollDefinition    `json:"parameter_polls,omitempty"`
+	RebootAfterBootstrap             bool                                `json:"reboot_after_bootstrap"`
+	Name                             string                              `json:"name"`
+	Manufacturer                     string                              `json:"manufacturer"`
+	ProductClass                     string                              `json:"product_class"`
+	Description                      string                              `json:"description,omitempty"`
+	Inventory                        models.TemplateInventory            `json:"inventory,omitempty"`
+	DynamicParameterBranches         []string                            `json:"dynamic_parameter_branches,omitempty"`
+	IgnoredParameterBranches         []string                            `json:"ignored_parameter_branches,omitempty"`
+	DynamicParameterSuppressedFaults map[string][]string                 `json:"dynamic_parameter_suppressed_faults,omitempty"`
+	OverviewPollInterval             string                              `json:"overview_poll_interval,omitempty"`
+	FullTreePollInterval             string                              `json:"full_tree_poll_interval,omitempty"`
+	Variables                        []models.ProvisioningVariable       `json:"variables,omitempty"`
+	Features                         []models.ProvisioningFeature        `json:"features,omitempty"`
+	LANPortCount                     int                                 `json:"lan_port_count,omitempty"`
+	LANPortMappings                  []models.ProvisioningLANPortMapping `json:"lan_port_mappings,omitempty"`
+	CPEInfoFields                    []models.ProvisioningCPEInfoField   `json:"cpe_info_fields,omitempty"`
+	CPEEditWindows                   []models.CPEEditWindow              `json:"cpe_edit_windows,omitempty"`
+	Snapshots                        models.TemplateSnapshotSettings     `json:"snapshots"`
+	Rules                            []models.ProvisioningRule           `json:"rules,omitempty"`
+	Metrics                          []models.MetricDefinition           `json:"metrics,omitempty"`
+	ParameterPolls                   []models.ParameterPollDefinition    `json:"parameter_polls,omitempty"`
 }
 
 func requireFullProvisioningAccess(w http.ResponseWriter, req *http.Request) bool {
@@ -77,7 +78,7 @@ func (r *Router) handleExportProvisioning(w http.ResponseWriter, req *http.Reque
 		item := provisioningTransferTemplate{
 			Name: template.Name, Manufacturer: template.Manufacturer, ProductClass: template.ProductClass,
 			RebootAfterBootstrap: template.RebootAfterBootstrap,
-			Description:          template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, IgnoredParameterBranches: template.IgnoredParameterBranches, Variables: template.Variables, Features: template.Features,
+			Description:          template.Description, Inventory: template.Inventory, DynamicParameterBranches: template.DynamicParameterBranches, IgnoredParameterBranches: template.IgnoredParameterBranches, DynamicParameterSuppressedFaults: template.DynamicParameterSuppressedFaults, Variables: template.Variables, Features: template.Features,
 			OverviewPollInterval: template.OverviewPollInterval, FullTreePollInterval: template.FullTreePollInterval,
 			LANPortCount: template.LANPortCount, LANPortMappings: template.LANPortMappings,
 			CPEInfoFields:  template.CPEInfoFields,
@@ -211,7 +212,7 @@ func (r *Router) handleImportProvisioning(w http.ResponseWriter, req *http.Reque
 			template := models.ProvisioningTemplate{
 				RebootAfterBootstrap: item.RebootAfterBootstrap,
 				Name:                 item.Name, Manufacturer: strings.ToLower(item.Manufacturer), ProductClass: strings.ToLower(item.ProductClass),
-				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, IgnoredParameterBranches: item.IgnoredParameterBranches, Variables: item.Variables, Features: item.Features,
+				Description: item.Description, Inventory: item.Inventory, DynamicParameterBranches: item.DynamicParameterBranches, IgnoredParameterBranches: item.IgnoredParameterBranches, DynamicParameterSuppressedFaults: item.DynamicParameterSuppressedFaults, Variables: item.Variables, Features: item.Features,
 				OverviewPollInterval: item.OverviewPollInterval, FullTreePollInterval: item.FullTreePollInterval,
 				LANPortCount: item.LANPortCount, LANPortMappings: item.LANPortMappings,
 				CPEInfoFields:  item.CPEInfoFields,
@@ -289,6 +290,11 @@ func validateTransferTemplate(item *provisioningTransferTemplate) error {
 		return err
 	}
 	item.DynamicParameterBranches = normalizeDynamicParameterBranches(item.DynamicParameterBranches)
+	var suppressionErr error
+	item.DynamicParameterSuppressedFaults, suppressionErr = resolveDynamicFaultSuppression(item.DynamicParameterSuppressedFaults, nil, item.DynamicParameterBranches)
+	if suppressionErr != nil {
+		return suppressionErr
+	}
 	if err := validateIgnoredParameterBranches(item.IgnoredParameterBranches); err != nil {
 		return err
 	}

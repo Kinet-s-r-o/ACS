@@ -16,14 +16,15 @@ const (
 // Keep the original task active until every batch is processed. Partial results
 // only update confirmed values and must never replace the cached full tree.
 type fullTreeRead struct {
-	root      string
-	names     []string
-	current   []string
-	values    []ParameterValueStruct
-	retries   [][]string
-	batchSize int
-	splits    int
-	skipped   []string
+	root       string
+	names      []string
+	current    []string
+	values     []ParameterValueStruct
+	retries    [][]string
+	batchSize  int
+	splits     int
+	skipped    []string
+	suppressed int
 }
 
 func recoverableParameterReadFault(code string) bool {
@@ -37,7 +38,11 @@ func recoverableParameterReadFault(code string) bool {
 func (h *Handler) skipFullTreeParameter(ctx context.Context, session *Session, code, message string) (interface{}, error) {
 	read := session.FullTreeRead
 	name := read.current[0]
-	if h.faultRepo != nil && session.DeviceID > 0 {
+	suppressed := suppressDynamicReadFault(session, code, []string{name})
+	if suppressed {
+		read.suppressed++
+	}
+	if h.faultRepo != nil && session.DeviceID > 0 && !suppressed {
 		if err := h.faultRepo.Create(ctx, &models.Fault{DeviceID: session.DeviceID, FaultCode: code, FaultString: requestFaultMessage(session, message), ParameterName: name}); err != nil {
 			return nil, fmt.Errorf("record skipped parameter fault: %w", err)
 		}
@@ -56,7 +61,13 @@ func (h *Handler) nextFullTreeRead(ctx context.Context, session *Session) (inter
 	}
 	warning := ""
 	if len(read.skipped) > 0 {
-		warning = fmt.Sprintf("Partial parameter refresh: read %d parameters; skipped %d unreadable parameters (see CWMP faults)", len(read.values), len(read.skipped))
+		warning = fmt.Sprintf("Partial parameter refresh: read %d parameters; skipped %d unreadable parameters", len(read.values), len(read.skipped))
+		if read.suppressed < len(read.skipped) {
+			warning += " (see CWMP faults)"
+		}
+		if read.suppressed > 0 {
+			warning += fmt.Sprintf("; %d fault records suppressed by template policy", read.suppressed)
+		}
 	}
 	session.FullTreeRead = nil
 	response := &GetParameterValuesResp{ParameterList: ParameterList{Parameters: read.values}}

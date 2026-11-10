@@ -52,9 +52,9 @@ func (r *ProvisioningRepository) UpdateTemplate(ctx context.Context, template *m
 		query := tx.Model(&models.ProvisioningTemplate{}).Where("id = ?", template.ID)
 		var err error
 		if template.Variables != nil {
-			err = query.Select("name", "manufacturer", "product_class", "description", "inventory", "dynamic_parameter_branches", "ignored_parameter_branches", "overview_poll_interval", "full_tree_poll_interval", "snapshots", "snapshot_initial_since", "reboot_after_bootstrap", "variables").Updates(template).Error
+			err = query.Select("name", "manufacturer", "product_class", "description", "inventory", "dynamic_parameter_branches", "ignored_parameter_branches", "dynamic_parameter_suppressed_faults", "overview_poll_interval", "full_tree_poll_interval", "snapshots", "snapshot_initial_since", "reboot_after_bootstrap", "variables").Updates(template).Error
 		} else {
-			err = query.Select("name", "manufacturer", "product_class", "description", "inventory", "dynamic_parameter_branches", "ignored_parameter_branches", "overview_poll_interval", "full_tree_poll_interval", "snapshots", "snapshot_initial_since", "reboot_after_bootstrap").Updates(template).Error
+			err = query.Select("name", "manufacturer", "product_class", "description", "inventory", "dynamic_parameter_branches", "ignored_parameter_branches", "dynamic_parameter_suppressed_faults", "overview_poll_interval", "full_tree_poll_interval", "snapshots", "snapshot_initial_since", "reboot_after_bootstrap").Updates(template).Error
 		}
 		if err != nil || template.Variables == nil {
 			return err

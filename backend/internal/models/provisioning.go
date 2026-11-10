@@ -3,32 +3,33 @@ package models
 import "time"
 
 type ProvisioningTemplate struct {
-	ID                       int64                        `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name                     string                       `json:"name" gorm:"not null;size:256"`
-	Manufacturer             string                       `json:"manufacturer" gorm:"size:128;default:''"`
-	ProductClass             string                       `json:"product_class" gorm:"size:128;default:''"`
-	Description              string                       `json:"description,omitempty"`
-	RebootAfterBootstrap     bool                         `json:"reboot_after_bootstrap" gorm:"not null;default:false"`
-	Inventory                TemplateInventory            `json:"inventory" gorm:"type:jsonb;serializer:json"`
-	DynamicParameterBranches []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
-	IgnoredParameterBranches []string                     `json:"ignored_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
-	OverviewPollInterval     string                       `json:"overview_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
-	FullTreePollInterval     string                       `json:"full_tree_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
-	Snapshots                TemplateSnapshotSettings     `json:"snapshots" gorm:"type:jsonb;serializer:json"`
-	SnapshotInitialSince     *time.Time                   `json:"snapshot_initial_since,omitempty"`
-	Variables                []ProvisioningVariable       `json:"variables" gorm:"type:jsonb;serializer:json"`
-	Features                 []ProvisioningFeature        `json:"features" gorm:"type:jsonb;serializer:json"`
-	LANPortCount             int                          `json:"lan_port_count" gorm:"default:0"`
-	LANPortMappings          []ProvisioningLANPortMapping `json:"lan_port_mappings" gorm:"type:jsonb;serializer:json"`
-	CPEInfoFields            []ProvisioningCPEInfoField   `json:"cpe_info_fields" gorm:"type:jsonb;serializer:json"`
-	CPEEditWindows           []CPEEditWindow              `json:"cpe_edit_windows" gorm:"type:jsonb;serializer:json"`
-	ImagePath                string                       `json:"-" gorm:"size:512;default:''"`
-	ImageType                string                       `json:"-" gorm:"size:64;default:''"`
-	ImageURL                 string                       `json:"image_url,omitempty" gorm:"-"`
-	LANVisualizationPath     string                       `json:"-" gorm:"size:512;default:''"`
-	LANVisualizationURL      string                       `json:"lan_visualization_url,omitempty" gorm:"-"`
-	CreatedAt                time.Time                    `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt                time.Time                    `json:"updated_at" gorm:"autoUpdateTime"`
+	ID                               int64                        `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name                             string                       `json:"name" gorm:"not null;size:256"`
+	Manufacturer                     string                       `json:"manufacturer" gorm:"size:128;default:''"`
+	ProductClass                     string                       `json:"product_class" gorm:"size:128;default:''"`
+	Description                      string                       `json:"description,omitempty"`
+	RebootAfterBootstrap             bool                         `json:"reboot_after_bootstrap" gorm:"not null;default:false"`
+	Inventory                        TemplateInventory            `json:"inventory" gorm:"type:jsonb;serializer:json"`
+	DynamicParameterBranches         []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
+	IgnoredParameterBranches         []string                     `json:"ignored_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
+	DynamicParameterSuppressedFaults map[string][]string          `json:"dynamic_parameter_suppressed_faults,omitempty" gorm:"type:jsonb;serializer:json"`
+	OverviewPollInterval             string                       `json:"overview_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
+	FullTreePollInterval             string                       `json:"full_tree_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
+	Snapshots                        TemplateSnapshotSettings     `json:"snapshots" gorm:"type:jsonb;serializer:json"`
+	SnapshotInitialSince             *time.Time                   `json:"snapshot_initial_since,omitempty"`
+	Variables                        []ProvisioningVariable       `json:"variables" gorm:"type:jsonb;serializer:json"`
+	Features                         []ProvisioningFeature        `json:"features" gorm:"type:jsonb;serializer:json"`
+	LANPortCount                     int                          `json:"lan_port_count" gorm:"default:0"`
+	LANPortMappings                  []ProvisioningLANPortMapping `json:"lan_port_mappings" gorm:"type:jsonb;serializer:json"`
+	CPEInfoFields                    []ProvisioningCPEInfoField   `json:"cpe_info_fields" gorm:"type:jsonb;serializer:json"`
+	CPEEditWindows                   []CPEEditWindow              `json:"cpe_edit_windows" gorm:"type:jsonb;serializer:json"`
+	ImagePath                        string                       `json:"-" gorm:"size:512;default:''"`
+	ImageType                        string                       `json:"-" gorm:"size:64;default:''"`
+	ImageURL                         string                       `json:"image_url,omitempty" gorm:"-"`
+	LANVisualizationPath             string                       `json:"-" gorm:"size:512;default:''"`
+	LANVisualizationURL              string                       `json:"lan_visualization_url,omitempty" gorm:"-"`
+	CreatedAt                        time.Time                    `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt                        time.Time                    `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 type ProvisioningLANPortMapping struct {
@@ -157,18 +158,19 @@ type CreateProvisioningRuleRequest struct {
 }
 
 type CreateProvisioningTemplateRequest struct {
-	RebootAfterBootstrap     *bool                     `json:"reboot_after_bootstrap,omitempty"`
-	Name                     string                    `json:"name"`
-	Manufacturer             string                    `json:"manufacturer"`
-	ProductClass             string                    `json:"product_class"`
-	Description              string                    `json:"description"`
-	Inventory                *TemplateInventory        `json:"inventory,omitempty"`
-	DynamicParameterBranches []string                  `json:"dynamic_parameter_branches,omitempty"`
-	IgnoredParameterBranches []string                  `json:"ignored_parameter_branches,omitempty"`
-	OverviewPollInterval     *string                   `json:"overview_poll_interval,omitempty"`
-	FullTreePollInterval     *string                   `json:"full_tree_poll_interval,omitempty"`
-	Snapshots                *TemplateSnapshotSettings `json:"snapshots,omitempty"`
-	Variables                []ProvisioningVariable    `json:"variables"`
+	RebootAfterBootstrap             *bool                     `json:"reboot_after_bootstrap,omitempty"`
+	Name                             string                    `json:"name"`
+	Manufacturer                     string                    `json:"manufacturer"`
+	ProductClass                     string                    `json:"product_class"`
+	Description                      string                    `json:"description"`
+	Inventory                        *TemplateInventory        `json:"inventory,omitempty"`
+	DynamicParameterBranches         []string                  `json:"dynamic_parameter_branches,omitempty"`
+	IgnoredParameterBranches         []string                  `json:"ignored_parameter_branches,omitempty"`
+	DynamicParameterSuppressedFaults map[string][]string       `json:"dynamic_parameter_suppressed_faults,omitempty"`
+	OverviewPollInterval             *string                   `json:"overview_poll_interval,omitempty"`
+	FullTreePollInterval             *string                   `json:"full_tree_poll_interval,omitempty"`
+	Snapshots                        *TemplateSnapshotSettings `json:"snapshots,omitempty"`
+	Variables                        []ProvisioningVariable    `json:"variables"`
 }
 
 type ProvisioningApplication struct {

@@ -121,7 +121,7 @@ func TestInformLoadsIgnoredWMMBranchesBeforeFullRefresh(t *testing.T) {
 	if err := db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
 		switch dest := tx.Statement.Dest.(type) {
 		case *models.ProvisioningTemplate:
-			*dest = models.ProvisioningTemplate{ID: 7, IgnoredParameterBranches: branches}
+			*dest = models.ProvisioningTemplate{ID: 7, IgnoredParameterBranches: branches, DynamicParameterSuppressedFaults: map[string][]string{branches[0]: {"9002", "9005"}}}
 		case *models.Device:
 			*dest = models.Device{ID: 1, SerialNumber: "IGNORED-INFORM-TEST"}
 		}
@@ -148,6 +148,9 @@ func TestInformLoadsIgnoredWMMBranchesBeforeFullRefresh(t *testing.T) {
 	s := h.sessions.Get("ignored-inform")
 	if !slices.Equal(s.IgnoredParameterBranches, branches) {
 		t.Fatalf("Inform lost exclusions: %v", s.IgnoredParameterBranches)
+	}
+	if !slices.Equal(s.DynamicParameterSuppressedFaults[branches[0]], []string{"9002", "9005"}) {
+		t.Fatal("Inform lost suppressed fault codes")
 	}
 	request, _, err := h.handleEmptyPost(ctx, s.ID)
 	if _, ok := request.(*GetParameterNames); err != nil || !ok {

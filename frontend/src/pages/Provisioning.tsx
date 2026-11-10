@@ -5,6 +5,7 @@ import { api, type InterfaceMetricDefinition, type MetricDefinition, type Parame
 import { useAuth, usePermissionSection } from '../lib/auth';
 import { useFeedback } from '../components/Feedback';
 import Dialog from '../components/Dialog';
+import DynamicBranchFaultCodes from '../components/DynamicBranchFaultCodes';
 import FieldHelpDialog, { HelpLabel } from '../components/FieldHelpDialog';
 import { ruleFieldHelp, interfaceFieldHelp, pollingFieldHelp } from '../lib/provisioningFieldHelp';
 import PageHeader from '../components/PageHeader';
@@ -193,7 +194,7 @@ const Provisioning: Component = () => {
   const [templateModalTab, setTemplateModalTab] = createSignal<'general' | 'parameter_refresh' | 'dynamic_parameters' | 'ignored_parameters' | 'snapshots'>('general');
   const [editingTemplate, setEditingTemplate] = createSignal<ProvisioningTemplate | null>(null);
   const [cloningTemplate, setCloningTemplate] = createSignal<ProvisioningTemplate | null>(null);
-  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], ignored_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false });
+  const [templateForm, setTemplateForm] = createSignal({ name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], dynamic_parameter_suppressed_faults: {} as Record<string, string[]>, ignored_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false });
   const [templatePathFontLoaded, setTemplatePathFontLoaded] = createSignal(false);
   onMount(() => { void document.fonts.ready.then(() => setTemplatePathFontLoaded(true)); });
   const templatePathMeasure = document.createElement('canvas').getContext('2d');
@@ -205,7 +206,7 @@ const Provisioning: Component = () => {
     const fontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.75;
     if (templatePathMeasure) templatePathMeasure.font = `${fontSize}px "IBM Plex Mono", monospace`;
     const textWidth = Math.max(0, ...branches.map(branch => templatePathMeasure?.measureText(branch).width ?? branch.length * fontSize * 0.6));
-    return Math.max(560, Math.ceil(textWidth + 144));
+    return Math.max(560, Math.ceil(textWidth + 164));
   });
   const [templateInitialSnapshot, setTemplateInitialSnapshot] = createSignal('');
   const [templateImageUrl, setTemplateImageUrl] = createSignal<string | null>(null);
@@ -968,7 +969,7 @@ const Provisioning: Component = () => {
   const openCreateTemplate = () => {
     setEditingTemplate(null);
     setCloningTemplate(null);
-    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], ignored_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false };
+    const next = { name: '', manufacturer: '', product_class: '', description: '', inventory: defaultTemplateInventory(), dynamic_parameter_branches: [] as string[], dynamic_parameter_suppressed_faults: {} as Record<string, string[]>, ignored_parameter_branches: [] as string[], overview_poll_interval: '', full_tree_poll_interval: '', snapshots: defaultSnapshotSettings(), reboot_after_bootstrap: false };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -978,7 +979,7 @@ const Provisioning: Component = () => {
   const openEditTemplate = (t: ProvisioningTemplate) => {
     setCloningTemplate(null);
     setEditingTemplate(t);
-    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])], ignored_parameter_branches: [...(t.ignored_parameter_branches || [])], overview_poll_interval: t.overview_poll_interval || '', full_tree_poll_interval: t.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...t.snapshots }, reboot_after_bootstrap: t.reboot_after_bootstrap ?? false };
+    const next = { name: t.name, manufacturer: t.manufacturer || '', product_class: t.product_class || '', description: t.description || '', inventory: { ...defaultTemplateInventory(), ...(t.inventory || {}) }, dynamic_parameter_branches: [...(t.dynamic_parameter_branches || [])], dynamic_parameter_suppressed_faults: { ...(t.dynamic_parameter_suppressed_faults || {}) }, ignored_parameter_branches: [...(t.ignored_parameter_branches || [])], overview_poll_interval: t.overview_poll_interval || '', full_tree_poll_interval: t.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...t.snapshots }, reboot_after_bootstrap: t.reboot_after_bootstrap ?? false };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     void loadTemplateImage(t);
@@ -988,7 +989,7 @@ const Provisioning: Component = () => {
   const openCloneTemplate = (template: ProvisioningTemplate) => {
     setEditingTemplate(null);
     setCloningTemplate(template);
-    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])], ignored_parameter_branches: [...(template.ignored_parameter_branches || [])], overview_poll_interval: template.overview_poll_interval || '', full_tree_poll_interval: template.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...template.snapshots }, reboot_after_bootstrap: template.reboot_after_bootstrap ?? false };
+    const next = { name: `${template.name} copy`, manufacturer: template.manufacturer || '', product_class: template.product_class || '', description: template.description || '', inventory: { ...defaultTemplateInventory(), ...(template.inventory || {}) }, dynamic_parameter_branches: [...(template.dynamic_parameter_branches || [])], dynamic_parameter_suppressed_faults: { ...(template.dynamic_parameter_suppressed_faults || {}) }, ignored_parameter_branches: [...(template.ignored_parameter_branches || [])], overview_poll_interval: template.overview_poll_interval || '', full_tree_poll_interval: template.full_tree_poll_interval || '', snapshots: { ...defaultSnapshotSettings(), ...template.snapshots }, reboot_after_bootstrap: template.reboot_after_bootstrap ?? false };
     setTemplateForm(next);
     setTemplateInitialSnapshot(JSON.stringify(next));
     clearTemplateImagePreview();
@@ -1001,7 +1002,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('create-template');
     try {
-      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), ignored_parameter_branches: form.ignored_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
+      await api.createProvisioningTemplate({ name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), ignored_parameter_branches: form.ignored_parameter_branches.map(branch => branch.trim()).filter(Boolean), dynamic_parameter_suppressed_faults: form.dynamic_parameter_suppressed_faults, overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
       notify({ tone: 'success', title: 'Template created', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -1016,7 +1017,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('clone-template');
     try {
-      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), ignored_parameter_branches: form.ignored_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
+      const cloned = await api.cloneProvisioningTemplate(source.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), ignored_parameter_branches: form.ignored_parameter_branches.map(branch => branch.trim()).filter(Boolean), dynamic_parameter_suppressed_faults: form.dynamic_parameter_suppressed_faults, overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
       notify({ tone: 'success', title: 'Template duplicated', message: `${source.name} was copied with its rules, metrics, advanced settings, variables, device photo, and LAN layout.` });
       setShowTemplateModal(false);
       setCloningTemplate(null);
@@ -1035,7 +1036,7 @@ const Provisioning: Component = () => {
     if (!form.name.trim()) { setTemplateModalTab('general'); notify({ tone: 'error', title: 'Missing field', message: 'Template name is required.' }); return; }
     setPendingAction('update-template');
     try {
-      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), ignored_parameter_branches: form.ignored_parameter_branches.map(branch => branch.trim()).filter(Boolean), overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
+      await api.updateProvisioningTemplate(t.id, { name: form.name.trim(), manufacturer: form.manufacturer.trim(), product_class: form.product_class.trim(), description: form.description.trim(), inventory: form.inventory, dynamic_parameter_branches: form.dynamic_parameter_branches.map(branch => branch.trim()).filter(Boolean), ignored_parameter_branches: form.ignored_parameter_branches.map(branch => branch.trim()).filter(Boolean), dynamic_parameter_suppressed_faults: form.dynamic_parameter_suppressed_faults, overview_poll_interval: form.overview_poll_interval.trim(), full_tree_poll_interval: form.full_tree_poll_interval.trim(), snapshots: form.snapshots, reboot_after_bootstrap: form.reboot_after_bootstrap });
       notify({ tone: 'success', title: 'Template updated', message: form.name.trim() });
       setShowTemplateModal(false);
       await loadProvTemplates();
@@ -2300,13 +2301,35 @@ const Provisioning: Component = () => {
               <legend class="px-1 text-xs font-medium text-secondary">Dynamic parameter branches</legend>
               <p class="text-xs text-muted">These object branches are discovered live before overview polling, so removed CPE objects are not requested from the ACS cache.</p>
               <div class="space-y-2">
-                <Index each={templateForm().dynamic_parameter_branches}>{(branch, index) => <div class="flex items-center gap-2">
-                  <input aria-label={`Dynamic parameter branch ${index + 1}`} class="input min-w-0 flex-1 font-mono text-xs" value={branch()} onInput={(event) => { const value = event.currentTarget.value; setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.map((item, itemIndex) => itemIndex === index ? value : item) })); }} placeholder="InternetGatewayDevice.LANDevice.*.Hosts.Host." />
-                  <button type="button" class="icon-button text-rose-400" aria-label={`Remove dynamic parameter branch ${index + 1}`} title="Remove branch" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.filter((_, itemIndex) => itemIndex !== index) }))}><Trash2 size={14} /></button>
+                <Index each={templateForm().dynamic_parameter_branches}>{(branch, index) => <div class="space-y-2 rounded border border-subtle p-2">
+                  <label for={`dynamic-parameter-branch-${index}`} class="block text-xs text-muted">Branch {index + 1}</label>
+                  <div class="flex items-center gap-2">
+                    <input id={`dynamic-parameter-branch-${index}`} aria-label={`Dynamic parameter branch ${index + 1}`} class="input min-w-0 flex-1 font-mono text-xs" value={branch()} onInput={(event) => {
+                      const value = event.currentTarget.value;
+                      setTemplateForm(form => {
+                        const policies = { ...form.dynamic_parameter_suppressed_faults };
+                        const previous = form.dynamic_parameter_branches[index].trim();
+                        const codes = policies[previous];
+                        delete policies[previous];
+                        if (codes?.length) policies[value.trim()] = codes;
+                        return { ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.map((item, itemIndex) => itemIndex === index ? value : item), dynamic_parameter_suppressed_faults: policies };
+                      });
+                    }} placeholder="InternetGatewayDevice.LANDevice.*.Hosts.Host.*." />
+                    <button type="button" class="icon-button text-rose-400" aria-label={`Remove dynamic parameter branch ${index + 1}`} title="Remove branch" onClick={() => setTemplateForm(form => {
+                      const policies = { ...form.dynamic_parameter_suppressed_faults };
+                      delete policies[form.dynamic_parameter_branches[index].trim()];
+                      return { ...form, dynamic_parameter_branches: form.dynamic_parameter_branches.filter((_, itemIndex) => itemIndex !== index), dynamic_parameter_suppressed_faults: policies };
+                    })}><Trash2 size={14} /></button>
+                  </div>
+                  <DynamicBranchFaultCodes label={`Suppressed fault codes for branch ${index + 1}`} codes={templateForm().dynamic_parameter_suppressed_faults[branch().trim()] || []} disabled={!branch().trim() || pendingAction() !== null} onChange={codes => setTemplateForm(form => {
+                    const policies = { ...form.dynamic_parameter_suppressed_faults };
+                    if (codes.length) policies[branch().trim()] = codes; else delete policies[branch().trim()];
+                    return { ...form, dynamic_parameter_suppressed_faults: policies };
+                  })} />
                 </div>}</Index>
                 <button type="button" class="btn btn-secondary text-xs" onClick={() => setTemplateForm(form => ({ ...form, dynamic_parameter_branches: [...form.dynamic_parameter_branches, ''] }))}><Plus size={13} />Add branch</button>
               </div>
-              <p class="text-[10px] text-muted [overflow-wrap:anywhere]">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number, for example <code>InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.AssociatedDevice.</code></p>
+              <p class="text-[10px] text-muted [overflow-wrap:anywhere]">Use a trailing dot for an object branch. The <code>*</code> segment matches one instance number. Selected fault codes suppress new CWMP fault records for reads of this branch, including full refresh. Reads continue; task failures and partial refresh warnings remain visible. Existing faults are unchanged. Mixed or unattributed failures remain visible.</p>
             </fieldset>
             </Show>
             <Show when={templateModalTab() === 'ignored_parameters'}>
