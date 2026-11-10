@@ -32,6 +32,7 @@ type Device struct {
 	Online                    bool              `json:"online" gorm:"default:false;index:idx_devices_online_last_inform,priority:1"`
 	ActiveFaults              int               `json:"active_faults" gorm:"->;-:migration"`
 	WANInterfacesCount        int               `json:"wan_interfaces_count" gorm:"->;-:migration"`
+	SnapshotCount             int               `json:"snapshot_count" gorm:"->;-:migration"`
 	CreatedAt                 time.Time         `json:"created_at" gorm:"autoCreateTime;index:idx_devices_created_at"`
 	SnapshotInitialAt         *time.Time        `json:"snapshot_initial_at,omitempty"`
 	SnapshotScheduledAt       *time.Time        `json:"snapshot_scheduled_at,omitempty"`

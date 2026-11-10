@@ -33,6 +33,7 @@ export interface Device {
   online: boolean;
   active_faults: number;
   wan_interfaces_count: number;
+  snapshot_count: number;
   created_at: string;
   updated_at: string;
   parameters?: DeviceParameter[];
