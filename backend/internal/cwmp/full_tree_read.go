@@ -8,26 +8,55 @@ import (
 	"github.com/matrix8412/acs/internal/models"
 )
 
-const fullTreeReadBatchSize = 64
+const (
+	fullTreeReadBatchSize = 64
+	fullTreeReadMaxSplits = 128
+)
 
 // Keep the original task active until every batch succeeds. Partial results
 // must never replace the cached full tree or complete a snapshot refresh.
 type fullTreeRead struct {
-	root    string
-	names   []string
-	current []string
-	values  []ParameterValueStruct
+	root      string
+	names     []string
+	current   []string
+	values    []ParameterValueStruct
+	retries   [][]string
+	batchSize int
+	splits    int
 }
 
 func (read *fullTreeRead) next() *GetParameterValues {
+	if len(read.retries) > 0 {
+		read.current = read.retries[0]
+		read.retries = read.retries[1:]
+		return &GetParameterValues{ParameterNames: read.current}
+	}
 	if len(read.names) == 0 {
 		return nil
 	}
-	count := min(len(read.names), fullTreeReadBatchSize)
+	if read.batchSize == 0 {
+		read.batchSize = fullTreeReadBatchSize
+	}
+	count := min(len(read.names), read.batchSize)
 	request := &GetParameterValues{ParameterNames: read.names[:count]}
 	read.current = request.ParameterNames
 	read.names = read.names[count:]
 	return request
+}
+
+func (read *fullTreeRead) split() *GetParameterValues {
+	if len(read.current) < 2 || read.splits >= fullTreeReadMaxSplits {
+		return nil
+	}
+	middle := len(read.current) / 2
+	read.splits++
+	// Retain both halves; a successful probe must not skip its sibling.
+	read.retries = append([][]string{read.current[:middle], read.current[middle:]}, read.retries...)
+	if read.batchSize == 0 {
+		read.batchSize = fullTreeReadBatchSize
+	}
+	read.batchSize = min(read.batchSize, middle)
+	return read.next()
 }
 
 func (read *fullTreeRead) accept(resp *GetParameterValuesResp) bool {

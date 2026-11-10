@@ -1593,6 +1593,11 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 
 	if session.State == StateProcessingTasks {
 		logCWMPSession(session.SerialNumber, session.ID, "Fault request: RPC=%s source=%s task=%d context=%s", session.LastSentRPC, session.LastSentSource, session.CurrentTaskID, session.LastSentContext)
+		if read := session.FullTreeRead; read != nil && faultCode == "9002" && session.LastSentRPC == "GetParameterValues" {
+			if request := read.split(); request != nil {
+				return request, nil
+			}
+		}
 		if faultCode == "9002" && session.FullTreeRead == nil && (session.CurrentFullTreeFetch || session.AutoFetchPhase == 1) && session.LastSentRPC == "GetParameterValues" && len(session.LastSentParameters) == 1 &&
 			(session.LastSentParameters[0] == "InternetGatewayDevice." || session.LastSentParameters[0] == "Device.") {
 			session.FullTreeRead = &fullTreeRead{root: session.LastSentParameters[0]}

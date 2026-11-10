@@ -152,3 +152,107 @@ func TestFullTree9002FallbackFailureIsNotRetriedOrHidden(t *testing.T) {
 		})
 	}
 }
+
+func TestFullTreeReadSplitsOversizedBatches(t *testing.T) {
+	for _, limit := range []int{1, 8, 32} {
+		t.Run(fmt.Sprintf("CPE-limit-%d", limit), func(t *testing.T) {
+			h, faults := diagnostic9005TestHandler(t, nil)
+			s := h.sessions.GetOrCreate("small-batches", "TEST")
+			s.DeviceID, s.State, s.CurrentTaskID, s.CurrentFullTreeFetch = 1, StateProcessingTasks, 42, true
+			read := &fullTreeRead{root: "Device."}
+			for index := 0; index < 131; index++ {
+				read.names = append(read.names, fmt.Sprintf("Device.Test.Value%d", index))
+			}
+			s.FullTreeRead = read
+			var request interface{} = read.next()
+			for calls := 0; request != nil; calls++ {
+				if calls > 300 {
+					t.Fatal("splitting did not terminate")
+				}
+				gpv := request.(*GetParameterValues)
+				h.rememberSentRequest(s.ID, request)
+				var err error
+				if len(gpv.ParameterNames) > limit {
+					request, err = h.handleFault(context.Background(), &SOAPFault{FaultCode: "9002", FaultString: "Internal error"}, s.ID)
+				} else {
+					response := &GetParameterValuesResp{}
+					for _, name := range gpv.ParameterNames {
+						response.ParameterList.Parameters = append(response.ParameterList.Parameters, ParameterValueStruct{Name: name, Value: "test"})
+					}
+					request, err = h.handleGetParameterValuesResponse(context.Background(), response, s.ID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if len(*faults) != 0 || s.FullTreeRead != nil || len(read.values) != 131 {
+				t.Fatalf("faults=%v parameters=%d", *faults, len(read.values))
+			}
+			for index, value := range read.values {
+				if value.Name != fmt.Sprintf("Device.Test.Value%d", index) {
+					t.Fatalf("parameter skipped or duplicated at %d", index)
+				}
+			}
+		})
+	}
+}
+
+func TestFullTreeReadIsolates9002Parameter(t *testing.T) {
+	for _, badIndex := range []int{0, 31, 32, 63} {
+		t.Run(fmt.Sprint(badIndex), func(t *testing.T) {
+			h, faults := diagnostic9005TestHandler(t, nil)
+			s := h.sessions.GetOrCreate("bad-parameter", "TEST")
+			s.DeviceID, s.State, s.CurrentTaskID, s.CurrentFullTreeFetch = 1, StateProcessingTasks, 42, true
+			s.FullTreeRead = &fullTreeRead{root: "Device."}
+			for index := 0; index < 64; index++ {
+				s.FullTreeRead.names = append(s.FullTreeRead.names, fmt.Sprintf("Device.Test.Value%d", index))
+			}
+			badName := s.FullTreeRead.names[badIndex]
+			var request interface{} = s.FullTreeRead.next()
+			for calls := 0; request != nil; calls++ {
+				if calls > 13 {
+					t.Fatal("parameter isolation did not terminate")
+				}
+				gpv := request.(*GetParameterValues)
+				h.rememberSentRequest(s.ID, request)
+				bad := false
+				response := &GetParameterValuesResp{}
+				for _, name := range gpv.ParameterNames {
+					bad = bad || name == badName
+					response.ParameterList.Parameters = append(response.ParameterList.Parameters, ParameterValueStruct{Name: name, Value: "test"})
+				}
+				var err error
+				if bad {
+					request, err = h.handleFault(context.Background(), &SOAPFault{FaultCode: "9002", FaultString: "Internal error"}, s.ID)
+				} else {
+					request, err = h.handleGetParameterValuesResponse(context.Background(), response, s.ID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if len(*faults) != 1 || (*faults)[0].ParameterName != badName || (*faults)[0].FaultCode != "9002" || s.FullTreeRead != nil || s.CurrentFullTreeFetch {
+				t.Fatalf("parameter not isolated: faults=%v", *faults)
+			}
+		})
+	}
+}
+
+func TestFullTreeReadSplitBudgetAndOtherFaults(t *testing.T) {
+	for _, code := range []string{"9002", "9005", "9001"} {
+		t.Run(code, func(t *testing.T) {
+			h, faults := diagnostic9005TestHandler(t, nil)
+			s := h.sessions.GetOrCreate("split-budget", "TEST")
+			s.DeviceID, s.State, s.CurrentTaskID, s.CurrentFullTreeFetch = 1, StateProcessingTasks, 42, true
+			s.FullTreeRead = &fullTreeRead{root: "Device.", names: []string{"Device.Test.A", "Device.Test.B"}}
+			if code == "9002" {
+				s.FullTreeRead.splits = fullTreeReadMaxSplits
+			}
+			h.rememberSentRequest(s.ID, s.FullTreeRead.next())
+			request, err := h.handleFault(context.Background(), &SOAPFault{FaultCode: code, FaultString: "CPE fault"}, s.ID)
+			if err != nil || request != nil || s.FullTreeRead != nil || len(*faults) != 1 || (*faults)[0].FaultCode != code {
+				t.Fatalf("unexpected retry: request=%#v error=%v faults=%v", request, err, *faults)
+			}
+		})
+	}
+}
