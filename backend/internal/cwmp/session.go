@@ -28,6 +28,7 @@ type Session struct {
 	AutoFactoryResetSessionFinished bool
 	CurrentDeleteObjectPath         string
 	CurrentFullTreeFetch            bool
+	FullTreeRead                    *fullTreeRead
 	FeatureObjectPath               string
 	FeatureObjectInstance           string
 	FeatureObjectStage              int

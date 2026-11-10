@@ -907,6 +907,16 @@ func (h *Handler) handleGetParameterValuesResponse(ctx context.Context, resp *Ge
 		logCWMPSession(session.SerialNumber, remoteAddr, "Session not in processing state")
 		return nil, nil
 	}
+	if read := session.FullTreeRead; read != nil {
+		if !read.accept(resp) {
+			return h.failFullTreeRead(ctx, session, "Full parameter refresh failed: incomplete batched GetParameterValues response after fault 9002")
+		}
+		if request := read.next(); request != nil {
+			return request, nil
+		}
+		resp = &GetParameterValuesResp{ParameterList: ParameterList{Parameters: read.values}}
+		session.FullTreeRead = nil
+	}
 
 	if h.parameterRepo != nil && session.DeviceID > 0 {
 		params := make([]models.DeviceParameter, 0, len(resp.ParameterList.Parameters))
@@ -1097,6 +1107,9 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 		}
 		session.DynamicDiscoveryCurrent = nil
 		return h.continueDynamicDiscovery(ctx, session)
+	}
+	if session.FullTreeRead != nil {
+		return h.continueFullTreeRead(ctx, session, resp)
 	}
 	if session.FeatureObjectStage == 1 && session.CurrentTaskID > 0 {
 		names := make([]string, 0, len(resp.ParameterList))
@@ -1580,6 +1593,14 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 
 	if session.State == StateProcessingTasks {
 		logCWMPSession(session.SerialNumber, session.ID, "Fault request: RPC=%s source=%s task=%d context=%s", session.LastSentRPC, session.LastSentSource, session.CurrentTaskID, session.LastSentContext)
+		if faultCode == "9002" && session.FullTreeRead == nil && (session.CurrentFullTreeFetch || session.AutoFetchPhase == 1) && session.LastSentRPC == "GetParameterValues" && len(session.LastSentParameters) == 1 &&
+			(session.LastSentParameters[0] == "InternetGatewayDevice." || session.LastSentParameters[0] == "Device.") {
+			session.FullTreeRead = &fullTreeRead{root: session.LastSentParameters[0]}
+			return &GetParameterNames{ParameterPath: session.FullTreeRead.root, NextLevel: false}, nil
+		}
+		fullTreeReadFailed := session.FullTreeRead != nil
+		session.FullTreeRead = nil
+		session.CurrentFullTreeFetch = false
 		if session.DynamicDiscoveryVerification != nil {
 			logCWMPSession(session.SerialNumber, session.ID, "Dynamic instance verification failed: %s - %s", faultCode, faultMessage)
 			return h.failDynamicInstanceVerification(ctx, session)
@@ -1615,7 +1636,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 				return request, nil
 			}
 		}
-		if h.faultRepo != nil && session.DeviceID > 0 && session.AutoFetchPhase == 0 && !(faultCode == "9005" && session.CurrentDeleteObjectPath != "") {
+		if h.faultRepo != nil && session.DeviceID > 0 && (session.AutoFetchPhase == 0 || fullTreeReadFailed) && !(faultCode == "9005" && session.CurrentDeleteObjectPath != "") {
 			deviceFault := &models.Fault{
 				DeviceID:      session.DeviceID,
 				FaultCode:     faultCode,
