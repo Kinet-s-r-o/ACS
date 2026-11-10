@@ -81,6 +81,8 @@ type Session struct {
 	// Used to populate Fault.ParameterName when a SOAP Fault arrives.
 	LastSentContext    string
 	LastSentParameters []string
+	LastSentRPC        string
+	LastSentSource     string
 
 	// Diagnostic9005 isolates an invalid parameter from a multi-parameter GPV
 	// request. It is activated only for devices carrying the diagnostic tag.

@@ -167,6 +167,7 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		h.rememberSentRequest(sessionKey, response)
 		responseBytes, err := GenerateSOAPEnvelopeWithContext(response, namespace, newMessageID())
 		if err != nil {
 			h.failCurrentTask(r.Context(), sessionKey, err)
@@ -192,6 +193,7 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	h.rememberSentRequest(sessionKey, response)
 
 	responseBytes, err := GenerateSOAPEnvelopeForRequest(response, envelope)
 	if err != nil {
@@ -590,6 +592,8 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DynamicParameterBranches = dynamicBranches
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
+	session.LastSentRPC = ""
+	session.LastSentSource = ""
 	session.BootstrapReboot = bootstrapReboot
 	session.InformStaggerPending = informStagger != nil && hasSetParameter(provisioning, informStagger.ParameterName)
 	if informStagger != nil {
@@ -1559,6 +1563,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 	defer session.mu.Unlock()
 
 	if session.State == StateProcessingTasks {
+		logCWMPSession(session.SerialNumber, session.ID, "Fault request: RPC=%s source=%s task=%d context=%s", session.LastSentRPC, session.LastSentSource, session.CurrentTaskID, session.LastSentContext)
 		if session.DynamicDiscoveryVerification != nil {
 			logCWMPSession(session.SerialNumber, session.ID, "Dynamic instance verification failed: %s - %s", faultCode, faultMessage)
 			return h.failDynamicInstanceVerification(ctx, session)
@@ -1598,7 +1603,7 @@ func (h *Handler) handleFault(ctx context.Context, fault *SOAPFault, remoteAddr 
 			deviceFault := &models.Fault{
 				DeviceID:      session.DeviceID,
 				FaultCode:     faultCode,
-				FaultString:   faultMessage,
+				FaultString:   requestFaultMessage(session, faultMessage),
 				ParameterName: session.LastSentContext,
 			}
 			if err := h.faultRepo.Create(ctx, deviceFault); err != nil {
