@@ -771,7 +771,7 @@ const Provisioning: Component = () => {
   const handleRowDragStart = (e: DragEvent, id: number) => {
     endRuleDrag();
     setProvDraggedRow(id);
-    stopRuleScroll = startDragAutoScroll(e);
+    stopRuleScroll = startDragAutoScroll(e, e.currentTarget as HTMLElement);
     e.dataTransfer?.setData('text/plain', String(id));
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
   };
