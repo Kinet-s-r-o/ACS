@@ -74,6 +74,9 @@ func clearDynamicDiscovery(session *Session) {
 }
 
 func (h *Handler) continueDynamicDiscovery(ctx context.Context, session *Session) (interface{}, error) {
+	for len(session.DynamicDiscoveryQueue) > 0 && ignoredParameterName(session.DynamicDiscoveryQueue[0].Path, session.IgnoredParameterBranches) {
+		session.DynamicDiscoveryQueue = session.DynamicDiscoveryQueue[1:]
+	}
 	if len(session.DynamicDiscoveryQueue) > 0 {
 		return nextDynamicDiscoveryRequest(session), nil
 	}
@@ -87,6 +90,7 @@ func (h *Handler) continueDynamicDiscovery(ctx context.Context, session *Session
 			seen[name] = true
 		}
 	}
+	session.OverviewFetchParams = filterIgnoredParameterNames(session.OverviewFetchParams, session.IgnoredParameterBranches)
 	if len(session.OverviewFetchParams) == 0 {
 		// An empty GPV name list asks for the whole tree, not for zero values.
 		if h.parameterRepo != nil && session.DeviceID > 0 {

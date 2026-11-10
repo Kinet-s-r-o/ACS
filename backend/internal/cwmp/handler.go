@@ -446,9 +446,11 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	}
 
 	dynamicBranches := []string(nil)
+	ignoredBranches := []string(nil)
 	if deviceID > 0 && resolvedTemplate != nil {
 		template := resolvedTemplate
 		dynamicBranches = append(dynamicBranches, template.DynamicParameterBranches...)
+		ignoredBranches = append(ignoredBranches, template.IgnoredParameterBranches...)
 		parameterValues := make(map[string]string, len(inform.ParameterList.Parameters))
 		for _, parameter := range inform.ParameterList.Parameters {
 			parameterValues[parameter.Name] = parameter.Value
@@ -606,6 +608,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 	session.DeviceType = inform.DeviceId.Manufacturer + "/" + inform.DeviceId.ProductClass
 	session.DataModelRoot = DetectDataModelRoot(inform.ParameterList.Parameters)
 	session.DynamicParameterBranches = dynamicBranches
+	session.IgnoredParameterBranches = ignoredBranches
 	session.CWMPNamespace = envelope.CWMPNamespace
 	session.Provisioning = provisioning
 	session.LastSentRPC = ""
@@ -667,6 +670,7 @@ func (h *Handler) handleInform(ctx context.Context, envelope *SOAPEnvelope, remo
 					logCWMPSession(inform.DeviceId.SerialNumber, remoteAddr, "Error loading overview parameters: %v", err)
 				} else {
 					names = database.FilterDynamicParameterNames(names, session.DynamicParameterBranches)
+					names = filterIgnoredParameterNames(names, session.IgnoredParameterBranches)
 					if len(names) > 0 || len(session.DynamicParameterBranches) > 0 {
 						session.OverviewFetchReady = true
 						session.OverviewFetchParams = names
@@ -835,7 +839,7 @@ func (h *Handler) nextSessionRequest(ctx context.Context, session *Session) (int
 		session.State = StateProcessingTasks
 		session.LastSentContext = session.DataModelRoot
 		session.LastSentParameters = []string{session.DataModelRoot}
-		return &GetParameterValues{ParameterNames: []string{session.DataModelRoot}}, namespace, nil
+		return startFullTreeRefresh(session, session.DataModelRoot), namespace, nil
 	}
 	if session.OverviewFetchReady {
 		session.OverviewFetchReady = false
@@ -844,7 +848,8 @@ func (h *Handler) nextSessionRequest(ctx context.Context, session *Session) (int
 			session.DynamicDiscoveryActive = true
 			session.DynamicDiscoveryQueue = dynamicDiscoverySteps(session.DynamicParameterBranches)
 			session.DynamicDiscoveryNames = nil
-			return nextDynamicDiscoveryRequest(session), namespace, nil
+			request, err := h.continueDynamicDiscovery(ctx, session)
+			return request, namespace, err
 		}
 		session.State = StateProcessingTasks
 		session.LastSentContext = strings.Join(session.OverviewFetchParams, ", ")
@@ -879,6 +884,7 @@ func (h *Handler) nextSessionRequest(ctx context.Context, session *Session) (int
 				}
 			}
 		}
+		params = filterIgnoredParameterNames(params, session.IgnoredParameterBranches)
 		if len(params) > 0 {
 			session.State = StateProcessingTasks
 			session.LastSentContext = strings.Join(params, ", ")
@@ -1092,6 +1098,9 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	if h.parameterRepo != nil && session.DeviceID > 0 {
 		params := make([]models.DeviceParameter, 0, len(resp.ParameterList))
 		for _, parameter := range resp.ParameterList {
+			if ignoredParameterName(parameter.Name, session.IgnoredParameterBranches) {
+				continue
+			}
 			writable := parameter.Writable
 			params = append(params, models.DeviceParameter{Name: parameter.Name, Writable: &writable})
 		}
@@ -1102,6 +1111,9 @@ func (h *Handler) handleGetParameterNamesResponse(ctx context.Context, resp *Get
 	if session.DynamicDiscoveryActive {
 		if current := session.DynamicDiscoveryCurrent; current != nil {
 			for _, parameter := range resp.ParameterList {
+				if ignoredParameterName(parameter.Name, session.IgnoredParameterBranches) {
+					continue
+				}
 				if current.Leaf {
 					if !strings.HasSuffix(parameter.Name, ".") && database.DynamicParameterBranchMatches(current.Path, parameter.Name) {
 						session.DynamicDiscoveryNames = append(session.DynamicDiscoveryNames, parameter.Name)
@@ -1781,6 +1793,7 @@ func (h *Handler) getNextTask(ctx context.Context, session *Session) (interface{
 				session.LastSentParameters = append([]string(nil), values.ParameterNames...)
 				if len(values.ParameterNames) == 1 && values.ParameterNames[0] == session.DataModelRoot {
 					session.CurrentFullTreeFetch = true
+					request = startFullTreeRefresh(session, session.DataModelRoot)
 				}
 			} else {
 				session.LastSentParameters = nil

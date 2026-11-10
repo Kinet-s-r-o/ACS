@@ -40,6 +40,7 @@ type Session struct {
 	OverviewFetchReady              bool
 	OverviewFetchActive             bool
 	OverviewFetchParams             []string
+	IgnoredParameterBranches        []string
 	DynamicParameterBranches        []string
 	DynamicDiscoveryActive          bool
 	DynamicDiscoveryQueue           []DynamicDiscoveryStep

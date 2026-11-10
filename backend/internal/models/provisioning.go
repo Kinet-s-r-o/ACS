@@ -11,6 +11,7 @@ type ProvisioningTemplate struct {
 	RebootAfterBootstrap     bool                         `json:"reboot_after_bootstrap" gorm:"not null;default:false"`
 	Inventory                TemplateInventory            `json:"inventory" gorm:"type:jsonb;serializer:json"`
 	DynamicParameterBranches []string                     `json:"dynamic_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
+	IgnoredParameterBranches []string                     `json:"ignored_parameter_branches,omitempty" gorm:"type:jsonb;serializer:json"`
 	OverviewPollInterval     string                       `json:"overview_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
 	FullTreePollInterval     string                       `json:"full_tree_poll_interval,omitempty" gorm:"size:32;not null;default:''"`
 	Snapshots                TemplateSnapshotSettings     `json:"snapshots" gorm:"type:jsonb;serializer:json"`
@@ -163,6 +164,7 @@ type CreateProvisioningTemplateRequest struct {
 	Description              string                    `json:"description"`
 	Inventory                *TemplateInventory        `json:"inventory,omitempty"`
 	DynamicParameterBranches []string                  `json:"dynamic_parameter_branches,omitempty"`
+	IgnoredParameterBranches []string                  `json:"ignored_parameter_branches,omitempty"`
 	OverviewPollInterval     *string                   `json:"overview_poll_interval,omitempty"`
 	FullTreePollInterval     *string                   `json:"full_tree_poll_interval,omitempty"`
 	Snapshots                *TemplateSnapshotSettings `json:"snapshots,omitempty"`

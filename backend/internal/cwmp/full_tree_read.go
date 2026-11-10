@@ -118,7 +118,7 @@ func (h *Handler) continueFullTreeRead(ctx context.Context, session *Session, re
 	seen := make(map[string]bool)
 	for _, parameter := range resp.ParameterList {
 		name := parameter.Name
-		if strings.HasPrefix(name, read.root) && !strings.HasSuffix(name, ".") && !seen[name] {
+		if !ignoredParameterName(name, session.IgnoredParameterBranches) && strings.HasPrefix(name, read.root) && !strings.HasSuffix(name, ".") && !seen[name] {
 			seen[name] = true
 			read.names = append(read.names, name)
 		}
@@ -126,7 +126,7 @@ func (h *Handler) continueFullTreeRead(ctx context.Context, session *Session, re
 	if request := read.next(); request != nil {
 		return request, nil
 	}
-	return h.failFullTreeRead(ctx, session, "Full parameter refresh failed: GetParameterNames returned no leaf parameters after GPV fault 9002")
+	return h.failFullTreeRead(ctx, session, "Full parameter refresh failed: no readable leaf parameters remain after discovery and branch filtering")
 }
 
 func (h *Handler) failFullTreeRead(ctx context.Context, session *Session, message string) (interface{}, error) {

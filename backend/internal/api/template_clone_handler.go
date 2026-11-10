@@ -34,6 +34,7 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 		Description              string                           `json:"description"`
 		Inventory                *models.TemplateInventory        `json:"inventory,omitempty"`
 		DynamicParameterBranches []string                         `json:"dynamic_parameter_branches,omitempty"`
+		IgnoredParameterBranches []string                         `json:"ignored_parameter_branches,omitempty"`
 		OverviewPollInterval     *string                          `json:"overview_poll_interval,omitempty"`
 		FullTreePollInterval     *string                          `json:"full_tree_poll_interval,omitempty"`
 		Snapshots                *models.TemplateSnapshotSettings `json:"snapshots,omitempty"`
@@ -86,10 +87,17 @@ func (r *Router) handleCloneProvisioningTemplate(w http.ResponseWriter, req *htt
 	if body.DynamicParameterBranches == nil {
 		body.DynamicParameterBranches = append([]string(nil), source.DynamicParameterBranches...)
 	}
+	if body.IgnoredParameterBranches == nil {
+		body.IgnoredParameterBranches = append([]string(nil), source.IgnoredParameterBranches...)
+	}
+	if err := validateIgnoredParameterBranches(body.IgnoredParameterBranches); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	clone := models.ProvisioningTemplate{
 		RebootAfterBootstrap: source.RebootAfterBootstrap,
 		Name:                 body.Name, Manufacturer: body.Manufacturer, ProductClass: body.ProductClass,
-		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), Variables: source.Variables, Features: source.Features,
+		Description: body.Description, Inventory: inventory, DynamicParameterBranches: normalizeDynamicParameterBranches(body.DynamicParameterBranches), IgnoredParameterBranches: normalizeDynamicParameterBranches(body.IgnoredParameterBranches), Variables: source.Variables, Features: source.Features,
 		OverviewPollInterval: overviewInterval, FullTreePollInterval: fullTreeInterval,
 		LANPortCount: source.LANPortCount, LANPortMappings: source.LANPortMappings,
 		CPEInfoFields:  append([]models.ProvisioningCPEInfoField(nil), source.CPEInfoFields...),
