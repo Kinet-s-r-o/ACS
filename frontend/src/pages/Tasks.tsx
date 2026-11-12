@@ -42,8 +42,8 @@ const Tasks: Component = () => {
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
   const [taskDetailTab, setTaskDetailTab] = createSignal<'requested' | 'result'>('requested');
   createEffect(() => { if (!can('tasks.' + taskDetailTab(), 'read')) setTaskDetailTab(can('tasks.requested', 'read') ? 'requested' : 'result'); });
-  const [statusFilter, setStatusFilter] = createSignal<string | 'all' | 'column'>('all');
   const [columnFilters, setColumnFilters] = createPersistedJsonSignal<Record<string, ColumnFilterState>>('acs.filters.tasks', {});
+  const [statusFilter, setStatusFilter] = createSignal<string | 'all' | 'column'>(columnFilters().status ? 'column' : 'all');
   const [sortState, setSortState] = createPersistedJsonSignal<{ column: string | null; direction: SortDirection }>('acs.sort.tasks', { column: 'created_at', direction: 'desc' });
   const handleSort = (column: string) => { setTaskPage(0); setSortState(current => ({ column, direction: current.column === column && current.direction === 'asc' ? 'desc' : 'asc' })); };
   const [taskPage, setTaskPage] = createSignal(0);
