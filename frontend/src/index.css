@@ -390,7 +390,8 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
    the available table width. Stable IDs keep this behavior after reordering. */
 .cwmp-fault-table { table-layout: auto; }
 .cwmp-fault-table th:not([data-column-order-id="message#0"]):not([data-column-order-id="parameter#0"]) { width: 1%; white-space: nowrap; }
-.cwmp-fault-table td:is([data-column-order-id="message#0"], [data-column-order-id="parameter#0"]) { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cwmp-fault-table td[data-column-order-id="message#0"] { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cwmp-fault-parameter { display: block; max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cwmp-fault-table td[data-column-order-id="time#0"] { white-space: nowrap; }
 .data-table .icon-button { width: 30px; height: 30px; }
 .data-table .btn-xs { min-height: 28px; padding: 4px 8px; font-size: 11px; }

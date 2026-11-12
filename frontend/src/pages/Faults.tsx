@@ -1,10 +1,11 @@
 import type { Component } from 'solid-js';
 import { createResource, createSignal, createMemo, Show, For } from 'solid-js';
 import { A } from '@solidjs/router';
-import { AlertTriangle, CheckCircle, Download, RefreshCw, Search, Trash2, X } from 'lucide-solid';
-import { api } from '../lib/api';
+import { AlertTriangle, CheckCircle, Download, Eye, RefreshCw, Search, Trash2, X } from 'lucide-solid';
+import { api, type Fault } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import PageHeader from '../components/PageHeader';
+import Dialog from '../components/Dialog';
 import { useFeedback } from '../components/Feedback';
 import { EmptyState, ResourceError } from '../components/ResourceState';
 import ColumnFilter from '../components/ColumnFilter';
@@ -28,6 +29,7 @@ const Faults: Component = () => {
   const [activeView, setActiveView] = createSignal<FaultView>('active');
   const [searchQuery, setSearchQuery] = createPersistedSignal('acs.search.faults');
   const [pendingFault, setPendingFault] = createSignal<number | null>(null);
+  const [detailFault, setDetailFault] = createSignal<Fault | null>(null);
   const [selectedFaults, setSelectedFaults] = createSignal<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = createSignal(false);
   const [stats, { refetch: refetchStats }] = createResource(() => api.getFaultStats());
@@ -386,8 +388,8 @@ const Faults: Component = () => {
                           </td>
                         </Show>
                         <Show when={isVisible('parameter_name')}>
-                          <td data-column-order-id="parameter#0" class="px-4 py-3 text-muted font-mono text-xs hidden lg:table-cell" title={fault.parameter_name}>
-                            {fault.parameter_name || '-'}
+                          <td data-column-order-id="parameter#0" class="px-4 py-3 text-muted font-mono text-xs hidden lg:table-cell">
+                            <span class="cwmp-fault-parameter">{fault.parameter_name || '-'}</span>
                           </td>
                         </Show>
                         <Show when={isVisible('created_at')}>
@@ -413,6 +415,9 @@ const Faults: Component = () => {
                         </Show>
                         <td data-column-order-id="actions#0" class="px-4 py-3 text-right">
                           <div class="flex items-center justify-end gap-2">
+                            <button type="button" class="icon-button" onClick={() => setDetailFault(fault)} aria-label={`View details of fault ${fault.id}`}>
+                              <Eye size={14} />
+                            </button>
                             <Show when={!fault.resolved && can('faults', 'edit')}>
                               <button 
                                 onClick={() => handleResolve(fault.id)}
@@ -444,6 +449,27 @@ const Faults: Component = () => {
         </Show>
       </div></Show>
       <Pagination page={faultPage()} totalPages={faultTotalPages()} totalItems={filteredFaults().length} pageSize={pageSize()} onPageChange={setFaultPage} storageKey="faults" onPageSizeChange={handlePageSizeChange} filters={columnFilters()} onClearFilters={() => { setColumnFilters({}); setFaultPage(0); }} onRemoveFilter={(columnId) => { setColumnFilters((previous) => { const next = { ...previous }; delete next[columnId]; return next; }); setFaultPage(0); }} />
+      <Show when={detailFault()}>
+        {(fault) => <Dialog title={`CWMP fault #${fault().id}`} size="large" onClose={() => setDetailFault(null)}>
+          <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <For each={[
+              ['Device', fault().serial_number],
+              ['Model', fault().model_name || '-'],
+              ['Code', fault().fault_code],
+              ['Status', fault().resolved ? 'Resolved' : 'Active'],
+              ['Time', formatDate(fault().created_at)],
+              ['Resolved at', fault().resolved_at ? formatDate(fault().resolved_at!) : '-'],
+              ['Message', fault().fault_string || '-'],
+              ['Parameter', fault().parameter_name || '-'],
+            ]}>
+              {([label, value]) => <div class={`min-w-0 ${label === 'Message' || label === 'Parameter' ? 'sm:col-span-2' : ''}`}>
+                <dt class="text-xs text-muted mb-1">{label}</dt>
+                <dd class={`text-secondary whitespace-pre-wrap [overflow-wrap:anywhere] ${label === 'Parameter' ? 'font-mono text-xs' : ''}`}>{value}</dd>
+              </div>}
+            </For>
+          </dl>
+        </Dialog>}
+      </Show>
     </div>
   );
 };

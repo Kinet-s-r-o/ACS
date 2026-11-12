@@ -3455,8 +3455,8 @@ const DeviceDetail: Component = () => {
                               <td data-column-order-id="message#0" class="px-4 py-2 text-secondary" title={fault.fault_string}>
                                 {fault.fault_string}
                               </td>
-                              <td data-column-order-id="parameter#0" class="px-4 py-2 text-muted font-mono text-xs" title={fault.parameter_name}>
-                                {fault.parameter_name || '-'}
+                              <td data-column-order-id="parameter#0" class="px-4 py-2 text-muted font-mono text-xs">
+                                <span class="cwmp-fault-parameter">{fault.parameter_name || '-'}</span>
                               </td>
                               <td data-column-order-id="time#0" class="px-4 py-2 text-muted text-xs">{formatDate(fault.created_at)}</td>
                               <td data-column-order-id="status#0" class="px-4 py-2">
