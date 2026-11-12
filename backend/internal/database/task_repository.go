@@ -520,6 +520,18 @@ func (r *TaskRepository) MarkOldPendingDownloadsAsFailed(ctx context.Context, ag
 	return result.RowsAffected, result.Error
 }
 
+// Downloads can finish asynchronously through TransferComplete in a later session.
+func (r *TaskRepository) FailExpiredSessionTask(ctx context.Context, id int64) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).Model(&models.Task{}).
+		Where("id = ? AND status = ? AND type <> ?", id, models.TaskStatusSent, models.TaskTypeDownload).
+		Updates(map[string]interface{}{
+			"status":        models.TaskStatusFailed,
+			"error_message": "CWMP session expired before the device response was received",
+			"completed_at":  &now,
+		}).Error
+}
+
 func (r *TaskRepository) MarkOldSentAsFailed(ctx context.Context, age time.Duration) (int64, error) {
 	now := time.Now()
 	result := r.db.WithContext(ctx).Model(&models.Task{}).

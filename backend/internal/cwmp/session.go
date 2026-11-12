@@ -1,6 +1,7 @@
 package cwmp
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -112,17 +113,19 @@ type DynamicDiscoveryStep struct {
 
 // SessionManager manage active CWMP sessions
 type SessionManager struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session
-	timeout  time.Duration
-	maxSize  int
+	mu         sync.RWMutex
+	sessions   map[string]*Session
+	timeout    time.Duration
+	maxSize    int
+	expireTask func(int64) error
 }
 
-func NewSessionManager(timeout time.Duration) *SessionManager {
+func NewSessionManager(timeout time.Duration, expireTask func(int64) error) *SessionManager {
 	sm := &SessionManager{
-		sessions: make(map[string]*Session),
-		timeout:  timeout,
-		maxSize:  100000,
+		sessions:   make(map[string]*Session),
+		timeout:    timeout,
+		maxSize:    100000,
+		expireTask: expireTask,
 	}
 
 	// Start cleanup goroutine
@@ -207,16 +210,37 @@ func (sm *SessionManager) cleanupLoop() {
 }
 
 func (sm *SessionManager) cleanup() {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	sm.mu.RLock()
+	sessions := make([]*Session, 0, len(sm.sessions))
+	for _, s := range sm.sessions {
+		sessions = append(sessions, s)
+	}
+	sm.mu.RUnlock()
 
 	now := time.Now()
-	for id, s := range sm.sessions {
+	for _, s := range sessions {
 		s.mu.Lock()
 		expired := now.Sub(s.LastActivity) > sm.timeout
+		if expired && s.CurrentTaskID > 0 && sm.expireTask != nil {
+			if err := sm.expireTask(s.CurrentTaskID); err != nil {
+				log.Printf("Failed to expire CWMP task %d: %v", s.CurrentTaskID, err)
+				expired = false
+			} else {
+				s.CurrentTaskID = 0
+				s.State = StateIdle
+			}
+		}
 		s.mu.Unlock()
 		if expired {
-			delete(sm.sessions, id)
+			// Database writes must not hold the manager lock or block other CPEs.
+			// Recheck activity and identity after reacquiring locks in their usual order.
+			sm.mu.Lock()
+			s.mu.Lock()
+			if sm.sessions[s.ID] == s && now.Sub(s.LastActivity) > sm.timeout {
+				delete(sm.sessions, s.ID)
+			}
+			s.mu.Unlock()
+			sm.mu.Unlock()
 		}
 	}
 }

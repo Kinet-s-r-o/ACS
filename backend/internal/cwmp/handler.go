@@ -86,9 +86,8 @@ func NewHandler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Handler {
 			pollInterval = d
 		}
 	}
-	return &Handler{
+	h := &Handler{
 		communication:        communicationControl(controls),
-		sessions:             NewSessionManager(2 * time.Minute),
 		deviceRepo:           deviceRepo,
 		taskRepo:             taskRepo,
 		parameterRepo:        parameterRepo,
@@ -107,6 +106,20 @@ func NewHandler(db *gorm.DB, controls ...*cwmpcontrol.Controller) *Handler {
 		trustedProxies:       parseAllowedNetworks(os.Getenv("CWMP_TRUSTED_PROXY_CIDRS")),
 		diagnosticSlots:      make(chan struct{}, 2),
 	}
+	h.sessions = NewSessionManager(2*time.Minute, func(taskID int64) error {
+		if h.taskRepo == nil {
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ctx, release, err := h.communication.Bind(ctx)
+		if err != nil {
+			return err
+		}
+		defer release()
+		return h.taskRepo.FailExpiredSessionTask(ctx, taskID)
+	})
+	return h
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
