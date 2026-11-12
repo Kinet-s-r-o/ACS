@@ -25,3 +25,15 @@ If private reporting is unavailable, contact the repository owner privately befo
 - Back up the database before bulk provisioning, reset, or firmware operations.
 
 Signed firmware links are time-limited bearer credentials. They should not be logged by reverse proxies and must only be shared with the intended CPE. Firmware authenticity remains vendor-specific; operators must validate checksums/signatures and compatibility before scheduling an upgrade.
+
+## Container security updates
+
+Rebuild all three application images with fresh base images and uncached package updates:
+
+```sh
+docker compose -f docker-compose-coolify.yml build --pull --no-cache acs web acs-postgres
+```
+
+For Coolify, disable the build cache for the security rebuild. Scan the resulting images before redeploying; changing source files does not patch running containers. Keep PostgreSQL on major version 17 and back up the database before deployment.
+
+The runtime stages apply Alpine security updates. PostgreSQL's bundled Go tools are rebuilt from the versioned module in [docker/postgres-tools](docker/postgres-tools/go.mod), using the same patched Go compiler as ACS. Keep both module files and the Docker build compiler current; upgrading Alpine packages alone does not patch Go code embedded in these executables.

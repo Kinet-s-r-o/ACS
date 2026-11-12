@@ -3,7 +3,7 @@
 # ------------------------------------------------------------
 # Backend build
 # ------------------------------------------------------------
-FROM golang:1.26-alpine AS backend-builder
+FROM golang:1.27.4-alpine AS backend-builder
 
 WORKDIR /build/backend
 
@@ -46,7 +46,8 @@ RUN printf 'VITE_API_URL=/api\nVITE_APP_NAME=%s\n' "${VITE_APP_NAME:-}" > .env.p
 # ------------------------------------------------------------
 FROM alpine:3.23 AS backend
 
-RUN apk add --no-cache \
+RUN apk upgrade --no-cache && \
+    apk add --no-cache \
     ca-certificates \
     tzdata
 
@@ -83,15 +84,31 @@ ENTRYPOINT ["/app/acs"]
 # ------------------------------------------------------------
 # PostgreSQL storage probe
 # ------------------------------------------------------------
+FROM golang:1.27.4-alpine AS postgres-tools-builder
+
+WORKDIR /build/postgres-tools
+COPY docker/postgres-tools/go.mod docker/postgres-tools/go.sum ./
+RUN go mod download && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/gosu github.com/tianon/gosu && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/timescaledb-tune github.com/timescale/timescaledb-tune/cmd/timescaledb-tune && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/timescaledb-parallel-copy github.com/timescale/timescaledb-parallel-copy/cmd/timescaledb-parallel-copy
+
 FROM timescale/timescaledb:latest-pg17 AS postgres
 
+RUN apk upgrade --no-cache
+COPY --from=postgres-tools-builder /out/ /usr/local/bin/
 COPY scripts/postgres-index-storage-probe.sh /usr/local/bin/acs-postgres-index-storage-probe
+RUN sed -i 's/\r$//' /usr/local/bin/acs-postgres-index-storage-probe
 
 
 # ------------------------------------------------------------
 # Web / reverse proxy runtime
 # ------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:alpine AS web
+
+USER root
+RUN apk upgrade --no-cache
+USER nginx
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=frontend-builder /build/frontend/dist /usr/share/nginx/html

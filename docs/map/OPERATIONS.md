@@ -9,6 +9,7 @@
 | Nginx/TLS deployment | [setup_nginx.md](../../setup_nginx.md) | API prefix, static frontend, firmware limits, CWMP proxy |
 | Cloudflare deployment | [setup_cloudflare.md](../../setup_cloudflare.md) | Console Access is separate from CPE CWMP and firmware paths |
 | Security baseline | [SECURITY.md](../../SECURITY.md) | Secrets, proxy CIDRs, TLS, backups, firmware controls |
+| Container vulnerability remediation | [SECURITY.md](../../SECURITY.md#container-security-updates), [tool dependencies](../../docker/postgres-tools/go.mod) | Fresh base/package updates; rebuild PostgreSQL helper binaries with patched Go; keep PostgreSQL 17 |
 | Container deployment | [docker-compose-coolify.yml](../../docker-compose-coolify.yml), [Dockerfile](../../Dockerfile) | Backend, web, PostgreSQL, firmware volume, health checks |
 | CI checks | [.github/workflows/ci.yml](../../.github/workflows/ci.yml) | Backend, frontend, installer, and PostgreSQL 14–18 matrix |
 | Health endpoint | `GET /api/health` through the proxy | Backend listens on API port 7548 by default |
