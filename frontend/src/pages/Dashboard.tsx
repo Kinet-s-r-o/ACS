@@ -115,7 +115,7 @@ const FleetPanelFrame: Component<{
     ghost.setAttribute('aria-hidden', 'true');
     Object.assign(ghost.style, {
       position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`,
-      margin: '0', zIndex: '10000', pointerEvents: 'none', opacity: '.92', boxShadow: '0 14px 36px rgb(0 0 0 / .38)',
+      margin: '0', zIndex: '10000', pointerEvents: 'none', opacity: '.92', boxShadow: '0 14px 36px rgb(var(--shadow-color) / .38)',
       transform: 'none', transition: 'none',
     });
     document.body.append(ghost);

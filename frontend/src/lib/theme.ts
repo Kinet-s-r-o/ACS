@@ -22,7 +22,8 @@ const [theme, setThemeSignal] = createSignal<ResolvedTheme>(resolveTheme(themePr
 
 const applyTheme = (currentTheme: ResolvedTheme) => {
   document.documentElement.setAttribute('data-theme', currentTheme);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', currentTheme === 'light' ? '#ebf2f9' : '#080f1a');
+  const background = getComputedStyle(document.documentElement).getPropertyValue('--bg-base').trim();
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', `rgb(${background})`);
 };
 
 if (typeof document !== 'undefined') applyTheme(theme());

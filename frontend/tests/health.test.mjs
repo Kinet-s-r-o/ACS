@@ -317,6 +317,17 @@ test('thresholdLines falls back to warn/critical when no custom thresholds', () 
   assert.equal(lines[1].color, '#f43f5e');
 });
 
+test('thresholdLines uses theme colors only for legacy warning and critical thresholds', () => {
+  const colors = { warning: 'rgb(217 119 6)', error: 'rgb(220 38 38)' };
+  const def = { ...baseDef, thresholds: [], warn_threshold: 80, critical_threshold: 90 };
+  assert.deepEqual(thresholdLines(def, colors), [
+    { value: 80, color: colors.warning },
+    { value: 90, color: colors.error },
+  ]);
+  const thresholds = [{ value: 50, color: '#10b981' }];
+  assert.deepEqual(thresholdLines({ ...def, thresholds }, colors), thresholds);
+});
+
 test('thresholdLines prefers custom thresholds over warn/critical', () => {
   const def = { ...baseDef, thresholds: [
     { value: 50, color: '#10b981' },

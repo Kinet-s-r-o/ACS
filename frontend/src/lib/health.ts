@@ -182,12 +182,12 @@ export function gaugeZones(thresholds: Threshold[], min: number, max: number): [
  * Returns the threshold lines to draw as reference lines on a chart.
  * Falls back to warn/critical when no custom thresholds are set.
  */
-export function thresholdLines(def: MetricDefinition): { value: number; color: string }[] {
+export function thresholdLines(def: MetricDefinition, colors = { warning: '#f59e0b', error: '#f43f5e' }): { value: number; color: string }[] {
   if (def.thresholds && def.thresholds.length > 0) {
     return def.thresholds.map(t => ({ value: t.value, color: t.color }));
   }
   const lines: { value: number; color: string }[] = [];
-  if (def.warn_threshold != null) lines.push({ value: def.warn_threshold, color: '#f59e0b' });
-  if (def.critical_threshold != null) lines.push({ value: def.critical_threshold, color: '#f43f5e' });
+  if (def.warn_threshold != null) lines.push({ value: def.warn_threshold, color: colors.warning });
+  if (def.critical_threshold != null) lines.push({ value: def.critical_threshold, color: colors.error });
   return lines;
 }

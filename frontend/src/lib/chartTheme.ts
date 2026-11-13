@@ -16,6 +16,8 @@ export const useChartTheme = () => {
       track: color('--bg-elevated'),
       accent: color('--accent'),
       success: color('--success'),
+      warning: color('--warning'),
+      error: color('--error'),
       tooltip: { backgroundColor: surface, borderColor: border, textStyle: { color: text } },
     };
   };

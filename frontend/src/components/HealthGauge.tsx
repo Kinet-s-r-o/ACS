@@ -46,31 +46,31 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
     } else if (direction === 'lower_is_worse') {
       zones = [];
       if (critical != null && critical > min) {
-        zones.push([Number(((critical - min) / range).toFixed(4)), '#f43f5e']);
+        zones.push([Number(((critical - min) / range).toFixed(4)), colors.error]);
       }
       if (warn != null && warn > min) {
-        zones.push([Number(((warn - min) / range).toFixed(4)), '#f59e0b']);
+        zones.push([Number(((warn - min) / range).toFixed(4)), colors.warning]);
       }
-      zones.push([1, '#10b981']);
+      zones.push([1, colors.success]);
     } else if (gaugeStyle === 'speed') {
-      zones = [[0.65, '#22c55e'], [0.85, '#f59e0b'], [1, '#f43f5e']];
+      zones = [[0.65, colors.success], [0.85, colors.warning], [1, colors.error]];
     } else if (gaugeStyle === 'stage') {
-      zones = [[0.78, '#41d3e8'], [0.9, '#41d3e8'], [1, '#f43f5e']];
+      zones = [[0.78, '#41d3e8'], [0.9, '#41d3e8'], [1, colors.error]];
     } else if (gaugeStyle === 'grade') {
       zones = [[0.2, '#fb7185'], [0.4, '#fbbf24'], [0.6, '#fde047'], [0.8, '#38bdf8'], [1, '#4ade80']];
     } else if (gaugeStyle === 'barometer') {
       zones = [[0.25, '#38bdf8'], [0.5, '#34d399'], [0.75, '#fbbf24'], [1, '#fb7185']];
     } else if (gaugeStyle === 'temperature') {
-      zones = [[0.55, '#38bdf8'], [0.8, '#f59e0b'], [1, '#f97316']];
+      zones = [[0.55, '#38bdf8'], [0.8, colors.warning], [1, colors.error]];
     } else {
       zones = [];
       if (warn != null && warn < max) {
-        zones.push([Number(((warn - min) / range).toFixed(4)), '#10b981']);
+        zones.push([Number(((warn - min) / range).toFixed(4)), colors.success]);
       }
       if (critical != null && critical < max) {
-        zones.push([Number(((critical - min) / range).toFixed(4)), '#f59e0b']);
+        zones.push([Number(((critical - min) / range).toFixed(4)), colors.warning]);
       }
-      zones.push([1, '#f43f5e']);
+      zones.push([1, colors.error]);
     }
 
     // Arc angle is set by the selected style and remains user-adjustable.

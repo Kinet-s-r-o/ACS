@@ -242,7 +242,8 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     });
   });
   const buildOption = (): echarts.EChartsCoreOption => {
-    const { text, label: LABEL_COLOR, border: AXIS_COLOR, grid: GRID_COLOR, tooltip } = chartTheme();
+    const colors = chartTheme();
+    const { text, label: LABEL_COLOR, border: AXIS_COLOR, grid: GRID_COLOR, tooltip } = colors;
     const s = seriesData();
     if (!s) return {};
 
@@ -294,7 +295,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
 
       const dataPoints: [number, number | null][] = s.seriesTimes[i].map((t, j) => [t, s.series[i][j]]);
 
-      const tLines = thresholdLines(m);
+      const tLines = thresholdLines(m, colors);
       const markLine = tLines.length > 0 ? {
         silent: true,
         symbol: 'none',
