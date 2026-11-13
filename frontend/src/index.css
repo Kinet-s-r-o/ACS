@@ -307,7 +307,7 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .dashboard-configurable-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .data-panel-section .dashboard-configurable-heading h3 { min-width: 0; margin: 0; }
 .fleet-dashboard-grid { --fleet-grid-line: 16px; display: grid; grid-template-columns: repeat(120, minmax(0, 1fr)); grid-auto-rows: 8px; grid-auto-flow: dense; gap: 0; align-items: start; }
-.fleet-dashboard-grid.is-resizing { background-image: linear-gradient(to right, transparent calc(100% - 1px), rgb(var(--accent) / .22) calc(100% - 1px)), linear-gradient(to bottom, transparent 11px, rgb(var(--accent) / .22) 11px); background-size: .8333333333% 100%, 100% 12px; }
+.fleet-dashboard-grid.is-resizing { background-image: linear-gradient(to right, transparent calc(100% - 1px), rgb(var(--accent) / .22) calc(100% - 1px)), linear-gradient(to bottom, transparent 7px, rgb(var(--accent) / .22) 7px); background-size: .8333333333% 100%, 100% 8px; }
 .fleet-layout-panel { position: relative; min-width: 0; min-height: 0; margin-inline: calc(var(--fleet-grid-line) / 2); padding-bottom: var(--fleet-grid-line); align-self: start; transition: box-shadow 160ms ease; }
 .fleet-layout-panel.is-dragging { opacity: .16; }
 .fleet-panel-drag-ghost { pointer-events: none !important; }
@@ -321,6 +321,11 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fleet-panel-drag-handle:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
 .fleet-layout-panel:hover { z-index: 2; }
 .fleet-content-panel { height: auto; min-height: var(--fleet-panel-height, 0px); overflow: visible; }
+.fleet-growth-panel { display: flex; flex-direction: column; height: 336px; min-height: 240px; }
+.fleet-growth-panel > .data-panel-header { flex-shrink: 0; }
+.fleet-growth-panel > .data-panel-body { flex: 1; min-height: 0; }
+.fleet-growth-panel .device-growth-chart { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.fleet-growth-panel .device-growth-chart > div { flex: 1; height: 100%; min-height: 0; }
 .fleet-content-panel > .data-panel-header { padding-left: 52px; }
 .fleet-content-panel > .dashboard-configurable-heading { min-height: 28px; padding-left: 44px; box-sizing: border-box; }
 .fleet-layout-status { grid-column: 1 / -1; }

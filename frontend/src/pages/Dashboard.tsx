@@ -94,7 +94,7 @@ const FleetPanelFrame: Component<{
       window.removeEventListener('pointercancel', end);
       grid?.classList.remove('is-resizing');
       if (axis === 'x') props.onResize?.(props.id, Math.max(30, Math.min(120, Math.round(currentWidth))));
-      else props.onResize?.(props.id, props.layout.width, Math.max(80, Math.round(currentWidth / 12) * 12));
+      else props.onResize?.(props.id, props.layout.width, Math.max(80, Math.round(currentWidth / 8) * 8));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end, { once: true });
@@ -163,6 +163,15 @@ const FleetPanelFrame: Component<{
     window.addEventListener('pointercancel', end, { once: true });
   };
   const width = () => Math.max(30, Math.min(120, props.layout.width <= 12 ? props.layout.width * 10 : props.layout.width));
+  const resizeKey = (event: KeyboardEvent, axis: 'x' | 'y') => {
+    const direction = axis === 'x' ? { ArrowLeft: -1, ArrowRight: 1 } : { ArrowUp: -1, ArrowDown: 1 };
+    const delta = direction[event.key as keyof typeof direction];
+    if (!delta || !props.onResize) return;
+    event.preventDefault();
+    const step = delta * (event.shiftKey ? 5 : 1);
+    if (axis === 'x') props.onResize(props.id, Math.max(30, Math.min(120, Math.round(width()) + step)));
+    else props.onResize(props.id, props.layout.width, Math.max(80, Math.round(shell.getBoundingClientRect().height / 8) * 8 + step * 8));
+  };
   const occupiedColumns = () => Math.ceil(width());
   const occupiedRows = () => Math.max(1, Math.ceil((panelHeight() + 16) / 8));
   const savedHeight = () => props.layout.height > 5 ? props.layout.height : 0;
@@ -175,8 +184,8 @@ const FleetPanelFrame: Component<{
     <div class="fleet-panel-shell" ref={shell}>
       {props.children}
       <Show when={props.editable}><button type="button" class="fleet-panel-drag-handle" aria-label="Move panel" title="Drag to move panel" onPointerDown={dragStart}><GripVertical size={14} aria-hidden="true" /></button></Show>
-      <Show when={props.onResize}><button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge to resize width" onPointerDown={(event) => resizeStart(event, 'x')} />
-      <button type="button" class="fleet-panel-resize-y" aria-label="Resize panel height" title="Drag bottom edge to resize height" onPointerDown={(event) => resizeStart(event, 'y')} /></Show>
+      <Show when={props.onResize}><button type="button" class="fleet-panel-resize-x" aria-label="Resize panel width" title="Drag right edge or use Left/Right arrows to resize width" onPointerDown={(event) => resizeStart(event, 'x')} onKeyDown={(event) => resizeKey(event, 'x')} />
+      <button type="button" class="fleet-panel-resize-y" aria-label="Resize panel height" title="Drag bottom edge or use Up/Down arrows to resize height" onPointerDown={(event) => resizeStart(event, 'y')} onKeyDown={(event) => resizeKey(event, 'y')} /></Show>
     </div>
   </div>;
 };
@@ -407,14 +416,13 @@ const Dashboard: Component = () => {
     });
   });
   const layoutFor = (id: string, fallbackOrder = 100): FleetPanelLayout => {
-    const saved = fleetLayout()[id] ?? { order: fallbackOrder, width: 40, height: 2 };
-    if (id === 'growth') return { order: saved.order, width: 60, height: 2 };
+    const saved = fleetLayout()[id] ?? defaultFleetLayout[id] ?? { order: fallbackOrder, width: 40, height: 2 };
     return { ...saved, width: Math.max(30, Math.min(120, saved.width <= 12 ? saved.width * 10 : saved.width)), height: saved.height > 5 ? saved.height : 0 };
   };
   const panelFallbackOrder = (id: string) => Math.max(1, panelConfigs().findIndex((panel) => panel.id === id) + 1);
   const resizePanel = (id: string, width: number, height?: number) => setFleetLayout((current) => {
     const saved = current[id] ?? layoutFor(id);
-    return { ...current, [id]: { ...saved, width, ...(height === undefined ? {} : { height }) } };
+    return { ...current, [id]: { ...saved, width, ...(height === undefined ? {} : { height: id === 'growth' ? Math.max(240, height) : height }) } };
   });
   const movePanel = (source: string, target: string, after: boolean) => setFleetLayout((current) => {
     const layouts: FleetLayout = { ...defaultFleetLayout, ...current };
@@ -685,8 +693,8 @@ const Dashboard: Component = () => {
         </dl>
 
         <div class="fleet-dashboard-grid" aria-label="Fleet dashboard panels">
-        <FleetPanelFrame id="growth" layout={layoutFor('growth')} editable={canEditPanel()} onMove={movePanel}>
-        <section class="data-panel fleet-content-panel">
+        <FleetPanelFrame id="growth" layout={layoutFor('growth')} editable={canEditPanel()} onMove={movePanel} onResize={canEditPanel() ? resizePanel : undefined}>
+        <section class="data-panel fleet-content-panel fleet-growth-panel" data-dynamic-style style={{ height: layoutFor('growth').height > 5 ? `${Math.max(240, layoutFor('growth').height)}px` : undefined }}>
           <div class="data-panel-header">
             <div><h2>Device growth</h2><p>Active CPE count at the end of each period, including registrations and deletions.</p></div>
             <div class="flex flex-wrap justify-end gap-1" role="group" aria-label="Device growth interval">
