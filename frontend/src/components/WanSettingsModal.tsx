@@ -219,10 +219,10 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
             disabled={!writable || !canEditTab()}
             onInput={(e) => setValue(field, e.currentTarget.value)}
             placeholder={field.placeholder}
-            class={`input py-1.5 px-2 text-sm ${error ? 'border-red-500' : ''}`}
+            class={`input py-1.5 px-2 text-sm ${error ? 'border-error' : ''}`}
           />
         </Show>
-        <Show when={error}><span class="text-xs text-red-400">{error}</span></Show>
+        <Show when={error}><span class="text-xs text-error-text">{error}</span></Show>
         <Show when={!writable && canEditTab()}><span class="text-[10px] text-muted">Read-only on this device</span></Show>
       </div>
     );
@@ -254,7 +254,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
           </div>
         }>
           <div class="flex items-center gap-2">
-            <span class="flex items-center gap-1 text-xs text-emerald-400"><Check size={14} /> Task created</span>
+            <span class="flex items-center gap-1 text-xs text-success-text"><Check size={14} /> Task created</span>
             <button onClick={handleSummon} disabled={!can('inventory.cpes.overview', 'edit') || summoning()} class="btn btn-primary">
               <Send size={14} />
               {summoning() ? 'Summoning…' : 'Summon device'}
@@ -276,7 +276,7 @@ const WanSettingsModal: Component<WanSettingsModalProps> = (props) => {
         )}</For>
       </div>
 
-      <Show when={validationMessage()}>{message => <div class="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">{message().label}: {message().message}</div>}</Show>
+      <Show when={validationMessage()}>{message => <div class="mb-4 rounded border border-error/30 bg-error/10 px-3 py-2 text-xs text-error-text" role="alert">{message().label}: {message().message}</div>}</Show>
 
       <div class="space-y-4 max-h-80 overflow-y-auto pr-1">
         <Show when={can(section('general'), 'read') && activeTab() === 'general'}>

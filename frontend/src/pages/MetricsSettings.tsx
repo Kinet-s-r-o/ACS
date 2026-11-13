@@ -282,7 +282,7 @@ const MetricsSettings: Component = () => {
         <button
           onClick={() => handleSort(colId)}
           class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${
-            sortBy()?.column === colId ? 'text-sky-400' : 'text-muted hover:text-primary'
+            sortBy()?.column === colId ? 'text-accent' : 'text-muted hover:text-primary'
           } cursor-pointer`}
         >
           {label}
@@ -404,7 +404,7 @@ const MetricsSettings: Component = () => {
                             <button onClick={() => openCopyMetric(def)} class="btn btn-ghost text-xs" title="Copy">
                               <Copy size={12} />
                             </button>
-                            <button onClick={() => handleDeleteMetric(def)} class="btn btn-ghost text-xs text-red-400" title="Delete">
+                            <button onClick={() => handleDeleteMetric(def)} class="btn btn-ghost text-xs text-error-text" title="Delete">
                               <Trash2 size={12} />
                             </button>
                           </div>
@@ -429,9 +429,9 @@ const MetricsSettings: Component = () => {
           onClose={() => { if (!pendingAction()) setShowMetricModal(false); }}
         >
           <div class="space-y-4">
-            <div class="flex gap-1 border-b border-zinc-800 pb-2">
-              <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Metric</button>
-              <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Health</button>
+            <div class="flex gap-1 border-b border-subtle pb-2">
+              <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>Metric</button>
+              <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>Health</button>
             </div>
             <Show when={metricTab() === 'metric'}>
             <div>
@@ -456,7 +456,7 @@ const MetricsSettings: Component = () => {
                       <button
                         type="button"
                         onClick={() => setMetricForm(f => ({ ...f, device_type_match: dt }))}
-                        class={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${metricForm().device_type_match === dt ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-elevated text-muted hover:bg-hover hover:text-primary'}`}
+                        class={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${metricForm().device_type_match === dt ? 'bg-accent/20 text-accent ring-1 ring-accent/40' : 'bg-elevated text-muted hover:bg-hover hover:text-primary'}`}
                       >
                         {dt}
                       </button>
@@ -668,7 +668,7 @@ const MetricsSettings: Component = () => {
                           <button
                             type="button"
                             onClick={() => setMetricForm(f => ({ ...f, thresholds: f.thresholds.filter((_, j) => j !== i()) }))}
-                            class="btn btn-ghost self-start text-xs text-red-400"
+                            class="btn btn-ghost self-start text-xs text-error-text"
                             title="Remove"
                           >
                             <X size={12} />

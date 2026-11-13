@@ -117,7 +117,7 @@ const DeviceGrowthChart: Component<Props> = (props) => {
       <Show when={!growth.loading && !growth.error && (growth()?.points.length ?? 0) > 0} fallback={<div class="flex h-56 items-center justify-center text-xs text-muted">{growth.loading ? 'Loading device history…' : 'No device history available.'}</div>}>
         <div ref={setElement} class="h-56 w-full" />
       </Show>
-      <Show when={growth.error}><p class="py-5 text-center text-xs text-rose-400">Device history is unavailable.</p></Show>
+      <Show when={growth.error}><p class="py-5 text-center text-xs text-error-text">Device history is unavailable.</p></Show>
     </div>
   );
 };

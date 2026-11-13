@@ -65,37 +65,37 @@ test('healthColor returns neutral when no thresholds are configured', () => {
 
 test('healthColor higher_is_worse: below warn is emerald', () => {
   const def = { ...baseDef, warn_threshold: 80, critical_threshold: 90 };
-  assert.equal(healthColor(50, def), 'text-emerald-400');
+  assert.equal(healthColor(50, def), 'text-success-text');
 });
 
 test('healthColor higher_is_worse: between warn and critical is amber', () => {
   const def = { ...baseDef, warn_threshold: 80, critical_threshold: 90 };
-  assert.equal(healthColor(85, def), 'text-amber-400');
+  assert.equal(healthColor(85, def), 'text-warning-text');
 });
 
 test('healthColor higher_is_worse: at or above critical is rose', () => {
   const def = { ...baseDef, warn_threshold: 80, critical_threshold: 90 };
-  assert.equal(healthColor(95, def), 'text-rose-400');
+  assert.equal(healthColor(95, def), 'text-error-text');
 });
 
 test('healthColor higher_is_worse: only warn set still colors correctly', () => {
   const def = { ...baseDef, warn_threshold: 80, critical_threshold: null };
-  assert.equal(healthColor(95, def), 'text-amber-400');
+  assert.equal(healthColor(95, def), 'text-warning-text');
 });
 
 test('healthColor lower_is_worse: above warn is emerald', () => {
   const def = { ...baseDef, threshold_direction: 'lower_is_worse', warn_threshold: 100, critical_threshold: 50 };
-  assert.equal(healthColor(500, def), 'text-emerald-400');
+  assert.equal(healthColor(500, def), 'text-success-text');
 });
 
 test('healthColor lower_is_worse: between critical and warn is amber', () => {
   const def = { ...baseDef, threshold_direction: 'lower_is_worse', warn_threshold: 100, critical_threshold: 50 };
-  assert.equal(healthColor(80, def), 'text-amber-400');
+  assert.equal(healthColor(80, def), 'text-warning-text');
 });
 
 test('healthColor lower_is_worse: at or below critical is rose', () => {
   const def = { ...baseDef, threshold_direction: 'lower_is_worse', warn_threshold: 100, critical_threshold: 50 };
-  assert.equal(healthColor(40, def), 'text-rose-400');
+  assert.equal(healthColor(40, def), 'text-error-text');
 });
 
 // formatUptime

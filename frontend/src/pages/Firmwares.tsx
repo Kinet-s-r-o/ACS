@@ -145,7 +145,7 @@ const Firmwares: Component = () => {
               ref={fileInputRef}
               type="file"
               accept=".bin,.img,.tar,.gz,.zip"
-              class="w-full px-3 py-2 bg-surface border border-default rounded-[3px] text-sm text-secondary file:mr-3 file:py-1 file:px-3 file:rounded-[2px] file:border-0 file:bg-sky-600 file:text-white file:text-xs file:cursor-pointer"
+              class="w-full px-3 py-2 bg-surface border border-default rounded-[3px] text-sm text-secondary file:mr-3 file:py-1 file:px-3 file:rounded-[2px] file:border-0 file:bg-action-primary file:text-white file:text-xs file:cursor-pointer"
               aria-invalid={Boolean(validation().file)}
               aria-describedby={validation().file ? 'firmware-file-error' : undefined}
             />
@@ -280,7 +280,7 @@ const Firmwares: Component = () => {
                     <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-3">
                       <Show when={can('firmwares', 'delete')}><button
                         onClick={() => handleDelete(fw.id, fw.filename)}
-                        class="text-rose-400 hover:text-rose-300 text-sm flex items-center gap-1 transition-fast"
+                        class="text-error-text hover:text-error-text text-sm flex items-center gap-1 transition-fast"
                       >
                         <Trash2 size={12} />
                         Delete

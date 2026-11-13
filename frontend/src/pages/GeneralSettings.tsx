@@ -158,9 +158,9 @@ const GeneralSettings: Component = () => {
 
       <div class="card p-5">
         <div class="mb-5 flex gap-1 border-b border-subtle" role="tablist" aria-label="General settings sections">
-          <Show when={canVisit('settings.general.general')}><button type="button" role="tab" aria-selected={activeSection() === 'general'} onClick={() => setActiveSection('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'general' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>General</button></Show>
-          <Show when={canVisit('settings.general.ui')}><button type="button" role="tab" aria-selected={activeSection() === 'ui'} onClick={() => setActiveSection('ui')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'ui' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>UI settings</button></Show>
-          <Show when={canVisit('settings.general.aggregations')}><button type="button" role="tab" aria-selected={activeSection() === 'aggregations'} onClick={() => setActiveSection('aggregations')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'aggregations' ? 'border-sky-400 text-sky-300' : 'border-transparent text-muted hover:text-primary'}`}>Fleet aggregations</button></Show>
+          <Show when={canVisit('settings.general.general')}><button type="button" role="tab" aria-selected={activeSection() === 'general'} onClick={() => setActiveSection('general')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'general' ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-primary'}`}>General</button></Show>
+          <Show when={canVisit('settings.general.ui')}><button type="button" role="tab" aria-selected={activeSection() === 'ui'} onClick={() => setActiveSection('ui')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'ui' ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-primary'}`}>UI settings</button></Show>
+          <Show when={canVisit('settings.general.aggregations')}><button type="button" role="tab" aria-selected={activeSection() === 'aggregations'} onClick={() => setActiveSection('aggregations')} class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeSection() === 'aggregations' ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-primary'}`}>Fleet aggregations</button></Show>
         </div>
         <Show when={canVisit('settings.general.general') && activeSection() === 'general'}>
         <h2 class="text-sm font-medium text-secondary mb-4 flex items-center gap-2">
@@ -246,8 +246,8 @@ const GeneralSettings: Component = () => {
                 onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt('Chart points', getValue('chart_show_points') !== 'false'), () => setFormData((prev) => ({ ...prev, chart_show_points: getValue('chart_show_points') !== 'false' ? 'false' : 'true' })))}
                 class={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   getValue('chart_show_points') !== 'false'
-                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
-                    : 'bg-zinc-700 text-secondary border border-zinc-600'
+                    ? 'bg-accent/20 text-accent border border-accent/30'
+                    : 'bg-elevated text-secondary border border-default'
                 }`}
                 disabled={!isFullAccess()}
                 aria-pressed={getValue('chart_show_points') !== 'false'}
@@ -315,7 +315,7 @@ const GeneralSettings: Component = () => {
                 <label class="block text-xs text-muted">Option name<input class="input mt-1 w-full" maxlength={48} value={option().title} onInput={(event) => updateAggregationOption(option().id, 'title', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Region" /></label>
                 <label class="block text-xs text-muted">Aggregation source<select class="input mt-1 w-full" value={option().source} onChange={(event) => updateAggregationOption(option().id, 'source', event.currentTarget.value as DashboardAggregationSource)} disabled={!isFullAccess()}><option value="parameter">CWMP parameter</option><option value="manufacturer">Manufacturer</option><option value="product_class">Product class</option><option value="access_type">Access type</option></select></label>
                 <Show when={option().source === 'parameter'}><label class="block text-xs text-muted">CWMP parameter path<input class="input mt-1 w-full font-mono" maxlength={512} value={option().parameter_pattern} onInput={(event) => updateAggregationOption(option().id, 'parameter_pattern', event.currentTarget.value)} disabled={!isFullAccess()} placeholder="Device.DeviceInfo.X_VENDOR.Region" /><span class="mt-1 block">Use * for dynamic sections. Sensitive parameter names are excluded.</span></label></Show>
-                <button type="button" class="btn btn-secondary text-rose-400 sm:mt-5" onClick={() => setAggregationOptions((current) => current.filter((item) => item.id !== option().id))} disabled={!isFullAccess()} aria-label={`Remove ${option().title || 'unnamed'} aggregation option`}><Trash2 size={14} />Remove</button>
+                <button type="button" class="btn btn-secondary text-error-text sm:mt-5" onClick={() => setAggregationOptions((current) => current.filter((item) => item.id !== option().id))} disabled={!isFullAccess()} aria-label={`Remove ${option().title || 'unnamed'} aggregation option`}><Trash2 size={14} />Remove</button>
               </div>}</Index>
               <div class="flex flex-wrap gap-2 pt-2">
                 <button type="button" class="btn btn-secondary" onClick={addAggregationOption} disabled={!isFullAccess() || aggregationOptions().length >= 30}><Plus size={14} />Add aggregation option</button>

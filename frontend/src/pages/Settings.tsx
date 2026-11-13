@@ -234,7 +234,7 @@ const Settings: Component = () => {
             </button>
             <button
               onClick={logout}
-              class="btn btn-ghost text-xs text-red-400"
+              class="btn btn-ghost text-xs text-error-text"
             >
               <LogOut size={12} />
               Sign out
@@ -357,7 +357,7 @@ const Settings: Component = () => {
                             <button onClick={() => openEditMetric(def)} class="icon-button" aria-label={`Edit ${def.name}`}>
                               <Edit size={13} />
                             </button>
-                            <button onClick={() => void handleDeleteMetric(def)} disabled={pendingAction() === `delete-metric-${def.id}`} class="icon-button hover:text-rose-400" aria-label={`Delete ${def.name}`}>
+                            <button onClick={() => void handleDeleteMetric(def)} disabled={pendingAction() === `delete-metric-${def.id}`} class="icon-button hover:text-error-text" aria-label={`Delete ${def.name}`}>
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -395,9 +395,9 @@ const Settings: Component = () => {
           }
         >
           <div class="space-y-4">
-            <div class="flex gap-1 border-b border-zinc-800 pb-2">
-              <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Metric</button>
-              <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Health</button>
+            <div class="flex gap-1 border-b border-subtle pb-2">
+              <button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>Metric</button>
+              <button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>Health</button>
             </div>
             <Show when={metricTab() === 'metric'}>
             <div>

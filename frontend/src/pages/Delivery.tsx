@@ -155,8 +155,8 @@ const Delivery: Component = () => {
                   onClick={() => void confirmBooleanChange(confirm, booleanChangePrompt('Automatic connection-request credentials', getValue('use_auto_conn_credentials') === 'true'), () => handleChange('use_auto_conn_credentials', getValue('use_auto_conn_credentials') === 'true' ? 'false' : 'true'))}
                   class={`px-3 py-1.5 text-xs font-medium transition-colors ${
                     getValue('use_auto_conn_credentials') === 'true'
-                      ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
-                      : 'bg-zinc-700 text-secondary border border-zinc-600'
+                      ? 'bg-accent/20 text-accent border border-accent/30'
+                      : 'bg-elevated text-secondary border border-default'
                   }`}
                   disabled={!isFullAccess()}
                   aria-pressed={getValue('use_auto_conn_credentials') === 'true'}
@@ -219,7 +219,7 @@ const Delivery: Component = () => {
                       value={showMasterSecret() ? (revealedMasterSecret() ?? getValue('connection_request_password')) : getValue('connection_request_password')}
                       onInput={(e) => { setRevealedMasterSecret(e.currentTarget.value); handleChange('connection_request_password', e.currentTarget.value); }}
                       placeholder="Minimum 16 characters"
-                      class={`input ${masterSecretInvalid() ? 'border-red-500' : ''}`}
+                      class={`input ${masterSecretInvalid() ? 'border-error' : ''}`}
                       minLength={16}
                       aria-invalid={masterSecretInvalid()}
                       aria-describedby={masterSecretInvalid() ? 'connection-request-secret-error' : undefined}
@@ -231,7 +231,7 @@ const Delivery: Component = () => {
                       </p>
                     </Show>
                   </div>
-                  <div class="p-3 bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400">
+                  <div class="p-3 bg-accent/10 border border-accent/20 text-xs text-accent">
                     <p><strong>Username:</strong> CPE serial number</p>
                     <p><strong>Password:</strong> unique HMAC-SHA256 value derived for each CPE</p>
                   </div>
@@ -263,7 +263,7 @@ const Delivery: Component = () => {
           <ol class="list-decimal list-inside space-y-1 ml-2">
             <li>Sign in to the CPE management interface.</li>
             <li>Open its TR-069 or CWMP settings.</li>
-            <li>Set the ACS URL to the published CWMP endpoint, for example <code class="bg-elevated px-2 py-0.5 rounded text-sky-400">https://cwmp.example.com/</code>.</li>
+            <li>Set the ACS URL to the published CWMP endpoint, for example <code class="bg-elevated px-2 py-0.5 rounded text-accent">https://cwmp.example.com/</code>.</li>
             <li>Configure <code>CWMP_USERNAME</code> and <code>CWMP_PASSWORD</code> when endpoint authentication is enabled.</li>
             <li>Save the configuration and verify that an Inform reaches ACS.</li>
           </ol>

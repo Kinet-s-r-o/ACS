@@ -1609,26 +1609,26 @@ const DeviceDetail: Component = () => {
   const getTempColor = () => {
     const temp = parseFloat(getTemperature());
     if (isNaN(temp)) return 'text-muted';
-    if (temp < 40) return 'text-emerald-400';
-    if (temp < 55) return 'text-amber-400';
-    return 'text-rose-400';
+    if (temp < 40) return 'text-success-text';
+    if (temp < 55) return 'text-warning-text';
+    return 'text-error-text';
   };
 
   const getRxPowerColor = () => {
     const rx = parseFloat(getRxPower());
     if (isNaN(rx)) return 'text-muted';
-    if (rx > -20) return 'text-emerald-400';
-    if (rx > -25) return 'text-amber-400';
-    return 'text-rose-400';
+    if (rx > -20) return 'text-success-text';
+    if (rx > -25) return 'text-warning-text';
+    return 'text-error-text';
   };
 
   const getUptimeColor = () => {
     const uptime = getDeviceUptime();
     if (!uptime) return 'text-muted';
     const secs = parseInt(uptime);
-    if (secs > 86400 * 7) return 'text-emerald-400';
-    if (secs > 86400) return 'text-sky-400';
-    return 'text-amber-400';
+    if (secs > 86400 * 7) return 'text-success-text';
+    if (secs > 86400) return 'text-accent';
+    return 'text-warning-text';
   };
 
   const healthTileGroups = createMemo<HealthTileGroup[]>(() => {
@@ -1992,10 +1992,10 @@ const DeviceDetail: Component = () => {
     switch (status) {
       case 'completed': return 'badge-success';
       case 'pending': return 'badge-warning';
-      case 'sent': return 'bg-sky-500/15 text-sky-400';
+      case 'sent': return 'bg-accent/15 text-accent';
       case 'failed': return 'badge-error';
       case 'deleted': return 'bg-elevated text-muted';
-      default: return 'bg-zinc-700 text-secondary';
+      default: return 'bg-elevated text-secondary';
     }
   };
 
@@ -2025,7 +2025,7 @@ const DeviceDetail: Component = () => {
                 const path = `${control.parameter}${instance}.${column}`;
                 const value = () => (parameters() || []).find(item => item.name === path)?.value || '—';
                 return <td data-column-order-id={`field:${column}`} class="max-w-64 truncate">{value()}</td>;
-              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-rose-400" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!can('cpe', 'write') || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
+              }}</For><td data-column-fixed="actions" data-column-order-id="actions#0" class="whitespace-nowrap text-right"><button type="button" class="icon-button" aria-label={`Edit ${control.label} ${instance}`} title="Edit object parameters" disabled={!isFullAccess() || featureAction() !== null} onClick={() => openFeatureObjectEditor(feature.id, control.key, control.label, control.parameter, instance, control.object_fields?.map(field => ({ ...field, value: '', writable: false })))}><Edit size={13} /></button><button type="button" class="icon-button text-error-text" aria-label={`Delete ${control.label} ${instance}`} title="Delete object" disabled={!can('cpe', 'write') || featureAction() !== null} onClick={() => void deleteFeatureObject(feature.id, control.key, control.label, instance)}><Trash2 size={13} /></button></td><td data-column-fixed="visibility" data-column-order-id="__visibility#0" class="px-2 py-2"></td></tr>}</For></tbody></table></div>
             </Show>
           </div>
         </>
@@ -2044,7 +2044,7 @@ const DeviceDetail: Component = () => {
       <>
         <label class="flex items-center justify-between gap-3 rounded border border-subtle p-4">
           <span class="min-w-0"><span class="block text-sm font-medium text-primary">{control.label}</span><Show when={description()}><span class="mt-1 block text-xs text-secondary">{description()}</span></Show></span>
-          <input type="checkbox" class="h-4 w-4 accent-sky-500" checked={parameter()?.value?.toLowerCase() === (control.enabled_value || '1').toLowerCase()} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void toggleTemplateFeature(feature.id, control.key, control.label, control.group, event.currentTarget.checked)} />
+          <input type="checkbox" class="h-4 w-4 accent-accent" checked={parameter()?.value?.toLowerCase() === (control.enabled_value || '1').toLowerCase()} disabled={!isFullAccess() || featureAction() !== null} onChange={event => void toggleTemplateFeature(feature.id, control.key, control.label, control.group, event.currentTarget.checked)} />
         </label>
       </>
     </Show>
@@ -2070,7 +2070,7 @@ const DeviceDetail: Component = () => {
                 aria-label={deviceReachability().status === 'reachable' ? `CPE ping response ${deviceReachability().response_time_ms?.toFixed(1) ?? 'unknown'} milliseconds` : deviceReachability().status === 'unreachable' ? 'CPE did not respond to ping' : deviceReachability().status === 'checking' ? 'Checking CPE ping status' : deviceReachability().error ? 'CPE ping check unavailable' : 'CPE main IP unavailable'}
                 title={[deviceReachability().ip_address, deviceReachability().checked_at ? `Updated ${formatDateTime(deviceReachability().checked_at)}` : undefined, deviceReachability().error].filter(Boolean).join(' · ')}
               >
-                <span class={`h-1.5 w-1.5 shrink-0 ${deviceReachability().status === 'reachable' ? 'bg-emerald-500' : deviceReachability().status === 'unreachable' ? 'bg-rose-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                <span class={`h-1.5 w-1.5 shrink-0 ${deviceReachability().status === 'reachable' ? 'bg-success' : deviceReachability().status === 'unreachable' ? 'bg-error' : 'bg-neutral'}`} aria-hidden="true" />
                 {deviceReachability().status === 'reachable' ? `${deviceReachability().response_time_ms?.toFixed(1) ?? '—'} ms` : deviceReachability().status === 'unreachable' ? 'No ping response' : deviceReachability().status === 'checking' ? 'Checking ping' : deviceReachability().error ? 'Ping check unavailable' : deviceReachability().ip_address ? 'Ping status unavailable' : 'Main IP unavailable'}
               </span>
             </Show>
@@ -2096,7 +2096,7 @@ const DeviceDetail: Component = () => {
                 <div class="absolute right-0 top-full z-50 mt-2 min-w-44 rounded border border-subtle bg-elevated p-1 shadow-xl" role="menu">
                   <button type="button" role="menuitemcheckbox" aria-checked={autoRefreshEnabled() === 'true'} class="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-primary hover:bg-base" onClick={() => { setAutoRefreshEnabled(autoRefreshEnabled() === 'true' ? 'false' : 'true'); setShowActionsMenu(false); }}>
                     Auto-refresh
-                    <span class={autoRefreshEnabled() === 'true' ? 'text-emerald-400' : 'text-rose-400'}>{autoRefreshEnabled() === 'true' ? 'On' : 'Off'}</span>
+                    <span class={autoRefreshEnabled() === 'true' ? 'text-success-text' : 'text-error-text'}>{autoRefreshEnabled() === 'true' ? 'On' : 'Off'}</span>
                   </button>
                   <Show when={isFullAccess()}>
                   <div class="my-1 border-t border-subtle" role="separator"></div>
@@ -2109,7 +2109,7 @@ const DeviceDetail: Component = () => {
                   </Show>
                   <Show when={can('cpe', 'delete')}>
                   <div class="my-1 border-t border-subtle" role="separator"></div>
-                  <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); void handleDelete(); }}>
+                  <button type="button" role="menuitem" class="w-full rounded px-3 py-2 text-left text-sm text-error-text hover:bg-error/10 disabled:opacity-50" disabled={actionLoading() !== null} onClick={() => { setShowActionsMenu(false); void handleDelete(); }}>
                     Delete CPE
                   </button>
                   </Show>
@@ -2128,13 +2128,13 @@ const DeviceDetail: Component = () => {
         <Show when={canVisit('inventory.cpes.tasks')}><button role="tab" class={`tab-btn ${activeTab() === 'tasks' ? 'is-active' : ''}`} aria-selected={activeTab() === 'tasks'} onClick={() => setSearchParams({ tab: 'tasks' })}>
           CWMP tasks
           <Show when={pendingTaskCount() > 0}>
-            <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">{pendingTaskCount()}</span>
+            <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-error text-white text-[10px] font-bold leading-none">{pendingTaskCount()}</span>
           </Show>
         </button></Show>
         <Show when={canVisit('inventory.cpes.faults')}><button role="tab" class={`tab-btn ${activeTab() === 'faults' ? 'is-active' : ''}`} aria-selected={activeTab() === 'faults'} onClick={() => setSearchParams({ tab: 'faults' })}>
           CWMP Faults
           <Show when={unresolvedFaultCount() > 0}>
-            <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">{unresolvedFaultCount()}</span>
+            <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-error text-white text-[10px] font-bold leading-none">{unresolvedFaultCount()}</span>
           </Show>
         </button></Show>
         <Show when={canVisit('inventory.cpes.credentials')}><button role="tab" class={`tab-btn ${activeTab() === 'credentials' ? 'is-active' : ''}`} aria-selected={activeTab() === 'credentials'} onClick={() => setSearchParams({ tab: 'credentials' })}>Credentials</button></Show>
@@ -2143,7 +2143,7 @@ const DeviceDetail: Component = () => {
       </nav>
 
       <Show when={message()}>
-        <div role={message()?.type === 'error' ? 'alert' : 'status'} class={`p-3 rounded-md text-sm ${message()?.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+        <div role={message()?.type === 'error' ? 'alert' : 'status'} class={`p-3 rounded-md text-sm ${message()?.type === 'success' ? 'bg-success/10 text-success-text border border-success/20' : 'bg-error/10 text-error-text border border-error/20'}`}>
           <p>{message()?.text}</p>
           <Show when={message()?.detail}>
             <details class="mt-2 text-xs">
@@ -2475,7 +2475,7 @@ const DeviceDetail: Component = () => {
                                 <div class="text-xs text-muted mt-1">{formatDate(snapshot.created_at)} · {snapshot.parameter_count} parameters</div>
                               </button>
                               <Show when={canDeleteSnapshot(snapshot.kind, can('cpe', 'write'), can('cpe', 'full'))}>
-                                <button type="button" class="icon-button text-muted hover:text-rose-400" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button></Show>
+                                <button type="button" class="icon-button text-muted hover:text-error-text" aria-label={`Delete snapshot ${snapshot.name}`} onClick={() => void deleteSnapshot(snapshot)} disabled={snapshotLoading() !== null}><Trash2 size={14} /></button></Show>
                             </div>
                           </div>
                         )}
@@ -2562,7 +2562,7 @@ const DeviceDetail: Component = () => {
             <Show when={canVisit('inventory.cpes.features') && activeTab() === 'features' && (matchingProvisioningTemplate()?.features?.length || 0) > 0}>
               <div class="space-y-4">
                 <div class="flex justify-end"><button type="button" class="btn btn-secondary text-xs" onClick={() => void loadDeviceParameters()} disabled={parameters.loading}><RefreshCw size={13} class={parameters.loading ? 'animate-spin' : ''} />Refresh device parameters</button></div>
-                <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Device Advanced settings sections"><For each={matchingProvisioningTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeDeviceFeature()?.id === feature.id} onClick={() => setActiveDeviceFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeDeviceFeature()?.id === feature.id ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For></div>
+                <div class="flex gap-1 overflow-x-auto border-b border-subtle" role="tablist" aria-label="Device Advanced settings sections"><For each={matchingProvisioningTemplate()?.features || []}>{feature => <button type="button" role="tab" aria-selected={activeDeviceFeature()?.id === feature.id} onClick={() => setActiveDeviceFeatureID(feature.id)} class={`shrink-0 rounded-t px-3 py-2 text-xs font-medium ${activeDeviceFeature()?.id === feature.id ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>{feature.name}</button>}</For></div>
                 <Show when={activeDeviceFeature()} keyed>{feature => <section class="card p-5 space-y-4">
                   <div><h2 class="text-sm font-medium text-secondary">{feature.name}</h2><p class="mt-1 text-xs text-muted">Advanced settings from template {matchingProvisioningTemplate()?.name}. Changes are sent to the device as CWMP tasks.</p></div>
                   <For each={featureControlGroups(feature.controls)}>{group => <Show when={group.name} fallback={<div class="grid gap-3 lg:grid-cols-2">{renderFeatureControls(feature, group.controls)}</div>}>
@@ -2621,7 +2621,7 @@ const DeviceDetail: Component = () => {
                       {(['inherit', 'auto', 'custom'] as const).map((mode) => (
                         <button
                           onClick={() => setConnCredMode(mode)}
-                          class={`px-3 py-1.5 text-xs font-medium transition-colors ${connCredMode() === mode ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'bg-zinc-700 text-secondary border border-zinc-600'}`}
+                          class={`px-3 py-1.5 text-xs font-medium transition-colors ${connCredMode() === mode ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-elevated text-secondary border border-default'}`}
                           aria-pressed={connCredMode() === mode}
                         >
                           {mode === 'inherit' ? 'Inherit (global)' : mode === 'auto' ? 'Auto (derived)' : 'Custom'}
@@ -2642,7 +2642,7 @@ const DeviceDetail: Component = () => {
                     </div>
                   </Show>
                   <Show when={connCredMode() === 'auto'}>
-                    <div class="p-3 bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400">
+                    <div class="p-3 bg-accent/10 border border-accent/20 text-xs text-accent">
                       <p><strong>Username:</strong> device serial number</p>
                       <p><strong>Password:</strong> HMAC-SHA256 derived from global master secret</p>
                     </div>
@@ -2660,11 +2660,11 @@ const DeviceDetail: Component = () => {
                 </div>
               </Show>
               <Show when={generatedCred()}>
-                <div class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+                <div class="mt-4 p-3 bg-success/10 border border-success/20 text-xs text-success-text">
                   <p class="font-medium mb-1">Generated credentials (shown once — store them now):</p>
                   <p><strong>Username:</strong> <code class="font-mono">{generatedCred()!.username}</code></p>
                   <p><strong>Password:</strong> <code class="font-mono">{generatedCred()!.password}</code></p>
-                  <button onClick={() => setGeneratedCred(null)} class="mt-2 text-emerald-300 underline">Dismiss</button>
+                  <button onClick={() => setGeneratedCred(null)} class="mt-2 text-success-text underline">Dismiss</button>
                 </div>
               </Show>
             </div>
@@ -2767,63 +2767,63 @@ const DeviceDetail: Component = () => {
                             <td data-column-order-id="service#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isWanColumnVisible('service') }}>{wan.service}</td>
                             <td data-column-order-id="nat#0" class="px-3 py-2.5" classList={{ hidden: !isWanColumnVisible('nat') }}><span class={`badge ${wan.nat === 'Enabled' ? 'badge-success' : wan.nat === '-' ? 'badge-warning' : 'badge-error'}`}>{wan.nat}</span></td>
                             <td data-column-order-id="l1#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l1') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan1} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.lan1} onChange={() => handleWanTie(wan, 1, 'lan', !wan.lan1)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L1 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan1} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.lan1} onChange={() => handleWanTie(wan, 1, 'lan', !wan.lan1)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L1 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="l2#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l2') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan2} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.lan2} onChange={() => handleWanTie(wan, 2, 'lan', !wan.lan2)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L2 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan2} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.lan2} onChange={() => handleWanTie(wan, 2, 'lan', !wan.lan2)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L2 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="l3#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l3') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan3} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.lan3} onChange={() => handleWanTie(wan, 3, 'lan', !wan.lan3)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L3 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan3} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.lan3} onChange={() => handleWanTie(wan, 3, 'lan', !wan.lan3)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L3 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="l4#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('l4') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan4} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.lan4} onChange={() => handleWanTie(wan, 4, 'lan', !wan.lan4)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L4 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.lan4} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.lan4} onChange={() => handleWanTie(wan, 4, 'lan', !wan.lan4)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind L4 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s1#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s1') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid1} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid1} onChange={() => handleWanTie(wan, 1, 'ssid', !wan.ssid1)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S1 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid1} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid1} onChange={() => handleWanTie(wan, 1, 'ssid', !wan.ssid1)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S1 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s2#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s2') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid2} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid2} onChange={() => handleWanTie(wan, 2, 'ssid', !wan.ssid2)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S2 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid2} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid2} onChange={() => handleWanTie(wan, 2, 'ssid', !wan.ssid2)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S2 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s3#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s3') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid3} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid3} onChange={() => handleWanTie(wan, 3, 'ssid', !wan.ssid3)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S3 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid3} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid3} onChange={() => handleWanTie(wan, 3, 'ssid', !wan.ssid3)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S3 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s4#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s4') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid4} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid4} onChange={() => handleWanTie(wan, 4, 'ssid', !wan.ssid4)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S4 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid4} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid4} onChange={() => handleWanTie(wan, 4, 'ssid', !wan.ssid4)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S4 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s5#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s5') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid5} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid5} onChange={() => handleWanTie(wan, 5, 'ssid', !wan.ssid5)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S5 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid5} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid5} onChange={() => handleWanTie(wan, 5, 'ssid', !wan.ssid5)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S5 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s6#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s6') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid6} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid6} onChange={() => handleWanTie(wan, 6, 'ssid', !wan.ssid6)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S6 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid6} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid6} onChange={() => handleWanTie(wan, 6, 'ssid', !wan.ssid6)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S6 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s7#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s7') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid7} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid7} onChange={() => handleWanTie(wan, 7, 'ssid', !wan.ssid7)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S7 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid7} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid7} onChange={() => handleWanTie(wan, 7, 'ssid', !wan.ssid7)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S7 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="s8#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isWanColumnVisible('s8') }}>
-                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid8} disabled class="accent-emerald-500 w-3.5 h-3.5 cursor-default" />}>
-                                <input type="checkbox" checked={wan.ssid8} onChange={() => handleWanTie(wan, 8, 'ssid', !wan.ssid8)} disabled={actionLoading() !== null} class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S8 to ${wan.name}`} />
+                              <Show when={isFullAccess() && wan.portParams} fallback={<input type="checkbox" checked={wan.ssid8} disabled class="accent-accent w-3.5 h-3.5 cursor-default" />}>
+                                <input type="checkbox" checked={wan.ssid8} onChange={() => handleWanTie(wan, 8, 'ssid', !wan.ssid8)} disabled={actionLoading() !== null} class="accent-accent w-3.5 h-3.5 cursor-pointer" aria-label={`Bind S8 to ${wan.name}`} />
                               </Show>
                             </td>
                             <td data-column-order-id="actions#0" class="px-2 py-2" classList={{ hidden: !isWanColumnVisible('actions') }}>
@@ -2845,7 +2845,7 @@ const DeviceDetail: Component = () => {
                                 </button>
                                 <button
                                   type="button"
-                                  class="icon-button text-rose-400"
+                                  class="icon-button text-error-text"
                                   aria-label={`Delete WAN interface ${wan.name}`}
                                   title={wan.canDeleteObject ? 'Delete WAN interface from the ONT' : 'CPE has not reported this WAN object as writable'}
                                   disabled={!wan.canDeleteObject || featureAction() !== null}
@@ -2864,7 +2864,7 @@ const DeviceDetail: Component = () => {
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">Subnet Mask</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('SubnetMask')}</div></div>
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">Default Gateway</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('DefaultGateway')}</div></div>
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">DNS Servers</div><div class="mt-1 text-xs font-mono text-primary break-all">{getWanDetail('DNSServers')}</div></div>
-                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">DMZ</div><div class={`mt-1 text-xs ${getWanDetail('X_HW_DMZ.DMZEnable') === '-' ? 'text-muted' : dmzEnabled() ? 'text-emerald-400' : 'text-secondary'}`}>{getWanDetail('X_HW_DMZ.DMZEnable') === '-' ? '-' : dmzEnabled() ? 'Enabled' : 'Disabled'}</div></div>
+                                  <div><div class="text-[10px] uppercase tracking-wide text-muted">DMZ</div><div class={`mt-1 text-xs ${getWanDetail('X_HW_DMZ.DMZEnable') === '-' ? 'text-muted' : dmzEnabled() ? 'text-success-text' : 'text-secondary'}`}>{getWanDetail('X_HW_DMZ.DMZEnable') === '-' ? '-' : dmzEnabled() ? 'Enabled' : 'Disabled'}</div></div>
                                   <div><div class="text-[10px] uppercase tracking-wide text-muted">DMZ Host IP</div><div class="mt-1 text-xs font-mono text-primary">{getWanDetail('X_HW_DMZ.DMZHostIPAddress')}</div></div>
                                 </div>
                               </td>
@@ -2927,7 +2927,7 @@ const DeviceDetail: Component = () => {
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                             <td data-column-order-id="name#0" class="px-3 py-2.5 text-primary font-medium" classList={{ hidden: !isLanColumnVisible('name') }}>{lan.name}</td>
                             <td data-column-order-id="adm. status#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isLanColumnVisible('admin_status') }}>
-                              <Show when={isFullAccess()} fallback={<span class={lan.enabled ? 'text-emerald-400' : 'text-muted'}>{lan.enabled ? 'Y' : '-'}</span>}>
+                              <Show when={isFullAccess()} fallback={<span class={lan.enabled ? 'text-success-text' : 'text-muted'}>{lan.enabled ? 'Y' : '-'}</span>}>
                                 <button
                                   onClick={() => handleLanEnable(lan.index, !lan.enabled)}
                                   disabled={actionLoading() !== null}
@@ -2945,7 +2945,7 @@ const DeviceDetail: Component = () => {
                             <td data-column-order-id="duplex#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isLanColumnVisible('duplex') }}>{lan.duplex}</td>
                             <td data-column-order-id="speed#0" class="px-3 py-2.5 text-secondary" classList={{ hidden: !isLanColumnVisible('speed') }}>{lan.speed}</td>
                             <td data-column-order-id="l3#0" class="px-2 py-2.5 text-center" classList={{ hidden: !isLanColumnVisible('l3') }}>
-                              <Show when={isFullAccess()} fallback={<span class={lan.l3Enable === '1' || lan.l3Enable === 'true' ? 'text-emerald-400' : 'text-muted'}>{lan.l3Enable === '1' || lan.l3Enable === 'true' ? 'Y' : '-'}</span>}>
+                              <Show when={isFullAccess()} fallback={<span class={lan.l3Enable === '1' || lan.l3Enable === 'true' ? 'text-success-text' : 'text-muted'}>{lan.l3Enable === '1' || lan.l3Enable === 'true' ? 'Y' : '-'}</span>}>
                                 <button
                                   onClick={() => handleLanL3(lan.index, lan.l3Enable !== '1' && lan.l3Enable !== 'true')}
                                   disabled={actionLoading() !== null}
@@ -3078,7 +3078,7 @@ const DeviceDetail: Component = () => {
                                 <button
                                   onClick={() => void handleDeleteWifiSSID(wlan.index, wlan.ssid)}
                                   disabled={actionLoading() !== null}
-                                  class="icon-button text-rose-400"
+                                  class="icon-button text-error-text"
                                   aria-label={`Delete Wi-Fi SSID${wlan.index}`}
                                   title="Delete SSID object"
                                 >
@@ -3177,10 +3177,10 @@ const DeviceDetail: Component = () => {
                             <Show when={hostColumns().find(column => column.id === 'interface')?.visible}><td data-column-order-id="interface#0" class="px-3 py-2">
                               <span class={`px-2 py-0.5 rounded text-xs ${
                                 host.interface.startsWith('WiFi') || host.interface.startsWith('SSID')
-                                  ? 'bg-sky-500/20 text-sky-400'
+                                  ? 'bg-accent/20 text-accent'
                                   : host.interface === 'Ethernet' 
-                                    ? 'bg-blue-500/20 text-blue-400'
-                                    : 'bg-zinc-700 text-secondary'
+                                    ? 'bg-accent/20 text-accent'
+                                    : 'bg-elevated text-secondary'
                               }`}>
                                 {host.interface}
                               </span>
@@ -3213,7 +3213,7 @@ const DeviceDetail: Component = () => {
             </dl>
             <div class="card overflow-hidden">
               <div class="p-5 border-b border-subtle flex items-center justify-between">
-                <h2 class="flex items-center gap-2 text-sm font-medium text-secondary"><ClipboardList size={16} class="text-sky-400" />CWMP tasks ({tasks()?.total || 0})</h2>
+                <h2 class="flex items-center gap-2 text-sm font-medium text-secondary"><ClipboardList size={16} class="text-accent" />CWMP tasks ({tasks()?.total || 0})</h2>
                 <div class="relative">
                   <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                   <input type="text" value={taskSearch()} onInput={(e) => { setTaskPage(0); setTaskSearch(e.currentTarget.value); }} placeholder="Search tasks…" class="input pl-9! w-48 text-sm" />
@@ -3279,7 +3279,7 @@ const DeviceDetail: Component = () => {
                             <Show when={isDeviceTaskColumnVisible('completed_at')}><td data-column-order-id="completed#0" class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
                             <Show when={isDeviceTaskColumnVisible('created_by')}><td data-column-order-id="created by#0" class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td></Show>
                             <Show when={isDeviceTaskColumnVisible('deleted_by')}><td data-column-order-id="deleted by#0" class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td></Show>
-                            <Show when={isDeviceTaskColumnVisible('error')}><td data-column-order-id="error#0" class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td></Show>
+                            <Show when={isDeviceTaskColumnVisible('error')}><td data-column-order-id="error#0" class="px-4 py-2 text-error-text text-xs">{task.error_message || '-'}</td></Show>
                             <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-2 text-right">
                               <div class="inline-flex items-center gap-1">
                                 <button
@@ -3290,7 +3290,7 @@ const DeviceDetail: Component = () => {
                                   Details
                                 </button>
                                 <Show when={task.status === 'pending' && can('inventory.cpes.tasks', 'delete')}>
-                                  <button type="button" class="btn btn-ghost btn-xs text-rose-400" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button>
+                                  <button type="button" class="btn btn-ghost btn-xs text-error-text" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button>
                                 </Show>
                               </div>
                             </td>
@@ -3320,7 +3320,7 @@ const DeviceDetail: Component = () => {
                     <div><span class="text-muted text-xs">Completed</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.completed_at)}</div></div>
                   </div>
                   <Show when={selectedTask()!.error_message}>
-                    <div class="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">{selectedTask()!.error_message}</div>
+                    <div class="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">{selectedTask()!.error_message}</div>
                   </Show>
                   <div class="border-b border-subtle flex gap-0">
                     <Show when={can('inventory.cpes.tasks.requested', 'read')}><button class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'requested' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('requested')}>Requested</button></Show>
@@ -3400,7 +3400,7 @@ const DeviceDetail: Component = () => {
                           <th class="px-3 py-2 w-8" aria-label="Fault details" />
                           <Show when={can('faults', 'delete')}>
                             <th class="px-3 py-2 w-8">
-                              <input data-table-select-all type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
+                              <input data-table-select-all type="checkbox" class="accent-accent w-3.5 h-3.5 cursor-pointer" checked={allDeviceFaultsSelected()} onChange={toggleSelectAllDeviceFaults} aria-label="Select all faults on this page" />
                             </th>
                           </Show>
                           <th data-column-order-id="code#0" class="text-left px-4 py-2 text-xs font-medium text-muted">
@@ -3444,11 +3444,11 @@ const DeviceDetail: Component = () => {
                               </td>
                               <Show when={can('faults', 'delete')}>
                                 <td class="px-3 py-2">
-                                  <input data-table-select-row={fault.id} type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
+                                  <input data-table-select-row={fault.id} type="checkbox" class="accent-accent w-3.5 h-3.5 cursor-pointer" checked={selectedDeviceFaults().has(fault.id)} onChange={() => toggleSelectDeviceFault(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
                                 </td>
                               </Show>
                               <td data-column-order-id="code#0" class="px-4 py-2">
-                                <span class={`font-mono font-semibold ${parseInt(fault.fault_code) >= 9000 ? 'text-rose-400' : parseInt(fault.fault_code) >= 8000 ? 'text-amber-400' : 'text-sky-400'}`}>
+                                <span class={`font-mono font-semibold ${parseInt(fault.fault_code) >= 9000 ? 'text-error-text' : parseInt(fault.fault_code) >= 8000 ? 'text-warning-text' : 'text-accent'}`}>
                                   {fault.fault_code}
                                 </span>
                               </td>
@@ -3469,7 +3469,7 @@ const DeviceDetail: Component = () => {
                                   <Show when={!fault.resolved && can('faults', 'write')}>
                                     <button
                                       onClick={() => handleResolveFault(fault.id)}
-                                      class="icon-button hover:text-emerald-400"
+                                      class="icon-button hover:text-success-text"
                                       aria-label={`Mark fault ${fault.fault_code} as resolved`}
                                       disabled={pendingFault() === fault.id}
                                     >
@@ -3479,7 +3479,7 @@ const DeviceDetail: Component = () => {
                                   <Show when={can('faults', 'delete')}>
                                     <button
                                       onClick={() => handleDeleteFault(fault.id)}
-                                      class="icon-button hover:text-rose-400"
+                                      class="icon-button hover:text-error-text"
                                       aria-label={`Delete fault ${fault.fault_code}`}
                                       disabled={pendingFault() === fault.id}
                                     >
@@ -3530,10 +3530,10 @@ const DeviceDetail: Component = () => {
             <section class="card overflow-hidden" aria-labelledby="device-log-title">
               <div class="p-5 border-b border-subtle flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 id="device-log-title" class="flex items-center gap-2 text-sm font-medium text-secondary"><ScrollText size={16} class="text-sky-400" />Device log</h2>
+                  <h2 id="device-log-title" class="flex items-center gap-2 text-sm font-medium text-secondary"><ScrollText size={16} class="text-accent" />Device log</h2>
                   <p class="mt-1 text-xs text-muted">From InternetGatewayDevice.DeviceInfo.DeviceLog · {deviceLogPageData()?.total ?? 0} entries</p>
                   <div class="mt-1 flex items-center gap-1.5 text-xs text-muted" title="Time when the ACS last received InternetGatewayDevice.DeviceInfo.DeviceLog from this CPE">
-                    <span class={`inline-block size-1.5 shrink-0 ${deviceLogPageData()?.parameter_updated_at ? 'bg-emerald-500' : 'bg-zinc-400'}`} aria-hidden="true" />
+                    <span class={`inline-block size-1.5 shrink-0 ${deviceLogPageData()?.parameter_updated_at ? 'bg-success' : 'bg-neutral'}`} aria-hidden="true" />
                     <Show when={deviceLogPageData()?.parameter_updated_at} fallback={<span>Update time unavailable</span>}>
                       {updatedAt => <span>Updated <time dateTime={updatedAt()}>{formatDateTime(updatedAt())}</time></span>}
                     </Show>
@@ -3666,7 +3666,7 @@ const DeviceDetail: Component = () => {
                             <Show when={paramColumns().find(c => c.id === 'object')?.visible}><td data-column-order-id="object#0" class="px-4 py-2 text-muted font-mono text-xs truncate" title={param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}>{param.name.includes('.') ? param.name.substring(0, param.name.lastIndexOf('.')) : ''}</td></Show>
                             <Show when={paramColumns().find(c => c.id === 'name')?.visible}><td data-column-order-id="name#0" class="px-4 py-2 text-secondary font-mono text-xs truncate" title={param.name}><button type="button" class="data-link font-mono text-left" onClick={() => setSelectedParam(param)}>{param.name}</button></td></Show>
                             <Show when={paramColumns().find(c => c.id === 'writable')?.visible}><td data-column-order-id="writable#0" class="px-4 py-2 text-xs">
-                              <Show when={param.writable}><span class="text-emerald-400">✓</span></Show>
+                              <Show when={param.writable}><span class="text-success-text">✓</span></Show>
                               <Show when={!param.writable}><span class="text-muted">—</span></Show>
                             </td></Show>
                             <Show when={paramColumns().find(c => c.id === 'value_type')?.visible}><td data-column-order-id="value type#0" class="px-4 py-2 text-muted text-xs">{param.value_type || '—'}</td></Show>
@@ -3690,7 +3690,7 @@ const DeviceDetail: Component = () => {
 		  <Show when={featureObjectEditor()}>
 			<Dialog title={`Edit ${featureObjectEditor()?.label} ${featureObjectEditor()?.instance}`} description="Update writable parameters for this object instance." size="large" onClose={() => setFeatureObjectEditor(null)} actions={<><button type="button" class="btn btn-secondary" onClick={() => setFeatureObjectEditor(null)} disabled={featureAction() !== null}>Cancel</button><button type="submit" form="feature-object-editor-form" class="btn btn-primary" disabled={featureAction() !== null}>{featureAction() ? 'Saving…' : 'Save changes'}</button></>}>
 			  <form id="feature-object-editor-form" class="space-y-3" onSubmit={saveFeatureObjectParameters}>
-				<For each={featureObjectEditor()?.fields || []}>{field => <label class="block text-xs text-muted"><span class="mb-1 block">{field.label} <Show when={!field.writable}><span class="text-muted">(read only)</span></Show></span><Show when={field.help}><span class="mb-2 block text-[11px] text-secondary">{field.help}</span></Show><Show when={field.input === 'boolean'} fallback={<Show when={field.input === 'select'} fallback={<input class="input w-full font-mono text-xs" type={field.type === 'string' ? 'text' : 'number'} min={field.type === 'unsignedInt' ? '0' : undefined} value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onInput={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))} />}><select class="input w-full" value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onChange={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))}><Show when={!field.options?.includes(featureObjectDraft()[field.name] || '')}><option value={featureObjectDraft()[field.name] || ''}>{featureObjectDraft()[field.name] || 'Select a value'}</option></Show><For each={field.options || []}>{option => <option value={option}>{field.option_labels?.[option] || option}</option>}</For></select></Show>}><input type="checkbox" class="h-4 w-4 accent-sky-500" checked={(featureObjectDraft()[field.name] || '').toLowerCase() === (field.enabled_value || '1').toLowerCase()} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onChange={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.checked ? (field.enabled_value || '1') : (field.disabled_value || '0') }))} /></Show></label>}</For>
+				<For each={featureObjectEditor()?.fields || []}>{field => <label class="block text-xs text-muted"><span class="mb-1 block">{field.label} <Show when={!field.writable}><span class="text-muted">(read only)</span></Show></span><Show when={field.help}><span class="mb-2 block text-[11px] text-secondary">{field.help}</span></Show><Show when={field.input === 'boolean'} fallback={<Show when={field.input === 'select'} fallback={<input class="input w-full font-mono text-xs" type={field.type === 'string' ? 'text' : 'number'} min={field.type === 'unsignedInt' ? '0' : undefined} value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onInput={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))} />}><select class="input w-full" value={featureObjectDraft()[field.name] || ''} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onChange={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.value }))}><Show when={!field.options?.includes(featureObjectDraft()[field.name] || '')}><option value={featureObjectDraft()[field.name] || ''}>{featureObjectDraft()[field.name] || 'Select a value'}</option></Show><For each={field.options || []}>{option => <option value={option}>{field.option_labels?.[option] || option}</option>}</For></select></Show>}><input type="checkbox" class="h-4 w-4 accent-accent" checked={(featureObjectDraft()[field.name] || '').toLowerCase() === (field.enabled_value || '1').toLowerCase()} disabled={!field.writable || !isFullAccess() || featureAction() !== null} onChange={event => setFeatureObjectDraft(current => ({ ...current, [field.name]: event.currentTarget.checked ? (field.enabled_value || '1') : (field.disabled_value || '0') }))} /></Show></label>}</For>
 				<Show when={(featureObjectEditor()?.fields.length || 0) === 0}><p class="text-sm text-muted">No parameters were discovered for this object. Refresh device parameters and try again.</p></Show>
 			  </form>
 			</Dialog>
@@ -3792,7 +3792,7 @@ const DeviceDetail: Component = () => {
         <Dialog title="CWMP parameter detail" description="Full parameter path and the latest value stored from this CPE." size="large" onClose={() => setSelectedParam(null)} actions={<button onClick={() => setSelectedParam(null)} class="btn btn-secondary">Close parameter detail</button>}>
             <div class="mb-3">
               <span class="text-xs text-muted">Parameter path</span>
-              <button type="button" class="block text-left text-sky-400 font-mono text-sm break-all cursor-copy hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" onClick={() => { const path = selectedParam()?.name; if (path) void copyTextToClipboard(path, 'Parameter path'); }} aria-label="Copy parameter path" title="Click to copy parameter path">{selectedParam()?.name}</button>
+              <button type="button" class="block text-left text-accent font-mono text-sm break-all cursor-copy hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" onClick={() => { const path = selectedParam()?.name; if (path) void copyTextToClipboard(path, 'Parameter path'); }} aria-label="Copy parameter path" title="Click to copy parameter path">{selectedParam()?.name}</button>
             </div>
             <div class="flex-1 overflow-auto">
               <span class="text-xs text-muted">Stored value</span>

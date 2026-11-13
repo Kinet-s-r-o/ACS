@@ -57,7 +57,7 @@ const IperfResult: Component<Props> = (props) => {
         <div class="text-xs text-muted">{run.mode === 'UPLOAD' ? 'Upload' : 'Download'} throughput</div>
         <div class="mt-1 text-lg font-semibold text-primary">{formatRate(runData(run).rate)}</div>
         <div class="mt-1 text-xs text-muted">Status: {field(run, 'DiagnosticsState') || '—'}</div>
-        <Show when={field(run, 'ErrorDescription')}><div class="mt-1 text-xs text-rose-400 break-words">{field(run, 'ErrorDescription')}</div></Show>
+        <Show when={field(run, 'ErrorDescription')}><div class="mt-1 text-xs text-error-text break-words">{field(run, 'ErrorDescription')}</div></Show>
       </div>)}
     </div>
     <Show when={props.runs.some(run => runData(run).rate > 0)}>

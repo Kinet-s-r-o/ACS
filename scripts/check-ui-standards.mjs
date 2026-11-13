@@ -30,6 +30,7 @@ for (const path of sourceFiles) {
   const source = await readFile(path, 'utf8');
 
   reportMatches(relativePath, source, /\bInter\b/g, 'uses the prohibited generic Inter font');
+  reportMatches(relativePath, source, /\b(?:text|bg|border|accent|ring|outline|fill|stroke|divide|decoration|from|via|to)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|rose|pink|fuchsia)-\d{2,3}\b/g, 'uses a palette utility instead of a semantic theme color');
   reportMatches(relativePath, source, /\b(?:purple|violet|indigo)(?:-|\b)/gi, 'uses a prohibited default purple-family visual token');
   reportMatches(relativePath, source, /\b(?:window|globalThis)\.(?:alert|confirm)\s*\(/g, 'uses a native blocking dialog instead of shared feedback');
   reportMatches(relativePath, source, /(^|[^.\w])alert\s*\(/gm, 'uses a native blocking alert instead of shared feedback');

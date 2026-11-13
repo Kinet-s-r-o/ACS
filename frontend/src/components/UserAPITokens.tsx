@@ -55,7 +55,7 @@ const UserAPITokens: Component<{ user: User; onClose: () => void }> = (props) =>
   return (
     <Dialog title={`API tokens — ${props.user.username}`} description="Create a separate token for each external system. Tokens inherit this user's current permissions. They authenticate services without an interactive 2FA prompt." size="large" closeOnBackdrop={false} onClose={() => { if (!pending()) { setSecret(''); props.onClose(); } }}>
       <div class="space-y-5">
-        <A href="/settings/api-docs" class="text-sky-400 text-sm" onClick={props.onClose}>Open Swagger API documentation</A>
+        <A href="/settings/api-docs" class="text-accent text-sm" onClick={props.onClose}>Open Swagger API documentation</A>
         <Show when={secret()} fallback={can('settings.users.users.tokens', 'edit') && (
           <form class="space-y-3" onSubmit={(event) => { event.preventDefault(); void createToken(); }}>
             <div><label for="api-token-name" class="block text-xs text-muted mb-1.5">External system name</label><input id="api-token-name" class="input w-full" required maxLength={128} value={name()} onInput={(e) => setName(e.currentTarget.value)} placeholder="Billing production" disabled={pending()} /></div>

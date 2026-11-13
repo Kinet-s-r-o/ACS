@@ -70,7 +70,7 @@ const TagChips: Component<{ tags: string[] }> = (props) => {
     <div class="flex flex-wrap gap-1">
       <For each={props.tags}>
         {(tag) => (
-          <span class="inline-flex items-center text-[11px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 whitespace-nowrap">{tag}</span>
+          <span class="inline-flex items-center text-[11px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent whitespace-nowrap">{tag}</span>
         )}
       </For>
     </div>
@@ -226,7 +226,7 @@ const Devices: Component = () => {
       val = num;
     }
     
-    const color = val > -20 ? 'text-emerald-400' : val > -25 ? 'text-amber-400' : 'text-rose-400';
+    const color = val > -20 ? 'text-success-text' : val > -25 ? 'text-warning-text' : 'text-error-text';
     return { value: val.toFixed(2), color };
   };
 
@@ -291,7 +291,7 @@ const Devices: Component = () => {
       case 'manufacturer_oui':
         return <span class="text-secondary font-mono text-xs">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI')}</span>;
       case 'active_faults':
-        return <span class={`font-mono text-sm ${device.active_faults > 0 ? 'text-rose-400' : 'text-muted'}`}>{device.active_faults ?? 0}</span>;
+        return <span class={`font-mono text-sm ${device.active_faults > 0 ? 'text-error-text' : 'text-muted'}`}>{device.active_faults ?? 0}</span>;
       case 'wan_interfaces_count':
         return <span class="font-mono text-sm text-secondary tabular-nums">{device.wan_interfaces_count ?? 0}</span>;
       case 'snapshot_count':
@@ -583,7 +583,7 @@ const Devices: Component = () => {
                               if (isSortable) handleSort(col.id);
                             }}
                             class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${
-                              isSorted() ? 'text-sky-400' : 'text-muted'
+                              isSorted() ? 'text-accent' : 'text-muted'
                             } ${isSortable ? 'hover:text-primary cursor-pointer' : 'cursor-default'}`}
                             disabled={!isSortable}
                           >

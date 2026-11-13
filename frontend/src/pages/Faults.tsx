@@ -173,9 +173,9 @@ const Faults: Component = () => {
 
   const getFaultColor = (code: string) => {
     const num = parseInt(code);
-    if (num >= 9000) return 'text-rose-400';
-    if (num >= 8000) return 'text-orange-400';
-    return 'text-amber-400';
+    if (num >= 9000) return 'text-error-text';
+    if (num >= 8000) return 'text-warning-strong';
+    return 'text-warning-text';
   };
 
   return (
@@ -279,7 +279,7 @@ const Faults: Component = () => {
                   <tr class="border-b border-subtle bg-surface/50">
                     <Show when={isFullAccess()}>
                       <th class="px-3 py-3 w-8">
-                        <input data-table-select-all type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={toggleSelectAll} aria-label="Select all faults on this page" />
+                        <input data-table-select-all type="checkbox" class="accent-accent w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={toggleSelectAll} aria-label="Select all faults on this page" />
                       </th>
                     </Show>
                     <Show when={isVisible('serial_number')}>
@@ -362,12 +362,12 @@ const Faults: Component = () => {
                       <tr class="border-t border-subtle/50 hover:bg-elevated/30">
                         <Show when={isFullAccess()}>
                           <td class="px-3 py-3">
-                            <input data-table-select-row={fault.id} type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedFaults().has(fault.id)} onChange={() => toggleSelect(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
+                            <input data-table-select-row={fault.id} type="checkbox" class="accent-accent w-3.5 h-3.5 cursor-pointer" checked={selectedFaults().has(fault.id)} onChange={() => toggleSelect(fault.id)} aria-label={`Select fault ${fault.fault_code}`} />
                           </td>
                         </Show>
                         <Show when={isVisible('serial_number')}>
                           <td data-column-order-id="device#0" class="px-4 py-3">
-                            <A href={`/device/${fault.serial_number}?tab=faults`} class="text-sky-400 hover:underline font-mono text-xs">
+                            <A href={`/device/${fault.serial_number}?tab=faults`} class="text-accent hover:underline font-mono text-xs">
                               {fault.serial_number}
                             </A>
                           </td>
@@ -421,7 +421,7 @@ const Faults: Component = () => {
                             <Show when={!fault.resolved && can('faults', 'edit')}>
                               <button 
                                 onClick={() => handleResolve(fault.id)}
-                                class="icon-button hover:text-emerald-400"
+                                class="icon-button hover:text-success-text"
                                 aria-label={`Mark fault ${fault.fault_code} as resolved`}
                                 disabled={pendingFault() === fault.id}
                               >
@@ -430,7 +430,7 @@ const Faults: Component = () => {
                             </Show>
                             <Show when={can('faults', 'delete')}><button
                               onClick={() => handleDelete(fault.id)}
-                              class="icon-button hover:text-rose-400"
+                              class="icon-button hover:text-error-text"
                               aria-label={`Delete fault ${fault.fault_code}`}
                               disabled={pendingFault() === fault.id}
                             >

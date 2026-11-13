@@ -123,13 +123,13 @@ export function healthColor(v: number | null, def: MetricDefinition): string {
   const crit = def.critical_threshold;
   if (warn === null && crit === null) return 'text-secondary';
   if (def.threshold_direction === 'lower_is_worse') {
-    if (crit !== null && v <= crit) return 'text-rose-400';
-    if (warn !== null && v <= warn) return 'text-amber-400';
-    return 'text-emerald-400';
+    if (crit !== null && v <= crit) return 'text-error-text';
+    if (warn !== null && v <= warn) return 'text-warning-text';
+    return 'text-success-text';
   }
-  if (crit !== null && v >= crit) return 'text-rose-400';
-  if (warn !== null && v >= warn) return 'text-amber-400';
-  return 'text-emerald-400';
+  if (crit !== null && v >= crit) return 'text-error-text';
+  if (warn !== null && v >= warn) return 'text-warning-text';
+  return 'text-success-text';
 }
 
 export function gaugeRange(v: number | null, def: MetricDefinition): { min: number; max: number } {

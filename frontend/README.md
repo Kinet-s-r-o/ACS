@@ -27,6 +27,8 @@ Section authorization: [permission model](../docs/permission-expansion-plan.md),
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
 
+Use semantic Tailwind color utilities (`text-success-text`, `bg-error/10`, `border-accent/30`) from the inline theme, including hover/opacity variants. Do not add palette-shade classes or light-only remaps. Table foreground rules stay on direct `.data-table` cells; nested controls and helper text retain their own colors. Native checkboxes/radios/ranges share the theme accent without replacing their browser behavior.
+
 ECharts components use `lib/chartTheme.ts` inside their rendering effect or option builder so mounted charts update when the resolved theme changes. It reads root semantic tokens for labels, axes, grids, tracks and tooltips; preserve configured series/threshold colors. `lib/theme.ts` applies the DOM palette before notifying reactive consumers.
 
 Table multiselect headers mark their select-all checkbox with `data-table-select-all`. Layout's `lib/tableSelection.ts` handles Ctrl+A (Cmd+A on macOS) through that existing control, selecting the current page without toggling an existing selection off. Text editors retain native selection; modal dialogs isolate the shortcut, and multiple selectable tables require focus in the intended table. Existing permissions and disabled controls remain authoritative.

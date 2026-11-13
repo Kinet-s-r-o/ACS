@@ -175,10 +175,10 @@ const WifiSettingsModal: Component<WifiSettingsModalProps> = (props) => {
             disabled={!writable || !canEditTab()}
             onInput={(e) => setValue(field, e.currentTarget.value)}
             placeholder={field.placeholder}
-            class={`input py-1.5 px-2 text-sm ${error ? 'border-red-500' : ''}`}
+            class={`input py-1.5 px-2 text-sm ${error ? 'border-error' : ''}`}
           />
         </Show>
-        <Show when={error}><span class="text-xs text-red-400">{error}</span></Show>
+        <Show when={error}><span class="text-xs text-error-text">{error}</span></Show>
         <Show when={!writable && canEditTab()}><span class="text-[10px] text-muted">Read-only on this device</span></Show>
       </div>
     );
@@ -207,7 +207,7 @@ const WifiSettingsModal: Component<WifiSettingsModalProps> = (props) => {
           </div>
         }>
           <div class="flex items-center gap-2">
-            <span class="flex items-center gap-1 text-xs text-emerald-400"><Check size={14} /> Task created</span>
+            <span class="flex items-center gap-1 text-xs text-success-text"><Check size={14} /> Task created</span>
             <button onClick={handleSummon} disabled={!can('inventory.cpes.overview', 'edit') || summoning()} class="btn btn-primary">
               <Send size={14} />
               {summoning() ? 'Summoning…' : 'Summon device'}

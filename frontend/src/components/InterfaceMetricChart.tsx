@@ -175,10 +175,10 @@ const InterfaceMetricChart: Component<Props> = (props) => {
 
   return <div class="space-y-2">
     <div class="flex justify-end gap-1" role="group" aria-label="Interface metric history range">
-      <For each={BUCKET_OPTIONS}>{option => <button type="button" class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${bucket().label === option.label ? 'bg-sky-500/20 text-sky-400' : 'text-muted hover:text-secondary'}`} aria-pressed={bucket().label === option.label} onClick={() => changeBucket(option)}>{option.label}</button>}</For>
+      <For each={BUCKET_OPTIONS}>{option => <button type="button" class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${bucket().label === option.label ? 'bg-accent/20 text-accent' : 'text-muted hover:text-secondary'}`} aria-pressed={bucket().label === option.label} onClick={() => changeBucket(option)}>{option.label}</button>}</For>
     </div>
     <Show when={results.loading}><div class="skeleton h-56 w-full" /></Show>
-    <Show when={!results.loading && results.error}><p class="h-56 flex items-center justify-center text-sm text-rose-400">Could not load interface statistics.</p></Show>
+    <Show when={!results.loading && results.error}><p class="h-56 flex items-center justify-center text-sm text-error-text">Could not load interface statistics.</p></Show>
     <Show when={!results.loading && !results.error && requests().length === 0}><p class="h-56 flex items-center justify-center text-sm text-muted">No configured metrics match this interface.</p></Show>
     <Show when={!results.loading && !results.error && requests().length > 0 && chartData().series.length === 0}><p class="h-56 flex items-center justify-center text-sm text-muted">No samples yet. The next device metric poll will collect matching parameters.</p></Show>
     <Show when={!results.loading && !results.error && chartData().series.length > 0}>

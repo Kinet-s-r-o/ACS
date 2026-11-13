@@ -84,12 +84,12 @@ const DeviceTagPicker: Component<DeviceTagPickerProps> = (props) => {
                 <For each={filteredTags()}>{tag => {
                   const checked = () => selected().includes(tag.id);
                   return <button type="button" role="menuitemcheckbox" aria-checked={checked()} onClick={() => void toggleTag(tag.id)} disabled={saving()} class="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-sm text-primary hover:bg-elevated disabled:opacity-50">
-                    <span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="flex-1 truncate">{tag.name}</span><Show when={checked()}><Check size={14} class="text-sky-400" /></Show>
+                    <span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="flex-1 truncate">{tag.name}</span><Show when={checked()}><Check size={14} class="text-accent" /></Show>
                   </button>;
                 }}</For>
               </Show>
             </div>
-            <A href="/settings/dictionaries" onClick={close} class="mt-2 flex items-center gap-2 border-t border-subtle px-2 py-2 text-sm text-primary hover:text-sky-400"><Plus size={15} />New tag</A>
+            <A href="/settings/dictionaries" onClick={close} class="mt-2 flex items-center gap-2 border-t border-subtle px-2 py-2 text-sm text-primary hover:text-accent"><Plus size={15} />New tag</A>
           </div>
         </Portal>
       </Show>

@@ -631,7 +631,7 @@ const Dashboard: Component = () => {
           </div>
         </Show>
         <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-emerald-500" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
+          <span class="inline-flex items-center gap-2 text-[11px] text-muted"><span class="w-1.5 h-1.5 bg-success" aria-hidden="true" />{dashboard.loading || panelAnalytics.loading ? 'Refreshing fleet data' : dashboard()?.fetchedAt ? `Updated ${formatDateTime(dashboard()!.fetchedAt)}` : 'Update unavailable'}</span>
           <button type="button" class="icon-button" onClick={refreshDashboard} disabled={dashboard.loading || panelAnalytics.loading} aria-label="Refresh fleet data" title="Refresh fleet data"><RefreshCw size={16} /></button>
           <Show when={canAddPanel()}><div class="relative" ref={panelActionsMenu}>
             <button type="button" class="icon-button" aria-label="Fleet panel actions" aria-haspopup="menu" aria-expanded={showPanelActionsMenu()} onClick={() => setShowPanelActionsMenu((visible) => !visible)}>
@@ -781,7 +781,7 @@ const Dashboard: Component = () => {
                 <Show when={showCopyUsers()}>
                   <p class="mt-2 text-xs text-muted">Choose one or more users. Each gets an independent copy of this panel.</p>
                   <Show when={shareUsers.loading}><p class="py-3 text-xs text-muted">Loading users…</p></Show>
-                  <Show when={shareUsers.error}><p class="py-3 text-xs text-rose-400">Could not load users.</p></Show>
+                  <Show when={shareUsers.error}><p class="py-3 text-xs text-error-text">Could not load users.</p></Show>
                   <div class="mt-2 max-h-44 space-y-1 overflow-y-auto">
                     <For each={(shareUsers() ?? []).filter((recipient) => recipient.id !== user()?.id)}>{(recipient) => (
                       <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-primary hover:bg-elevated/50">
@@ -809,7 +809,7 @@ const Dashboard: Component = () => {
                     <label class="block min-w-0 text-xs text-muted">Label<input class="input mt-1 w-full" maxlength={48} value={threshold().label} onInput={(event) => updateThreshold(index, 'label', event.currentTarget.value)} /></label>
                     <label class="block text-xs text-muted">Maximum<input type="number" step="any" class="input mt-1 w-full" placeholder={index === (panelDraft()?.thresholds.length ?? 1) - 1 ? 'No limit' : ''} value={threshold().max} onInput={(event) => updateThreshold(index, 'max', event.currentTarget.value)} /></label>
                     <div class="block text-xs text-muted">Color<div class="mt-1"><ColorSwatch compact clearable={false} ariaLabel={`Choose color for ${threshold().label}`} value={legacyThresholdColorHex[threshold().color] ?? threshold().color} onChange={(color) => updateThresholdColor(index, color as DashboardThresholdColor)} /></div></div>
-                    <button type="button" class="icon-button text-rose-400" aria-label={`Remove threshold ${threshold().label}`} title="Remove threshold" disabled={(panelDraft()?.thresholds.length ?? 0) <= 1} onClick={() => removeThreshold(index)}><Trash2 size={14} /></button>
+                    <button type="button" class="icon-button text-error-text" aria-label={`Remove threshold ${threshold().label}`} title="Remove threshold" disabled={(panelDraft()?.thresholds.length ?? 0) <= 1} onClick={() => removeThreshold(index)}><Trash2 size={14} /></button>
                   </div>
                 )}</Index>
               </div>

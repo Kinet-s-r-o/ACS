@@ -102,7 +102,7 @@ const Login: Component = () => {
             <p class="text-sm text-muted mt-2">Use your {appName()} control-plane credentials.</p>
 
             <Show when={error()}>
-              <div id="login-error" role="alert" class="mt-6 px-3 py-2.5 border border-red-500/30 bg-red-500/8 rounded-[3px] text-xs text-red-400">{error()}</div>
+              <div id="login-error" role="alert" class="mt-6 px-3 py-2.5 border border-error/30 bg-error/8 rounded-[3px] text-xs text-error-text">{error()}</div>
             </Show>
 
             <Show when={!factorStage()} fallback={<>

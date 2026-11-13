@@ -134,7 +134,7 @@ const Dictionaries: Component = () => {
     <div class="page">
       <PageHeader title="Dictionaries" description="Manage shared values used across device operations." />
       <div class="border-b border-subtle flex gap-1" role="tablist" aria-label="Dictionaries">
-        <button type="button" role="tab" aria-selected="true" class="px-3 py-2 text-xs font-medium border-b-2 border-sky-400 text-primary flex items-center gap-1.5"><Tags size={13} />Tags</button>
+        <button type="button" role="tab" aria-selected="true" class="px-3 py-2 text-xs font-medium border-b-2 border-accent text-primary flex items-center gap-1.5"><Tags size={13} />Tags</button>
       </div>
       <div class="card p-5">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -167,7 +167,7 @@ const Dictionaries: Component = () => {
               <Show when={isVisible('name')}><td data-column-order-id="tag#0" class="px-3 py-2.5"><div class="flex items-center gap-2"><span class="tag-color-swatch tag-color-swatch-large" data-dynamic-style="tag-color" style={{ '--tag-color': tag.color } as any} /><span class="text-primary">{tag.name}</span></div></td></Show>
               <Show when={isVisible('description')}><td data-column-order-id="description#0" class="px-3 py-2.5 text-secondary">{tag.description || <span class="text-muted">—</span>}</td></Show>
               <Show when={isVisible('color')}><td data-column-order-id="color#0" class="px-3 py-2.5 font-mono text-xs text-secondary">{tag.color}</td></Show>
-              <Show when={canShowActions()}><td data-column-fixed="actions" data-column-order-id="actions#0" class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" disabled={!canManageTags()} onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={!can('settings.dictionaries.tags', 'delete') || deleting() === tag.id} class="icon-button hover:text-rose-400" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show><td data-column-fixed="visibility" data-column-order-id="__visibility#0" />
+              <Show when={canShowActions()}><td data-column-fixed="actions" data-column-order-id="actions#0" class="px-2 py-2"><div class="flex justify-end gap-1"><button type="button" disabled={!canManageTags()} onClick={() => openEdit(tag)} class="icon-button" aria-label={`Edit tag ${tag.name}`}><Edit size={13} /></button><button type="button" onClick={() => void deleteTag(tag)} disabled={!can('settings.dictionaries.tags', 'delete') || deleting() === tag.id} class="icon-button hover:text-error-text" aria-label={`Delete tag ${tag.name}`}><Trash2 size={13} /></button></div></td></Show><td data-column-fixed="visibility" data-column-order-id="__visibility#0" />
             </tr>}</For></tbody>
           </table></div>
           </Show>

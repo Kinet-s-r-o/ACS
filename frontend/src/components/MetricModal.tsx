@@ -173,9 +173,9 @@ const MetricModal: Component<MetricModalProps> = (props) => {
         onClose={() => void closeModal()}
       >
         <div class="space-y-4">
-          <div class="flex gap-1 border-b border-zinc-800 pb-2">
-            <Show when={can('settings.provisioning.metrics.general.metric', 'read')}><button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Metric</button></Show>
-            <Show when={can('settings.provisioning.metrics.general.health', 'read')}><button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-sky-500/20 text-sky-300' : 'text-muted hover:text-primary'}`}>Health</button></Show>
+          <div class="flex gap-1 border-b border-subtle pb-2">
+            <Show when={can('settings.provisioning.metrics.general.metric', 'read')}><button type="button" onClick={() => setMetricTab('metric')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'metric' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>Metric</button></Show>
+            <Show when={can('settings.provisioning.metrics.general.health', 'read')}><button type="button" onClick={() => setMetricTab('health')} class={`px-3 py-1 rounded text-xs font-medium transition-colors ${metricTab() === 'health' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-primary'}`}>Health</button></Show>
           </div>
           <Show when={can('settings.provisioning.metrics.general.metric', 'read') && metricTab() === 'metric'}><fieldset disabled={!can('settings.provisioning.metrics.general.metric', 'edit') || pendingAction() !== null} class="space-y-4">
           <div>
@@ -398,7 +398,7 @@ const MetricModal: Component<MetricModalProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => setMetricForm(f => ({ ...f, thresholds: f.thresholds.filter((_, j) => j !== i()) }))}
-                          class="btn btn-ghost self-start text-xs text-red-400"
+                          class="btn btn-ghost self-start text-xs text-error-text"
                           title="Remove"
                         >
                           <X size={12} />

@@ -148,7 +148,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                           return (
                             <Show when={column.visible}><th class="text-left px-4 py-3 whitespace-nowrap" aria-sort={isSorted() ? (sortBy()?.direction === 'asc' ? 'ascending' : 'descending') : undefined}>
                               <div class="flex items-center gap-1.5">
-                                <button type="button" class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${isSorted() ? 'text-sky-400' : 'text-muted'} hover:text-primary`} onClick={() => handleSort(column.id)}>
+                                <button type="button" class={`flex items-center gap-1 text-xs font-medium tracking-wide transition-colors ${isSorted() ? 'text-accent' : 'text-muted'} hover:text-primary`} onClick={() => handleSort(column.id)}>
                                   {column.label}
                                   <Show when={isSorted()} fallback={<ArrowUpDown size={10} class="opacity-50" />}>
                                     <Show when={sortBy()?.direction === 'asc'} fallback={<ArrowDown size={12} />}><ArrowUp size={12} /></Show>

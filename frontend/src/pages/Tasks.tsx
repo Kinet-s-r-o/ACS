@@ -23,10 +23,10 @@ const statusBadge = (status: string) => {
   switch (status) {
     case 'completed': return 'badge-success';
     case 'pending': return 'badge-warning';
-    case 'sent': return 'bg-sky-500/15 text-sky-400';
+    case 'sent': return 'bg-accent/15 text-accent';
     case 'failed': return 'badge-error';
     case 'deleted': return 'bg-elevated text-muted';
-    default: return 'bg-zinc-700 text-secondary';
+    default: return 'bg-elevated text-secondary';
   }
 };
 
@@ -253,7 +253,7 @@ const Tasks: Component = () => {
                 <table id="cwmp-tasks-table" class="data-table w-full text-sm min-w-[1240px]">
                   <thead class="opaque-table-header">
                     <tr class="border-b border-subtle">
-                      <Show when={canCurrent('delete')}><th class="w-8"><input data-table-select-all type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={togglePageTaskSelection} aria-label="Select all pending tasks on this page" /></th></Show>
+                      <Show when={canCurrent('delete')}><th class="w-8"><input data-table-select-all type="checkbox" class="accent-accent w-3.5 h-3.5 cursor-pointer" checked={allPageSelected()} onChange={togglePageTaskSelection} aria-label="Select all pending tasks on this page" /></th></Show>
                       <Show when={isTaskColumnVisible('serial_number')}><th data-column-order-id="serial number#0" class="text-left whitespace-nowrap"><SortableHeader column="serial_number" label="Serial number" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('serial_number', 'Serial number')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('type')}><th data-column-order-id="type#0" class="text-left whitespace-nowrap"><SortableHeader column="type" label="Type" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('type', 'Type')}</SortableHeader></th></Show>
                       <Show when={isTaskColumnVisible('trigger_event')}><th data-column-order-id="trigger event#0" class="text-left whitespace-nowrap"><SortableHeader column="trigger_event" label="Trigger event" sortBy={sortState().column} direction={sortState().direction} onSort={handleSort}>{renderFilter('trigger_event', 'Trigger event')}</SortableHeader></th></Show>
@@ -271,7 +271,7 @@ const Tasks: Component = () => {
                     <For each={pagedTasks()}>
                       {(task) => (
                         <tr class="border-t border-subtle/50 hover:bg-elevated/30">
-                          <Show when={canCurrent('delete')}><td class="px-3 py-2">{task.status === 'pending' ? <input data-table-select-row={task.id} type="checkbox" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer" checked={selectedTasks().has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select pending task ${task.id}`} /> : null}</td></Show>
+                          <Show when={canCurrent('delete')}><td class="px-3 py-2">{task.status === 'pending' ? <input data-table-select-row={task.id} type="checkbox" class="accent-accent w-3.5 h-3.5 cursor-pointer" checked={selectedTasks().has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select pending task ${task.id}`} /> : null}</td></Show>
                           <Show when={isTaskColumnVisible('serial_number')}><td data-column-order-id="serial number#0" class="px-4 py-2"><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(task.serial_number)}?tab=tasks`} aria-label={`Open tasks for CPE ${task.serial_number}`}>{task.serial_number}</A></td></Show>
                           <Show when={isTaskColumnVisible('type')}><td data-column-order-id="type#0" class="px-4 py-2 text-primary">{task.type}</td></Show>
                           <Show when={isTaskColumnVisible('trigger_event')}><td data-column-order-id="trigger event#0" class="px-4 py-2 text-secondary text-xs">{formatTriggerEvents(task.trigger_events)}</td></Show>
@@ -280,8 +280,8 @@ const Tasks: Component = () => {
                           <Show when={isTaskColumnVisible('completed_at')}><td data-column-order-id="completed#0" class="px-4 py-2 text-muted text-xs">{formatDate(task.completed_at)}</td></Show>
                           <Show when={isTaskColumnVisible('created_by')}><td data-column-order-id="created by#0" class="px-4 py-2 text-muted text-xs">{task.created_by || '-'}</td></Show>
                           <Show when={isTaskColumnVisible('deleted_by')}><td data-column-order-id="deleted by#0" class="px-4 py-2 text-muted text-xs">{task.deleted_by || '-'}</td></Show>
-                          <Show when={isTaskColumnVisible('error')}><td data-column-order-id="error#0" class="px-4 py-2 text-rose-400 text-xs">{task.error_message || '-'}</td></Show>
-                          <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-2 text-right"><div class="inline-flex items-center gap-1"><Show when={can('tasks.requested', 'read')}><button type="button" class="btn btn-ghost btn-xs" onClick={() => { setSelectedTask(task); setTaskDetailTab('requested'); }}><Eye size={13} />Details</button></Show><Show when={task.status === 'pending' && canCurrent('delete')}><button type="button" class="btn btn-ghost btn-xs text-rose-400" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button></Show></div></td>
+                          <Show when={isTaskColumnVisible('error')}><td data-column-order-id="error#0" class="px-4 py-2 text-error-text text-xs">{task.error_message || '-'}</td></Show>
+                          <td data-column-fixed="actions" data-column-order-id="actions#0" class="px-4 py-2 text-right"><div class="inline-flex items-center gap-1"><Show when={can('tasks.requested', 'read')}><button type="button" class="btn btn-ghost btn-xs" onClick={() => { setSelectedTask(task); setTaskDetailTab('requested'); }}><Eye size={13} />Details</button></Show><Show when={task.status === 'pending' && canCurrent('delete')}><button type="button" class="btn btn-ghost btn-xs text-error-text" disabled={deletingTask() === task.id} onClick={() => void deletePendingTask(task)} aria-label={`Delete pending task ${task.id}`} title="Delete pending task"><Trash2 size={13} /></button></Show></div></td>
                           <td data-column-fixed="visibility" data-column-order-id="__visibility#0"></td>
                         </tr>
                       )}
@@ -307,7 +307,7 @@ const Tasks: Component = () => {
               <div><span class="text-muted text-xs">Created</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.created_at)}</div></div>
               <div><span class="text-muted text-xs">Completed</span><div class="mt-0.5 text-primary">{formatDate(selectedTask()!.completed_at)}</div></div>
             </div>
-            <Show when={selectedTask()!.error_message}><div class="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">{selectedTask()!.error_message}</div></Show>
+            <Show when={selectedTask()!.error_message}><div class="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">{selectedTask()!.error_message}</div></Show>
             <div class="border-b border-subtle flex gap-0">
               <Show when={can('tasks.requested', 'read')}><button type="button" class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'requested' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('requested')}>Requested</button></Show>
               <Show when={can('tasks.result', 'read')}><button type="button" class={`px-4 py-2 text-sm font-medium border-b-2 ${taskDetailTab() === 'result' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setTaskDetailTab('result')}>Result</button></Show>

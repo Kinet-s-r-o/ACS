@@ -201,8 +201,8 @@ const UsersPage: Component = () => {
       </PageHeader>
 
       <div class="border-b border-subtle flex gap-1" role="tablist" aria-label="Users and roles">
-        <Show when={canVisit('settings.users.users')}><button type="button" role="tab" aria-selected={activeTab() === 'users'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'users' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => { setActiveTab('users'); void refetchRoles(); void refetchUsers(); }}><Users size={13} />Users</button></Show>
-        <Show when={canVisit('settings.users.roles')}><button type="button" role="tab" aria-selected={activeTab() === 'roles'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'roles' ? 'border-sky-400 text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setActiveTab('roles')}><ShieldCheck size={13} />Roles</button></Show>
+        <Show when={canVisit('settings.users.users')}><button type="button" role="tab" aria-selected={activeTab() === 'users'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'users' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => { setActiveTab('users'); void refetchRoles(); void refetchUsers(); }}><Users size={13} />Users</button></Show>
+        <Show when={canVisit('settings.users.roles')}><button type="button" role="tab" aria-selected={activeTab() === 'roles'} class={`px-3 py-2 text-xs font-medium border-b-2 flex items-center gap-1.5 ${activeTab() === 'roles' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`} onClick={() => setActiveTab('roles')}><ShieldCheck size={13} />Roles</button></Show>
       </div>
 
       <Show when={canVisit('settings.users.users') && activeTab() === 'users'}>
@@ -295,7 +295,7 @@ const UsersPage: Component = () => {
                         <Show when={can('settings.users', 'write') && can('fleet', 'read')}><button type="button" class="icon-button" title="Edit Fleet dashboard" aria-label={`Edit Fleet dashboard for ${u.username}`} onClick={() => navigate(`/?dashboardUserId=${u.id}&dashboardUserName=${encodeURIComponent(u.username)}`)}><LayoutDashboard size={14} /></button></Show>
                         <Show when={isFullAccess() && hasPermission('users.write')}>
                           <button type="button" onClick={() => openEditUser(u)} class="icon-button" aria-label={`Edit operator ${u.username}`} disabled={pendingAction() !== null}><Edit2 size={14} /></button>
-                          <button type="button" onClick={() => void confirmSetUserActive(u)} class={`icon-button ${u.active ? 'text-amber-400' : 'text-emerald-400'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
+                          <button type="button" onClick={() => void confirmSetUserActive(u)} class={`icon-button ${u.active ? 'text-warning-text' : 'text-success-text'}`} aria-label={`${u.active ? 'Deactivate' : 'Activate'} operator ${u.username}`} title={u.active ? 'Deactivate operator' : 'Activate operator'} disabled={pendingAction() !== null || (u.active && currentUser()?.id === u.id)}>
                             {u.active ? <Ban size={14} /> : <Check size={14} />}
                           </button>
                         </Show>

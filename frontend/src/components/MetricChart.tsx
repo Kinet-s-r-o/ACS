@@ -428,7 +428,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
             <button
               onClick={() => handleBucketChange(opt)}
               aria-pressed={bucket().value === opt.value && bucket().hours === opt.hours}
-              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${bucket().value === opt.value && bucket().hours === opt.hours ? 'bg-sky-500/20 text-sky-400' : 'text-muted hover:text-secondary'}`}
+              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${bucket().value === opt.value && bucket().hours === opt.hours ? 'bg-accent/20 text-accent' : 'text-muted hover:text-secondary'}`}
             >
               {opt.label}
             </button>
@@ -439,7 +439,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
         <div class="skeleton h-[200px] w-full" />
       </Show>
       <Show when={!data.loading && data.error}>
-        <div class="text-xs text-rose-400 h-[200px] flex items-center justify-center">
+        <div class="text-xs text-error-text h-[200px] flex items-center justify-center">
           Failed to load metric data
         </div>
       </Show>
