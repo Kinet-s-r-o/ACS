@@ -388,6 +388,7 @@ tbody tr { transition: background-color 100ms ease; } tbody tr:hover { backgroun
 .table-text { font-weight: 400; line-height: 1.35; }
 .table-text.font-mono { font-family: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; font-variant-numeric: tabular-nums; }
 .data-link.table-text { color: rgb(var(--accent-hover)); }
+[data-theme="light"] .table-text { color: rgb(var(--text-table)); }
 .data-table thead { background: rgb(var(--bg-elevated) / .58); }
 .data-table thead.opaque-table-header { background: rgb(var(--bg-elevated)); }
 .data-table thead th { position: sticky; top: 0; z-index: 4; background: rgb(var(--bg-elevated)); box-shadow: inset 0 -1px 0 rgb(var(--border-subtle)); }
