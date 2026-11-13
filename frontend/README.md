@@ -27,6 +27,8 @@ Section authorization: [permission model](../docs/permission-expansion-plan.md),
 
 Use semantic tokens and existing components. Run `npm run check:ui` and `npm run build` after console changes; do not put secrets in frontend environment files or bundles.
 
+ECharts components use `lib/chartTheme.ts` inside their rendering effect or option builder so mounted charts update when the resolved theme changes. It reads root semantic tokens for labels, axes, grids, tracks and tooltips; preserve configured series/threshold colors. `lib/theme.ts` applies the DOM palette before notifying reactive consumers.
+
 Table multiselect headers mark their select-all checkbox with `data-table-select-all`. Layout's `lib/tableSelection.ts` handles Ctrl+A (Cmd+A on macOS) through that existing control, selecting the current page without toggling an existing selection off. Text editors retain native selection; modal dialogs isolate the shortcut, and multiple selectable tables require focus in the intended table. Existing permissions and disabled controls remain authoritative.
 
 Bulk-delete buttons use `data-table-delete-selected`, `aria-controls` pointing to the table's stable DOM ID, and `aria-keyshortcuts="Delete"`. The shared Delete handler clicks the existing visible, enabled button, retaining its selection, permissions and confirmation. It ignores text editors, modified/repeated/composing key events and underlying modal content; ambiguous actions require focus in the intended table. Only mark selection-based actions, never dialog confirmation or whole-group cleanup buttons.

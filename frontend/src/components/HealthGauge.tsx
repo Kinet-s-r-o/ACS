@@ -6,6 +6,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { gaugeZones } from '../lib/health';
 import type { Threshold } from '../lib/api';
 import type { GaugeStyle } from '../lib/api';
+import { useChartTheme } from '../lib/chartTheme';
 
 echarts.use([GaugeChart, CanvasRenderer]);
 
@@ -28,10 +29,12 @@ interface HealthGaugeProps {
 }
 
 const HealthGauge: Component<HealthGaugeProps> = (props) => {
+  const chartTheme = useChartTheme();
   let chartRef: HTMLDivElement | undefined;
   let chart: echarts.ECharts | null = null;
 
   const buildOption = () => {
+    const colors = chartTheme();
     const { value, min, max, centerText, animated, warn, critical, direction, thresholds, arc, pointer, gaugeStyle } = props;
     const safeVal = value ?? min;
     const range = max - min || 1;
@@ -108,7 +111,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
             lineStyle: {
               width: gaugeWidth,
               color: gaugeStyle === 'progress' || gaugeStyle === 'ring' || gaugeStyle === 'multi'
-                ? [[1, '#263244']]
+                ? [[1, colors.track]]
                 : zones,
             },
           },
@@ -118,15 +121,15 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
             width: 4,
             itemStyle: { color: 'auto' },
           },
-          axisTick: { show: showScale, splitNumber: gaugeStyle === 'temperature' ? 5 : 2, distance: gaugeStyle === 'temperature' ? -gaugeWidth - 8 : -gaugeWidth - 2, length: gaugeStyle === 'barometer' ? 5 : 4, lineStyle: { color: gaugeStyle === 'grade' ? 'auto' : '#94a3b8', width: 1 } },
-          splitLine: { show: showScale, distance: gaugeStyle === 'temperature' ? -gaugeWidth - 14 : -gaugeWidth - 4, length: gaugeStyle === 'barometer' ? 12 : 8, lineStyle: { color: gaugeStyle === 'grade' ? 'auto' : '#cbd5e1', width: 2 } },
-          axisLabel: { show: showScale, distance: gaugeStyle === 'temperature' ? -gaugeWidth + 2 : 12, color: gaugeStyle === 'grade' ? 'auto' : '#94a3b8', fontSize: gaugeStyle === 'barometer' ? 9 : 8 },
+          axisTick: { show: showScale, splitNumber: gaugeStyle === 'temperature' ? 5 : 2, distance: gaugeStyle === 'temperature' ? -gaugeWidth - 8 : -gaugeWidth - 2, length: gaugeStyle === 'barometer' ? 5 : 4, lineStyle: { color: colors.label, width: 1 } },
+          splitLine: { show: showScale, distance: gaugeStyle === 'temperature' ? -gaugeWidth - 14 : -gaugeWidth - 4, length: gaugeStyle === 'barometer' ? 12 : 8, lineStyle: { color: colors.text, width: 2 } },
+          axisLabel: { show: showScale, distance: gaugeStyle === 'temperature' ? -gaugeWidth + 2 : 12, color: colors.label, fontSize: gaugeStyle === 'barometer' ? 9 : 8 },
           detail: {
             valueAnimation: true,
             formatter: (value: number) => props.values?.length ? props.values.find(item => item.value === value)?.centerText ?? String(value) : centerText,
-            color: gaugeStyle === 'temperature' ? '#ffab91' : 'inherit',
-            backgroundColor: gaugeStyle === 'speed' ? '#fff' : undefined,
-            borderColor: gaugeStyle === 'speed' ? '#999' : undefined,
+            color: colors.text,
+            backgroundColor: gaugeStyle === 'speed' ? colors.surface : undefined,
+            borderColor: gaugeStyle === 'speed' ? colors.border : undefined,
             borderWidth: gaugeStyle === 'speed' ? 1 : 0,
             borderRadius: gaugeStyle === 'speed' ? 4 : 0,
             fontSize: gaugeStyle === 'ring' || gaugeStyle === 'progress' ? 18 : gaugeStyle === 'temperature' ? 16 : 14,
@@ -136,7 +139,7 @@ const HealthGauge: Component<HealthGaugeProps> = (props) => {
           title: {
             show: gaugeStyle !== 'ring' && gaugeStyle !== 'progress',
             fontSize: 10,
-            color: '#71717a',
+            color: colors.label,
             offsetCenter: [0, gaugeStyle === 'temperature' ? '88%' : '95%'],
           },
           data: props.values?.length

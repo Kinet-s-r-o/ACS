@@ -4,6 +4,7 @@ import * as echarts from 'echarts/core';
 import { BarChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { useChartTheme } from '../lib/chartTheme';
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 const IperfResult: Component<Props> = (props) => {
+  const chartTheme = useChartTheme();
   const [element, setElement] = createSignal<HTMLDivElement>();
   let chart: echarts.ECharts | undefined;
   let observer: ResizeObserver | undefined;
@@ -28,6 +30,7 @@ const IperfResult: Component<Props> = (props) => {
   const formatRate = (value: number) => value > 0 ? `${value.toFixed(2)} Mbps` : '—';
 
   createEffect(() => {
+    const colors = chartTheme();
     const el = element();
     const rates = props.runs.map(run => runData(run).rate);
     if (!el || !rates.some(rate => rate > 0)) return;
@@ -38,11 +41,11 @@ const IperfResult: Component<Props> = (props) => {
     }
     chart.setOption({
       animation: false,
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (value: number) => `${value.toFixed(2)} Mbps` },
+      tooltip: { ...colors.tooltip, trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (value: number) => `${value.toFixed(2)} Mbps` },
       grid: { left: 76, right: 24, top: 12, bottom: 24 },
-      xAxis: { type: 'value', name: 'Mbps', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(71,85,105,0.2)' } } },
-      yAxis: { type: 'category', data: props.runs.map(run => run.mode === 'UPLOAD' ? 'Upload' : 'Download'), axisLabel: { color: '#94a3b8' } },
-      series: [{ type: 'bar', data: rates, barMaxWidth: 32, itemStyle: { color: '#38bdf8', borderRadius: [0, 5, 5, 0] }, label: { show: true, position: 'right', color: '#cbd5e1', formatter: ({ value }: { value: number }) => `${value.toFixed(2)} Mbps` } }],
+      xAxis: { type: 'value', name: 'Mbps', nameTextStyle: { color: colors.label }, axisLabel: { color: colors.label }, splitLine: { lineStyle: { color: colors.grid } } },
+      yAxis: { type: 'category', data: props.runs.map(run => run.mode === 'UPLOAD' ? 'Upload' : 'Download'), axisLine: { lineStyle: { color: colors.border } }, axisLabel: { color: colors.label } },
+      series: [{ type: 'bar', data: rates, barMaxWidth: 32, itemStyle: { color: colors.accent, borderRadius: [0, 5, 5, 0] }, label: { show: true, position: 'right', color: colors.text, formatter: ({ value }: { value: number }) => `${value.toFixed(2)} Mbps` } }],
     }, { notMerge: true });
   });
 

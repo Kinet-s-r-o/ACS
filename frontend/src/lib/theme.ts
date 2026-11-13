@@ -31,8 +31,8 @@ if (typeof window !== 'undefined') {
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (event) => {
     if (themePreference() !== 'system') return;
     const nextTheme = event.matches ? 'light' : 'dark';
-    setThemeSignal(nextTheme);
     applyTheme(nextTheme);
+    setThemeSignal(nextTheme);
   });
 }
 
@@ -40,8 +40,8 @@ const setTheme = (nextPreference: ThemePreference) => {
   setThemePreferenceSignal(nextPreference);
   try { localStorage.setItem('acs-theme', nextPreference); } catch { /* Local storage may be unavailable. */ }
   const nextTheme = resolveTheme(nextPreference);
-  setThemeSignal(nextTheme);
   applyTheme(nextTheme);
+  setThemeSignal(nextTheme);
 };
 
 export const useTheme = () => {

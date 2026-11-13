@@ -6,6 +6,7 @@ import { LineChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { api, type DeviceGrowthInterval } from '../lib/api';
+import { useChartTheme } from '../lib/chartTheme';
 
 echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
@@ -15,11 +16,10 @@ interface Props {
 }
 
 const DeviceGrowthChart: Component<Props> = (props) => {
+  const chartTheme = useChartTheme();
   const [element, setElement] = createSignal<HTMLDivElement>();
-  const [themeMode, setThemeMode] = createSignal(document.documentElement.getAttribute('data-theme'));
   let chart: echarts.ECharts | undefined;
   let observer: ResizeObserver | undefined;
-  let themeObserver: MutationObserver | undefined;
   let chartElement: HTMLDivElement | undefined;
   const [growth] = createResource(
     () => ({ interval: props.interval, refreshKey: props.refreshKey ?? 0 }),
@@ -29,24 +29,20 @@ const DeviceGrowthChart: Component<Props> = (props) => {
   createEffect(() => {
     dateTimeFormat();
     const el = element();
-    themeMode();
+    const colors = chartTheme();
     const points = growth()?.points ?? [];
     if (!el || points.length === 0) {
       observer?.disconnect();
-      themeObserver?.disconnect();
       chart?.dispose();
       observer = undefined;
-      themeObserver = undefined;
       chart = undefined;
       chartElement = undefined;
       return;
     }
     if (chartElement && chartElement !== el) {
       observer?.disconnect();
-      themeObserver?.disconnect();
       chart?.dispose();
       observer = undefined;
-      themeObserver = undefined;
       chart = undefined;
       chartElement = undefined;
     }
@@ -55,24 +51,14 @@ const DeviceGrowthChart: Component<Props> = (props) => {
       chartElement = el;
       observer = new ResizeObserver(() => chart?.resize());
       observer.observe(el);
-      themeObserver = new MutationObserver(() => setThemeMode(document.documentElement.getAttribute('data-theme')));
-      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     }
-    const styles = getComputedStyle(document.documentElement);
-    const textColor = styles.getPropertyValue('--text-muted').trim();
-    const borderColor = styles.getPropertyValue('--border-subtle').trim();
-    const lineColor = styles.getPropertyValue('--accent').trim();
-    const onlineLineColor = styles.getPropertyValue('--success').trim();
-    const isDark = themeMode() !== 'light';
-    const axisColor = isDark ? '#ffffff' : textColor ? `rgb(${textColor})` : '#64748b';
-    const gridColor = isDark ? 'rgba(148,163,184,0.18)' : borderColor ? `rgb(${borderColor})` : 'rgba(100,116,139,0.2)';
-    const seriesColor = lineColor ? `rgb(${lineColor})` : '#0ea5e9';
-    const onlineColor = onlineLineColor ? `rgb(${onlineLineColor})` : '#22c55e';
+    const { label: axisColor, grid: gridColor, accent: seriesColor, success: onlineColor } = colors;
     chart.setOption({
       animation: false,
       legend: { top: 0, right: 12, textStyle: { color: axisColor, fontSize: 12 } },
       grid: { left: 52, right: 18, top: 32, bottom: 30 },
       tooltip: {
+        ...colors.tooltip,
         trigger: 'axis',
         formatter: (params: any) => {
           const points = Array.isArray(params) ? params : [params];

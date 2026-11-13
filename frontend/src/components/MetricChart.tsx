@@ -9,6 +9,7 @@ import { thresholdLines, effectiveUnit } from '../lib/health';
 import { isTimeSeriesType } from '../lib/echartsTypes';
 import { formatDateTime, dateTimeFormat } from '../lib/dateTime';
 import { loadChartPreferences } from '../lib/chartPreferences';
+import { useChartTheme } from '../lib/chartTheme';
 
 echarts.use([
   LineChart, BarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart,
@@ -92,9 +93,6 @@ const computeUnitScale = (values: number[], mode: string): UnitScale => {
 const fmtVal = (v: number | null): string => (v == null ? '—' : v.toFixed(2));
 
 const MONO_FONT = '"IBM Plex Mono", monospace';
-const AXIS_COLOR = '#475569';
-const LABEL_COLOR = '#71717a';
-const GRID_COLOR = 'rgba(71,85,105,0.15)';
 type ChartPoint = { timestamp: number; value: number; min: number; max: number };
 
 const metricChartPoints = (result: { samples?: MetricSample[]; aggregates?: AggregatedMetric[] }, bucket: string): ChartPoint[] => {
@@ -114,6 +112,7 @@ const metricChartPoints = (result: { samples?: MetricSample[]; aggregates?: Aggr
 };
 
 const MetricChart: Component<MetricChartProps> = (props) => {
+  const chartTheme = useChartTheme();
   const [bucket, setBucket] = createSignal(getStoredBucket(props.serial));
   const [selectedMetricId, setSelectedMetricId] = createSignal<number | null>(null);
   const [chartEl, setChartEl] = createSignal<HTMLElement>();
@@ -243,6 +242,7 @@ const MetricChart: Component<MetricChartProps> = (props) => {
     });
   });
   const buildOption = (): echarts.EChartsCoreOption => {
+    const { text, label: LABEL_COLOR, border: AXIS_COLOR, grid: GRID_COLOR, tooltip } = chartTheme();
     const s = seriesData();
     if (!s) return {};
 
@@ -342,10 +342,9 @@ const MetricChart: Component<MetricChartProps> = (props) => {
       },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: 'rgba(15,23,42,0.9)',
-        borderColor: 'transparent',
+        ...tooltip,
         padding: [4, 8],
-        textStyle: { color: '#e2e8f0', fontSize: 11, fontFamily: MONO_FONT },
+        textStyle: { color: text, fontSize: 11, fontFamily: MONO_FONT },
         axisPointer: { type: 'line', lineStyle: { color: AXIS_COLOR } },
         formatter: (params: any) => {
           if (!Array.isArray(params) || params.length === 0) return '';

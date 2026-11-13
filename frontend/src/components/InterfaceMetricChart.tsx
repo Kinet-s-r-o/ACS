@@ -7,6 +7,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { api, type InterfaceMetricDefinition } from '../lib/api';
 import { computeUnitScale, effectiveUnit } from '../lib/health';
 import { formatDateTime, dateTimeFormat } from '../lib/dateTime';
+import { useChartTheme } from '../lib/chartTheme';
 
 echarts.use([LineChart, BarChart, PictorialBarChart, ScatterChart, EffectScatterChart, CandlestickChart, BoxplotChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, ToolboxComponent, CanvasRenderer]);
 
@@ -41,6 +42,7 @@ const matches = (pattern: string, name: string) => {
 };
 
 const InterfaceMetricChart: Component<Props> = (props) => {
+  const chartTheme = useChartTheme();
   const [element, setElement] = createSignal<HTMLDivElement>();
   const [selectedSeriesKey, setSelectedSeriesKey] = createSignal<string | null>(null);
   const [bucket, setBucket] = createSignal(readStoredBucket(props.serial, props.interfacePath));
@@ -121,6 +123,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
 
   createEffect(() => {
     dateTimeFormat();
+    const colors = chartTheme();
     const el = element();
     const { series: data, summaries } = visibleChartData();
     if (!el || data.length === 0) return;
@@ -136,6 +139,7 @@ const InterfaceMetricChart: Component<Props> = (props) => {
       animation: false,
       color: data.map(item => item.itemStyle.color),
       tooltip: {
+        ...colors.tooltip,
         trigger: 'axis',
         formatter: (params: any) => {
           const points = Array.isArray(params) ? params : [params];
@@ -147,6 +151,8 @@ const InterfaceMetricChart: Component<Props> = (props) => {
         },
       },
       toolbox: {
+        iconStyle: { borderColor: colors.label },
+        emphasis: { iconStyle: { borderColor: colors.accent } },
         top: 0,
         right: 8,
         itemSize: 14,
@@ -158,9 +164,9 @@ const InterfaceMetricChart: Component<Props> = (props) => {
         },
       },
       grid: { left: 60, right: 18, top: 34, bottom: 48 },
-      xAxis: { type: 'time', axisLabel: { color: '#71717a', fontSize: 10, formatter: (value: number) => formatDateTime(value), hideOverlap: true }, splitLine: { show: false } },
-      yAxis: { type: 'value', name: unitLabel(), nameTextStyle: { color: '#71717a', fontSize: 10 }, axisLabel: { color: '#71717a', fontSize: 10, formatter: (value: number) => formatValue(value) }, splitLine: { lineStyle: { color: 'rgba(71,85,105,0.15)' } } },
-      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4 }],
+      xAxis: { type: 'time', axisLine: { lineStyle: { color: colors.border } }, axisLabel: { color: colors.label, fontSize: 10, formatter: (value: number) => formatDateTime(value), hideOverlap: true }, splitLine: { show: false } },
+      yAxis: { type: 'value', name: unitLabel(), nameTextStyle: { color: colors.label, fontSize: 10 }, axisLabel: { color: colors.label, fontSize: 10, formatter: (value: number) => formatValue(value) }, splitLine: { lineStyle: { color: colors.grid } } },
+      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4, textStyle: { color: colors.label }, borderColor: colors.border, backgroundColor: colors.surface, dataBackground: { lineStyle: { color: colors.label }, areaStyle: { color: colors.track } }, handleStyle: { color: colors.track, borderColor: colors.border }, moveHandleStyle: { color: colors.label } }],
       series: data,
     }, { notMerge: true });
   });

@@ -302,18 +302,18 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .dashboard-configurable-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .data-panel-section .dashboard-configurable-heading h3 { min-width: 0; margin: 0; }
 .fleet-dashboard-grid { --fleet-grid-line: 16px; display: grid; grid-template-columns: repeat(120, minmax(0, 1fr)); grid-auto-rows: 8px; grid-auto-flow: dense; gap: 0; align-items: start; }
-.fleet-dashboard-grid.is-resizing { background-image: linear-gradient(to right, transparent calc(100% - 1px), rgb(var(--primary) / .22) calc(100% - 1px)), linear-gradient(to bottom, transparent 11px, rgb(var(--primary) / .22) 11px); background-size: .8333333333% 100%, 100% 12px; }
+.fleet-dashboard-grid.is-resizing { background-image: linear-gradient(to right, transparent calc(100% - 1px), rgb(var(--accent) / .22) calc(100% - 1px)), linear-gradient(to bottom, transparent 11px, rgb(var(--accent) / .22) 11px); background-size: .8333333333% 100%, 100% 12px; }
 .fleet-layout-panel { position: relative; min-width: 0; min-height: 0; margin-inline: calc(var(--fleet-grid-line) / 2); padding-bottom: var(--fleet-grid-line); align-self: start; transition: box-shadow 160ms ease; }
 .fleet-layout-panel.is-dragging { opacity: .16; }
 .fleet-panel-drag-ghost { pointer-events: none !important; }
-.fleet-layout-panel.is-drop-target { outline: 2px dashed rgb(var(--primary)); outline-offset: 2px; }
+.fleet-layout-panel.is-drop-target { outline: 2px dashed rgb(var(--accent)); outline-offset: 2px; }
 .fleet-panel-shell { position: relative; height: auto; min-height: 0; }
-.fleet-panel-drag-handle { position: absolute; top: 10px; left: 10px; z-index: 4; display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; color: rgb(var(--text-muted)); background: rgb(var(--surface) / .92); cursor: grab; font-size: 17px; line-height: 1; touch-action: none; }
+.fleet-panel-drag-handle { position: absolute; top: 10px; left: 10px; z-index: 4; display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; color: rgb(var(--text-muted)); background: rgb(var(--bg-surface) / .92); cursor: grab; font-size: 17px; line-height: 1; touch-action: none; }
 .fleet-layout-panel .fleet-panel-drag-handle { top: 0; left: 0; border-color: transparent; background: transparent; }
 .fleet-layout-panel .icon-button,
 .fleet-layout-panel .icon-button:hover { border-color: transparent; }
 .fleet-panel-drag-handle:active { cursor: grabbing; }
-.fleet-panel-drag-handle:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; }
+.fleet-panel-drag-handle:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
 .fleet-layout-panel:hover { z-index: 2; }
 .fleet-content-panel { height: auto; min-height: var(--fleet-panel-height, 0px); overflow: visible; }
 .fleet-content-panel > .data-panel-header { padding-left: 52px; }
@@ -322,7 +322,7 @@ html[data-ui-motion="on"][data-ui-motion-style="fade-slide"] .content-area.ui-tr
 .fleet-panel-resize-x, .fleet-panel-resize-y { position: absolute; z-index: 5; padding: 0; border: 0; background: transparent; touch-action: none; }
 .fleet-panel-resize-x { top: 0; right: 0; width: 10px; height: 100%; cursor: ew-resize; }
 .fleet-panel-resize-y { right: 0; bottom: 0; left: 0; height: 10px; cursor: ns-resize; }
-.fleet-panel-resize-x:focus-visible, .fleet-panel-resize-y:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; }
+.fleet-panel-resize-x:focus-visible, .fleet-panel-resize-y:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
 .distribution-value { min-width: 32px; color: rgb(var(--text-secondary)); font-family: "IBM Plex Mono", monospace; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 
 .login-context { display: grid; grid-template-columns: 118px 1fr; gap: 0; margin-top: 36px; border-top: 1px solid rgb(var(--border-default)); }
