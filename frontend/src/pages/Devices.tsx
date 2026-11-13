@@ -257,45 +257,45 @@ const Devices: Component = () => {
     switch (columnId) {
       case 'serial_number':
         return (
-          <Show when={can('cpe', 'read')} fallback={<span class="font-mono text-sm">{device.serial_number}</span>}><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(device.serial_number)}`} aria-label={`Open CPE ${device.serial_number}`}>
+          <Show when={can('cpe', 'read')} fallback={<span class="table-text font-mono">{device.serial_number}</span>}><A class="data-link table-text font-mono" href={`/device/${encodeURIComponent(device.serial_number)}`} aria-label={`Open CPE ${device.serial_number}`}>
             {device.serial_number}
           </A></Show>
         );
       case 'manufacturer':
-        return <span class="text-secondary text-sm">{device.manufacturer || '-'}</span>;
+        return <span class="table-text">{device.manufacturer || '-'}</span>;
       case 'model':
-        return <span class="text-secondary text-sm">{device.model_name || device.product_class || '-'}</span>;
+        return <span class="table-text">{device.model_name || device.product_class || '-'}</span>;
       case 'product_class':
-        return <span class="text-secondary text-sm">{device.product_class || '-'}</span>;
+        return <span class="table-text">{device.product_class || '-'}</span>;
       case 'ip_address':
-        return <span class="text-muted font-mono text-sm">{device.ip_address || '-'}</span>;
+        return <span class="table-text font-mono">{device.ip_address || '-'}</span>;
       case 'rx_power':
         const rx = getRxPower(device);
-        return <span class={`font-mono text-sm ${rx.color}`}>{rx.value}</span>;
+        return <span class={`table-text font-mono ${rx.color}`}>{rx.value}</span>;
       case 'uptime':
-        return <span class="font-mono text-sm text-secondary">{getUptime(device)}</span>;
+        return <span class="table-text font-mono">{getUptime(device)}</span>;
       case 'ppp_username':
-        return <span class="text-secondary text-sm font-mono">{getPppUsername(device)}</span>;
+        return <span class="table-text font-mono">{getPppUsername(device)}</span>;
       case 'status':
         return <DeviceStatusBadge device={device} />;
       case 'last_inform':
-        return <span class="text-muted text-xs" title={formatRelativeTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
+        return <span class="table-text font-mono" title={formatRelativeTime(device.last_inform)}>{formatDate(device.last_inform)}</span>;
       case 'created_at':
-        return <span class="text-muted text-xs">{formatDateTime(device.created_at)}</span>;
+        return <span class="table-text font-mono">{formatDateTime(device.created_at)}</span>;
       case 'tags':
         return <Show when={tagCatalog()} fallback={<TagChips tags={device.tags || []} />}><DeviceTagPicker device={device} tags={tagCatalog() || []} writable={can('cpe', 'write')} onUpdated={() => { void refetch(); }} /></Show>;
       case 'software_version':
-        return <span class="text-secondary text-sm">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion')}</span>;
+        return <span class="table-text">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.SoftwareVersion')}</span>;
       case 'hardware_version':
-        return <span class="text-secondary text-sm">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion')}</span>;
+        return <span class="table-text">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.HardwareVersion')}</span>;
       case 'manufacturer_oui':
-        return <span class="text-secondary font-mono text-xs">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI')}</span>;
+        return <span class="table-text font-mono">{getDeviceInfoParameter(device, 'InternetGatewayDevice.DeviceInfo.ManufacturerOUI')}</span>;
       case 'active_faults':
-        return <span class={`font-mono text-sm ${device.active_faults > 0 ? 'text-error-text' : 'text-muted'}`}>{device.active_faults ?? 0}</span>;
+        return <span class={`table-text font-mono ${device.active_faults > 0 ? 'text-error-text' : ''}`}>{device.active_faults ?? 0}</span>;
       case 'wan_interfaces_count':
-        return <span class="font-mono text-sm text-secondary tabular-nums">{device.wan_interfaces_count ?? 0}</span>;
+        return <span class="table-text font-mono">{device.wan_interfaces_count ?? 0}</span>;
       case 'snapshot_count':
-        return <span class="font-mono text-sm text-secondary tabular-nums">{device.snapshot_count ?? 0}</span>;
+        return <span class="table-text font-mono">{device.snapshot_count ?? 0}</span>;
       default:
         return '-';
     }

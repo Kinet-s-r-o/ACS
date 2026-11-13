@@ -183,7 +183,7 @@ export const WANInterfaces: Component<WANInterfacesProps> = (props) => {
                         return (
                           <tr class="border-t border-subtle hover:bg-elevated/30 transition-colors">
                             <Show when={isVisible('serial_number')}><td data-column-order-id="serial number#0" class="px-4 py-3">
-                              <Show when={can('cpe', 'read')} fallback={<span class="font-mono text-sm">{row.serial_number}</span>}><A class="data-link font-mono text-sm" href={`/device/${encodeURIComponent(row.serial_number)}`} aria-label={`Open CPE ${row.serial_number}`}>
+                              <Show when={can('cpe', 'read')} fallback={<span class="table-text font-mono">{row.serial_number}</span>}><A class="data-link table-text font-mono" href={`/device/${encodeURIComponent(row.serial_number)}`} aria-label={`Open CPE ${row.serial_number}`}>
                                 {row.serial_number}
                               </A></Show>
                             </td></Show>

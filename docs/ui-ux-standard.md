@@ -91,6 +91,7 @@ Analytics tracking is intentionally not embedded in the console. Security audit 
 ### Data table
 
 - **Purpose:** structured comparison of operational records.
+- **Value typography:** shared `table-text` uses IBM Plex Sans at 12 px and `text-table` (white in dark mode, black in light mode). Add `font-mono` for identifiers, addresses, timestamps and aligned numbers, `data-link` for navigable values, or semantic status colors where the value conveys status. Keep helper copy, badges and form controls separate from value typography.
 - **Behavior:** visible labels and units, consistent formatting, loading/error/empty states, and fixed first identifier on narrow screens.
 - **Trailing controls:** show/hide controls have their own final column; Actions are penultimate. Reserve the final control slot even when no selector exists. Both columns stay at the right edge while scrolling and cannot be reordered by pointer or keyboard; old saved orders cannot override their positions.
 - **Responsive:** hide low-priority columns where appropriate; otherwise allow deliberate horizontal scroll with a fixed identifier. Essential actions remain visible.
